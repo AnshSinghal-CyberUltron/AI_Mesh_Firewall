@@ -1,0 +1,27 @@
+{
+  "checkpoint": "31",
+  "nodes": {
+    "Context Fields": "CONTEXT FIELDS 4,000 assembled",
+    "PII Redaction": "PII REDACTION 0 sanitized",
+    "Size Check": "SIZE CHECK 33 denied",
+    "Final Context": "FINAL CONTEXT 3,967 approved"
+  },
+  "ok": true,
+  "feedEnvelope": {
+    "count": 4000,
+    "action_counts": {
+      "monitor": 3967,
+      "block": 33
+    }
+  },
+  "parsed": {
+    "assembled": 4000,
+    "sanitized": 0,
+    "denied": 33,
+    "approved": 3967
+  },
+  "assembledNotCapped": true,
+  "approvedPopulated": true,
+  "consistent": true,
+  "cp31Pass": true
+}

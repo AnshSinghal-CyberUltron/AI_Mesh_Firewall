@@ -35,11 +35,19 @@ class SemanticLeakageDetector:
         similarity_threshold: float = 0.7,
         cross_request_window: int = 300,
         cross_request_threshold: int = 5,
+        max_registered_docs: int = 5000,
     ):
         self._redis = redis_client
         self._similarity_threshold = similarity_threshold
         self._cross_request_window = cross_request_window
         self._cross_request_threshold = cross_request_threshold
+        # Bound the in-memory fingerprint store. register_confidential_content is
+        # called once per retrieved doc per RAG query and previously NEVER evicted,
+        # so this dict grew unbounded for the process lifetime — a slow memory
+        # leak (esp. on the RAG pipeline's detector, whose entries are write-only:
+        # its check_leakage is never called — the OUTPUT_GUARD checks a SEPARATE
+        # instance). Cap + FIFO-evict oldest. <=0 disables the bound.
+        self._max_registered_docs = max_registered_docs
         self._confidential_fingerprints: dict[str, set[str]] = {}
 
     def register_confidential_content(self, doc_id: str, content: str) -> None:
@@ -51,6 +59,14 @@ class SemanticLeakageDetector:
                 ngram = " ".join(tokens[i : i + n])
                 fingerprints.add(ngram)
         self._confidential_fingerprints[doc_id] = fingerprints
+        # FIFO-evict the oldest registrations beyond the cap so the store cannot
+        # grow without bound. (Re-registering an existing doc_id updates in place
+        # and never triggers eviction.)
+        if self._max_registered_docs > 0:
+            while len(self._confidential_fingerprints) > self._max_registered_docs:
+                self._confidential_fingerprints.pop(
+                    next(iter(self._confidential_fingerprints)), None
+                )
         LOG.debug(
             "Registered %d fingerprints for document %s",
             len(fingerprints),

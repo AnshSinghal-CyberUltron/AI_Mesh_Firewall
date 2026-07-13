@@ -38,6 +38,8 @@ MCP_SERVER_CRASHED = "MCP_SERVER_CRASHED"
 MCP_IMAGE_UNAVAILABLE = "MCP_IMAGE_UNAVAILABLE"
 MCP_TIMEOUT = "MCP_TIMEOUT"
 MCP_START_FAILED = "MCP_START_FAILED"
+MCP_HOST_TOOL_FAILED = "MCP_HOST_TOOL_FAILED"
+MCP_PROTOCOL_FAILED = "MCP_PROTOCOL_FAILED"
 MCP_DNS_FAILURE = "MCP_DNS_FAILURE"                 # gateway transport addition
 MCP_CONNECTION_REFUSED = "MCP_CONNECTION_REFUSED"   # gateway transport addition
 MCP_UPSTREAM_HTTP_ERROR = "MCP_UPSTREAM_HTTP_ERROR" # gateway transport addition
@@ -67,8 +69,8 @@ def _classify_exit_code(exit_code: int) -> tuple[str, str] | None:
     if exit_code != 0:
         return MCP_START_FAILED, ("The MCP server could not be started — it stopped "
                                   "immediately during startup. Verify the command and package "
-                                  "name; a server needing an extra host tool (e.g. a required "
-                                  "CLI binary) may not run in the isolated sandbox.")
+                                  "name; if the server shells out to a required CLI binary, "
+                                  "declare it in the server's Host CLI tools / MCP_HOST_TOOLS.")
     return None
 
 
@@ -152,12 +154,22 @@ def _classify_raw_text(low: str) -> tuple[str, str]:
     if any(h in low for h in _REFUSED_HINTS):
         return MCP_CONNECTION_REFUSED, ("Could not reach the server — the connection was "
                                         "refused. Check the host and port.")
+    if any(k in low for k in ("host tool install failed", "mcp_host_tools",
+                              "host tool not in allowlist", "host tool manager")):
+        return MCP_HOST_TOOL_FAILED, ("A required CLI tool could not be installed in the "
+                                      "sandbox. Verify the Host CLI tools declaration and "
+                                      "retry, or contact support.")
+    if "mcp_protocol_handshake_failed" in low or "host_cli_tools_installed" in low:
+        return MCP_PROTOCOL_FAILED, (
+            "The command exited without speaking MCP JSON-RPC. Verify it launches an MCP "
+            "server (not a one-off script). Host CLI tools were installed successfully."
+        )
     if any(k in low for k in ("exited with code", "failed to start", "process exited",
                               "missing host dependency", "did not start", "stdout stream closed")):
         return MCP_START_FAILED, ("The MCP server could not be started — it stopped "
                                   "immediately during startup. Verify the command and package "
-                                  "name; a server needing an extra host tool (e.g. a required "
-                                  "CLI binary) may not run in the isolated sandbox.")
+                                  "name; if the server shells out to a required CLI binary, "
+                                  "declare it in the server's Host CLI tools / MCP_HOST_TOOLS.")
     return MCP_UNAVAILABLE, ("The MCP server could not be reached or returned an error. "
                              "Verify the configuration and retry.")
 

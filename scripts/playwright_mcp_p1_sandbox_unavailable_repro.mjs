@@ -13,6 +13,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import { existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 
 const require = createRequire(import.meta.url);
@@ -28,6 +29,10 @@ const SHOT_DIR = process.env.SHOT_DIR || "mcp-parallel/findings/p1-4";
 const NET_TRACE = process.env.NET_TRACE || "mcp-parallel/findings/p1-4/network.jsonl";
 const BROKER_CONTAINER = process.env.BROKER_CONTAINER || "ai_mesh_mcp_broker";
 const GATEWAY_CONTAINER = process.env.GATEWAY_CONTAINER || "ai_mesh_firewall-gateway-1";
+const CHROME =
+  process.env.CHROME_PATH ||
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ||
+  (existsSync("/usr/bin/chromium-browser") ? "/usr/bin/chromium-browser" : null);
 const PRESET_NAME = process.env.MCP_STDIO_PRESET || "Everything MCP";
 
 const TARGET_MSG = "MCP sandbox is temporarily unavailable";
@@ -220,10 +225,9 @@ async function triggerToolCallWhileBrokerDown(page) {
 async function main() {
   mkdir();
   const netStream = fs.createWriteStream(NET_TRACE, { flags: "w" });
-  const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
   const browser = await chromium.launch({
     headless: true,
-    ...(chromiumPath ? { executablePath: chromiumPath } : {}),
+    ...(CHROME ? { executablePath: CHROME } : {}),
   });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1200 } });
   const page = await context.newPage();

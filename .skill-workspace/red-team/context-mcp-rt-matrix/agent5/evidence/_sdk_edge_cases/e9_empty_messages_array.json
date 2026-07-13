@@ -1,0 +1,25 @@
+{
+  "server_slug": "_sdk_edge_cases",
+  "label": "e9_empty_messages_array",
+  "captured_at_utc": "2026-07-07T10:57:54Z",
+  "request": {
+    "sdk": "openai.OpenAI.chat.completions.create",
+    "base_url": "http://127.0.0.1:8300/v1",
+    "model": "openrouter/free",
+    "messages": [],
+    "max_tokens": 20
+  },
+  "response": {
+    "status": "error",
+    "type": "BadRequestError",
+    "message": "Error code: 400 - {'error': {'message': \"'messages' must contain at least one message with content.\", 'type': 'invalid_request_error', 'param': 'messages', 'code': 'invalid_messages'}, 'request_id': 'zs-d08b6eeb9f2d'}",
+    "status_code": 400,
+    "body": {
+      "message": "'messages' must contain at least one message with content.",
+      "type": "invalid_request_error",
+      "param": "messages",
+      "code": "invalid_messages"
+    }
+  },
+  "notes": ""
+}

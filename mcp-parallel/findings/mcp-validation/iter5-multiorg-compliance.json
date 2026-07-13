@@ -1,0 +1,86 @@
+{
+  "orgs": [
+    {
+      "slug": "zeroshield",
+      "scan_control_rows": 0,
+      "scan_controls_configured": false,
+      "mcp_tier2_enabled": false,
+      "decision": "scan_skipped",
+      "compliance_tags": [],
+      "scan_findings_count": 0,
+      "raw_ssn_visible": true,
+      "pass": true
+    },
+    {
+      "slug": "org-a",
+      "scan_control_rows": 0,
+      "scan_controls_configured": false,
+      "mcp_tier2_enabled": null,
+      "decision": "scan_skipped",
+      "compliance_tags": [],
+      "scan_findings_count": 0,
+      "raw_ssn_visible": true,
+      "pass": true
+    },
+    {
+      "slug": "org-b",
+      "scan_control_rows": 0,
+      "scan_controls_configured": false,
+      "mcp_tier2_enabled": null,
+      "decision": "scan_skipped",
+      "compliance_tags": [],
+      "scan_findings_count": 0,
+      "raw_ssn_visible": true,
+      "pass": true
+    }
+  ],
+  "cross_tenant": [
+    {
+      "attacker": "zeroshield",
+      "victim": "org-a",
+      "status": 403,
+      "pass": true
+    },
+    {
+      "attacker": "zeroshield",
+      "victim": "org-b",
+      "status": 403,
+      "pass": true
+    },
+    {
+      "attacker": "org-a",
+      "victim": "zeroshield",
+      "status": 403,
+      "pass": true
+    },
+    {
+      "attacker": "org-a",
+      "victim": "org-b",
+      "status": 403,
+      "pass": true
+    },
+    {
+      "attacker": "org-b",
+      "victim": "zeroshield",
+      "status": 403,
+      "pass": true
+    },
+    {
+      "attacker": "org-b",
+      "victim": "org-a",
+      "status": 403,
+      "pass": true
+    }
+  ],
+  "harness": {
+    "ok": true,
+    "exit_code": 0,
+    "tail": "ounts\": {\n    \"capability\": 15,\n    \"echo\": 15,\n    \"sum\": 15,\n    \"concurrency\": 540,\n    \"sustained\": 0,\n    \"cross-tenant\": 6\n  },\n  \"phase_pass\": {\n    \"capability\": 15,\n    \"echo\": 15,\n    \"sum\": 15,\n    \"concurrency\": 540,\n    \"sustained\": 0,\n    \"cross-tenant\": 6\n  },\n  \"latency_ms\": {\n    \"p50\": 1961.3375979824923,\n    \"max\": 3728.341159003321\n  }\n}\nreport -> /home/contact_cyberultron_com/AI_Mesh_Firewall/scripts/../mcp-parallel/findings/p8-26/multi_org_harness_report.json\nHARNESS: GREEN"
+  },
+  "checks": {
+    "all_orgs_pass": true,
+    "cross_tenant_pass": true,
+    "harness_pass": true
+  },
+  "ok": true
+}

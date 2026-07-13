@@ -25,7 +25,9 @@ export function ImpactPanel({ config, index }) {
       title: "Compliance Impact",
       sub: "Affects audit trails and regulatory reporting",
       bullets: [
-        `${config.complianceFrameworks.length} frameworks active`,
+        config.complianceFrameworks.length > 0
+          ? `${config.complianceFrameworks.length} framework(s) in reporting scope`
+          : "No framework filter (detection tags still apply)",
         `${config.retentionDays}-day log retention`,
         config.auditLoggingEnabled ? "Full audit trail" : "Limited logging",
       ],

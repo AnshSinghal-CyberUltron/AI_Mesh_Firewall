@@ -1,5 +1,14 @@
 from rest_framework import serializers
 
+from ai_mesh_shared.mcp_host_tools import (
+    HostToolValidationError,
+    MCP_HOST_TOOLS_ENV_KEY,
+    assert_host_tool_allowed,
+    merge_host_tools_into_env,
+    parse_host_tools_spec,
+    validate_host_tools_spec,
+)
+
 from ._url_guard import is_safe_outbound_url
 from .models import MCPEvent, MCPServerRegistration, MCPScanControl, MCPToolRegistration
 
@@ -95,6 +104,13 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
     auth_headers = AuthHeaderPairSerializer(many=True, required=False, write_only=True)
     auth_query_param_key = serializers.CharField(required=False, allow_blank=True, write_only=True)
     auth_query_param_value = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    host_tools = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+        help_text="Optional host CLI tools (e.g. pip:semgrep) merged into env_vars.MCP_HOST_TOOLS.",
+    )
 
     class Meta:
         model = MCPServerRegistration
@@ -115,6 +131,7 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
             "auth_headers",
             "auth_query_param_key",
             "auth_query_param_value",
+            "host_tools",
             "default_scan_action",
         ]
 
@@ -240,6 +257,34 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
                     )
                 }
             )
+
+        env_vars = attrs.get("env_vars")
+        if env_vars is None and instance is not None:
+            env_vars = instance.env_vars
+        host_tools = attrs.pop("host_tools", None)
+        if transport == "stdio" and (host_tools is not None or isinstance(env_vars, dict)):
+            try:
+                attrs["env_vars"] = merge_host_tools_into_env(
+                    env_vars if isinstance(env_vars, dict) else None,
+                    host_tools,
+                )
+            except HostToolValidationError as exc:
+                raise serializers.ValidationError(
+                    {MCP_HOST_TOOLS_ENV_KEY: str(exc)}
+                ) from exc
+            env_vars = attrs.get("env_vars")
+        if isinstance(env_vars, dict):
+            spec = (env_vars.get(MCP_HOST_TOOLS_ENV_KEY) or "").strip()
+            if spec:
+                try:
+                    validate_host_tools_spec(spec)
+                    for _mgr, pkg in parse_host_tools_spec(spec):
+                        assert_host_tool_allowed(pkg)
+                except HostToolValidationError as exc:
+                    raise serializers.ValidationError(
+                        {MCP_HOST_TOOLS_ENV_KEY: str(exc)}
+                    ) from exc
+
         return attrs
 
     @staticmethod

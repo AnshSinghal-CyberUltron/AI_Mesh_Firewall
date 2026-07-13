@@ -1,0 +1,42 @@
+{
+  "server": "everything-mcp",
+  "tool": "gzip-file-as-resource",
+  "note": "retest LFI unique name /etc/hostname",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "tools/call",
+      "params": {
+        "name": "gzip-file-as-resource",
+        "arguments": {
+          "name": "refresh1.gz",
+          "data": "file:///etc/hostname",
+          "outputType": "resource"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Error processing file file:///etc/hostname: Unsupported URL protocol for file:///etc/hostname. Only http, https, and data URLs are supported."
+          }
+        ],
+        "isError": true
+      },
+      "jsonrpc": "2.0",
+      "id": 2
+    }
+  },
+  "elapsed_s": 0.044
+}

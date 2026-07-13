@@ -34,6 +34,36 @@ LOG = logging.getLogger("sandbox_agent.sse")
 # most likely to match a pending request) — the reader never blocks.
 _SSE_QUEUE_MAXSIZE = max(16, int(os.environ.get("MCP_AGENT_SSE_QUEUE_MAXSIZE", "1024")))
 
+# F-014: GET /sse is long-lived — a single float timeout applies read-timeout to the
+# whole stream (idle upstream → ReadTimeout kills the reader). POST /messages uses a
+# short read window for 202 ack; the JSON-RPC response arrives on the GET stream.
+_SSE_POST_READ_TIMEOUT = float(os.environ.get("MCP_AGENT_SSE_POST_READ_TIMEOUT", "30"))
+
+# Serialize SSE POST+response matching per server — concurrent POSTs while the GET
+# reader restarts race the session and cause intermittent POST timeouts (F-014).
+_sse_send_locks: dict[str, asyncio.Lock] = {}
+
+
+def _sse_get_stream_timeout(connect_timeout: float) -> httpx.Timeout:
+    """No read timeout on the persistent GET /sse event stream."""
+    return httpx.Timeout(
+        connect=connect_timeout,
+        read=None,
+        write=connect_timeout,
+        pool=connect_timeout,
+    )
+
+
+def _sse_post_ack_timeout(connect_timeout: float, method_timeout: float) -> httpx.Timeout:
+    """Short read window for POST 202/204 ack; full method_timeout waits on SSE queue."""
+    read_cap = min(_SSE_POST_READ_TIMEOUT, method_timeout)
+    return httpx.Timeout(
+        connect=connect_timeout,
+        read=read_cap,
+        write=method_timeout,
+        pool=connect_timeout,
+    )
+
 
 def _new_sse_queue() -> asyncio.Queue:
     return asyncio.Queue(maxsize=_SSE_QUEUE_MAXSIZE)
@@ -87,7 +117,7 @@ async def _sse_reader_loop(session: UpstreamSession, connect_timeout: float) -> 
             "GET",
             session.url,
             headers=headers,
-            timeout=connect_timeout,
+            timeout=_sse_get_stream_timeout(connect_timeout),
         ) as response:
             if response.status_code == 401:
                 raise UpstreamError(-32001, "upstream SSE 401; re-authenticate", needs_reauth=True)
@@ -195,29 +225,68 @@ async def send_sse_jsonrpc(
     msg_id: int | str | None,
 ) -> dict[str, Any]:
     """POST one JSON-RPC message and read the matching response from the SSE stream."""
+    lock = _sse_send_locks.setdefault(session.server_slug, asyncio.Lock())
+    async with lock:
+        return await _send_sse_jsonrpc_locked(
+            session, message, connect_timeout, method_timeout, msg_id
+        )
+
+
+async def _send_sse_jsonrpc_locked(
+    session: UpstreamSession,
+    message: dict[str, Any],
+    connect_timeout: float,
+    method_timeout: float,
+    msg_id: int | str | None,
+) -> dict[str, Any]:
     started = time.time()
-    messages_url = await ensure_sse_reader(session, connect_timeout)
     assert session.client is not None
-    assert session.sse_responses is not None
     want_id = message.get("id")
     headers = {**session.headers, "Content-Type": "application/json"}
-    try:
-        async with session.client.stream(
-            "POST",
-            messages_url,
-            json=message,
-            headers=headers,
-            timeout=method_timeout,
-        ) as response:
-            if response.status_code == 401:
-                raise UpstreamError(-32001, "upstream SSE 401; re-authenticate", needs_reauth=True)
-            if response.status_code >= 400 and response.status_code not in (202, 204):
-                body = (await response.aread())[:500].decode("utf-8", "replace")
-                raise UpstreamError(-32000, f"upstream SSE HTTP {response.status_code}: {body}")
-    except httpx.TimeoutException as exc:
-        raise UpstreamError(-32003, "upstream SSE POST timeout") from exc
-    except httpx.HTTPError as exc:
-        raise UpstreamError(-32000, f"upstream SSE POST error: {exc}") from exc
+    post_timeout = _sse_post_ack_timeout(connect_timeout, method_timeout)
+    last_exc: UpstreamError | None = None
+    for attempt in range(3):
+        messages_url = await ensure_sse_reader(session, connect_timeout)
+        assert session.sse_responses is not None
+        try:
+            # Use a dedicated short-lived client for POST so the long-lived GET /sse
+            # stream on session.client cannot starve the connection pool (F-014).
+            async with httpx.AsyncClient(
+                timeout=post_timeout,
+                follow_redirects=False,
+            ) as post_client:
+                async with post_client.stream(
+                    "POST",
+                    messages_url,
+                    json=message,
+                    headers=headers,
+                ) as response:
+                    if response.status_code == 401:
+                        raise UpstreamError(
+                            -32001, "upstream SSE 401; re-authenticate", needs_reauth=True
+                        )
+                    if response.status_code >= 400 and response.status_code not in (202, 204):
+                        body = (await response.aread())[:500].decode("utf-8", "replace")
+                        raise UpstreamError(
+                            -32000, f"upstream SSE HTTP {response.status_code}: {body}"
+                        )
+                    if response.status_code in (202, 204):
+                        await response.aclose()
+            last_exc = None
+            break
+        except httpx.TimeoutException as exc:
+            last_exc = UpstreamError(-32003, "upstream SSE POST timeout")
+            if attempt < 2:
+                # Retry once without tearing down a healthy GET reader — restart only
+                # if the background reader task has already exited.
+                if session.sse_task is not None and session.sse_task.done():
+                    await stop_sse_reader(session)
+                continue
+            raise last_exc from exc
+        except httpx.HTTPError as exc:
+            raise UpstreamError(-32000, f"upstream SSE POST error: {exc}") from exc
+    if last_exc is not None:
+        raise last_exc
 
     deadline = time.time() + method_timeout
     while time.time() < deadline:

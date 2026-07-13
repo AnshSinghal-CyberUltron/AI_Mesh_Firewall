@@ -1,0 +1,47 @@
+{
+  "server_slug": "filesystem-canary",
+  "label": "tools_call_create_directory_pii",
+  "captured_at_utc": "2026-07-07T10:56:18Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/filesystem-canary",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "create_directory",
+        "arguments": {
+          "path": "/tmp/rt-matrix-dir-probe"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:56:17 GMT",
+      "server": "uvicorn",
+      "content-length": "128",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Successfully created directory /tmp/rt-matrix-dir-probe"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    },
+    "_latency_ms": 37.6
+  },
+  "notes": ""
+}

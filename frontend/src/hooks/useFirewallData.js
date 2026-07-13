@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRealtimeNotifications } from "./useRealtimeNotifications";
+import { selectOutputGovernanceEvents } from "../utils/outputGovernanceFeed";
 
 export const TIME_RANGE_TO_HOURS = {
   "1h": 1,
@@ -67,6 +68,11 @@ export function useFirewallData(moduleId, timeRange = "24h", { enabled = true } 
       } else if (source) {
         feedParams.set("source", source);
       }
+      if (moduleId === "1.7") {
+        // Collapsed feed prefers the lifecycle `request` row over `output_guard`,
+        // hiding output-governance evidence from §1.7 tables.
+        feedParams.set("collapse", "false");
+      }
 
       // Decoupled fetch (mirrors the overview dashboard's apply() pattern, 56ff19ca):
       // fire all requests but commit each slice of state the MOMENT its own response
@@ -90,13 +96,18 @@ export function useFirewallData(moduleId, timeRange = "24h", { enabled = true } 
       const jobs = [
         apply(fetchWithAuth(`/api/security/soc-kpis/?period=${period}`), (data) => setSocKpis(data)),
         apply(fetchWithAuth(`/api/security/threat-feed/?${feedParams.toString()}`), (data) => {
+          const normalizeResults = (rows) => (
+            moduleId === "1.7" ? selectOutputGovernanceEvents(rows) : rows
+          );
           if (Array.isArray(data)) {
-            setThreatFeed(data);
-            setThreatFeedCount(data.length);
+            const rows = normalizeResults(data);
+            setThreatFeed(rows);
+            setThreatFeedCount(rows.length);
             setThreatFeedActionCounts(null);
           } else if (Array.isArray(data?.results)) {
-            setThreatFeed(data.results);
-            setThreatFeedCount(typeof data.count === "number" ? data.count : data.results.length);
+            const rows = normalizeResults(data.results);
+            setThreatFeed(rows);
+            setThreatFeedCount(typeof data.count === "number" ? data.count : rows.length);
             setThreatFeedActionCounts(
               data.action_counts && typeof data.action_counts === "object" ? data.action_counts : null,
             );

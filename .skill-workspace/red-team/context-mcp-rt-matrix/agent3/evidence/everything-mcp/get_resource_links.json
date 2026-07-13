@@ -1,0 +1,110 @@
+{
+  "server": "everything-mcp",
+  "tool": "get-resource-links",
+  "note": "baseline resource links x10",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "method": "tools/call",
+      "params": {
+        "name": "get-resource-links",
+        "arguments": {
+          "count": 10
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Here are 10 resource links to resources available in this server:"
+          },
+          {
+            "name": "Blob Resource 1",
+            "uri": "demo://resource/dynamic/blob/1",
+            "description": "Resource 1: plaintext resource",
+            "mimeType": "text/plain",
+            "type": "resource_link"
+          },
+          {
+            "name": "Text Resource 2",
+            "uri": "demo://resource/dynamic/text/2",
+            "description": "Resource 2: plaintext resource",
+            "mimeType": "text/plain",
+            "type": "resource_link"
+          },
+          {
+            "name": "Blob Resource 3",
+            "uri": "demo://resource/dynamic/blob/3",
+            "description": "Resource 3: plaintext resource",
+            "mimeType": "text/plain",
+            "type": "resource_link"
+          },
+          {
+            "name": "Text Resource 4",
+            "uri": "demo://resource/dynamic/text/4",
+            "description": "Resource 4: plaintext resource",
+            "mimeType": "text/plain",
+            "type": "resource_link"
+          },
+          {
+            "name": "Blob Resource 5",
+            "uri": "demo://resource/dynamic/blob/5",
+            "description": "Resource 5: plaintext resource",
+            "mimeType": "text/plain",
+            "type": "resource_link"
+          },
+          {
+            "name": "Text Resource 6",
+            "uri": "demo://resource/dynamic/text/6",
+            "description": "Resource 6: plaintext resource",
+            "mimeType": "text/plain",
+            "type": "resource_link"
+          },
+          {
+            "name": "Blob Resource 7",
+            "uri": "demo://resource/dynamic/blob/7",
+            "description": "Resource 7: plaintext resource",
+            "mimeType": "text/plain",
+            "type": "resource_link"
+          },
+          {
+            "name": "Text Resource 8",
+            "uri": "demo://resource/dynamic/text/8",
+            "description": "Resource 8: plaintext resource",
+            "mimeType": "text/plain",
+            "type": "resource_link"
+          },
+          {
+            "name": "Blob Resource 9",
+            "uri": "demo://resource/dynamic/blob/9",
+            "description": "Resource 9: plaintext resource",
+            "mimeType": "text/plain",
+            "type": "resource_link"
+          },
+          {
+            "name": "Text Resource 10",
+            "uri": "demo://resource/dynamic/text/10",
+            "description": "Resource 10: plaintext resource",
+            "mimeType": "text/plain",
+            "type": "resource_link"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 5
+    }
+  },
+  "elapsed_s": 0.089,
+  "_pii_scan": {}
+}

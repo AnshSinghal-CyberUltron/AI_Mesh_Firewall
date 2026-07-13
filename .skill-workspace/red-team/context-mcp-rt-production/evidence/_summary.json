@@ -1,0 +1,190 @@
+{
+  "target": "https://aimeshgateway.zeroshield.ai",
+  "generated_at_utc": "2026-07-07T09:58:20Z",
+  "gateway_api_key_present": false,
+  "gateway_api_key_redacted": "<none>",
+  "status": "BLOCKED_NO_KEY",
+  "message": "GATEWAY_API_KEY not found via os.environ or a literal .env line. Per the assessment's absolute constraints, no other key source is permitted. Running mandated auth-boundary probes for evidence.",
+  "auth_boundary_probes": [
+    {
+      "label": "chat_completions_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/_gateway_auth_boundary/chat_completions_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "chat_completions_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/_gateway_auth_boundary/chat_completions_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "models_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/_gateway_auth_boundary/models_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "models_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/_gateway_auth_boundary/models_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "semgrep-mcp/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/semgrep-mcp/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "semgrep-mcp/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/semgrep-mcp/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "playwright-mcp/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/playwright-mcp/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "playwright-mcp/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/playwright-mcp/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "cp09-ens8do/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/cp09-ens8do/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "cp09-ens8do/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/cp09-ens8do/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "cp09-verify/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/cp09-verify/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "cp09-verify/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/cp09-verify/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "playwright/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/playwright/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "playwright/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/playwright/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "ws-everything-stub/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/ws-everything-stub/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "ws-everything-stub/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/ws-everything-stub/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "sse-everything-stub/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/sse-everything-stub/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "sse-everything-stub/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/sse-everything-stub/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "http-everything-stub/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/http-everything-stub/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "http-everything-stub/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/http-everything-stub/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "linear-manual-oauth/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/linear-manual-oauth/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "linear-manual-oauth/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/linear-manual-oauth/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "everything-5/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/everything-5/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "everything-5/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/everything-5/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "everything-4/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/everything-4/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "everything-4/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/everything-4/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "everything-3/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/everything-3/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "everything-3/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/everything-3/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "everything-2/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/everything-2/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "everything-2/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/everything-2/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "everything-1/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/everything-1/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "everything-1/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/everything-1/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "filesystem-canary/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/filesystem-canary/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "filesystem-canary/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/filesystem-canary/tools_list_bogus_auth.json",
+      "status": 401
+    },
+    {
+      "label": "everything-mcp/tools_list_no_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/everything-mcp/tools_list_no_auth.json",
+      "status": 401
+    },
+    {
+      "label": "everything-mcp/tools_list_bogus_auth",
+      "path": "/home/contact_cyberultron_com/AI_Mesh_Firewall/.skill-workspace/red-team/context-mcp-rt-production/evidence/everything-mcp/tools_list_bogus_auth.json",
+      "status": 401
+    }
+  ]
+}

@@ -7,10 +7,12 @@ import { copyToClipboard } from "../lib/clipboard";
 import { InfoTooltip } from "./InfoTooltip";
 import { useSimulatorEngine } from "../hooks/useSimulatorEngine";
 import { useSimulatorGatewayModels } from "../hooks/useSimulatorGatewayModels";
+import { useFirewallConfig } from "../hooks/useFirewallConfig";
 import { SimulatorModelSelector } from "./simulator/SimulatorModelSelector";
 import { StageTimeline } from "./simulator/StageTimeline";
 import {
   chatCompletionBody,
+  simulatorRoutingPreferences,
   normalizeChatPipelineResult,
   normalizeStreamChatPipelineResult,
 } from "../utils/liveGateway";
@@ -212,6 +214,8 @@ export function AttackSimulatorPanel() {
     gatewayFetch, gatewayFetchStream, executing: engineExecuting,
   } = useSimulatorEngine();
   const gatewayModels = useSimulatorGatewayModels();
+  const { config: firewallConfig } = useFirewallConfig();
+  const orgRoutingEnabled = firewallConfig?.routing_enabled ?? true;
 
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [promptText, setPromptText] = useState("");
@@ -255,6 +259,7 @@ export function AttackSimulatorPanel() {
         model: gatewayModels.selectedModel,
         runInference: true,
         stream: useStreamMode,
+        routingPreferences: simulatorRoutingPreferences(gatewayModels.selectedModel, { orgRoutingEnabled }),
       });
 
       const res = useStreamMode
@@ -295,6 +300,7 @@ export function AttackSimulatorPanel() {
                 prompt: activePrompt,
                 model: gatewayModels.selectedModel,
                 runInference: false,
+                routingPreferences: simulatorRoutingPreferences(gatewayModels.selectedModel, { orgRoutingEnabled }),
               }),
             ),
           });
@@ -475,6 +481,7 @@ export function AttackSimulatorPanel() {
               prompt: burstPrompt,
               model: gatewayModels.selectedModel,
               runInference: false,
+              routingPreferences: simulatorRoutingPreferences(gatewayModels.selectedModel, { orgRoutingEnabled }),
             }),
             estimated_tokens: estimatedTokens,
           }),

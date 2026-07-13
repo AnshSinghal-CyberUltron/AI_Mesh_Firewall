@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { consumeSSEStream, extractRoutingFromHeaders } from "./liveGateway.js";
+import {
+  consumeSSEStream,
+  extractRoutingFromHeaders,
+  normalizeChatPipelineResult,
+  pinnedModelRoutingPreferences,
+  simulatorRoutingPreferences,
+} from "./liveGateway.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -205,4 +211,43 @@ test("extractRoutingFromHeaders handles null/missing headers gracefully", () => 
   const sparse = extractRoutingFromHeaders({});
   assert.equal(sparse.selected_model, "");
   assert.equal(sparse.rerouted, false);
+});
+
+test("output_guardrail latency uses output_guardrail_ms from stage metrics", () => {
+  const result = normalizeChatPipelineResult(
+    {
+      stage_metrics_ms: { output_guardrail_ms: 42.3 },
+      choices: [{ message: { content: "hello" } }],
+    },
+    200,
+    {},
+  );
+  const og = result.stages.find((s) => s.name === "output_guardrail");
+  assert.ok(og);
+  assert.equal(og.latency_ms, 42.3);
+});
+
+test("500 after output guard ran does not show Output guard not evaluated", () => {
+  const result = normalizeChatPipelineResult(
+    { stage_metrics_ms: { output_guardrail_ms: 12.5 } },
+    500,
+    {},
+  );
+  const og = result.stages.find((s) => s.name === "output_guardrail");
+  assert.ok(og);
+  assert.equal(og.action, "error");
+  assert.match(og.detail, /after output guard ran/i);
+  assert.notEqual(og.detail, "Output guard not evaluated");
+});
+
+test("simulatorRoutingPreferences honours org routing_enabled (PIPELINE-0030)", () => {
+  assert.deepEqual(
+    simulatorRoutingPreferences("nvidia/nemotron-3-super-120b-a12b:free", { orgRoutingEnabled: true }),
+    { enable_routing: true, preferred_model: "nvidia/nemotron-3-super-120b-a12b:free" },
+  );
+  assert.deepEqual(
+    simulatorRoutingPreferences("nvidia/nemotron-3-super-120b-a12b:free", { orgRoutingEnabled: false }),
+    pinnedModelRoutingPreferences("nvidia/nemotron-3-super-120b-a12b:free"),
+  );
+  assert.equal(simulatorRoutingPreferences("auto", { orgRoutingEnabled: true }), null);
 });

@@ -41,6 +41,31 @@ export function chatCompletionBody({
   return body;
 }
 
+/** Pin the selected model: disable org routing for simulator / SDK callers. */
+export function pinnedModelRoutingPreferences(model) {
+  const name = String(model || "").trim();
+  if (!name || name.toLowerCase() === "auto") {
+    return null;
+  }
+  return { enable_routing: false, preferred_model: name };
+}
+
+/**
+ * Attack / isolation simulators: honour org routing_enabled from firewall config.
+ * When org routing is on, send enable_routing:true (model is a preference hint).
+ * When off, pin the selected model (SDK parity).
+ */
+export function simulatorRoutingPreferences(model, { orgRoutingEnabled = true } = {}) {
+  const name = String(model || "").trim();
+  if (!name || name.toLowerCase() === "auto") {
+    return null;
+  }
+  if (orgRoutingEnabled) {
+    return { enable_routing: true, preferred_model: name };
+  }
+  return pinnedModelRoutingPreferences(name);
+}
+
 /**
  * Parse an OpenAI-compatible SSE response body into discrete events.
  * Reason: output-guard and stream governance paths only emit on text/event-stream;
@@ -106,6 +131,11 @@ export async function consumeSSEStream(response) {
     const delta = parsed?.choices?.[0]?.delta?.content;
     if (typeof delta === "string") {
       aggregatedContent += delta;
+    } else {
+      const reasoning = parsed?.choices?.[0]?.delta?.reasoning_content;
+      if (typeof reasoning === "string" && reasoning) {
+        aggregatedContent += reasoning;
+      }
     }
   };
 
@@ -558,7 +588,10 @@ function latencyForStage(stageName, stageMetrics, zs = {}, context = {}) {
     model_routing: roundMs(stageMetrics.routing_ms, 0.5),
     model_input: roundMs(stageMetrics.model_input_ms, 0.1),
     model_output: roundMs(stageMetrics.upstream_ms, roundMs(zs.processing_time_ms, 0)),
-    output_guardrail: roundMs(stageMetrics.output_guard_ms, 0.2),
+    output_guardrail: roundMs(
+      stageMetrics.output_guardrail_ms ?? stageMetrics.output_guard_ms,
+      0.2,
+    ),
   };
   if (map[stageName] > 0) return map[stageName];
   // Do NOT fabricate an even total/N split for stages with no real metric — it
@@ -961,12 +994,28 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     const at = stageAt("output_guardrail");
     const ogBlocked = blockedStage === "output_guardrail";
     const outContent = zs.redacted_response || zs.rewritten_response || data?.choices?.[0]?.message?.content || "";
+    const outputGuardMs = roundMs(
+      stageMetrics.output_guardrail_ms ?? stageMetrics.output_guard_ms,
+      0,
+    );
+    const outputGuardRan = outputGuardMs > 0
+      || zs.detection_tier === "output_guard"
+      || hasOutputGuardSignal(zs, data);
+    const gatewayErrorAfterOutputGuard = httpStatus >= 500 && outputGuardRan;
     if (ogBlocked) {
       stages.push({
         name: "output_guardrail",
         action: "block",
         latency_ms: latencyForStage("output_guardrail", stageMetrics, zs, context),
         detail: data?.message || zs.reason || zs.detail || "Output guard blocked the response",
+        content: outContent,
+      });
+    } else if (gatewayErrorAfterOutputGuard) {
+      stages.push({
+        name: "output_guardrail",
+        action: "error",
+        latency_ms: latencyForStage("output_guardrail", stageMetrics, zs, context),
+        detail: "Response failed after output guard ran (gateway internal error)",
         content: outContent,
       });
     } else if (hasOutputGuardSignal(zs, data) && !isBlocked) {

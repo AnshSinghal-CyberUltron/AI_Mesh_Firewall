@@ -1,0 +1,49 @@
+{
+  "agent": "agent1",
+  "scope": "context-assembly|least-privilege|context-minimization|cross-mcp-leakage",
+  "server_slug": "playwright-mcp",
+  "label": "tools_call_browser_hover_clean_plus_foreign_canary",
+  "captured_at_utc": "2026-07-07T10:55:33Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/playwright-mcp",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "browser_hover",
+        "arguments": {
+          "target": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:33 GMT",
+      "server": "uvicorn",
+      "content-length": "241",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "### Error\nError: async initializeServer: Chromium distribution 'chrome' is not found at /opt/google/chrome/chrome\nRun \"npx playwright install chrome\""
+          }
+        ],
+        "isError": true
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    }
+  },
+  "notes": ""
+}

@@ -13,6 +13,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import { existsSync } from "node:fs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(
@@ -25,9 +26,11 @@ const PASS = process.env.TEST_PASSWORD || "Adm1n!Pass#2024";
 const OUT = process.env.E2E_REPORT || "mcp-parallel/findings/p1-3/report.json";
 const SHOT_DIR = process.env.SHOT_DIR || "mcp-parallel/findings/p1-3";
 const NET_TRACE = process.env.NET_TRACE || "mcp-parallel/findings/p1-3/network.jsonl";
+const CHROME =
+  process.env.CHROME_PATH ||
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ||
+  (existsSync("/usr/bin/chromium-browser") ? "/usr/bin/chromium-browser" : null);
 const TYPED_LEN = Number(process.env.TYPED_LEN || 24);
-
-const LONG = {
   name: "my-long-mcp-server-name-abc",
   url: "https://example-mcp-server.example.com/mcp/v1",
   description: "Optional description field typing test for focus retention across keystrokes.",
@@ -148,10 +151,9 @@ async function openRegisterDialog(page) {
 async function main() {
   mkdir();
   const netStream = fs.createWriteStream(NET_TRACE, { flags: "w" });
-  const chromiumPath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
   const browser = await chromium.launch({
     headless: true,
-    ...(chromiumPath ? { executablePath: chromiumPath } : {}),
+    ...(CHROME ? { executablePath: CHROME } : {}),
   });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1200 } });
   const page = await context.newPage();

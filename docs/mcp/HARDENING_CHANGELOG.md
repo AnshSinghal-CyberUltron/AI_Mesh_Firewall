@@ -2681,3 +2681,34 @@ the prod compose/manifests is tracked under G3 item 12.
 - **NOW DOES:** catch the oversized-line raise INSIDE the loop and `continue` (no blocking read — the buffer is already consumed on both runtimes; the earlier CHG-0144 `read()` drain was the dead-end): `except (asyncio.LimitOverrunError, ValueError): LOG.warning(...); continue`. A huge line drains in limit-sized chunks across successive raises; a normal line AFTER the flood is read cleanly; the reader survives so the child never backs up. The stdout reader is unchanged (it deliberately fail-closes an oversized stdout line).
 - **Touched whose work:** the in-sandbox stdio process manager (agent).
 - **VERIFY:** `cd services/mcp-broker/sandbox-image/agent && ../../.venv/bin/python -m pytest tests/test_stdio_exit_reason.py -q` → 11 passed (2 new: flood-survival + normal-path); broader fast agent sweep 88 passed. CROSS-VERSION: the REAL `_log_stderr` run on `python:3.12-slim` via docker (repo mounted) → "survived flood, next line captured = True". Evidence: `mcp-parallel/findings/backstop-p17-stderr-flood-self-hang/finding.md`.
+
+### CHG-0153 — sandbox image put CWD on the agent's Python import path (PYTHONPATH trailing colon); + image-level verify of CHG-0142
+- **Date:** 2026-07-03
+- **Scratchpad item:** HARDEN THE ARCHITECTURE — no untrusted-controllable import surface in the per-tenant sandbox (item 8).
+- **Severity:** LOW (defense-in-depth — removes an implicit-CWD entry from the sandbox agent's import path; also fixes the docker build `UndefinedVar` warning).
+- **Files:** `services/mcp-broker/sandbox-image/Dockerfile` (`ENV PYTHONPATH`).
+- **WHAT (gap):** `ENV PYTHONPATH="/opt/shared:${PYTHONPATH}"` — `${PYTHONPATH}` is UNDEFINED at build time, so it resolved to the literal `"/opt/shared:"`; the trailing colon is an EMPTY `sys.path` entry = the process CWD (verified in the built image: `PYTHONPATH=[/opt/shared:]`, `"" in sys.path == True`). A sandbox agent that spawns untrusted MCP servers must not carry CWD on its import path (import-hijack footgun). Also the source of the `UndefinedVar: '$PYTHONPATH' (line 45)` build warning.
+- **WHY:** minimize the agent's import surface — no dynamic CWD entry.
+- **NOW DOES:** `ENV PYTHONPATH="/opt/shared"` (plain). `docker run -e PYTHONPATH=...` overrides anyway, so nothing legitimate is lost. Empty CWD entry removed.
+- **Touched whose work:** the sandbox image.
+- **VERIFY:** rebuilt via docker (no `UndefinedVar` warning); ran the REAL agent CMD `uvicorn agent.main:app` → `/health` `{"status":"ok",...}` + "Application startup complete" (the empty entry was NOT load-bearing — uvicorn imports the `agent` pkg itself; `ai_mesh_shared` resolves via `/opt/shared`); runtime `PYTHONPATH=[/opt/shared]`. BONUS: verified CHG-0142 END-TO-END in a rebuild (`/usr/local/etc/npmrc`=`ignore-scripts=true`+audit/fund/update-notifier off; `npm config get ignore-scripts`→true as the sandbox user; `globalconfig`=`/usr/local/etc/npmrc`; root-owned). OPERATIONAL FINDING: the deployed `ai-mesh/mcp-sandbox:latest` PREDATES CHG-0142 (`ignore-scripts`→false there) — the image must be REBUILT + redeployed (sandboxes recreated) for the baked-npmrc + PYTHONPATH controls to take effect (the CHG-0044 per-spawn env pin still enforces ignore-scripts at runtime today). gVisor/runsc NOT installed (`docker info` Runtimes: runc) → item 12 still blocked. Evidence: `mcp-parallel/findings/backstop-p8-sandbox-pythonpath-cwd/finding.md`.
+
+### CHG-0154 — MCP_HOST_TOOLS end-to-end wiring (on-demand sandbox CLI binaries)
+- **Date:** 2026-07-06
+- **Scratchpad item:** General host CLI binary support for stdio MCP servers (Semgrep ref `6112427d4bc9` class).
+- **Severity:** MEDIUM (availability — MCP servers shelling out to undeclared CLIs failed at startup; install path existed but was unwired).
+- **Files:** `shared/ai_mesh_shared/mcp_host_tools.py` (new); `services/mcp-broker/sandbox-image/agent/stdio_manager.py`; `control/.../serializers.py`; `gateway/.../mcp_error_classifier.py`; `control/.../views.py`; `frontend/.../MCPConnectorPanel.jsx`; tests + `scripts/ralph/mcp_page_cp33_catalog.py`.
+- **WHAT (gap):** Sandbox agent already installed declared host tools via `MCP_HOST_TOOLS`, but presets/API/UI never set it; Semgrep preset lacked `host_tools`; classifiers hardcoded "semgrep" in user-facing copy; zero tests.
+- **WHY:** Operators need a general mechanism to declare extra CLI binaries (pip/uv/npm) installed into sandbox tmpfs before MCP spawn — not image-baked one-offs.
+- **NOW DOES:** Shared parse/validate/merge contract; presets `host_tools` → `env_vars.MCP_HOST_TOOLS`; control serializer validation + optional `MCP_HOST_TOOLS_ALLOWLIST`; stable `MCP_HOST_TOOL_FAILED` classifier; agent install errors prefixed `host tool install failed:`.
+- **VERIFY:** `test_mcp_host_tools.py` + `test_stdio_host_tools.py` (22) + gateway 2091 + broker 196; live `mcp_page_cp33_catalog.py` / `mcp_page_host_tools_live.py` after sandbox image rebuild. Evidence: `mcp-parallel/findings/backstop-p-host-tools-wiring/`.
+
+### CHG-0155 — Sandbox writable HOME + npx isEntrypoint spawn fix (MCP_HOST_TOOLS live)
+- **Date:** 2026-07-07
+- **Scratchpad item:** CHG-0154 live-proof follow-up (Semgrep `MCP_START_FAILED` after host-tool install succeeded).
+- **Severity:** MEDIUM (availability — installed CLIs that write dotdirs under `$HOME` crashed on read-only `/home/sandbox`; `npx -y mcp-server-semgrep` exited 0 without JSON-RPC due to package `isEntrypoint` argv check).
+- **Files:** `services/mcp-broker/src/sandbox/docker_manager.py`; `services/mcp-broker/sandbox-image/agent/main.py`; `services/mcp-broker/sandbox-image/agent/stdio_manager.py`; `services/mcp-broker/tests/test_sandbox_lifecycle.py`; agent tests.
+- **WHAT (gap):** (1) `uv tool install semgrep` succeeded but `semgrep --version` failed with `OSError: Read-only file system: '/home/sandbox/.semgrep'`. (2) `npx -y mcp-server-semgrep` exited immediately (code 0, no stdout) because the package gates on `process.argv[1] === __filename` — npx's wrapper breaks that; direct `node build/index.js` works.
+- **WHY:** Read-only rootfs sandboxes need writable `HOME`; npm MCP servers that use isEntrypoint checks cannot be spawned via raw npx in piped-stdio mode.
+- **NOW DOES:** Container env `HOME=/var/cache/home` + lifespan mkdir; `_resolve_npx_spawn` rewrites bare `npx -y <pkg>` to `node <resolved-main.js>` (leaves `npx -y mcp-remote <url>` untouched).
+- **VERIFY:** broker `test_sandbox_home_on_writable_tmpfs` + `test_stdio_host_tools.py` (12); live `mcp_page_host_tools_quick.py` → `hostToolsQuickPass:true`, semgrep connected tools_count=7, bogus `MCP_HOST_TOOL_FAILED`. Evidence: `mcp-parallel/findings/backstop-p-host-tools-writable-home/live_quick.json`.

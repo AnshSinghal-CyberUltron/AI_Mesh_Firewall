@@ -246,9 +246,21 @@ class RankerStage:
             )
 
         # ── 5. Stage-specific policy-based filtering ──
+        # Prefer the PER-REQUEST compiled policies (inp.compiled_policies) over
+        # the shared-instance ``self._compiled_policies``. The pipeline is a
+        # singleton serving concurrent multi-org requests; storing policies on
+        # the instance (the old update_policies path) let one org's request
+        # clobber another's between the pipeline's await points → cross-tenant
+        # policy contamination. Falls back to instance state for direct callers
+        # that still use update_policies().
+        _compiled = (
+            inp.compiled_policies
+            if inp.compiled_policies is not None
+            else self._compiled_policies
+        )
         policy_rules_consulted: list[str] = []
         rejected_doc_ids: list[str] = []
-        if documents and self._compiled_policies:
+        if documents and _compiled:
             try:
                 from policy_engine import evaluate_for_stage
             except ImportError:
@@ -260,7 +272,7 @@ class RankerStage:
                 result = evaluate_for_stage(
                     prompt=content,
                     response_text="",
-                    compiled_policies=self._compiled_policies,
+                    compiled_policies=_compiled,
                     stage="ranker",
                     actor=inp.actor,
                 )

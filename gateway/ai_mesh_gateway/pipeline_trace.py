@@ -266,13 +266,132 @@ def attach_latency_breakdown(trace: dict[str, Any]) -> dict[str, Any]:
 try:  # pragma: no cover - import shim (script vs package execution)
     from patterns import redact_all as _redact_all  # type: ignore
     from patterns import contains_smart_redaction_markers as _has_smart_masks  # type: ignore
+    from patterns import smart_mask_redaction_noop_is_expected as _smart_mask_noop_expected  # type: ignore
 except ImportError:  # pragma: no cover
     try:
         from .patterns import redact_all as _redact_all  # type: ignore
         from .patterns import contains_smart_redaction_markers as _has_smart_masks  # type: ignore
+        from .patterns import smart_mask_redaction_noop_is_expected as _smart_mask_noop_expected  # type: ignore
     except Exception:  # pragma: no cover
         _redact_all = None  # type: ignore
         _has_smart_masks = lambda _t: False  # type: ignore
+
+        def _smart_mask_noop_expected(_p: str, _keys: list | None = None) -> bool:  # type: ignore
+            return False
+
+_INJECTION_THREAT_TYPES = frozenset({
+    "prompt_injection",
+    "jailbreak",
+    "goal_hijacking",
+    "tool_overreach",
+    "indirect_injection",
+    "injection",
+})
+
+
+def _is_injection_threat(threat_type: str) -> bool:
+    t = str(threat_type or "").strip().lower()
+    return t in _INJECTION_THREAT_TYPES or t.endswith("_injection")
+
+
+def _normalize_verdict_action(action: str) -> str:
+    a = str(action or "allow").strip().lower()
+    if a not in ("allow", "flag", "block", "redact", "rewrite"):
+        return "allow"
+    return a
+
+
+def _resolve_input_scan_action(
+    *,
+    policy_redacted: bool,
+    scanner_redaction_applied: bool,
+    verdict_action: str,
+    threat_type: str,
+    matched_patterns: list,
+    final_action: str,
+    is_blocked: bool,
+    blocked_stage: str,
+    is_output_only: bool,
+    scan_input_prompt: str,
+) -> tuple[str, str, bool]:
+    """Honest input_scan stage action (action, scan_outcome, redact_noop)."""
+    action = _normalize_verdict_action(verdict_action)
+    threat_lc = str(threat_type or "").strip().lower()
+    has_threat = bool(matched_patterns) or bool(
+        threat_lc and threat_lc not in ("none", "", "clean")
+    )
+
+    if is_blocked and blocked_stage == "input_scan":
+        return "block", "", False
+
+    if not is_blocked and action == "block":
+        action = "allow"
+
+    if is_output_only:
+        return (action if action in ("flag", "block") else "allow"), "", False
+
+    if scanner_redaction_applied and has_threat:
+        resolved = "rewrite" if final_action == "rewrite" else "redact"
+        return resolved, "", False
+
+    if policy_redacted and not scanner_redaction_applied:
+        if has_threat and _is_injection_threat(threat_type):
+            if action == "redact":
+                action = "flag"
+            return action, "", False
+        if has_threat:
+            return "allow", "analyzed", True
+        return "allow", "clean", False
+
+    if has_threat and action in ("redact", "rewrite") and not scanner_redaction_applied:
+        return "allow", "analyzed", True
+
+    if not has_threat:
+        return "allow", "clean", False
+
+    return action, "", False
+
+
+def _input_scan_detail(
+    *,
+    scan_action: str,
+    threat_type: str,
+    confidence: float,
+    scan_detail: str,
+    policy_redacted: bool,
+    scanner_redaction_applied: bool,
+    scan_outcome: str,
+) -> str:
+    threat_label = str(threat_type or "").replace("_", " ")
+    conf_suffix = f" ({confidence:.0%} confidence)" if confidence else ""
+
+    if scan_action == "block" and threat_type:
+        if policy_redacted and _is_injection_threat(threat_type):
+            return scan_detail or f"Prompt injection detected in post-policy input{conf_suffix}"
+        return scan_detail or f"Input blocked — {threat_label}{conf_suffix}"
+
+    if scan_outcome == "analyzed" and policy_redacted and not scanner_redaction_applied:
+        if threat_label:
+            return (
+                f"Input analyzed after policy redaction — {threat_label}{conf_suffix}; "
+                "no additional masking"
+            )
+        return "Input analyzed after policy redaction; no additional masking"
+
+    if scan_action == "block" and threat_type:
+        return scan_detail or f"Input blocked — {threat_label}{conf_suffix}"
+
+    threat_lc = threat_label.lower()
+    if threat_type and threat_label and threat_lc not in ("none", "clean"):
+        if scan_action in ("allow", "flag"):
+            return (
+                scan_detail
+                or f"Scan completed — {threat_label}{conf_suffix}; allowed through"
+            )
+
+    if scan_detail:
+        return scan_detail
+    return "Input scan completed — no threats detected"
 
 GUARD_MODEL_LABEL = "ZeroShield Model"
 PATTERN_ENGINE_LABEL = "ZeroShield Pattern Engine"
@@ -805,6 +924,7 @@ def build_pipeline_trace(
     forwarded_prompt: str = "",
     policy_redacted_prompt: str = "",
     policy_redacted_flag: bool | None = None,
+    scanner_redaction_applied: bool | None = None,
     stage_metrics: dict | None = None,
     final_action: str = "allow",
     blocked_stage: str = "",
@@ -884,59 +1004,36 @@ def build_pipeline_trace(
     }
     _model_skipped = bool(is_blocked and blocked_stage in _UPSTREAM_OF_MODEL)
 
-    scan_action = getattr(sv, "action", None) or _zs_scan.get("action") or "allow"
-    if scan_action not in ("allow", "flag", "block", "redact", "rewrite"):
-        scan_action = "allow"
-    if is_blocked and blocked_stage == "input_scan":
-        scan_action = "block"
-    elif not is_blocked and scan_action == "block":
-        scan_action = "allow"
+    if scanner_redaction_applied is None:
+        scanner_redaction_applied = bool(
+            forwarded_prompt
+            and scan_input_prompt
+            and forwarded_prompt != scan_input_prompt
+        )
+
+    verdict_action = getattr(sv, "action", None) or _zs_scan.get("action") or "allow"
     is_output_only = zs.get("detection_tier") == "output_guard"
-    has_input_threat = bool(matched_patterns) or bool(threat_type)
-    # Reflect INPUT-stage enforcement on the input_scan badge even when the request
-    # still proceeds (redact/rewrite/flag ≠ block). Neither the scan verdict's own
-    # .action nor the global final_action is reliable here: redaction is
-    # non-blocking so .action often stays "allow", and final_action may carry an
-    # OUTPUT-guard verdict (so it can be "redact" for an output-only redaction
-    # where the input was clean). The authoritative signal that the INPUT was
-    # sanitized is that the prompt FORWARDED to the LLM differs from the original
-    # AND an input-tier threat was detected. Output-guard redactions
-    # (detection_tier == output_guard) leave the input untouched → must NOT colour
-    # the input stage.
-    if not is_blocked and scan_action in ("allow", "flag"):
-        # Tier-2 redacted only if the FORWARDED prompt differs from what Tier-2
-        # actually received (the post-policy text) — NOT from the raw prompt. If
-        # the policy stage already masked everything, forwarded == scan_input and
-        # input_scan stays clean (no double-attribution of the same redaction).
-        input_modified = bool(forwarded_prompt) and forwarded_prompt != scan_input_prompt
-        if input_modified and has_input_threat and not is_output_only:
-            scan_action = "rewrite" if final_action == "rewrite" else "redact"
-        elif (
-            final_action == "redact"
-            and has_input_threat
-            and not is_output_only
-            and _has_smart_masks(scan_input_prompt or "")
-            and forwarded_prompt == scan_input_prompt
-        ):
-            scan_action = "redact"
-        elif final_action == "flag" and has_input_threat and not is_output_only:
-            scan_action = "flag"
-    elif (
-        not is_blocked
-        and scan_action in ("redact", "rewrite")
-        and forwarded_prompt
-        and forwarded_prompt == scan_input_prompt
-    ):
-        # Tier-2's nominal action was redact/rewrite but it did NOT change the
-        # text — the policy stage had already masked everything. Show input_scan
-        # as clean instead of claiming a redaction it didn't perform.
-        # PIPELINE-0012: smart partial masks are unchanged by design — still show
-        # input_scan as redact when a threat was detected on masked shapes.
-        if not (
-            has_input_threat
-            and _has_smart_masks(scan_input_prompt or "")
-        ):
-            scan_action = "allow"
+    scan_action, scan_outcome, redact_noop = _resolve_input_scan_action(
+        policy_redacted=policy_redacted,
+        scanner_redaction_applied=scanner_redaction_applied,
+        verdict_action=verdict_action,
+        threat_type=threat_type,
+        matched_patterns=matched_patterns,
+        final_action=final_action,
+        is_blocked=is_blocked,
+        blocked_stage=blocked_stage,
+        is_output_only=is_output_only,
+        scan_input_prompt=scan_input_prompt,
+    )
+    input_scan_detail = _input_scan_detail(
+        scan_action=scan_action,
+        threat_type=threat_type,
+        confidence=float(confidence or 0),
+        scan_detail=scan_detail if isinstance(scan_detail, str) else str(scan_detail or ""),
+        policy_redacted=policy_redacted,
+        scanner_redaction_applied=scanner_redaction_applied,
+        scan_outcome=scan_outcome,
+    )
 
     def _latency(name: str, explicit: float | None = None, *, skipped: bool = False) -> float:
         if skipped:
@@ -970,6 +1067,8 @@ def build_pipeline_trace(
             except ValueError:
                 pass
         if final_action in ("redact", "rewrite", "flag") and stage == "input_scan":
+            if policy_redacted and not scanner_redaction_applied:
+                return default
             return final_action
         return default
 
@@ -1006,6 +1105,10 @@ def build_pipeline_trace(
     # input guard; only detection_tier=="output_guard" belongs to the output guard.
     _orig_detection_tier = str(zs.get("detection_tier") or "")
     _enforced_at_output = _orig_detection_tier == "output_guard"
+    _input_guard_final_attributed = (
+        not _enforced_at_output
+        and not (policy_redacted and not scanner_redaction_applied)
+    )
     input_guard = build_guard_fields(
         verdict=sv,
         stage_action=scan_action,
@@ -1013,7 +1116,7 @@ def build_pipeline_trace(
         tier=tier,
         zs=_zs_scan,
         output=False,
-        final_attributed=not _enforced_at_output,
+        final_attributed=_input_guard_final_attributed,
     )
     output_guard_zs = {
         **zs,
@@ -1081,6 +1184,11 @@ def build_pipeline_trace(
                 "; matched %d rule(s)" % len(policy_rules)
                 if policy_rules
                 else "; no matching policy rule"
+                + (
+                    " (regex/keyword rules target raw PII; pre-masked shapes are handled at input_scan)"
+                    if not policy_rules and _has_smart_masks(scan_input_prompt or "")
+                    else ""
+                )
             )
         )
     )
@@ -1141,25 +1249,12 @@ def build_pipeline_trace(
             "name": "input_scan",
             "action": scan_action if blocked_stage != "input_scan" else _action("input_scan"),
             "latency_ms": _latency("input_scan"),
-            "detail": (
-                scan_detail
-                or (
-                    f"Input blocked — {threat_type}"
-                    + (f" ({confidence:.0%} confidence)" if confidence else "")
-                    if scan_action == "block" and threat_type
-                    else (
-                        f"Scan completed — {threat_type}"
-                        + (f" ({confidence:.0%} confidence)" if confidence else "")
-                        + "; allowed through"
-                        if threat_type and threat_type not in ("none", "")
-                        else "Input scan completed — no threats detected"
-                    )
-                )
-            ),
+            "detail": input_scan_detail,
             "threat_type": threat_type,
             "confidence": confidence,
             "risk_score": zs.get("risk_score"),
-            "scan_outcome": zs.get("scan_outcome"),
+            "scan_outcome": scan_outcome or zs.get("scan_outcome") or "",
+            "redact_noop": redact_noop,
             "tier": tier,
             "matched_patterns": matched_patterns,
             # Tier-2 scans the POST-policy text. prompt_in is what it received
@@ -1357,7 +1452,8 @@ def build_pipeline_trace(
     elif is_blocked and blocked_stage == "output_guardrail":
         output_withheld = True
         output_withheld_reason = "Response withheld — output guard blocked delivery to client"
-        output_text = ""
+        # Operator forensics: show redacted-safe model bytes in trace (not client 403).
+        output_text = _truncate(out_raw, 2000) if out_raw else ""
     else:
         output_text = _truncate(out_raw, 2000) if out_raw else ""
 

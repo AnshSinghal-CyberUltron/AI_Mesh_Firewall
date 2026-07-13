@@ -1,0 +1,42 @@
+{
+  "server": "everything-mcp",
+  "tool": "gzip-file-as-resource",
+  "note": "retest LFI unique name /etc/passwd",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "method": "tools/call",
+      "params": {
+        "name": "gzip-file-as-resource",
+        "arguments": {
+          "name": "refresh2.gz",
+          "data": "file:///etc/passwd",
+          "outputType": "resource"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Response from 'gzip-file-as-resource' matched compliance tags: INFRA, SECRET, SOC2."
+          }
+        ],
+        "isError": true
+      }
+    }
+  },
+  "elapsed_s": 0.044
+}

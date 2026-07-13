@@ -1,0 +1,20 @@
+{
+  "agent": "agent1",
+  "scope": "context-assembly|least-privilege|context-minimization|cross-mcp-leakage",
+  "server_slug": "_unauthorized_discovery",
+  "label": "enum_endpoint_http_127_0_0_1_8300_gateway_zeroshield_mcp_servers",
+  "captured_at_utc": "2026-07-07T10:55:53Z",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/servers",
+    "headers": {
+      "Authorization": "Bearer <redacted>"
+    }
+  },
+  "response": {
+    "status_code": 405,
+    "body": {
+      "detail": "Method Not Allowed"
+    }
+  },
+  "notes": ""
+}

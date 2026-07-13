@@ -95,6 +95,30 @@ class ScanControlResolutionTests(TestCase):
 
     def test_defaults_when_no_rows(self):
         effective = resolve_effective_controls([], server_id="x", tool_name="t")
-        assert effective["scan_controls_configured"] is True
+        assert effective["scan_controls_configured"] is False
         assert effective["tier1_input"]["enabled"] is True
         assert effective["tier2_input"]["enabled"] is False
+
+    def test_output_only_disables_input_tier(self):
+        """F-009: an output-scoped row must not baseline-scan the input side."""
+        rows = [
+            {
+                "id": "out-block",
+                "tier": "tier1",
+                "enabled": True,
+                "direction": "output",
+                "scope_type": "org",
+                "server_id": None,
+                "tool_name": "",
+                "target_mode": "entire",
+                "key_path": "",
+                "strict_mode": "fail_open",
+                "action": "block",
+                "priority": 10,
+            },
+        ]
+        effective = resolve_effective_controls(rows, server_id="srv-1", tool_name="echo")
+        assert effective["scan_controls_configured"] is True
+        assert effective["tier1_input"]["enabled"] is False
+        assert effective["tier1_output"]["enabled"] is True
+        assert effective["tier1_output"]["action"] == "block"

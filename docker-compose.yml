@@ -206,6 +206,9 @@ services:
       MCP_STDIO_METHOD_TIMEOUT: ${MCP_STDIO_METHOD_TIMEOUT:-60}
       MCP_STDIO_HUNG_INIT_TIMEOUT: ${MCP_STDIO_HUNG_INIT_TIMEOUT:-180}
       MCP_STDIO_PACKAGE_ALLOWLIST: ${MCP_STDIO_PACKAGE_ALLOWLIST:-}
+      # Optional: extend ext_mcp_proxy allowlist for hermetic validation stubs (iter13+).
+      MCP_EXT_ALLOWED_DOMAINS: ${MCP_EXT_ALLOWED_DOMAINS:-}
+      MCP_EXT_PROXY_HTTP_HOSTS: ${MCP_EXT_PROXY_HTTP_HOSTS:-}
       UV_CACHE_DIR: /root/.cache/uv
       NPM_CONFIG_CACHE: /root/.npm
     volumes:
@@ -258,6 +261,8 @@ services:
       MCP_SANDBOX_IMAGE: ai-mesh/mcp-sandbox:latest
       MCP_SANDBOX_NETWORK: mcp_sandbox_bridge
       MCP_SANDBOX_IDLE_TIMEOUT: ${MCP_SANDBOX_IDLE_TIMEOUT:-3600}
+      # Kernel isolation: runsc (gVisor). Requires host `runsc install` + Docker reload.
+      MCP_SANDBOX_RUNTIME: ${MCP_SANDBOX_RUNTIME:-runsc}
       # Per-org sandbox memory limit + Node/V8 old-space heap cap (CP20). The heap
       # cap defaults to ~75% of the memory limit so heavy Node MCP servers fail with
       # a graceful V8 OOM instead of a kernel SIGKILL. Raise MEMORY_MB for heavy
@@ -307,6 +312,52 @@ services:
     ports: ["8312:8312"]
     profiles: ["services"]
 
+  # P4.13/P6.18 transport stubs — reachable from per-org sandboxes via DNS aliases.
+  # Prefer: docker compose --profile transport-stubs up -d
+  http-everything:
+    image: node:20-slim
+    profiles: ["transport-stubs"]
+    environment:
+      PORT: "3001"
+    command: >-
+      sh -c "npm_config_cache=/tmp/npm npx -y @modelcontextprotocol/server-everything streamableHttp"
+    networks:
+      mcp_sandbox_net_zeroshield:
+        aliases:
+          - http-everything.stub
+    restart: unless-stopped
+
+  sse-everything:
+    image: node:20-slim
+    profiles: ["transport-stubs"]
+    environment:
+      PORT: "3002"
+    command: >-
+      sh -c "npm_config_cache=/tmp/npm npx -y @modelcontextprotocol/server-everything sse"
+    networks:
+      mcp_sandbox_net_zeroshield:
+        aliases:
+          - sse-everything.stub
+    restart: unless-stopped
+
+  ws-everything:
+    image: node:20-slim
+    profiles: ["transport-stubs"]
+    environment:
+      PORT: "3003"
+    volumes:
+      - ./scripts/mcp_ws_everything_stub.mjs:/stub.mjs:ro
+    command: >-
+      sh -c "cd /tmp && npm_config_cache=/tmp/npm npm init -y >/dev/null 2>&1 &&
+      npm install ws@8 >/dev/null 2>&1 &&
+      cp /stub.mjs /tmp/stub.mjs &&
+      NODE_PATH=/tmp/node_modules node /tmp/stub.mjs"
+    networks:
+      mcp_sandbox_net_zeroshield:
+        aliases:
+          - ws-everything.stub
+    restart: unless-stopped
+
   frontend:
     image: node:22-alpine
     working_dir: /app
@@ -334,4 +385,9 @@ networks:
   # when the network already exists. Run scripts/ensure_mcp_sandbox_network.sh first.
   mcp_sandbox_bridge:
     name: mcp_sandbox_bridge
+    external: true
+  # Per-org sandbox network for zeroshield — transport stubs attach here.
+  # Run scripts/ensure_org_sandbox_network.sh before first transport-stubs up.
+  mcp_sandbox_net_zeroshield:
+    name: mcp_sandbox_net_zeroshield
     external: true

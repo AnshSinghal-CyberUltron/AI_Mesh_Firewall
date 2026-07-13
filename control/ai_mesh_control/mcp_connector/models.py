@@ -1,6 +1,5 @@
 import uuid
 
-from django.conf import settings
 from django.core.validators import MaxLengthValidator
 from django.db import models
 from django.utils.text import slugify
@@ -223,14 +222,24 @@ class MCPServerRegistration(models.Model):
 
     @property
     def gateway_endpoint(self):
-        """Deterministic external gateway endpoint for this server."""
+        """Deterministic gateway endpoint PATH for this server (never host-qualified).
+
+        Intentionally relative. This field is read straight off the API by the
+        frontend (MCPConnectorPanel "Copy MCP Config" / server-card URL / OAuth
+        start), which resolves it to an absolute URL itself based on where the
+        BROWSER is actually running (resolveMcpGatewayBaseUrl() in
+        environmentUrls.js) — local dev vs. production. Prepending
+        settings.GATEWAY_PUBLIC_URL here would bake in whatever that env var
+        happens to be for the WHOLE deployment (often the production gateway
+        domain even on a local dev stack sharing the same .env) and, since the
+        frontend short-circuits on an already-absolute URL, permanently defeat
+        that per-browser local/production detection. Non-browser consumers of
+        this API that need a fully-qualified URL should combine this path with
+        their own known GATEWAY_PUBLIC_URL.
+        """
         org = self.organization
         if org and self.server_slug:
-            endpoint_path = f"/gateway/{org.slug}/mcp/{self.server_slug}"
-            gateway_base = (getattr(settings, "GATEWAY_PUBLIC_URL", "") or "").strip().rstrip("/")
-            if gateway_base:
-                return f"{gateway_base}{endpoint_path}"
-            return endpoint_path
+            return f"/gateway/{org.slug}/mcp/{self.server_slug}"
         return ""
 
     def __str__(self):
@@ -305,6 +314,9 @@ class MCPEvent(models.Model):
         ("redact", "Redact"),
         ("monitor", "Monitor"),
         ("error", "Error"),
+        # Zero scan-control rows → gateway skips Tier-1/Tier-2 entirely
+        # (distinct from ``allow`` = scanned and clean).
+        ("scan_skipped", "Scan Skipped"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

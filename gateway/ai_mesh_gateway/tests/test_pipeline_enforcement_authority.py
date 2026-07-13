@@ -233,18 +233,21 @@ class EnforceOutputTests(unittest.TestCase):
         self.assertEqual(d.action, "redact")
         self.assertTrue(d.degraded)
 
-    def test_rewrite_streaming_becomes_block(self):
+    def test_rewrite_streaming_preserved(self):
+        """F-002: rewrite must stay rewrite on stream (DONE flush rewrites)."""
         d = enforce_output(verdict_action="rewrite", is_streaming=True)
-        self.assertTrue(d.is_terminal_block)
+        self.assertEqual(d.action, "rewrite")
+        self.assertFalse(d.is_terminal_block)
 
     def test_rewrite_nonstreaming_preserved(self):
         d = enforce_output(verdict_action="rewrite", is_streaming=False)
         self.assertEqual(d.action, "rewrite")
 
-    def test_flag_block_mode_becomes_block(self):
-        """D-18 harmonization: flag + block mode → block."""
+    def test_flag_block_mode_preserved(self):
+        """F-003: UI Flag must flag even when org enforcement_mode=block."""
         d = enforce_output(verdict_action="flag", enforcement_mode="block")
-        self.assertTrue(d.is_terminal_block)
+        self.assertEqual(d.action, "flag")
+        self.assertFalse(d.is_terminal_block)
 
     def test_flag_monitor_mode_preserved(self):
         d = enforce_output(verdict_action="flag", enforcement_mode="monitor")

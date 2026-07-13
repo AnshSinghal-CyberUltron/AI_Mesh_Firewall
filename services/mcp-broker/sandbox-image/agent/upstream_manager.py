@@ -78,6 +78,11 @@ def _validate_upstream(upstream: dict[str, Any]) -> None:
 _METADATA_IPS = frozenset({"169.254.169.254", "fd00:ec2::254"})
 
 
+def _is_transport_stub_host(host: str) -> bool:
+    """Dev-only transport stubs (P4.13) resolve to RFC1918 on the org sandbox network."""
+    return _normalize_host(host).endswith("-everything.stub")
+
+
 def _resolved_ip_blocked(ip_str: str) -> str | None:
     """Return a reason string if a resolved IP is internal/metadata (block), else None."""
     if ip_str in _METADATA_IPS:
@@ -108,8 +113,20 @@ async def _assert_upstream_not_ssrf(host: str) -> None:
         try:
             infos = await asyncio.get_running_loop().getaddrinfo(host, None)
         except Exception as exc:           # DNS failure → fail closed
+            norm = _normalize_host(host)
+            if norm.endswith("-everything.stub"):
+                raise UpstreamError(
+                    -32002,
+                    "egress denied: transport stub host not reachable "
+                    f"({host!r}; stub_not_provisioned — run "
+                    "'docker compose --profile transport-stubs up -d' after "
+                    "scripts/ensure_org_sandbox_network.sh)",
+                )
             raise UpstreamError(-32002, f"egress denied: cannot resolve host {host!r} ({exc})")
         ips = [info[4][0] for info in infos]
+    # Transport-stub sidecars intentionally live on the per-org docker network (RFC1918).
+    if _is_transport_stub_host(host):
+        return
     for ip_str in ips:
         reason = _resolved_ip_blocked(ip_str)
         if reason:

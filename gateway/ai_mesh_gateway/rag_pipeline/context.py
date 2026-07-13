@@ -39,6 +39,12 @@ class PipelineContext:
     stages: list[StageRecord] = field(default_factory=list)
     escalation_level: int = 0  # 0=normal, 1=elevated, 2=strict
     final_action: str = "allow"
+    # Per-org audit gate: when the caller's org has telemetry_enabled=False
+    # (control-plane audit_logging_enabled OFF), per-stage pipeline telemetry
+    # must be suppressed — mirroring the chat path's _emit_telemetry gate. The
+    # handler resolves the per-org value and passes it into execute(). Defaults
+    # True so unauthenticated / no-org callers keep emitting (backward compat).
+    telemetry_enabled: bool = True
 
     def add_stage(self, record: StageRecord) -> None:
         """Add a stage record and auto-escalate based on verdict."""

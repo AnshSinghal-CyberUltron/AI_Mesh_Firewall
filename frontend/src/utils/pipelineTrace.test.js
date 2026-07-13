@@ -59,6 +59,17 @@ test("honestStageAction downgrades a no-op redact to flag", () => {
   assert.equal(honestStageAction({ action: "redact", metadata: { redact_noop: true } }), "flag");
 });
 
+test("honestStageAction keeps allow when scan_outcome is analyzed", () => {
+  assert.equal(
+    honestStageAction({ action: "allow", scan_outcome: "analyzed", redact_noop: true }),
+    "allow",
+  );
+  assert.equal(
+    honestStageAction({ action: "redact", scan_outcome: "analyzed", redact_noop: true }),
+    "allow",
+  );
+});
+
 test("buildHonestTraceStages gives EACH stage its own badge (no global smear)", () => {
   const realStages = [
     { stage: "policy", action: "redact", detection_tier: "policy", matched_policy_names: ["PII Detection & Redaction"], latency_ms: 1.2 },
@@ -276,6 +287,22 @@ test("resolvePipelineInputOutput blocked shows withheld output (PIPELINE-0022)",
   assert.equal(io.outputWithheld, true);
   assert.match(io.outputText, /withheld/i);
   assert.equal(io.inputWasRedacted, false);
+});
+
+test("resolvePipelineInputOutput withheld output guard shows operator preview (PIPELINE-0030)", () => {
+  const io = resolvePipelineInputOutput({
+    meta: { raw_output: "Could you clarify what processing you need?" },
+    pipelineTrace: {
+      final_action: "block",
+      input_text: "user record",
+      output_text: "Could you clarify what processing you need?",
+      output_withheld: true,
+      output_withheld_reason: "Response withheld — output guard blocked delivery to client",
+    },
+  });
+  assert.equal(io.outputWithheld, true);
+  assert.match(io.outputText, /withheld/i);
+  assert.equal(io.outputWithheldPreview, "Could you clarify what processing you need?");
 });
 
 test("resolvePipelineInputOutput redact shows before/after (PIPELINE-0022)", () => {

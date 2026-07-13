@@ -366,8 +366,10 @@ def enforce_output(
     **Fail-closed contract:**
     - ``exception`` (guard crash/timeout) → ``block`` (fixes D-05)
     - ``scan_degraded`` → ``redact`` (not raw pass-through)
-    - ``rewrite`` + streaming → coerced to ``block``
-    - ``flag`` + ``enforcement_mode=="block"`` → ``block`` (harmonizes D-18)
+    - ``rewrite`` is preserved on streaming (stream path rewrites at DONE;
+      never coerce to block — UI honesty / F-002)
+    - ``flag`` is preserved under ``enforcement_mode=="block"`` (UI honesty /
+      F-003: §1.7 Flag means deliver + flag, not silent escalate to block)
     - maskable PII/secret ``block`` verdict → ``redact`` (mirror input path)
     - ``redact`` + ``redaction_possible=False`` → ``block`` (noop scrub fail-closed)
     """
@@ -402,10 +404,9 @@ def enforce_output(
         if act == "block" and _redactable:
             act = "redact"
 
-        if act == "rewrite" and is_streaming:
-            act = "block"
-        elif act == "flag" and str(enforcement_mode or "").strip().lower() == "block":
-            act = "block"
+        # F-002/F-003: do NOT coerce rewrite→block on stream or flag→block under
+        # org enforcement_mode. The §1.7 UI advertises distinct actions; streaming
+        # rewrite is honored at SecureStreamingResponse DONE flush.
 
         if act == "redact" and not redaction_possible:
             act = "block"

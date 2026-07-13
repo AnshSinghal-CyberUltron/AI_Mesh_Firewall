@@ -25,7 +25,10 @@ COPY --from=node:20-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 COPY --from=node:20-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
-    && mkdir -p /data/mcp-auth /tmp/mcp-orgs
+    && mkdir -p /data/mcp-auth /tmp/mcp-orgs \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends util-linux \
+    && rm -rf /var/lib/apt/lists/*
 
 # BACKSTOP CHG-0142 (item 8, supply-chain defense-in-depth): bake a GLOBAL npmrc that
 # force-disables npm/npx install lifecycle scripts for EVERY invocation in the sandbox —
@@ -42,10 +45,12 @@ RUN mkdir -p /usr/local/etc \
     && printf '%s\n' 'ignore-scripts=true' 'audit=false' 'fund=false' 'update-notifier=false' \
         > /usr/local/etc/npmrc
 
-# Shared stdio denylist/OAuth heuristics (gateway parity).
+# Shared stdio denylist/OAuth heuristics + host-tools contract (gateway parity).
 COPY shared/ai_mesh_shared/mcp_stdio_common.py /opt/shared/ai_mesh_shared/mcp_stdio_common.py
+COPY shared/ai_mesh_shared/mcp_host_tools.py /opt/shared/ai_mesh_shared/mcp_host_tools.py
+COPY shared/ai_mesh_shared/mcp_host_tools_runtime.py /opt/shared/ai_mesh_shared/mcp_host_tools_runtime.py
 RUN mkdir -p /opt/shared/ai_mesh_shared \
-    && printf '%s\n' '"""Sandbox subset of ai_mesh_shared (stdio common only)."""' \
+    && printf '%s\n' '"""Sandbox subset of ai_mesh_shared (stdio + host tools)."""' \
         > /opt/shared/ai_mesh_shared/__init__.py
 # CHG-0153: PYTHONPATH is a plain assignment (no ":${PYTHONPATH}"). At build time
 # ${PYTHONPATH} is undefined, so the old value resolved to "/opt/shared:" — the trailing
@@ -62,11 +67,15 @@ RUN uv sync --no-dev \
     && useradd --create-home --shell /usr/sbin/nologin sandbox \
     && chown -R sandbox:sandbox /opt/agent /opt/shared /data/mcp-auth /tmp/mcp-orgs
 
-USER sandbox
+COPY services/mcp-broker/sandbox-image/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+USER root
+ENTRYPOINT ["/docker-entrypoint.sh"]
 
 EXPOSE 9320
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9320/health')" || exit 1
+    CMD setpriv --reuid=sandbox --regid=sandbox --clear-groups -- python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9320/health')" || exit 1
 
 CMD ["uvicorn", "agent.main:app", "--host", "0.0.0.0", "--port", "9320"]

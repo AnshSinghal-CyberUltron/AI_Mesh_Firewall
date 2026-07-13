@@ -268,7 +268,8 @@ export function RoutingGovernancePanel() {
             </button>
           </div>
           <p className="mt-2 text-[10px] text-slate-600 dark:text-slate-400">
-            API callers can still override per request using <span className="font-mono">routing_preferences.enable_routing</span>.
+            API callers can override per request using <span className="font-mono">routing_preferences.enable_routing</span>.
+            Set <span className="font-mono">enable_routing: false</span> in <span className="font-mono">extra_body</span> to pin a specific model; when omitted, org routing applies.
           </p>
         </div>
 

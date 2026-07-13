@@ -1,0 +1,34 @@
+{
+  "ok": true,
+  "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+  "status_code": 200,
+  "elapsed_s": 0.044,
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "get-env",
+      "arguments": {}
+    }
+  },
+  "response": {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"NPM_CONFIG_CACHE\": \"/var/npm-cache\",\n  \"HOME\": \"/var/cache/home\",\n  \"UV_TOOL_DIR\": \"/var/cache/uv/tools\",\n  \"PATH\": \"/var/cache/uv/bin:/var/npm-cache/global/bin:/opt/agent/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n  \"UV_TOOL_BIN_DIR\": \"/var/cache/uv/bin\",\n  \"XDG_CACHE_HOME\": \"/var/cache\",\n  \"UV_CACHE_DIR\": \"/var/cache/uv\",\n  \"NODE_OPTIONS\": \"--max-old-space-size=1536\",\n  \"LANG\": \"C.UTF-8\",\n  \"npm_config_ignore_scripts\": \"true\",\n  \"MCP_REMOTE_CONFIG_DIR\": \"/data/mcp-auth\"\n}"
+        }
+      ]
+    },
+    "jsonrpc": "2.0",
+    "id": 1
+  },
+  "response_headers": {
+    "date": "Tue, 07 Jul 2026 09:27:52 GMT",
+    "server": "uvicorn",
+    "content-length": "657",
+    "content-type": "application/json"
+  },
+  "_captured_at": "2026-07-07T09:27:53.552195+00:00"
+}

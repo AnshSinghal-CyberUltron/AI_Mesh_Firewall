@@ -5,8 +5,10 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useIsolationPlayground } from "../../hooks/useIsolationPlayground";
 import { useSimulatorGatewayModels } from "../../hooks/useSimulatorGatewayModels";
+import { useFirewallConfig } from "../../hooks/useFirewallConfig";
 import {
   chatCompletionBody,
+  simulatorRoutingPreferences,
   normalizeChatPipelineResult,
   normalizeStreamChatPipelineResult,
 } from "../../utils/liveGateway";
@@ -30,6 +32,8 @@ export function IsolationOpsSimulator() {
   const { fetchWithAuth } = useAuth();
   const engine = useIsolationPlayground();
   const gatewayModels = useSimulatorGatewayModels();
+  const { config: firewallConfig } = useFirewallConfig();
+  const orgRoutingEnabled = firewallConfig?.routing_enabled ?? true;
   const [tab, setTab] = useState("live");
 
   const [prompt, setPrompt] = useState("What is the capital of France?");
@@ -88,6 +92,7 @@ export function IsolationOpsSimulator() {
                 prompt,
                 model: gatewayModels.selectedModel,
                 stream: true,
+                routingPreferences: simulatorRoutingPreferences(gatewayModels.selectedModel, { orgRoutingEnabled }),
               }),
             ),
           })
@@ -98,6 +103,7 @@ export function IsolationOpsSimulator() {
                 prompt,
                 model: gatewayModels.selectedModel,
                 stream: false,
+                routingPreferences: simulatorRoutingPreferences(gatewayModels.selectedModel, { orgRoutingEnabled }),
               }),
             ),
           });

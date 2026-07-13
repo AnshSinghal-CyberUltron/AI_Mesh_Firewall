@@ -1,0 +1,472 @@
+{
+  "collected_at": "2026-07-10T05:33:04.859097+00:00",
+  "workspace": "/home/contact_cyberultron_com/AI_Mesh_Firewall",
+  "mutation": false,
+  "stack": {
+    "control": {
+      "container": "ai_mesh_firewall-control-1",
+      "port": 8100,
+      "status": "Up 23 hours (healthy)",
+      "health_http": 200
+    },
+    "gateway": {
+      "container": "ai_mesh_firewall-gateway-1",
+      "port": 8300,
+      "status": "Up 23 hours (healthy)",
+      "health_http": 200,
+      "health": {
+        "status": "ok",
+        "agent_id": "2d7c07bb-6ad3-4706-b26a-72aad8bf4b70",
+        "policy_cache_loaded": true,
+        "policy_cache_version": 737,
+        "policy_count": 49,
+        "config_sync_loaded": false,
+        "firewall_enabled": true,
+        "enforcement_mode": "block",
+        "vector_policy_cache_loaded": true,
+        "vector_policy_cache_version": 682,
+        "vector_policy_count": 13,
+        "vector_clients": [],
+        "telemetry_queue_depth": 0
+      }
+    },
+    "frontend": {
+      "container": "ai_mesh_firewall-frontend-1",
+      "port": 8180,
+      "status": "Up 3 days",
+      "http": 200
+    }
+  },
+  "auth": {
+    "control_login_endpoint": "POST /api/auth/token/",
+    "note": "POST /api/auth/login/ returns 404; JWT pair via /api/auth/token/",
+    "user": "admin@zeroshield.io",
+    "org": {
+      "id": 2,
+      "name": "ZeroShield",
+      "slug": "zeroshield"
+    },
+    "roles": [
+      "admin",
+      "user",
+      "platform_admin",
+      "platform_user"
+    ]
+  },
+  "endpoints": {
+    "firewall_config": "GET|PUT /api/firewall/config/",
+    "firewall_models": "GET /api/firewall/models/",
+    "gateway_keys": "GET /api/gateways/keys/",
+    "org_gateway_key": "GET|POST /api/mcp-connector/org-gateway-key/",
+    "simulator_default_key": "GET /api/gateways/simulator-default/",
+    "gateway_health": "GET http://127.0.0.1:8300/health",
+    "chat_completions": "POST http://127.0.0.1:8300/v1/chat/completions"
+  },
+  "gateway_chat_probe": {
+    "health_ok": true,
+    "options_method": {
+      "http": 405,
+      "note": "OPTIONS not allowed; route exists"
+    },
+    "unauthenticated_post": {
+      "http": 401,
+      "error_type": "authentication_error",
+      "note": "endpoint up; requires Bearer gateway API key"
+    }
+  },
+  "posture": {
+    "organization": {
+      "id": 2,
+      "name": "ZeroShield",
+      "slug": "zeroshield"
+    },
+    "firewall_enabled": true,
+    "enforcement_mode": "block",
+    "default_model": "gpt-5.2",
+    "pii_detection_enabled": true,
+    "jailbreak_detection_enabled": true,
+    "tier2_enabled": null,
+    "tier2_execution_mode": "sync_pre_llm",
+    "tier2_strict": true,
+    "tier2_fail_closed_enabled": true,
+    "updated_at": "2026-07-09T08:18:53.741309Z"
+  },
+  "output_guardrail": {
+    "master_switch_response_filtering_enabled": true,
+    "output_incident_logging_enabled": true,
+    "hallucination_grounding_threshold": 0.2,
+    "factuality_check_enabled": false,
+    "hallucination_grounding_mode": "lexical",
+    "hallucination_grounding_model": "",
+    "detectors": {
+      "pii": {
+        "enabled": true,
+        "action": "redact"
+      },
+      "credential": {
+        "enabled": true,
+        "action": "block"
+      },
+      "ip_leakage": {
+        "enabled": true,
+        "action": "flag"
+      },
+      "policy": {
+        "enabled": true,
+        "action": "block"
+      },
+      "hallucination": {
+        "enabled": false,
+        "action": "flag",
+        "threshold": 0.2
+      }
+    }
+  },
+  "models": {
+    "from_firewall_models_api": [
+      {
+        "id": 13,
+        "model_name": "cohere/north-mini-code:free",
+        "model_id": "cohere/north-mini-code:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true,
+        "base_url": null,
+        "organization": null
+      },
+      {
+        "id": 6,
+        "model_name": "google/gemma-4-26b-a4b-it:free",
+        "model_id": "google/gemma-4-26b-a4b-it:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true,
+        "base_url": null,
+        "organization": null
+      },
+      {
+        "id": 5,
+        "model_name": "google/gemma-4-31b-it:free",
+        "model_id": "google/gemma-4-31b-it:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true,
+        "base_url": null,
+        "organization": null
+      },
+      {
+        "id": 12,
+        "model_name": "liquid/lfm-2.5-1.2b-instruct:free",
+        "model_id": "liquid/lfm-2.5-1.2b-instruct:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true,
+        "base_url": null,
+        "organization": null
+      },
+      {
+        "id": 7,
+        "model_name": "nvidia/nemotron-3.5-content-safety:free",
+        "model_id": "nvidia/nemotron-3.5-content-safety:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true,
+        "base_url": null,
+        "organization": null
+      },
+      {
+        "id": 8,
+        "model_name": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "model_id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true,
+        "base_url": null,
+        "organization": null
+      },
+      {
+        "id": 9,
+        "model_name": "nvidia/nemotron-3-super-120b-a12b:free",
+        "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true,
+        "base_url": null,
+        "organization": null
+      },
+      {
+        "id": 14,
+        "model_name": "openrouter/free",
+        "model_id": "openrouter/free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true,
+        "base_url": null,
+        "organization": null
+      },
+      {
+        "id": 11,
+        "model_name": "poolside/laguna-m.1:free",
+        "model_id": "poolside/laguna-m.1:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true,
+        "base_url": null,
+        "organization": null
+      },
+      {
+        "id": 10,
+        "model_name": "poolside/laguna-xs.2:free",
+        "model_id": "poolside/laguna-xs.2:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true,
+        "base_url": null,
+        "organization": null
+      },
+      {
+        "id": 2,
+        "model_name": "gpt-5.2",
+        "model_id": "openai/gpt-5.2",
+        "provider": "openai",
+        "provider_display": "OpenAI",
+        "is_active": true,
+        "api_key_set": true,
+        "base_url": null,
+        "organization": null
+      }
+    ],
+    "connected_models_from_config": [
+      {
+        "id": 13,
+        "model_name": "cohere/north-mini-code:free",
+        "model_id": "cohere/north-mini-code:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true
+      },
+      {
+        "id": 6,
+        "model_name": "google/gemma-4-26b-a4b-it:free",
+        "model_id": "google/gemma-4-26b-a4b-it:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true
+      },
+      {
+        "id": 5,
+        "model_name": "google/gemma-4-31b-it:free",
+        "model_id": "google/gemma-4-31b-it:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true
+      },
+      {
+        "id": 2,
+        "model_name": "gpt-5.2",
+        "model_id": "openai/gpt-5.2",
+        "provider": "openai",
+        "provider_display": "OpenAI",
+        "is_active": true,
+        "api_key_set": true
+      },
+      {
+        "id": 12,
+        "model_name": "liquid/lfm-2.5-1.2b-instruct:free",
+        "model_id": "liquid/lfm-2.5-1.2b-instruct:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true
+      },
+      {
+        "id": 7,
+        "model_name": "nvidia/nemotron-3.5-content-safety:free",
+        "model_id": "nvidia/nemotron-3.5-content-safety:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true
+      },
+      {
+        "id": 8,
+        "model_name": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "model_id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true
+      },
+      {
+        "id": 9,
+        "model_name": "nvidia/nemotron-3-super-120b-a12b:free",
+        "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true
+      },
+      {
+        "id": 14,
+        "model_name": "openrouter/free",
+        "model_id": "openrouter/free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true
+      },
+      {
+        "id": 11,
+        "model_name": "poolside/laguna-m.1:free",
+        "model_id": "poolside/laguna-m.1:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true
+      },
+      {
+        "id": 10,
+        "model_name": "poolside/laguna-xs.2:free",
+        "model_id": "poolside/laguna-xs.2:free",
+        "provider": "custom",
+        "provider_display": "Custom / Other",
+        "is_active": true,
+        "api_key_set": true
+      }
+    ],
+    "allowed_models_list": [
+      "gpt-5.2",
+      "google/gemma-4-31b-it:free",
+      "google/gemma-4-26b-a4b-it:free",
+      "nvidia/nemotron-3.5-content-safety:free",
+      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      "nvidia/nemotron-3-super-120b-a12b:free",
+      "poolside/laguna-xs.2:free",
+      "poolside/laguna-m.1:free",
+      "liquid/lfm-2.5-1.2b-instruct:free",
+      "cohere/north-mini-code:free",
+      "openrouter/free",
+      "r6a-live-verify:free"
+    ],
+    "governance_stale_models": [
+      "r6a-live-verify:free"
+    ],
+    "active_count": 11
+  },
+  "gateway_keys": {
+    "listed_count": 10,
+    "active_count": 3,
+    "active_prefixes_only": [
+      {
+        "id": "8b3e00ab-0d8c-49be-bdec-dbb967f887c1",
+        "name": "MCP Test",
+        "prefix": "XlI7xCow",
+        "is_active": true,
+        "project_id": "mcp",
+        "created_at": "2026-07-07T09:58:55.893917Z"
+      },
+      {
+        "id": "fc5dd6a2-e32a-456a-b38c-7a43ad8e5a4c",
+        "name": "pipeline-p12-proof",
+        "prefix": "zU4b4TOV",
+        "is_active": true,
+        "project_id": "pipeline-p12-proof",
+        "created_at": "2026-07-03T11:27:14.407417Z"
+      },
+      {
+        "id": "9a0866af-7963-4b72-911c-5c64f03e29c7",
+        "name": "isolation-playground",
+        "prefix": "HPZAxcxb",
+        "is_active": true,
+        "project_id": "isolation-playground-zeroshield",
+        "created_at": "2026-07-02T11:52:53.700455Z"
+      }
+    ],
+    "inactive_prefixes_only": [
+      {
+        "id": "70f39461-1166-4d97-b627-6351da4b5e57",
+        "name": "simulator-default",
+        "prefix": "GdySSRU1",
+        "is_active": false,
+        "project_id": "simulator-default",
+        "created_at": "2026-07-02T20:50:32.681456Z"
+      },
+      {
+        "id": "b6bd94d2-018f-47f0-8a88-429fe7f1de32",
+        "name": "simulator-default",
+        "prefix": "0tmaeE6v",
+        "is_active": false,
+        "project_id": "simulator-default",
+        "created_at": "2026-07-02T19:22:26.946592Z"
+      },
+      {
+        "id": "555f62cb-8390-48f7-87e8-a6fd4800017b",
+        "name": "stress-g10",
+        "prefix": "L4Tigo33",
+        "is_active": false,
+        "project_id": "simulator-default",
+        "created_at": "2026-07-02T11:54:39.848782Z"
+      },
+      {
+        "id": "c8aab1bb-5ecb-4de9-ae6a-14e4eee9b72e",
+        "name": "stress-c09",
+        "prefix": "Gp-tDbl3",
+        "is_active": false,
+        "project_id": "simulator-default",
+        "created_at": "2026-07-02T11:47:10.483640Z"
+      },
+      {
+        "id": "bea861fa-93a7-4b35-a818-68f4a451b665",
+        "name": "stress-r7-final",
+        "prefix": "_5knYZzQ",
+        "is_active": false,
+        "project_id": "simulator-default",
+        "created_at": "2026-07-02T11:42:44.311458Z"
+      },
+      {
+        "id": "1a3a00a0-7b65-4079-838e-ccc17a74f0a6",
+        "name": "stress-r5-ks3",
+        "prefix": "03D7WVru",
+        "is_active": false,
+        "project_id": "simulator-default",
+        "created_at": "2026-07-02T11:13:32.596973Z"
+      },
+      {
+        "id": "730d3ed5-72b3-4fd3-9f6e-6d1af81a9500",
+        "name": "stress-r5-ks2",
+        "prefix": "nk7IfXv_",
+        "is_active": false,
+        "project_id": "simulator-default",
+        "created_at": "2026-07-02T11:12:46.196611Z"
+      }
+    ],
+    "org_mcp_default": {
+      "has_gateway_key": true,
+      "prefix": "q9ZRfppC",
+      "name": "MCP Default Key (ZeroShield)",
+      "is_active": true,
+      "project_id": "mcp-default-zeroshield"
+    },
+    "simulator_default": {
+      "has_gateway_key": true,
+      "prefix": "dXskhTQl",
+      "name": "simulator",
+      "project_id": "simulator-zeroshield",
+      "org_slug": "zeroshield"
+    },
+    "note": "Full key material omitted; prefixes only. GATEWAY_INTERNAL_API_KEY exists in .env (not printed)."
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "server_slug": "_gateway_auth_boundary",
+  "label": "chat_completions_no_auth",
+  "captured_at_utc": "2026-07-07T09:58:20Z",
+  "request": {
+    "method": "POST",
+    "url": "https://aimeshgateway.zeroshield.ai/v1/chat/completions",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "model": "gpt-4o-mini",
+      "messages": [
+        {
+          "role": "user",
+          "content": "ping"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status_code": 401,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 09:58:20 GMT",
+      "content-type": "application/json",
+      "content-length": "189",
+      "connection": "keep-alive",
+      "server": "cloudflare",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "www-authenticate": "Bearer resource_metadata=\"https://aimeshgateway.zeroshield.ai/.well-known/oauth-protected-resource\"",
+      "x-request-id": "zs-3c49e62def1c",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "content-security-policy": "frame-ancestors 'none'",
+      "strict-transport-security": "max-age=31536000",
+      "cf-cache-status": "DYNAMIC",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=IwoNNnSCm2EcUOcsylsagqD7BYcwY8dSpxoJ9lSQ%2B8dZ54Geot1%2F1qC4BbGByGWs9L%2FFdBe59Ia6HDZuOTpXt7TZt72%2BAeVi7%2BbjJ1U1%2FlaUHy2FnJh%2FW1AxoxIxlOxv3vnkkhlE18eCyDD7Els%3D\"}]}",
+      "cf-ray": "a175fd78596dc058-BOM",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": {
+      "error": {
+        "message": "Missing or malformed Authorization header. Expected: Bearer <api_key>",
+        "type": "authentication_error",
+        "param": null,
+        "code": "unauthorized"
+      },
+      "request_id": "zs-3c49e62def1c"
+    }
+  },
+  "notes": ""
+}

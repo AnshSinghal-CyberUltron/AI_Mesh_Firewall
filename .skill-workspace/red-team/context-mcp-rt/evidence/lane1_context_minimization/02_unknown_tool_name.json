@@ -1,0 +1,37 @@
+{
+  "ok": true,
+  "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+  "status_code": 200,
+  "elapsed_s": 0.105,
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "definitely-not-a-real-tool-xyz",
+      "arguments": {
+        "x": 1
+      }
+    }
+  },
+  "response": {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "MCP error -32602: Tool definitely-not-a-real-tool-xyz not found"
+        }
+      ],
+      "isError": true
+    },
+    "jsonrpc": "2.0",
+    "id": 1
+  },
+  "response_headers": {
+    "date": "Tue, 07 Jul 2026 09:27:50 GMT",
+    "server": "uvicorn",
+    "content-length": "151",
+    "content-type": "application/json"
+  },
+  "_captured_at": "2026-07-07T09:27:51.152281+00:00"
+}

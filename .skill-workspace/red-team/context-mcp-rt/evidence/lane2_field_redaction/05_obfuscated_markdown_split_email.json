@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+  "status_code": 200,
+  "elapsed_s": 0.041,
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "echo",
+      "arguments": {
+        "message": "Contact alice.jones@**c**orp.example for details"
+      }
+    }
+  },
+  "response": {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Echo: Contact [PII_REDACTED] for details"
+        }
+      ]
+    },
+    "jsonrpc": "2.0",
+    "id": 1
+  },
+  "response_headers": {
+    "date": "Tue, 07 Jul 2026 09:27:52 GMT",
+    "server": "uvicorn",
+    "content-length": "113",
+    "content-type": "application/json"
+  },
+  "_captured_at": "2026-07-07T09:27:53.685407+00:00"
+}

@@ -958,6 +958,27 @@
       item 8 [x]: sub-item (1) prod-enable MCP_STDIO_REQUIRE_PINNED_PACKAGES=true + private-registry pin;
       sub-item (3) live malicious-postinstall egress-capture proof (both need a Docker/isolated host — no
       Docker here). Evidence: mcp-parallel/findings/backstop-p8-npmrc-global-ignore-scripts/finding.md.
+      CHG-0153 (2026-07-03, LOW defense-in-depth + IMAGE-LEVEL VERIFICATION of CHG-0142 — docker IS available
+      on this host): (a) FIX — the sandbox Dockerfile had `ENV PYTHONPATH="/opt/shared:${PYTHONPATH}"`;
+      ${PYTHONPATH} is UNDEFINED at build → resolved to the literal "/opt/shared:" — the trailing colon = an
+      EMPTY sys.path entry = the process CWD on the agent's import path (import-hijack footgun; verified in the
+      built image: "" in sys.path == True; also the source of the docker build UndefinedVar(line 45) warning).
+      Changed to `ENV PYTHONPATH="/opt/shared"` (plain; docker run -e overrides anyway). Verified via a rebuild:
+      no warning; the REAL agent CMD `uvicorn agent.main:app` starts (/health {"status":"ok"} + "Application
+      startup complete" — the empty entry was NOT load-bearing; uvicorn imports the agent pkg itself, and
+      ai_mesh_shared resolves via /opt/shared); runtime PYTHONPATH=[/opt/shared]. (b) BONUS — I finally
+      verified CHG-0142 (the baked npmrc) END-TO-END at the image level (previously only Dockerfile-asserted,
+      since the docker-build gate was thought host-blocked): a rebuild has /usr/local/etc/npmrc =
+      ignore-scripts=true (+ audit/fund/update-notifier=false); `npm config get ignore-scripts` → true as the
+      sandbox user; `npm config get globalconfig` → /usr/local/etc/npmrc (confirms CHG-0142 chose the right
+      path); root-owned (the unprivileged user can't rewrite it). (c) OPERATIONAL FINDING for the deploy owner:
+      the currently-DEPLOYED ai-mesh/mcp-sandbox:latest image PREDATES CHG-0142 (it has NO /usr/local/etc/npmrc,
+      `npm config get ignore-scripts` → false) — so CHG-0142 + CHG-0153 are in the Dockerfile but NOT in the
+      running image; the sandbox image must be REBUILT + redeployed (per-org sandboxes recreated) for the
+      image-level controls to take effect. The CHG-0044 per-spawn env pin (npm_config_ignore_scripts=true) still
+      enforces ignore-scripts at runtime in the deployed image today; the baked npmrc is belt-and-suspenders
+      awaiting a rebuild. NOTE: gVisor/runsc is NOT installed on this host (docker info Runtimes: runc only) →
+      item 12 (gVisor) remains genuinely blocked. Evidence: mcp-parallel/findings/backstop-p8-sandbox-pythonpath-cwd/finding.md.
 - [ ] 9. Gateway auth/authz/validation/rate-limit/policy/audit — verified + hardened.
       LIVE VERIFIED (auth/authz/validation) — CHG-0016 (2026-07-02): probed the live gateway. Auth ENFORCED
       (no-auth→401, bad-key→401); CROSS-ORG key ISOLATION ENFORCED (org-a key on org-b endpoint→403
@@ -1808,3 +1829,16 @@
 - **Fix:** `_STDIO_IN_PROCESS_DEFAULT = "false"` -> with MCP_STDIO_IN_PROCESS unset, `send_jsonrpc()` routes stdio through the per-org sandbox (`_send_jsonrpc_broker`), same as the remote transports. The in-gateway spawn is still available but now OPT-IN: set MCP_STDIO_IN_PROCESS=true (dev-only / single-tenant, when no broker is running). Compose/prod already set false → no behavior change there. All 4 pre-existing tests that exercise the in-process path already set the env explicitly via monkeypatch, so NONE relied on the old default (which is why the full suite is green with the flip).
 - **Gate:** test_mcp_stdio_adapter_branch.py 8 passed (2 new: test_stdio_default_is_sandbox_secure — unset -> `_stdio_in_process() is False` AND `_STDIO_IN_PROCESS_DEFAULT == "false"`; test_stdio_in_process_still_opt_in — `=true` -> True); full gateway suite 1948 passed 0 failed (proves the flip is test-safe — every flag-referencing test sets it explicitly).
 - **Evidence:** mcp-parallel/findings/backstop-p-stdio-secure-default/finding.md. Promise WITHHELD (G5 stress items 14-19 host-blocked; item-21 UI cross-plane).
+
+---
+## P6 — Pipeline transparency + UI (Cursor Ralph pipeline lane; cross-reference only)
+
+- [x] 24. Impeccable-revamp the pipeline-trace view: full-transparency, aligned, responsive
+      (1440/1024/768/375), both themes, detector clean. PIPELINE-0024 (2026-07-03):
+      LogDetailPage.jsx + StageTimeline.jsx — CHART_PALETTE (no inline hex), equal-height
+      MetricCards, responsive metrics grid, min-h-9/11 touch targets, CollapsibleSection a11y +
+      data-testids (pipeline-trace-view, pipeline-stage-timeline, routing-decision-card);
+      StageTimeline responsive popover + sm:grid-cols-2 detail grid. Gate:
+      pipeline_p24_trace_view_verify.mjs pipelineP24Pass:true (8/8); detect [] clean; lint 92 +
+      build green. Evidence mcp-parallel/findings/pipeline-p24-trace-view/.
+      (Owned by pipeline lane — `.cursor/ralph/scratchpad.md` is MCP hardening loop state.)

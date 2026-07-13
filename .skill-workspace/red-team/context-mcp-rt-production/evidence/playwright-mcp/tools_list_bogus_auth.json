@@ -1,0 +1,45 @@
+{
+  "server_slug": "playwright-mcp",
+  "label": "tools_list_bogus_auth",
+  "captured_at_utc": "2026-07-07T09:58:20Z",
+  "request": {
+    "method": "POST",
+    "url": "https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/playwright-mcp",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {}
+    }
+  },
+  "response": {
+    "status_code": 401,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 09:58:20 GMT",
+      "content-type": "application/json",
+      "content-length": "53",
+      "connection": "keep-alive",
+      "server": "cloudflare",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "www-authenticate": "Bearer resource_metadata=\"https://aimeshgateway.zeroshield.ai/.well-known/oauth-protected-resource\"",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "content-security-policy": "frame-ancestors 'none'",
+      "strict-transport-security": "max-age=31536000",
+      "cf-cache-status": "DYNAMIC",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=5zGXjrvGzEY3EsYH1800ZejTubvAwkufa7ZGzXk9tQP5KQiCZm4DE%2F%2F5UFdlNvWJ3XjKiBWKczY2%2FC9QpzdzF4D9jAsw%2FSa0gxjnGLwLa85NjCZXVmKj3aJQCqGfg0FaG%2FD8YFmkZUzM9Qaajhg%3D\"}]}",
+      "cf-ray": "a175fd7b693fc87d-BOM",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": {
+      "error": "unauthorized",
+      "message": "Invalid API key."
+    }
+  },
+  "notes": ""
+}

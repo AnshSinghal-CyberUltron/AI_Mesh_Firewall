@@ -38,7 +38,7 @@ export function AuditComplianceCard({ config, onPatch, index }) {
         <FieldRow
           align="stack"
           label="Compliance Frameworks"
-          hint="Active compliance frameworks"
+          hint="Reporting scope for audit exports — does not disable detection tags on MCP events. Leave empty to still see per-event compliance tags from scans."
           control={
             <ChipMultiSelect
               options={COMPLIANCE_OPTIONS}

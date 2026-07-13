@@ -1,0 +1,24 @@
+{
+  "server_slug": "_production",
+  "label": "v1_models_with_key",
+  "captured_at_utc": "2026-07-07T10:56:05Z",
+  "request": {
+    "url": "https://aimeshgateway.zeroshield.ai/v1/models",
+    "headers": {
+      "Authorization": "Bearer <redacted>"
+    }
+  },
+  "response": {
+    "status_code": 401,
+    "body": {
+      "error": {
+        "message": "A valid API key is required to list models.",
+        "type": "authentication_error",
+        "param": null,
+        "code": "unauthorized"
+      },
+      "request_id": "zs-5928392dd441"
+    }
+  },
+  "notes": ""
+}

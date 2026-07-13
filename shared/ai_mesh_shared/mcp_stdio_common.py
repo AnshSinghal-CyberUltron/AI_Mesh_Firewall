@@ -109,6 +109,36 @@ _SAFE_ENV_PASSTHROUGH = {
     "NODE_OPTIONS",
 }
 
+# Writable install targets for MCP_HOST_TOOLS (uv tool / npm -g). Image/broker set
+# these on the container env; augment PATH so a freshly installed CLI resolves.
+_DEFAULT_TOOL_BIN_DIRS = ("/var/cache/uv/bin", "/var/npm-cache/global/bin")
+
+
+def augment_path_for_host_tools(child: dict[str, str]) -> None:
+    """Prepend host-tool install dirs to PATH when they exist (in-place)."""
+    path = child.get("PATH", os.environ.get("PATH", ""))
+    prefixes: list[str] = []
+    uv_bin = (child.get("UV_TOOL_BIN_DIR") or os.environ.get("UV_TOOL_BIN_DIR") or "").strip()
+    if uv_bin:
+        prefixes.append(uv_bin)
+    npm_prefix = (child.get("NPM_CONFIG_PREFIX") or os.environ.get("npm_config_prefix")
+                  or os.environ.get("NPM_CONFIG_PREFIX") or "").strip()
+    if npm_prefix:
+        prefixes.append(os.path.join(npm_prefix, "bin"))
+    for default in _DEFAULT_TOOL_BIN_DIRS:
+        if os.path.isdir(default):
+            prefixes.append(default)
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for p in prefixes:
+        if p and p not in seen:
+            seen.add(p)
+            ordered.append(p)
+    if not ordered:
+        return
+    parts = [p for p in path.split(os.pathsep) if p]
+    child["PATH"] = os.pathsep.join(ordered + [p for p in parts if p not in seen])
+
 
 def _args_have_oauth_header(args: list[str]) -> bool:
     for idx, arg in enumerate(args):
@@ -253,4 +283,5 @@ def _build_child_env(
     child["MCP_REMOTE_CONFIG_DIR"] = (
         remote_config_dir or f"/tmp/mcp-orgs/{org_slug}/mcp-auth"
     )
+    augment_path_for_host_tools(child)
     return child

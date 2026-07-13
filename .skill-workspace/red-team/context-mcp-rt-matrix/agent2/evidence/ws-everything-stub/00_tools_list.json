@@ -1,0 +1,32 @@
+{
+  "run_id": "e733a9e2",
+  "server_slug": "ws-everything-stub",
+  "label": "00_tools_list",
+  "captured_at_utc": "2026-07-07T10:54:50Z",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/ws-everything-stub",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {}
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "elapsed_s": 0.354,
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "error": {
+        "code": -32002,
+        "message": "egress denied: cannot resolve host 'ws-everything.stub' ([Errno -2] Name or service not known)"
+      }
+    }
+  },
+  "notes": "Discovery call"
+}

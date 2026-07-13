@@ -83,6 +83,21 @@ def _jsonrpc_error(msg_id: int | str, code: int, message: str) -> dict[str, Any]
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Writable tmpfs mount points (docker_manager) — create expected subdirs so
+    # npm_config_prefix (/var/npm-cache/global) and uv tool bins exist before
+    # the first npx/uv host-tool install (Semgrep MCP uses npx after pip:semgrep).
+    for path in (
+        "/var/cache/home",
+        "/var/npm-cache/global/lib",
+        "/var/npm-cache/global/bin",
+        "/var/cache/uv/bin",
+        "/var/cache/uv/tools",
+        "/var/cache/uv/python",
+    ):
+        try:
+            os.makedirs(path, exist_ok=True)
+        except OSError:
+            LOG.warning("Could not create sandbox writable dir %s", path)
     start_reaper()
     yield
     await shutdown_all()

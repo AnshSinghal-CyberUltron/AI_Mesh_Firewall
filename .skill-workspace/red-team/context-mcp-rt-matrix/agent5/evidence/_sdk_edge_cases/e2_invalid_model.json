@@ -1,0 +1,30 @@
+{
+  "server_slug": "_sdk_edge_cases",
+  "label": "e2_invalid_model",
+  "captured_at_utc": "2026-07-07T10:57:11Z",
+  "request": {
+    "sdk": "openai.OpenAI.chat.completions.create",
+    "base_url": "http://127.0.0.1:8300/v1",
+    "model": "nonexistent-model-xyz-123",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi"
+      }
+    ],
+    "max_tokens": 20
+  },
+  "response": {
+    "status": "error",
+    "type": "NotFoundError",
+    "message": "Error code: 404 - {'error': {'message': \"Model 'nonexistent-model-xyz-123' is not configured for external inference in this organization.\", 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_configured'}, 'request_id': 'zs-fb0ac2a3eea5'}",
+    "status_code": 404,
+    "body": {
+      "message": "Model 'nonexistent-model-xyz-123' is not configured for external inference in this organization.",
+      "type": "invalid_request_error",
+      "param": null,
+      "code": "model_not_configured"
+    }
+  },
+  "notes": ""
+}

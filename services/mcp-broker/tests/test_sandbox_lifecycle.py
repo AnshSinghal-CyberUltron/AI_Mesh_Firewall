@@ -313,7 +313,52 @@ def test_run_kwargs_include_runtime_when_configured():
 
     run_kwargs = manager.client.containers.run.call_args.kwargs
     assert run_kwargs["runtime"] == "runsc"
+    assert run_kwargs["dns"] == ["8.8.8.8", "8.8.4.4"]
+    assert run_kwargs["environment"]["MCP_SANDBOX_DNS"] == "8.8.8.8,8.8.4.4"
+    assert run_kwargs["user"] == "0"
+    assert run_kwargs["read_only"] is False
+    assert "no-new-privileges" not in " ".join(run_kwargs["security_opt"])
+    assert run_kwargs["cap_add"] == ["SETUID", "SETGID"]
 
+
+def test_run_kwargs_runsc_dns_override(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("MCP_SANDBOX_DNS", "1.1.1.1,9.9.9.9")
+    config = SandboxDockerConfig(runtime="runsc")
+    manager = DockerManager(client=_mock_client(), config=config)
+    assert manager._run_kwargs("acme")["dns"] == ["1.1.1.1", "9.9.9.9"]
+
+
+def test_transport_stub_extra_hosts_from_org_network():
+    client = _mock_client()
+    client.networks.get.return_value = type(
+        "Net",
+        (),
+        {
+            "attrs": {
+                "Containers": {
+                    "a": {"Name": "http-everything", "IPv4Address": "172.20.0.2/16"},
+                    "b": {"Name": "sse-everything", "IPv4Address": "172.20.0.3/16"},
+                    "c": {"Name": "ws-everything", "IPv4Address": "172.20.0.7/16"},
+                }
+            }
+        },
+    )()
+    config = SandboxDockerConfig(runtime="runsc")
+    manager = DockerManager(client=client, config=config)
+    assert manager._transport_stub_extra_hosts("zeroshield") == {
+        "http-everything.stub": "172.20.0.2",
+        "sse-everything.stub": "172.20.0.3",
+        "ws-everything.stub": "172.20.0.7",
+    }
+
+
+def test_run_kwargs_runc_omits_explicit_dns():
+    config = SandboxDockerConfig(runtime="runc")
+    manager = DockerManager(client=_mock_client(), config=config)
+    kwargs = manager._run_kwargs("acme")
+    assert "dns" not in kwargs
+    assert kwargs["user"] == "sandbox"
+    assert "mounts" not in kwargs
 
 def test_runtime_required_fails_when_unset():
     config = SandboxDockerConfig(runtime_required=True)
@@ -438,6 +483,15 @@ def test_no_egress_proxy_env_when_lockdown_off_and_no_proxy():
     for k in ("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY",
               "http_proxy", "https_proxy", "no_proxy"):
         assert k not in env
+
+
+def test_sandbox_home_on_writable_tmpfs():
+    """Host CLIs installed via MCP_HOST_TOOLS write dotdirs under $HOME on first run."""
+    manager = DockerManager(client=_mock_client(), config=SandboxDockerConfig())
+    env = manager._run_kwargs("acme")["environment"]
+    assert env["HOME"] == "/var/cache/home"
+    assert env["XDG_CACHE_HOME"] == "/var/cache"
+    assert env["UV_PYTHON_INSTALL_DIR"] == "/var/cache/uv/python"
 
 
 def test_refuses_docker_socket_mount():

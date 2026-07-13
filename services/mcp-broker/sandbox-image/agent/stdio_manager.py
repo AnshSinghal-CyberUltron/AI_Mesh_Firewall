@@ -8,6 +8,7 @@ stdin/stdout, and reuses processes across RPC calls.
 from __future__ import annotations
 
 import asyncio
+import glob
 import json
 import logging
 import os
@@ -15,7 +16,19 @@ import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 
+from ai_mesh_shared.mcp_host_tools import (
+    HOST_CLI_TOOLS_INSTALLED_MARKER,
+    MCP_HOST_TOOLS_ENV_KEY,
+    MCP_PROTOCOL_HANDSHAKE_FAILED_MARKER,
+    parse_host_tools_spec,
+)
+from ai_mesh_shared.mcp_host_tools_runtime import (
+    ensure_host_tools as _ensure_host_tools,
+    install_host_tool as _install_host_tool,
+    reset_host_tool_install_cache,
+)
 from ai_mesh_shared.mcp_stdio_common import (
     _args_have_oauth_header,
     _build_child_env,
@@ -162,6 +175,98 @@ def _is_pinned(spec: str) -> bool:
     return False
 
 
+_NPX_CACHE_ROOT = "/var/npm-cache/_npx"
+_PKG_DIR_RE = re.compile(r"^(@[^/]+/[^@]+|[^@/]+)(?:@.+)?$")
+
+
+def _package_dir_name(spec: str) -> str:
+    """npm package directory name (strip a trailing @version, keep @scope/pkg)."""
+    m = _PKG_DIR_RE.match(spec.strip())
+    return m.group(1) if m else spec.strip()
+
+
+def _package_json_entrypoint(pkg_root: str) -> str | None:
+    pj = Path(pkg_root) / "package.json"
+    if not pj.is_file():
+        return None
+    data = json.loads(pj.read_text(encoding="utf-8"))
+    root = pj.parent
+    bin_field = data.get("bin")
+    if isinstance(bin_field, str):
+        return str((root / bin_field).resolve())
+    if isinstance(bin_field, dict) and bin_field:
+        return str((root / next(iter(bin_field.values()))).resolve())
+    main = data.get("main")
+    if main:
+        return str((root / main).resolve())
+    return None
+
+
+def _find_npx_package_entry(package_spec: str) -> str | None:
+    dir_name = _package_dir_name(package_spec)
+    pattern = os.path.join(_NPX_CACHE_ROOT, "*", "node_modules", dir_name, "package.json")
+    hits = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
+    if not hits:
+        return None
+    return _package_json_entrypoint(str(Path(hits[0]).parent))
+
+
+async def _warm_npx_package(package_spec: str) -> None:
+    """Populate the npx content-addressed cache without invoking the package bin."""
+    proc = await asyncio.create_subprocess_exec(
+        "npm",
+        "exec",
+        "--yes",
+        f"--package={package_spec}",
+        "--",
+        "node",
+        "--version",
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc.wait()
+
+
+def _should_resolve_npx_to_node(command: str, args: list[str]) -> str | None:
+    """Return the fetched package when ``npx -y <pkg>`` has no URL operand."""
+    if _command_basename(command) != "npx":
+        return None
+    if len(args) < 2 or args[0] not in ("-y", "--yes"):
+        return None
+    pkg = args[1]
+    if pkg.startswith("-"):
+        return None
+    for extra in args[2:]:
+        if extra.startswith("-"):
+            continue
+        if "://" in extra or extra.startswith("/"):
+            return None
+    return pkg
+
+
+async def _resolve_npx_spawn(command: str, args: list[str]) -> tuple[str, list[str]]:
+    """Rewrite ``npx -y <pkg>`` to ``node <pkg-main.js>`` when needed.
+
+    Some MCP npm packages (e.g. mcp-server-semgrep) gate startup on an
+    ``isEntrypoint`` check comparing ``process.argv[1]`` to ``__filename``.
+    npx's wrapper leaves argv[1] mismatched, so the server exits immediately
+    with code 0 and no JSON-RPC output. Spawning ``node`` on the resolved
+    package entrypoint is the general fix; ``npx -y mcp-remote <url>`` is
+    left untouched (extra URL operand).
+    """
+    pkg = _should_resolve_npx_to_node(command, args)
+    if not pkg:
+        return command, args
+    entry = _find_npx_package_entry(pkg)
+    if not entry:
+        await _warm_npx_package(pkg)
+        entry = _find_npx_package_entry(pkg)
+    if entry and os.path.isfile(entry):
+        LOG.info("Resolved npx -y %s to node %s (isEntrypoint-safe)", pkg, entry)
+        return "node", [entry]
+    return command, args
+
+
 def _get_init_semaphore() -> asyncio.Semaphore:
     global _init_semaphore
     if _init_semaphore is None:
@@ -187,6 +292,7 @@ class StdioProcess:
     _reader_task: asyncio.Task | None = None
     stderr_tail: deque = field(default_factory=lambda: deque(maxlen=50))
     oauth_header_injected: bool = False
+    host_tools_ready: bool = False
 
     def next_id(self) -> int:
         self._msg_id_counter += 1
@@ -214,7 +320,13 @@ def _flag_needs_reauth(proc: StdioProcess, evidence: str) -> None:
     asyncio.create_task(_kill_process(proc.key))
 
 
-def _classify_exit_reason(rc, stderr_tail: str, *, oversized_line: bool) -> str:
+def _classify_exit_reason(
+    rc,
+    stderr_tail: str,
+    *,
+    oversized_line: bool,
+    host_tools_ready: bool = False,
+) -> str:
     """Human-readable reason a spawned stdio MCP server terminated.
 
     Pure + unit-testable. OOM (CP20) is detected FIRST from the stderr signature
@@ -251,6 +363,12 @@ def _classify_exit_reason(rc, stderr_tail: str, *, oversized_line: bool) -> str:
     if rc is None:
         return "stdout stream closed unexpectedly"
     if rc == 0:
+        if host_tools_ready:
+            return (
+                f"{MCP_PROTOCOL_HANDSHAKE_FAILED_MARKER}: "
+                f"the MCP server exited immediately without speaking MCP JSON-RPC "
+                f"({HOST_CLI_TOOLS_INSTALLED_MARKER})"
+            )
         return (
             "the MCP server exited immediately without responding "
             "(likely a missing host dependency or wrong package name)"
@@ -326,7 +444,12 @@ async def _start_reader(proc: StdioProcess):
         stderr_tail = "\n".join(str(line) for line in proc.stderr_tail).strip()
         if stderr_tail:
             LOG.warning("Stdio %s stderr tail (rc=%s):\n%s", proc.key, rc, stderr_tail[-2000:])
-        reason = _classify_exit_reason(rc, stderr_tail, oversized_line=proc.oversized_line)
+        reason = _classify_exit_reason(
+            rc,
+            stderr_tail,
+            oversized_line=proc.oversized_line,
+            host_tools_ready=proc.host_tools_ready,
+        )
         safe_msg = (
             f"Stdio MCP server '{proc.key}' failed to start: {reason}. "
             "See sandbox-agent logs for details."
@@ -337,93 +460,10 @@ async def _start_reader(proc: StdioProcess):
         proc._pending.clear()
 
 
-# ── Host-tool install (general CLI-binary support) ──────────────────────────
-# Some MCP servers shell out to a CLI binary that the minimal sandbox image does
-# NOT ship (e.g. Semgrep MCP -> the `semgrep` CLI), so they exit immediately at
-# startup. Rather than baking every possible tool into the image, an operator
-# declares a server's host-tool prerequisites in its env var MCP_HOST_TOOLS
-# (already flows control -> gateway -> broker -> agent with the rest of env_vars):
-#
-#     MCP_HOST_TOOLS = "pip:semgrep npm:some-cli"      (whitespace/comma separated)
-#     MCP_HOST_TOOLS = "semgrep"                        (bare name -> pip/uv tool)
-#
-# The agent installs each declared tool INTO THE WRITABLE TMPFS before launching
-# the server: pip/uv tools via `uv tool install` (entry points land on
-# UV_TOOL_BIN_DIR=/var/cache/uv/bin, which the image puts on PATH), npm CLIs via
-# `npm install -g` (prefix redirected to the tmpfs npm cache). The installer verb
-# is FIXED — only the operator-declared PACKAGE NAME is interpolated, and it is
-# validated against a strict package-name regex (no shell, no path traversal), so
-# this never becomes arbitrary command execution. Read-only rootfs keeps the base
-# image immutable; installs are ephemeral per container (re-done on cold start) and
-# cached in-process so repeated launches don't reinstall.
-_HOST_TOOL_MANAGERS = {"pip", "uv", "npm"}
-_HOST_TOOL_INSTALL_TIMEOUT = float(os.environ.get("MCP_HOST_TOOL_INSTALL_TIMEOUT", "300"))
-_HOST_TOOL_PKG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+@/-]{0,127}$")
-_host_tools_installed: set[str] = set()          # marker cache (per container lifetime)
-_host_tools_lock = asyncio.Lock()                # serialize concurrent installs
-
-
-async def _install_host_tool(manager: str, package: str) -> None:
-    marker = f"{manager}:{package}"
-    if marker in _host_tools_installed:
-        return
-    async with _host_tools_lock:
-        if marker in _host_tools_installed:  # re-check inside the lock
-            return
-        if manager in ("pip", "uv"):
-            # `uv tool install` creates an isolated venv under UV_TOOL_DIR and links
-            # the CLI entry point into UV_TOOL_BIN_DIR (both tmpfs, writable).
-            cmd = ["uv", "tool", "install", "--quiet", package]
-        else:  # npm
-            cmd = ["npm", "install", "-g", "--no-audit", "--no-fund", package]
-        LOG.info("Installing declared host tool %s via %s", package, manager)
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            )
-        except FileNotFoundError as exc:
-            raise RuntimeError(f"host tool installer '{cmd[0]}' unavailable") from exc
-        try:
-            _out, _err = await asyncio.wait_for(
-                proc.communicate(), timeout=_HOST_TOOL_INSTALL_TIMEOUT,
-            )
-        except asyncio.TimeoutError as exc:
-            try:
-                proc.kill()
-            except ProcessLookupError:
-                pass
-            raise RuntimeError(
-                f"host tool '{package}' install timed out after "
-                f"{int(_HOST_TOOL_INSTALL_TIMEOUT)}s"
-            ) from exc
-        if proc.returncode != 0:
-            tail = (_err or b"").decode("utf-8", "replace").strip()[-300:]
-            raise RuntimeError(f"host tool '{package}' ({manager}) install failed: {tail}")
-        _host_tools_installed.add(marker)
-        LOG.info("Host tool %s installed", package)
-
-
-async def _ensure_host_tools(requested_env: dict[str, str]) -> None:
-    """Install any host CLI tools declared in MCP_HOST_TOOLS before launching."""
-    spec = (requested_env.get("MCP_HOST_TOOLS") or "").strip()
-    if not spec:
-        return
-    for entry in re.split(r"[,\s]+", spec):
-        entry = entry.strip()
-        if not entry:
-            continue
-        manager, sep, package = entry.partition(":")
-        if not sep:  # bare name → default to a pip/uv tool
-            manager, package = "pip", entry
-        manager = manager.strip().lower()
-        package = package.strip()
-        if manager not in _HOST_TOOL_MANAGERS:
-            raise RuntimeError(
-                f"host tool manager '{manager}' not allowed (use pip, uv, or npm)"
-            )
-        if not _HOST_TOOL_PKG_RE.match(package):
-            raise RuntimeError(f"invalid host tool package name: {package!r}")
-        await _install_host_tool(manager, package)
+# Re-export install cache helpers for agent tests (see test_stdio_host_tools.py).
+_host_tools_installed = __import__(
+    "ai_mesh_shared.mcp_host_tools_runtime", fromlist=["_installed"]
+)._installed
 
 
 async def _ensure_process(
@@ -503,7 +543,13 @@ async def _ensure_process(
         # doesn't ship (e.g. semgrep) finds it on PATH. A failure here surfaces as a
         # clean start error rather than the server exiting immediately with an
         # opaque "missing host dependency".
+        host_tools_declared = bool(
+            parse_host_tools_spec(requested_env.get(MCP_HOST_TOOLS_ENV_KEY) or "")
+        )
         await _ensure_host_tools(requested_env)
+        host_tools_ready = host_tools_declared
+
+        spawn_command, spawn_args = await _resolve_npx_spawn(command, args)
 
         proc_env = _build_child_env(
             requested_env,
@@ -514,12 +560,12 @@ async def _ensure_process(
 
         LOG.info(
             "Starting stdio MCP process: %s %s (key=%s)",
-            command, _safe_args_for_log(args), key,
+            spawn_command, _safe_args_for_log(spawn_args), key,
         )
         try:
             process = await asyncio.create_subprocess_exec(
-                command,
-                *args,
+                spawn_command,
+                *spawn_args,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -536,6 +582,7 @@ async def _ensure_process(
             command=command,
             args=args,
             env=requested_env,
+            host_tools_ready=host_tools_ready,
             process=process,
             oauth_header_injected=_args_have_oauth_header(args),
         )

@@ -23,7 +23,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from jobs import enqueue_job
 
-from mcp_scan_orchestrator import scan_mcp_payload
+from mcp_scan_orchestrator import _is_observe_only_posture, scan_mcp_payload
 
 try:  # package vs top-level import (mirrors mcp_oauth_proxy import style)
     from ._url_guard import is_safe_outbound_url
@@ -243,11 +243,48 @@ def _classify_backend_failure(status_code: int, data) -> tuple[str, str, str]:
 
 # Allowlist of external MCP server domains that can be proxied.
 # Prevents open-relay abuse while still allowing known MCP endpoints.
-_ALLOWED_MCP_DOMAINS = {
+# Operators may extend via MCP_EXT_ALLOWED_DOMAINS (comma-separated host[:port]).
+_BASE_ALLOWED_MCP_DOMAINS = frozenset({
     "mcp.context7.com",
     "api.githubcopilot.com",
     "mcp.linear.app",
-}
+})
+
+
+def _allowed_mcp_domains() -> set[str]:
+    domains = set(_BASE_ALLOWED_MCP_DOMAINS)
+    extra = os.environ.get("MCP_EXT_ALLOWED_DOMAINS", "") or ""
+    for part in extra.split(","):
+        part = part.strip()
+        if part:
+            domains.add(part)
+    return domains
+
+
+# Mutable set — tests patch this object; refreshed at import + via _refresh_allowed_mcp_domains().
+_ALLOWED_MCP_DOMAINS = _allowed_mcp_domains()
+
+
+def _refresh_allowed_mcp_domains() -> None:
+    """Re-read MCP_EXT_ALLOWED_DOMAINS (used after env changes in tests)."""
+    global _ALLOWED_MCP_DOMAINS  # noqa: PLW0603 — intentional module-level refresh
+    _ALLOWED_MCP_DOMAINS = _allowed_mcp_domains()
+
+
+def _ext_proxy_target_url(hostname: str, remaining: str) -> str:
+    """Build the upstream URL for ext_mcp_proxy.
+
+    Production allowlisted hosts use HTTPS. Dev/validation stubs listed in
+    MCP_EXT_PROXY_HTTP_HOSTS (comma-separated, case-insensitive) use HTTP so
+    hermetic in-compose targets (e.g. mcp-stub:9999) can be exercised live.
+    """
+    http_hosts = {
+        h.strip().lower()
+        for h in (os.environ.get("MCP_EXT_PROXY_HTTP_HOSTS", "") or "").split(",")
+        if h.strip()
+    }
+    scheme = "http" if hostname.lower() in http_hosts else "https"
+    return f"{scheme}://{hostname}/{remaining}"
 
 # CHG-0034: per-request body-size ceiling for the MCP routes (validation / DoS).
 # The MCP tool-call handlers buffer the whole body (request.body()/json()); with
@@ -480,6 +517,12 @@ def _mcp_upstream_too_large_response() -> JSONResponse:
 # ── Server config cache for transport-aware routing ──────────────────
 _server_config_cache: dict[str, dict] = {}
 _server_config_ttl: dict[str, float] = {}
+# Scan-version stamp per cache entry so a registration change (is_active /
+# is_exposed_to_agents / url / transport / name — _SERVER_RELEVANT_FIELDS bumps
+# mcp:scan_ver) invalidates the entry on the NEXT call instead of lingering for the
+# full TTL. Mirrors _enabled_tools_ver. Critical for the _server_disabled gate: a
+# disabled server must stop serving promptly, not up to _CONFIG_CACHE_TTL later.
+_server_config_ver: dict[str, str | None] = {}
 _CONFIG_CACHE_TTL = 120  # seconds
 
 # ── Enabled-tools cache for per-tool enable/disable enforcement ──────
@@ -595,8 +638,20 @@ async def _get_server_config(org_slug: str, server_slug: str) -> dict | None:
     """
     cache_key = f"{org_slug}/{server_slug}"
     now = time.time()
+    fetch_ver: str | None = None
     if cache_key in _server_config_cache and now - _server_config_ttl.get(cache_key, 0) < _CONFIG_CACHE_TTL:
-        return _server_config_cache[cache_key]
+        # Version-invalidate (mirrors _get_enabled_tools): a registration change that
+        # bumped the scan version makes this entry stale before its TTL — refetch so the
+        # _server_disabled gate + url/transport edits take effect on the next call. If
+        # Redis is unavailable (_current_scan_version None) fall back to TTL-only.
+        fetch_ver = await _current_scan_version(org_slug, server_slug)
+        if fetch_ver is None or fetch_ver == _server_config_ver.get(cache_key):
+            return _server_config_cache[cache_key]
+        # scan version changed -> stale; fall through to refetch below.
+
+    if fetch_ver is None:
+        # Read the version BEFORE the HTTP fetch so a mid-fetch bump refetches next call.
+        fetch_ver = await _current_scan_version(org_slug, server_slug)
 
     headers = _control_request_headers(org_slug)
 
@@ -624,13 +679,69 @@ async def _get_server_config(org_slug: str, server_slug: str) -> dict | None:
                         "env_vars": srv.get("env_vars", {}),
                         "url": srv.get("url", ""),
                         "name": srv.get("name", ""),
+                        # Registration disable flags surfaced so the route handlers can
+                        # gate a disabled/unexposed server (default True when a legacy/slim
+                        # payload omits them, so absence fails OPEN to prior behaviour;
+                        # only an explicit False disables). is_active = server enabled;
+                        # is_exposed_to_agents = "accessible via the external gateway".
+                        "is_active": srv.get("is_active", True),
+                        "is_exposed_to_agents": srv.get("is_exposed_to_agents", True),
                     }
                     _server_config_cache[cache_key] = config
                     _server_config_ttl[cache_key] = now
+                    _server_config_ver[cache_key] = fetch_ver
                     return config
     except Exception as exc:
         LOG.warning("Server config lookup error: %s", exc)
     return None
+
+
+def _server_disabled(server_config: dict | None) -> bool:
+    """True when the server registration is NOT reachable via the external gateway.
+
+    A server with ``is_active=False`` (disabled) or ``is_exposed_to_agents=False``
+    (``is_exposed_to_agents`` help_text: "Whether this server is accessible via the
+    external gateway endpoint") must not serve tool discovery or execution to agents.
+    Both flags default True when absent from a slim/legacy config payload, so absence
+    fails OPEN to prior behaviour — only an explicit False disables. Closes the gap
+    where these flags were stored + version-bumped but never enforced.
+    """
+    if not server_config:
+        return False
+    return (
+        server_config.get("is_active", True) is False
+        or server_config.get("is_exposed_to_agents", True) is False
+    )
+
+
+async def _rest_server_disabled_response(request, org_slug: str, server_slug: str):
+    """Bare-REST guard: HTTP 403 when the server registration is disabled/unexposed.
+
+    Parity with ``org_mcp_jsonrpc``'s ``_server_disabled`` gate for the bare REST
+    routes (``org_mcp_tool_call`` / ``org_mcp_tools_list`` / ``org_mcp_server_health``),
+    which previously proxied straight through after only the org-scope check — so a
+    server an operator disabled (``is_active=False`` / ``is_exposed_to_agents=False``)
+    stayed fully callable via REST even though the JSON-RPC route blocked it
+    (inconsistent enforcement across transports). Audits the block to the caller's org.
+    Returns a ``JSONResponse`` to short-circuit, or ``None`` to proceed. Fails OPEN when
+    the config is unavailable (``_server_disabled`` returns False on a None config), so a
+    control-plane hiccup degrades to prior behaviour rather than blocking every call.
+    """
+    server_config = await _get_server_config(org_slug, server_slug)
+    if not _server_disabled(server_config):
+        return None
+    await _record_gateway_event(
+        org_slug=org_slug, server_slug=server_slug, tool_name="",
+        decision="block", reason="server_disabled",
+        metadata={"transport": "http", "enforced_at": "gateway"},
+    )
+    return JSONResponse(
+        content={
+            "error": "Server is disabled or not exposed to agents",
+            "reason": "server_disabled", "server_slug": server_slug,
+        },
+        status_code=403,
+    )
 
 
 def _apply_fresh_config_overrides(
@@ -661,6 +772,9 @@ def _apply_fresh_config_overrides(
     cache_key = f"{org_slug}/{server_slug}"
     _server_config_cache[cache_key] = merged
     _server_config_ttl[cache_key] = time.time()
+    # Body-override merge carries no scan version; clear the stamp so the next
+    # _get_server_config revalidates against the live version (fails toward freshness).
+    _server_config_ver[cache_key] = None
     return merged
 
 
@@ -747,7 +861,7 @@ async def _get_enabled_tools(org_slug: str, server_slug: str) -> dict | None:
                     or {}
                 ),
                 "server_id": data.get("server_id"),
-                "scan_controls_configured": True,
+                "scan_controls_configured": bool(data.get("scan_controls_configured")),
                 "effective_scan_controls": data.get("effective_scan_controls") or {},
                 "effective_scan_controls_by_tool": data.get("effective_scan_controls_by_tool") or {},
                 "mcp_tier2_enabled": data.get("mcp_tier2_enabled"),
@@ -950,6 +1064,43 @@ def _effective_scan_action(tool_name: str, enabled_info: dict | None) -> str:
     )
 
 
+def _gateway_app_module():
+    """Resolve the RUNNING gateway app module whose startup handler set the live
+    singletons (CONFIG, RATE_LIMITER, CONFIG_SYNC, INPUT_SCANNER, POLICY_SYNC ...).
+
+    Gunicorn loads ``ai_mesh_gateway.main:app`` and runs its ``@app.on_event("startup")``
+    on THAT module object; a bare ``import main`` can resolve to a *different* module
+    object (same file, separate namespace) whose module-level globals stayed None. That
+    silently (a) BYPASSED MCP per-org rate limiting (``_enforce_org_tpm_rate_limit`` gets
+    ``RATE_LIMITER=None`` -> no-op) and (b) ignored CONFIG-based MCP flag overrides. Same
+    defect class as ``_get_policy_sync`` / ``_get_input_scanner``. Pick the module that
+    actually ran startup (``CONFIG`` populated); fall back to whichever exists (tests /
+    pre-startup) then to imports. Returns the module or None.
+    """
+    import sys
+
+    candidates = ("ai_mesh_gateway.main", "main")
+    for mod_name in candidates:
+        mod = sys.modules.get(mod_name)
+        if mod is not None and getattr(mod, "CONFIG", None) is not None:
+            return mod
+    for mod_name in candidates:
+        mod = sys.modules.get(mod_name)
+        if mod is not None:
+            return mod
+    try:
+        import ai_mesh_gateway.main as _m
+
+        return _m
+    except Exception:
+        try:
+            import main as _m  # noqa: WPS433 — legacy dev entry
+
+            return _m
+        except Exception:
+            return None
+
+
 def _mcp_block_on_credential_enabled() -> bool:
     """E12 FIX 1: whether a credential in tool ARGS force-blocks the call.
 
@@ -958,7 +1109,7 @@ def _mcp_block_on_credential_enabled() -> bool:
     early startup before ``main.CONFIG`` is set. Default ON.
     """
     try:
-        import main as gateway_main
+        gateway_main = _gateway_app_module()
 
         cfg = getattr(gateway_main, "CONFIG", None)
         if isinstance(cfg, dict) and "mcp_block_on_credential" in cfg:
@@ -1024,7 +1175,7 @@ def _mcp_redact_result_on_detect_enabled() -> bool:
     ``_mcp_block_on_credential_enabled`` exactly.
     """
     try:
-        import main as gateway_main
+        gateway_main = _gateway_app_module()
 
         cfg = getattr(gateway_main, "CONFIG", None)
         if isinstance(cfg, dict) and "mcp_redact_result_on_detect" in cfg:
@@ -1133,7 +1284,7 @@ async def _scan_tool_args_block(
             "mcp_proxy.args_too_deeply_nested org=%s server=%s tool=%s (>%d) action=%s",
             org_slug, server_slug, tool_name, _MCP_MAX_ARG_DEPTH, scan_action,
         )
-        if scan_action == "monitor":
+        if _explicit_monitor_posture(tool_name, enabled_info, "input"):
             return arguments, False, [], [], {
                 "args_too_deeply_nested": True, "monitor_scan_skipped": True,
             }
@@ -1162,7 +1313,7 @@ async def _scan_tool_args_block(
     if (
         not blocked
         and _mcp_block_on_credential_enabled()
-        and scan_action != "monitor"
+        and _static_hardening_floors_enabled(tool_name, enabled_info, "input")
         and _findings_have_credential(findings, tags)
     ):
         blocked = True
@@ -1279,11 +1430,11 @@ async def _scan_tool_result_floor(
     scanner hiccup, a silent fail-OPEN leak (BACKSTOP_FINDINGS G2 item 2).
     """
     scan_action = _effective_scan_action(tool_name, enabled_info)
-    # CHG-0104: fail CLOSED on a many-block resource bomb. The byte cap (10MB) does not
+    # CHG-0104: fail CLOSED on a many-block resource bomb.
     # stop ~50k tiny blocks (~3-10MB, under the byte cap) that amplify per-block loop cost
     # (scan / JSON serialize / filter) and stall the event loop. A per-tool "monitor" is
     # observe-only and does not block. Cheap O(1) length check before the expensive scan.
-    if scan_action != "monitor" and isinstance(result_content, (dict, list)):
+    if not _explicit_monitor_posture(tool_name, enabled_info, "output") and isinstance(result_content, (dict, list)):
         _blocks = result_content.get("content") if isinstance(result_content, dict) else result_content
         if isinstance(_blocks, list) and len(_blocks) > _MCP_MAX_CONTENT_BLOCKS:
             LOG.warning(
@@ -1308,7 +1459,7 @@ async def _scan_tool_result_floor(
             "mcp_proxy.result_too_deeply_nested org=%s server=%s tool=%s (>%d) action=%s",
             org_slug, server_slug, tool_name, _MCP_MAX_RESULT_DEPTH, scan_action,
         )
-        if scan_action == "monitor":
+        if _explicit_monitor_posture(tool_name, enabled_info, "output"):
             # Observe-only: never block; forward unscanned (the recursive scan would crash).
             return result_content, False, [], [], {
                 "result_too_deeply_nested": True, "monitor_scan_skipped": True,
@@ -1328,7 +1479,7 @@ async def _scan_tool_result_floor(
             "mcp_proxy.result_too_many_nodes org=%s server=%s tool=%s (>%d) action=%s",
             org_slug, server_slug, tool_name, _MCP_MAX_RESULT_NODES, scan_action,
         )
-        if scan_action == "monitor":
+        if _explicit_monitor_posture(tool_name, enabled_info, "output"):
             return result_content, False, [], [], {
                 "result_too_many_nodes": True, "monitor_scan_skipped": True,
             }
@@ -1364,7 +1515,7 @@ async def _scan_tool_result_floor(
     # structure so the value is never contiguous — but a client that concatenates the
     # text blocks reconstructs it. Fail CLOSED (a cross-block split cannot be masked in
     # place). A per-tool "monitor" still wins (observe-only), like the redaction floor.
-    if scan_action != "monitor":
+    if not _explicit_monitor_posture(tool_name, enabled_info, "output"):
         _split, _split_kinds = _result_has_split_secret(result_content)
         if _split:
             LOG.warning(
@@ -1380,7 +1531,7 @@ async def _scan_tool_result_floor(
     if (
         scanned is result_content
         and _mcp_redact_result_on_detect_enabled()
-        and scan_action != "monitor"
+        and _static_hardening_floors_enabled(tool_name, enabled_info, "output")
         and (
             _findings_have_secret_or_pii(findings)
             or _findings_have_infra_network_leak(findings)  # CHG-0074
@@ -1628,6 +1779,52 @@ def _effective_scan_controls_for_tool(
     return enabled_info.get("effective_scan_controls") or {}
 
 
+def _resolved_tier1_action(
+    tool_name: str,
+    enabled_info: dict | None,
+    scan_direction: str,
+) -> str:
+    """Per-direction Tier-1 action from the scan-control matrix (falls back to server/tool default)."""
+    fallback = _effective_scan_action(tool_name, enabled_info)
+    effective = _effective_scan_controls_for_tool(enabled_info, tool_name)
+    if not effective.get("scan_controls_configured"):
+        return fallback
+    from mcp_scan_orchestrator import _effective_control, _resolve_tier_action
+
+    ctrl = _effective_control(effective, "tier1", scan_direction)
+    return _resolve_tier_action(ctrl, fallback)
+
+
+def _explicit_monitor_posture(
+    tool_name: str,
+    enabled_info: dict | None,
+    scan_direction: str,
+) -> bool:
+    """True only when the org scan-control matrix explicitly resolved to monitor/tag.
+
+    Transport-level paths (``ext_mcp_proxy``, etc.) pass ``enabled_info=None`` and
+    inherit a default ``tag`` scan_action — that is NOT an operator opt-out of
+    static hardening floors.  At 0 configured scan controls the two-tier scan is
+    skipped separately in ``_mcp_security_scan``; this helper does not re-enable it.
+    """
+    if not enabled_info:
+        return False
+    effective = _effective_scan_controls_for_tool(enabled_info, tool_name)
+    if not effective.get("scan_controls_configured"):
+        return False
+    action = _resolved_tier1_action(tool_name, enabled_info, scan_direction)
+    return _is_observe_only_posture(action)
+
+
+def _static_hardening_floors_enabled(
+    tool_name: str,
+    enabled_info: dict | None,
+    scan_direction: str,
+) -> bool:
+    """E12 credential force-block + result-redaction floor apply unless explicit monitor."""
+    return not _explicit_monitor_posture(tool_name, enabled_info, scan_direction)
+
+
 async def _mcp_security_scan(
     payload,
     *,
@@ -1655,6 +1852,41 @@ async def _mcp_security_scan(
     """
     action = enforcement_override or _effective_scan_action(tool_name, enabled_info)
     mcp_direction = "inbound" if scan_direction == "input" else "outbound"
+    # Off-by-default scan controls: an org with ZERO scan controls configured is not
+    # scanned by the two-tier pipeline — no Tier-1, no Tier-2, no compliance tagging,
+    # no redaction, no blocking, no monitoring. The control plane signals this via
+    # ``scan_controls_configured`` (bool of the org's MCPScanControl rows). Gate ONLY
+    # on an AFFIRMATIVE ``is False`` so a transient control-plane outage (flag absent
+    # / enabled_info missing) still FAILS SAFE to the scan path below rather than
+    # silently disabling protection. Adding ANY scan control flips the flag True and
+    # restores the Tier-1 baseline + per-scope overrides. Static hardening floors in
+    # the callers stay governed by the server's explicit ``default_scan_action``
+    # posture (redact/block), which is itself explicit configuration.
+    # NOTE: chat-only OG assessment (2026-07-10) deliberately does NOT change this
+    # MCP gate — MCP/RAG hardening is out of scope for that lane.
+    if enabled_info is not None and enabled_info.get("scan_controls_configured") is False:
+        return (
+            payload,
+            False,
+            [],
+            [],
+            {
+                "scan_direction": mcp_direction,
+                "scan_action": action,
+                "scan_pipeline": "two_tier",
+                "scan_skipped": "no_scan_controls_configured",
+                "monitored": False,
+                "scan_trace": [
+                    {
+                        "scan_stage": "scan_skipped",
+                        "direction": scan_direction,
+                        "reason": "no_scan_controls_configured",
+                    }
+                ],
+                "redacted_fields": [],
+                "policy_redaction_fields": [],
+            },
+        )
     effective = _effective_scan_controls_for_tool(enabled_info, tool_name)
     if not effective:
         effective = {
@@ -1886,7 +2118,7 @@ async def ext_mcp_proxy(path: str, request: Request):
         await _ext_audit("block", "request_too_large")  # CHG-0095: audit the DoS-guard reject
         return _mcp_body_too_large_response()
 
-    target_url = f"https://{hostname}/{remaining}"
+    target_url = _ext_proxy_target_url(hostname, remaining)
 
     # CHG-0065: SSRF guard — parity with internal_tools_call / internal_discover_tools
     # ("finding mcp#1"). The allowlist above matches the hostname STRING only; it does
@@ -2580,6 +2812,19 @@ async def internal_discover_tools(request: Request):
         )
 
     config = await _get_server_config(org_slug, server_slug)
+    if _server_disabled(config):
+        # Parity with internal_tools_call: a disabled/unexposed server must not have its
+        # tools DISCOVERABLE via the internal path either (feeds control-plane MCPToolListView).
+        await _record_gateway_event(
+            org_slug=org_slug, server_slug=server_slug, tool_name="",
+            decision="block", reason="server_disabled",
+            metadata={"transport": "internal", "enforced_at": "gateway", "stage": "discover"},
+        )
+        return JSONResponse(
+            content={"error": "Server is disabled or not exposed to agents",
+                     "reason": "server_disabled"},
+            status_code=403,
+        )
     config = _apply_fresh_config_overrides(config, body, org_slug, server_slug)
     if not config:
         return JSONResponse(content={"error": "Server not found"}, status_code=404)
@@ -2744,6 +2989,59 @@ async def internal_discover_tools(request: Request):
 
 
 @router.post(
+    "/internal/oauth-token-mirror",
+    summary="Mirror control-plane OAuth tokens into gateway Redis",
+)
+async def internal_oauth_token_mirror(request: Request):
+    """Persist a control-plane OAuth token into gateway Redis for sandbox routing."""
+    internal_key = (request.headers.get("X-Gateway-Internal-Key") or "").strip()
+    if not _valid_internal_key(internal_key):
+        return JSONResponse(content={"error": "Unauthorized"}, status_code=401)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(content={"error": "Invalid JSON body"}, status_code=400)
+
+    org_slug = (body.get("org_slug") or "").strip()
+    server_url = (body.get("server_url") or "").strip()
+    access_token = (body.get("access_token") or "").strip()
+    if not org_slug or not server_url or not access_token:
+        return JSONResponse(
+            content={"error": "org_slug, server_url, and access_token are required"},
+            status_code=400,
+        )
+
+    data: dict = {
+        "access_token": access_token,
+        "refresh_token": body.get("refresh_token") or "",
+        "token_type": body.get("token_type") or "bearer",
+        "token_endpoint": body.get("token_endpoint") or "",
+        "client_id": body.get("client_id") or "",
+        "client_secret": body.get("client_secret") or "",
+        "resource": body.get("resource") or "",
+        "scope": body.get("scope") or "",
+        "obtained_at": time.time(),
+    }
+    expires_in = body.get("expires_in")
+    if expires_in is not None:
+        try:
+            data["expires_at"] = time.time() + int(expires_in)
+        except (TypeError, ValueError):
+            data["expires_at"] = None
+
+    try:
+        from mcp_oauth_proxy import _token_save
+
+        await _token_save(org_slug, server_url, data)
+    except Exception as exc:
+        LOG.warning("oauth-token-mirror save failed org=%s url=%s: %s", org_slug, server_url, exc)
+        return JSONResponse(content={"error": "token save failed"}, status_code=500)
+
+    return JSONResponse(content={"mirrored": True}, status_code=200)
+
+
+@router.post(
     "/internal/tools-call",
     summary="Internal tool execution for backend requests",
 )
@@ -2782,6 +3080,26 @@ async def internal_tools_call(request: Request):
         )
 
     config = await _get_server_config(org_slug, server_slug)
+    if _server_disabled(config):
+        # Server disabled (is_active=False) or not exposed (is_exposed_to_agents=False):
+        # block the INTERNAL tool-call path (control-plane MCPToolCallView / chat pipeline
+        # proxy here) too — parity with org_mcp_jsonrpc + the bare REST routes. Without this,
+        # a server an operator disabled was still executable via the control-plane's own MCP
+        # tool-execution surface. Gate on the authoritative DB config (before body overrides,
+        # which only carry url/transport). Fails OPEN on a None config (server absent → the
+        # 404 below handles it), so a fresh body-supplied config is unaffected.
+        await _record_gateway_event(
+            org_slug=org_slug, server_slug=server_slug, tool_name=tool_name,
+            decision="block", reason="server_disabled",
+            metadata={"transport": "internal", "enforced_at": "gateway"},
+        )
+        return JSONResponse(
+            content={
+                "jsonrpc": "2.0", "id": 1,
+                "error": {"code": -32601, "message": "Server is disabled or not exposed to agents"},
+            },
+            status_code=200,
+        )
     config = _apply_fresh_config_overrides(config, body, org_slug, server_slug)
     if not config:
         return JSONResponse(content={"error": "Server not found"}, status_code=404)
@@ -2796,6 +3114,18 @@ async def internal_tools_call(request: Request):
         "Internal tools-call: org=%s server=%s transport=%s tool=%s request_id=%s",
         org_slug, server_slug, transport, tool_name, _int_req_id or "-",
     )
+
+    # Actor for actor-scoped MCP policies / field RBAC (parity with org_mcp_jsonrpc).
+    # Control may forward {user_id, agent_id, roles} in the internal body; absent → None.
+    mcp_actor = None
+    _raw_actor = body.get("actor")
+    if isinstance(_raw_actor, dict):
+        _roles = _raw_actor.get("roles")
+        mcp_actor = {
+            "user_id": _raw_actor.get("user_id"),
+            "agent_id": str(_raw_actor.get("agent_id") or "")[:64],
+            "roles": [str(r)[:64] for r in list(_roles)[:16]] if isinstance(_roles, list) else [],
+        }
 
     enabled_info = await _get_enabled_tools(org_slug, server_slug)
     if _is_tool_disabled(tool_name, enabled_info):
@@ -2818,7 +3148,7 @@ async def internal_tools_call(request: Request):
         enabled_info=enabled_info,
         org_slug=org_slug,
         server_slug=server_slug,
-        actor=None,
+        actor=mcp_actor,
     )
     if _in_blocked:
         await _record_gateway_event(
@@ -2898,7 +3228,7 @@ async def internal_tools_call(request: Request):
         _scan_target = _adapter_obj.get("result") if "result" in _adapter_obj else _adapter_obj
         _sc, _blk, _tg, _fn, _mt = await _scan_tool_result_floor(
             _scan_target, tool_name=tool_name, enabled_info=enabled_info,
-            org_slug=org_slug, server_slug=server_slug, actor=None,
+            org_slug=org_slug, server_slug=server_slug, actor=mcp_actor,
         )
         if _blk:
             await _record_gateway_event(
@@ -2998,7 +3328,7 @@ async def internal_tools_call(request: Request):
             enabled_info=enabled_info,
             org_slug=org_slug,
             server_slug=server_slug,
-            actor=None,
+            actor=mcp_actor,
         )
         if out_blocked:
             await _record_gateway_event(
@@ -3264,9 +3594,8 @@ async def _mcp_org_rate_limit_raw(auth_ctx) -> JSONResponse | None:
     """
     if auth_ctx is None:
         return None
-    try:
-        import main as gateway_main
-    except Exception:
+    gateway_main = _gateway_app_module()
+    if gateway_main is None:
         return None
 
     user_id = getattr(auth_ctx, "user_id", None)
@@ -3346,14 +3675,15 @@ def _backend_proxy_headers(request: Request, org_slug: str, server_slug: str = "
 
 
 async def _notify_control_needs_reauth(org_slug: str, server_slug: str, reason: str) -> None:
-    """Tell the control plane an org's stdio OAuth token can't be refreshed.
+    """Tell the control plane an org's MCP server OAuth token can't be refreshed.
 
     Closes the Flow-2 gap: for mcp-remote (stdio) servers the gateway holds the
     OAuth token in Redis and the control plane has no visibility into refresh
     failures, so an expired token surfaced only as an opaque upstream
-    ``invalid_token``. This best-effort backprop lets control set
-    ``needs_reauth`` and prompt the operator. Failures here must NEVER break
-    the hot path.
+    ``invalid_token``. The gateway now calls this when it cannot inject a
+    usable token, or when the sandbox upstream returns -32001 / needs_reauth
+    (HTTP OAuth discover/call), letting control set ``needs_reauth`` and surface
+    an actionable per-org "re-authenticate <server>" signal.
     """
     if not server_slug or not _GATEWAY_INTERNAL_API_KEY:
         return
@@ -3377,6 +3707,41 @@ async def _notify_control_needs_reauth(org_slug: str, server_slug: str, reason: 
     except Exception as exc:
         LOG.warning("needs-reauth backprop failed (org=%s server=%s): %s",
                     org_slug, server_slug, exc)
+
+
+async def _maybe_propagate_upstream_needs_reauth(
+    result: dict | None,
+    org_slug: str,
+    server_slug: str,
+    *,
+    exc: BaseException | None = None,
+) -> None:
+    """Backprop sandbox upstream OAuth 401 (-32001) to control ``needs_reauth``."""
+    reason = ""
+    if isinstance(result, dict):
+        meta = result.get("_meta")
+        err = result.get("error")
+        if isinstance(meta, dict) and meta.get("needs_reauth"):
+            reason = (
+                (err.get("message") if isinstance(err, dict) else "")
+                or "OAuth token rejected — re-authenticate this server."
+            )
+        elif isinstance(err, dict) and err.get("code") == -32001:
+            reason = err.get("message") or "upstream returned 401; re-authenticate"
+    elif exc is not None:
+        low = str(exc).lower()
+        if any(
+            h in low
+            for h in (
+                "re-authenticat",
+                "requires re-authentication",
+                "byok / oauth",
+                "invalid_token",
+            )
+        ):
+            reason = str(exc)
+    if reason:
+        await _notify_control_needs_reauth(org_slug, server_slug, reason)
 
 
 async def _maybe_inject_oauth_header(args: list[str], org_slug: str, server_slug: str = "") -> None:
@@ -3529,6 +3894,7 @@ async def _adapter_forward(
                 org_slug, up_config, method, params if params else None,
                 msg_id=msg_id, oauth_token=oauth_token, correlation_id=correlation_id,
             )
+            await _maybe_propagate_upstream_needs_reauth(result, org_slug, server_slug)
             return JSONResponse(content=result, status_code=200)
         if transport == "stdio":
             from mcp_stdio_adapter import send_jsonrpc as stdio_send
@@ -3551,6 +3917,8 @@ async def _adapter_forward(
                 msg_id=msg_id,
                 server_config=stdio_cfg,
             )
+            if isinstance(result, dict):
+                await _maybe_propagate_upstream_needs_reauth(result, org_slug, server_slug)
         else:
             return JSONResponse(
                 content={
@@ -3564,6 +3932,7 @@ async def _adapter_forward(
         # result is the full JSON-RPC response dict from the adapter
         return JSONResponse(content=result, status_code=200)
     except Exception as exc:
+        await _maybe_propagate_upstream_needs_reauth(None, org_slug, server_slug, exc=exc)
         LOG.error("Adapter forward error (%s/%s, %s): %s", org_slug, server_slug, transport, exc)
         return JSONResponse(
             content={
@@ -3713,6 +4082,23 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
 
     # ── Resolve server transport for routing ──
     server_config = await _get_server_config(org_slug, server_slug)
+    if _server_disabled(server_config):
+        # Registration-level disable: is_active=False or is_exposed_to_agents=False.
+        # Block ALL JSON-RPC methods (discovery + execution) and audit to the caller's
+        # org. Without this a disabled/unexposed server stayed fully callable by any
+        # valid org key (the flags were stored + version-bumped but never enforced).
+        await _record_gateway_event(
+            org_slug=org_slug, server_slug=server_slug, tool_name="",
+            decision="block", reason="server_disabled",
+            metadata={"transport": "http", "enforced_at": "gateway"},
+        )
+        return JSONResponse(
+            content={
+                "jsonrpc": jsonrpc, "id": msg_id,
+                "error": {"code": -32601, "message": "Server is disabled or not exposed to agents"},
+            },
+            status_code=200,
+        )
     transport = (server_config or {}).get("transport", "streamable-http")
     is_adapter_transport = _is_sandbox_routed(transport)
 
@@ -4006,7 +4392,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
         if (
             not _in_blocked
             and _mcp_block_on_credential_enabled()
-            and _scan_action != "monitor"
+            and _static_hardening_floors_enabled(tool_name, enabled_info, "input")
             and _findings_have_credential(_in_findings, _in_tags)
         ):
             _in_blocked = True
@@ -4165,7 +4551,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         # error.message carries a secret/PII under the default "tag"
                         # posture (the detect-only case no swap branch had covered).
                         _mcp_redact_result_on_detect_enabled()
-                        and _scan_action != "monitor"
+                        and _static_hardening_floors_enabled(tool_name, enabled_info, "output")
                         and (
                             _findings_have_secret_or_pii(_out_find_new)
                             or _findings_have_infra_network_leak(_out_find_new)  # CHG-0074
@@ -4238,6 +4624,21 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                 or (_scan_meta_out or {}).get("monitored")
             ):
                 decision = "monitor"
+            # Distinct from clean ``allow``: zero scan-control rows skip the
+            # two-tier pipeline (scan_controls_configured=false). Meter as
+            # ``scan_skipped`` so Prometheus / observability do not conflate
+            # "scanned and clean" with "never scanned".
+            if decision == "allow" and (
+                (_scan_meta_in or {}).get("scan_skipped")
+                or (_scan_meta_out or {}).get("scan_skipped")
+            ):
+                decision = "scan_skipped"
+                if not reason:
+                    reason = str(
+                        (_scan_meta_in or {}).get("scan_skipped")
+                        or (_scan_meta_out or {}).get("scan_skipped")
+                        or "no_scan_controls_configured"
+                    )[:255]
             await _record_gateway_event(
                 org_slug=org_slug,
                 server_slug=server_slug,
@@ -4350,6 +4751,10 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         "monitored": _monitored,
                         "scan_trace": _merged_trace_base + list(_scan_meta_out2.get("scan_trace") or []),
                     }
+                    # Preserve inbound skip reason so audit decision can be
+                    # ``scan_skipped`` (distinct from clean ``allow``).
+                    if (_scan_meta_in or {}).get("scan_skipped"):
+                        _merged_meta["scan_skipped"] = _scan_meta_in["scan_skipped"]
                     if _out_blocked2:
                         await _record_gateway_event(
                             org_slug=org_slug,
@@ -4389,7 +4794,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                     if (
                         _scanned_content is result_content
                         and _mcp_redact_result_on_detect_enabled()
-                        and _scan_action != "monitor"
+                        and _static_hardening_floors_enabled(tool_name, enabled_info, "output")
                         and (
                             _findings_have_secret_or_pii(_out_find_new2)
                             or _findings_have_infra_network_leak(_out_find_new2)  # CHG-0074
@@ -4456,10 +4861,17 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                     _was_redacted = _in_redacted or (_scanned_content is not result_content)
                     if _scanned_content is not result_content:
                         result_content = _scanned_content
-                    # Decision precedence: block (handled above) > redact > monitor > allow.
+                    # Decision precedence: block (handled above) > redact > monitor >
+                    # scan_skipped (0 controls) > allow.
+                    _skip_reason = (_scan_meta_in or {}).get("scan_skipped") or (
+                        _merged_meta or {}
+                    ).get("scan_skipped")
                     _decision = (
                         "redact" if _was_redacted
-                        else ("monitor" if _monitored else "allow")
+                        else (
+                            "monitor" if _monitored
+                            else ("scan_skipped" if _skip_reason else "allow")
+                        )
                     )
                     # Always record exactly one audit event per call (incl. clean allow),
                     # so every scanned call is provably auditable, not just findings.
@@ -4468,7 +4880,10 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         server_slug=server_slug,
                         tool_name=tool_name,
                         decision=_decision,
-                        reason=("scan_findings" if _out_findings2 else "clean"),
+                        reason=(
+                            str(_skip_reason)[:255] if _decision == "scan_skipped"
+                            else ("scan_findings" if _out_findings2 else "clean")
+                        ),
                         request_id=_req_id,
                         latency_ms=int((time.time() - call_t0) * 1000),
                         metadata=_merged_meta,
@@ -4591,6 +5006,10 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
     err = await _audit_and_return_scope_error(request, org_slug, server_slug)
     if err:
         return err
+
+    _disabled = await _rest_server_disabled_response(request, org_slug, server_slug)
+    if _disabled:
+        return _disabled
 
     # CHG-0034: reject an oversized body before buffering it (DoS guard).
     if _mcp_body_too_large(request):
@@ -4848,6 +5267,10 @@ async def org_mcp_tools_list(org_slug: str, server_slug: str, request: Request):
     if err:
         return err
 
+    _disabled = await _rest_server_disabled_response(request, org_slug, server_slug)
+    if _disabled:
+        return _disabled
+
     _mcp_auth = _get_auth_context(request)
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         try:
@@ -4924,6 +5347,10 @@ async def org_mcp_server_health(org_slug: str, server_slug: str, request: Reques
     err = await _audit_and_return_scope_error(request, org_slug, server_slug)
     if err:
         return err
+
+    _disabled = await _rest_server_disabled_response(request, org_slug, server_slug)
+    if _disabled:
+        return _disabled
 
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         try:

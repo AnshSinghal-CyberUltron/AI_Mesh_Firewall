@@ -1,0 +1,42 @@
+{
+  "server": "everything-mcp",
+  "tool": "gzip-file-as-resource",
+  "note": "LFI probe: MCP_REMOTE_CONFIG_DIR (OAuth token store)",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "method": "tools/call",
+      "params": {
+        "name": "gzip-file-as-resource",
+        "arguments": {
+          "name": "x.gz",
+          "data": "file:///data/mcp-auth/",
+          "outputType": "resource"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Error processing file file:///data/mcp-auth/: Unsupported URL protocol for file:///data/mcp-auth/. Only http, https, and data URLs are supported."
+          }
+        ],
+        "isError": true
+      },
+      "jsonrpc": "2.0",
+      "id": 6
+    }
+  },
+  "elapsed_s": 0.105
+}

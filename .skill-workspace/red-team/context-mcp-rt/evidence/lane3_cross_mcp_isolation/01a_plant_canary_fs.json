@@ -1,0 +1,37 @@
+{
+  "ok": true,
+  "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/filesystem-canary",
+  "status_code": 200,
+  "elapsed_s": 0.075,
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "write_file",
+      "arguments": {
+        "path": "/tmp/rt_cross_fs-plant-272e2bfffd82.txt",
+        "content": "fs-plant-272e2bfffd82"
+      }
+    }
+  },
+  "response": {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Successfully wrote to /tmp/rt_cross_fs-plant-272e2bfffd82.txt"
+        }
+      ]
+    },
+    "jsonrpc": "2.0",
+    "id": 1
+  },
+  "response_headers": {
+    "date": "Tue, 07 Jul 2026 09:28:00 GMT",
+    "server": "uvicorn",
+    "content-length": "134",
+    "content-type": "application/json"
+  },
+  "_captured_at": "2026-07-07T09:28:01.310544+00:00"
+}

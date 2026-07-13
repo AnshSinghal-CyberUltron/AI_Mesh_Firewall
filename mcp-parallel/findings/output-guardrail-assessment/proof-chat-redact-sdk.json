@@ -1,0 +1,141 @@
+{
+  "title": "Chat Output Guardrail REDACT baseline (post-fix)",
+  "collected_at": "2026-07-10T07:26:52.610654+00:00",
+  "model": "cohere/north-mini-code:free",
+  "canary_primary": "john.doe@corp.example",
+  "prompt_primary": "Write a one-sentence customer support reply that includes the contact email john.doe@corp.example exactly once. Keep it under 40 words.",
+  "alt_math_used": false,
+  "config": {
+    "output_pii_action": "redact",
+    "output_credential_action": "block"
+  },
+  "snapshot_before_run": {
+    "output_pii_enabled": true,
+    "output_pii_action": "redact",
+    "output_credential_action": "block",
+    "output_credential_enabled": true,
+    "enforcement_mode": "block",
+    "response_filtering_enabled": true,
+    "firewall_enabled": true,
+    "factuality_check_enabled": false,
+    "output_hallucination_action": "flag",
+    "hallucination_grounding_threshold": 0.2
+  },
+  "parts": {
+    "http_non_stream": {
+      "http_status": 200,
+      "request_id": "zs-fdc493dff1b2",
+      "blocked_by": null,
+      "code": null,
+      "final_action": "redact",
+      "raw_canary_present": false,
+      "redaction_markers": [
+        "[PII_REDACTED]",
+        "j***@c***.example"
+      ],
+      "rewrite_hints": [],
+      "content_preview": "The user asks: \"Write a one-sentence customer support reply that includes the contact email [PII_REDACTED] exactly once. Keep it under 40 words.\"\n\nWe need to produce a single sentence, under 40 words, including the email \"[PII_REDACTED]\" exactly once. The email is partially redacted: [PII_REDACTED] We must include that exact string exactly once. No extra. Need to ensure it's exactly one occurrence. Also ensure the sentence is under 40 words. Let's count.\n\nWe need to include the email exactly once. So we",
+      "content_len": 508,
+      "delivered": true,
+      "is_blocked": false,
+      "output_guard_stage": {
+        "name": "output_guardrail",
+        "action": "redact",
+        "detail": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+        "guard_reason": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+        "guard_action": "redact",
+        "latency_ms": 962.1
+      },
+      "sse_error": null,
+      "observed_action": "redact",
+      "body_head": "{\"id\":\"chatcmpl-1783668374-jU8FS2HfDbCm5Dm0IJjE\",\"created\":1783668374,\"model\":\"cohere/north-mini-code:free\",\"object\":\"chat.completion\",\"system_fingerprint\":null,\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"message\":{\"content\":\"The user asks: \\\"Write a one-sentence customer support reply that includes the contact email [PII_REDACTED] exactly once. Keep it under 40 words.\\\"\\n\\nWe need to produce a single sentence, under 40 words, including the email \\\"[PII_REDACTED]\\\" exactly once. The email is",
+      "elapsed_ms": 5087.8,
+      "transport": "http_json"
+    },
+    "http_stream": {
+      "http_status": 200,
+      "request_id": "zs-a5f8ad3ce0f1",
+      "blocked_by": null,
+      "code": null,
+      "final_action": "redact",
+      "raw_canary_present": false,
+      "redaction_markers": [
+        "[PII_REDACTED]",
+        "j***@c***.example"
+      ],
+      "rewrite_hints": [],
+      "content_preview": "The user asks: \"Write a one-sentence customer support reply that includes the contact email [PII_REDACTED] exactly once. Keep it under 40 words.\"\n\nWe need to produce a single sentence, under 40 words, containing the email \"[PII_REDACTED]\" exactly once. The email is partially redacted: [PII_REDACTED]",
+      "content_len": 300,
+      "delivered": true,
+      "is_blocked": false,
+      "output_guard_stage": {
+        "name": "output_guardrail",
+        "action": "redact",
+        "detail": "PII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************",
+        "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "guard_action": "allow",
+        "latency_ms": 0.0
+      },
+      "sse_error": null,
+      "observed_action": "redact",
+      "body_head": "data: {\"id\": \"chatcmpl-1783668379-tLjyxzJNaE0musjA52ll\", \"created\": 1783668380, \"model\": \"cohere/north-mini-code:free\", \"object\": \"chat.completion.chunk\", \"system_fingerprint\": null, \"choices\": [{\"finish_reason\": null, \"index\": 0, \"delta\": {\"reasoning_content\": \"\", \"refusal\": null, \"reasoning_details\": [{\"type\": \"reasoning.text\", \"text\": \"The\", \"format\": \"unknown\", \"index\": 0}], \"content\": \"The user asks: \\\"Write a one-sentence customer support reply that includes the contact email [PII_REDACTED",
+      "elapsed_ms": 17928.2,
+      "transport": "http_sse"
+    },
+    "sdk_non_stream": {
+      "http_status": 200,
+      "request_id": "zs-186bf7a2d46a",
+      "blocked_by": null,
+      "code": null,
+      "final_action": "redact",
+      "raw_canary_present": false,
+      "redaction_markers": [
+        "[PII_REDACTED]",
+        "j***@c***.example"
+      ],
+      "rewrite_hints": [],
+      "content_preview": "The user asks: \"Write a one-sentence customer support reply that includes the contact email [PII_REDACTED] exactly once. Keep it under 40 words.\"\n\nWe need to produce a single sentence, under 40 words, including the email \"[PII_REDACTED]\" exactly once. The email is partially redacted: [PII_REDACTED] So we must include that exact string exactly once. No extra occurrences. Must be under 40 words. Also it's a customer support reply. So something like: \"Thank you for contacting us; please reach out to j",
+      "content_len": 503,
+      "delivered": true,
+      "is_blocked": false,
+      "output_guard_stage": {
+        "name": "output_guardrail",
+        "action": "redact",
+        "detail": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+        "guard_reason": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+        "guard_action": "redact",
+        "latency_ms": 1054.9
+      },
+      "sse_error": null,
+      "observed_action": "redact",
+      "body_head": "{\"id\":\"chatcmpl-1783668396-Bbw1cF0SqP1XiEAENlOh\",\"created\":1783668396,\"model\":\"cohere/north-mini-code:free\",\"object\":\"chat.completion\",\"system_fingerprint\":null,\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"message\":{\"content\":\"The user asks: \\\"Write a one-sentence customer support reply that includes the contact email [PII_REDACTED] exactly once. Keep it under 40 words.\\\"\\n\\nWe need to produce a single sentence, under 40 words, including the email \\\"[PII_REDACTED]\\\" exactly once. The email is",
+      "elapsed_ms": 2641.8,
+      "transport": "openai_sdk",
+      "ok": true
+    },
+    "sdk_stream": {
+      "http_status": 200,
+      "content_preview": "The user asks: \"Write a one-sentence customer support reply that includes the contact email [PII_REDACTED] exactly once. Keep it under 40 words.\"\n\nWe need to produce a single sentence, under 40 words, containing the email \"[PII_REDACTED]\" exactly once. The email is partially redacted: [PII_REDACTED]",
+      "content_len": 300,
+      "raw_canary_present": false,
+      "delivered": true,
+      "is_blocked": false,
+      "observed_action": "delivered_masked_or_clean",
+      "sdk_note": "iterated_stream_no_raw",
+      "elapsed_ms": 13997.4,
+      "transport": "openai_sdk",
+      "ok": true
+    }
+  },
+  "verdict": "PASS",
+  "unit_in_container": {
+    "rewrite_stream_preserved": true,
+    "flag_under_block_preserved": true,
+    "note": "Verified via docker exec enforce_output before live run"
+  },
+  "deploy": {
+    "enforcement_py": "/app/gateway/ai_mesh_gateway/enforcement.py",
+    "secure_streaming_py": "/app/gateway/ai_mesh_gateway/secure_streaming.py",
+    "reload": "python os.kill(1, SIGHUP)"
+  }
+}

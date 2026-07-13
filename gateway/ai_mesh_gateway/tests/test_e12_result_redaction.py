@@ -1,18 +1,12 @@
 """E12 — MCP tool-RESULT redaction floor (symmetric to FIX1 arg credential block).
 
-PROBLEM (fail-open): under the DEFAULT scan_action "tag" (and "monitor"), the
-OUTBOUND tool-RESULT scan DETECTS a secret/PII but does NOT redact/block it, so a
-tool result carrying token=ghp_... or an SSN reaches the LLM/client RAW.
+Under explicit ``redact`` / ``block`` postures (and legacy floors when the
+resolved action is NOT observe-only), detected secrets/PII in tool RESULTS are
+force-redacted when ``GATEWAY_MCP_REDACT_RESULT_ON_DETECT`` is ON.
 
-FIX: a result-REDACTION floor. When GATEWAY_MCP_REDACT_RESULT_ON_DETECT is ON,
-the resolved output action is not already redact/block, the explicit per-tool
-action is not "monitor", and the output scan DETECTED a secret OR PII, the result
-is force-REDACTED (masked, never blocked) before it is returned — on BOTH the
-streamable-http and adapter (stdio/ws) transports.
-
-Run:
-    cd .../gateway && .venv/bin/python -m pytest \
-        ai_mesh_gateway/tests/test_e12_result_redaction.py -q
+``tag`` is a legacy alias of ``monitor`` (observe-only): the E12 static floor
+does NOT fire under either — only explicit policy redact/block + field RBAC
+projection still apply.
 """
 
 from __future__ import annotations
@@ -154,9 +148,9 @@ def test_redact_result_on_detect_default_on():
 
 
 @pytest.mark.asyncio
-async def test_streamable_secret_and_pii_result_redacted_under_tag_default():
-    """A tool RESULT carrying a secret AND an SSN is REDACTED under the default
-    "tag" scan_action — the raw token and raw SSN are absent from the return."""
+async def test_streamable_secret_and_pii_result_not_redacted_under_tag_observe_only():
+    """Under default ``tag`` (observe-only alias of monitor), the E12 static floor
+    does NOT force-redact — raw secret/SSN may egress (policy redact is separate)."""
     req = _make_request(_auth())
     body = {"jsonrpc": "2.0", "id": 11, "method": "tools/call",
             "params": {"name": "echo", "arguments": _BENIGN_ARG}}
@@ -165,6 +159,24 @@ async def test_streamable_secret_and_pii_result_redacted_under_tag_default():
         resp = await _run_streamable(
             req, body,
             enabled_info=None,  # → default scan_action "tag"
+            backend_result=_SECRET_PII_RESULT_TEXT,
+        )
+    blob = str(_decode(resp))
+    assert _RAW_TOKEN in blob
+    assert _RAW_SSN in blob
+
+
+@pytest.mark.asyncio
+async def test_streamable_secret_and_pii_result_redacted_under_redact_posture():
+    """Under explicit ``redact`` posture, static detection still masks secrets/PII."""
+    req = _make_request(_auth())
+    body = {"jsonrpc": "2.0", "id": 11, "method": "tools/call",
+            "params": {"name": "echo", "arguments": _BENIGN_ARG}}
+    with patch.object(mcp_proxy, "_mcp_redact_result_on_detect_enabled",
+                      return_value=True):
+        resp = await _run_streamable(
+            req, body,
+            enabled_info={"default_scan_action": "redact"},
             backend_result=_SECRET_PII_RESULT_TEXT,
         )
     blob = str(_decode(resp))
@@ -236,9 +248,8 @@ async def test_streamable_explicit_monitor_does_not_force_redact():
 
 
 @pytest.mark.asyncio
-async def test_adapter_secret_and_pii_result_redacted_under_tag_default():
-    """Parity: the stdio adapter path also REDACTS a secret+SSN tool RESULT under
-    the default "tag" action."""
+async def test_adapter_secret_and_pii_result_not_redacted_under_tag_observe_only():
+    """Parity: stdio adapter path does NOT E12-redact under default ``tag``."""
     req = _make_request(_auth())
     body = {"jsonrpc": "2.0", "id": 15, "method": "tools/call",
             "params": {"name": "echo", "arguments": _BENIGN_ARG}}
@@ -246,13 +257,13 @@ async def test_adapter_secret_and_pii_result_redacted_under_tag_default():
                       return_value=True):
         resp = await _run_adapter(
             req, body,
-            enabled_info=None,  # → default scan_action "tag"
+            enabled_info=None,
             adapter_result={"content": [{"type": "text",
                                          "text": _SECRET_PII_RESULT_TEXT}]},
         )
     blob = str(_decode(resp))
-    assert _RAW_TOKEN not in blob
-    assert _RAW_SSN not in blob
+    assert _RAW_TOKEN in blob
+    assert _RAW_SSN in blob
 
 
 @pytest.mark.asyncio

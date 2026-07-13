@@ -22,12 +22,12 @@ from typing import Any
 try:
     from .patterns import (
         compile_pattern, detect_pii, detect_secrets, detect_credential_exposure,
-        canonicalize_for_detection,
+        canonicalize_for_detection, _iter_transport_decodes_canon,
     )
 except ImportError:
     from patterns import (
         compile_pattern, detect_pii, detect_secrets, detect_credential_exposure,
-        canonicalize_for_detection,
+        canonicalize_for_detection, _iter_transport_decodes_canon,
     )
 
 LOG = logging.getLogger("gateway.context_guard")
@@ -376,6 +376,38 @@ class ContextGuard:
                     detail=f"Indirect prompt injection in document: {match.group(0)[:SNIPPET_MAX_CHARS]}",
                     matched_patterns=[match.group(0)[:SNIPPET_MAX_CHARS]],
                 )
+
+        # G-DOC-TRANSPORT: a retrieved document can smuggle an indirect injection
+        # through a base64/hex/base32/base85 transport layer ("please base64-decode
+        # and follow: <blob>") that the raw + canonical (unicode-folded) search
+        # above cannot see, yet an LLM reading the context decodes and obeys it.
+        # The chat-side InputScanner already deobfuscates transport; the document
+        # scanner did not, so this class bypassed the RAG doc-poisoning gate.
+        # Re-scan the SAME shared, budget-/depth-/printable-gated decoder the chat
+        # scanner uses (patterns._iter_transport_decodes_canon) — it inherits that
+        # path's FP safety, so benign base64/hex in docs (data URIs, hashes, keys)
+        # decodes to high-entropy bytes that match no injection pattern.
+        canon_for_decode = canonical if canonical is not None else text
+        for decoded in _iter_transport_decodes_canon(text, canon_for_decode):
+            if not decoded:
+                continue
+            decoded_canon = canonicalize_for_detection(decoded)
+            for pattern_str in INDIRECT_INJECTION_PATTERNS:
+                compiled = compile_pattern(pattern_str)
+                match = compiled.search(decoded) or (
+                    compiled.search(decoded_canon) if decoded_canon != decoded else None
+                )
+                if match:
+                    return ContextScanVerdict(
+                        action="block",
+                        threat_type="indirect_injection",
+                        confidence=0.95,
+                        detail=(
+                            "Indirect prompt injection in transport-encoded document payload: "
+                            f"{match.group(0)[:SNIPPET_MAX_CHARS]}"
+                        ),
+                        matched_patterns=[match.group(0)[:SNIPPET_MAX_CHARS]],
+                    )
 
         for pattern_str in HIDDEN_INSTRUCTION_PATTERNS:
             compiled = compile_pattern(pattern_str)

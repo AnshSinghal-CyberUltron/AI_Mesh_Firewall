@@ -22,7 +22,7 @@ PRESETS = [
     {"name": "cp33-linear", "transport": "stdio", "command": "npx", "args": ["-y", "mcp-remote", "https://mcp.linear.app/mcp"], "auth_type": "none"},
     {"name": "cp33-context7", "transport": "streamable-http", "url": "https://mcp.context7.com/mcp", "auth_type": "none"},
     {"name": "cp33-playwright", "transport": "stdio", "command": "npx", "args": ["-y", "@playwright/mcp@latest"], "auth_type": "none"},
-    {"name": "cp33-semgrep", "transport": "stdio", "command": "npx", "args": ["-y", "mcp-server-semgrep"], "auth_type": "none"},
+    {"name": "cp33-semgrep", "transport": "stdio", "command": "npx", "args": ["-y", "mcp-server-semgrep"], "auth_type": "none", "env_vars": {"MCP_HOST_TOOLS": "pip:semgrep"}},
     {"name": "cp33-memory", "transport": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-memory"], "auth_type": "none"},
     {"name": "cp33-filesystem", "transport": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/data/mcp-auth"], "auth_type": "none"},
     {"name": "cp33-fetch", "transport": "stdio", "command": "uvx", "args": ["mcp-server-fetch"], "auth_type": "none"},  # CP36: uvx (Python pkg), not npx
@@ -30,7 +30,8 @@ PRESETS = [
     {"name": "cp33-vibecheck", "transport": "stdio", "command": "npx", "args": ["-y", "@pv-bhat/vibe-check-mcp", "start", "--stdio"], "auth_type": "none"},
 ]
 D_CODES = {"MCP_AUTH_FAILED", "MCP_EGRESS_DENIED", "MCP_OUT_OF_MEMORY", "MCP_SERVER_CRASHED",
-           "MCP_IMAGE_UNAVAILABLE", "MCP_INSUFFICIENT_STORAGE", "MCP_TIMEOUT", "MCP_START_FAILED", "MCP_UNAVAILABLE"}
+           "MCP_IMAGE_UNAVAILABLE", "MCP_INSUFFICIENT_STORAGE", "MCP_TIMEOUT", "MCP_START_FAILED",
+           "MCP_HOST_TOOL_FAILED", "MCP_UNAVAILABLE"}
 
 
 def _req(method, path, tok=None, body=None, timeout=30):

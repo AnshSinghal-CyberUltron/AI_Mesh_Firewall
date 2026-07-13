@@ -8,9 +8,10 @@ import pytest
 from ai_mesh_gateway.output_guard import (
     OutputGuard,
     OutputVerdict,
+    coalesce_output_guard_verdict_for_delivery,
     sanitize_output_for_verdict,
 )
-from ai_mesh_gateway.patterns import detect_pii, detect_secrets, is_safety_refusal_output
+from ai_mesh_gateway.patterns import detect_pii, detect_secrets, is_safety_classifier_output, is_safety_refusal_output
 
 
 AADHAAR_REFUSAL = (
@@ -87,6 +88,32 @@ async def test_pii_category_labels_only_not_detected() -> None:
     guard = OutputGuard(scanner=_StubScanner(), config={})
     verdict = await guard.inspect(PII_LABEL_REFUSAL, context_chunks=[])
     assert verdict.action == "allow"
+
+
+SAFETY_CLASSIFIER_OUTPUT = "User Safety: unsafe\nSafety Categories: PII/Privacy"
+
+
+def test_safety_classifier_output_shape() -> None:
+    assert is_safety_classifier_output(SAFETY_CLASSIFIER_OUTPUT)
+    assert detect_pii(SAFETY_CLASSIFIER_OUTPUT) == {}
+
+
+@pytest.mark.asyncio
+async def test_safety_classifier_downgrades_off_primary_smart_mask() -> None:
+    """Masked email in scan channels must not redact safety-classifier metadata."""
+    delivered = SAFETY_CLASSIFIER_OUTPUT
+    verdict = OutputVerdict(
+        action="redact",
+        threat_type="pii",
+        confidence=0.85,
+        detail="PII/secret detected in output: email_smart_masked",
+        matched_patterns=["email_smart_masked"],
+        matched_values={"email_smart_masked": "j***@a***.com"},
+    )
+    coalesced = coalesce_output_guard_verdict_for_delivery(verdict, delivered_text=delivered)
+    assert coalesced is not None
+    assert coalesced.action == "allow"
+    assert "Safety classifier metadata" in (coalesced.detail or "")
 
 
 @pytest.mark.asyncio

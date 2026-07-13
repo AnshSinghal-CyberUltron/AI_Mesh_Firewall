@@ -169,6 +169,15 @@ async def test_bounded_put_drops_oldest_when_full():
     assert [q.get_nowait(), q.get_nowait()] == [{"id": 2}, {"id": 3}]
 
 
+def test_sse_get_stream_timeout_has_no_read_cap():
+    assert sse_manager._sse_get_stream_timeout(30.0).read is None
+
+
+def test_sse_post_ack_timeout_caps_read():
+    t = sse_manager._sse_post_ack_timeout(30.0, 60.0)
+    assert t.read == 30.0
+
+
 @pytest.mark.asyncio
 async def test_unsolicited_message_flood_keeps_queue_bounded():
     # No consumer drains; an untrusted upstream floods 50 unsolicited message events.

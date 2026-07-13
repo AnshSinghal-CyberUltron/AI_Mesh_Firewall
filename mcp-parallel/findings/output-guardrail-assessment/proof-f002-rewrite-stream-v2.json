@@ -1,0 +1,200 @@
+{
+  "finding_id": "F-002",
+  "title": "Streaming rewrite coerced to block (email canary v2)",
+  "collected_at": "2026-07-10T06:20:34.877313+00:00",
+  "canary": "john.doe@corp.example",
+  "prompt": "Contact john.doe@corp.example",
+  "model": "cohere/north-mini-code:free",
+  "ui_action": "rewrite",
+  "snapshot_before": {
+    "output_pii_enabled": true,
+    "output_pii_action": "flag",
+    "enforcement_mode": "block",
+    "response_filtering_enabled": true,
+    "firewall_enabled": true
+  },
+  "snapshot_before_redis": {
+    "output_pii_enabled": true,
+    "output_pii_action": "flag",
+    "enforcement_mode": "block",
+    "response_filtering_enabled": null,
+    "firewall_enabled": true
+  },
+  "in_container_enforce_output": [
+    {
+      "kwargs": {
+        "verdict_action": "rewrite",
+        "is_streaming": true,
+        "enforcement_mode": "block",
+        "verdict_threat_type": "pii"
+      },
+      "action": "block",
+      "blocked_by": "output_guard",
+      "expect": "block",
+      "ok": true
+    },
+    {
+      "kwargs": {
+        "verdict_action": "rewrite",
+        "is_streaming": false,
+        "enforcement_mode": "block",
+        "verdict_threat_type": "pii"
+      },
+      "action": "rewrite",
+      "blocked_by": null,
+      "expect": "rewrite",
+      "ok": true
+    },
+    {
+      "kwargs": {
+        "verdict_action": "flag",
+        "is_streaming": false,
+        "enforcement_mode": "block",
+        "verdict_threat_type": "pii"
+      },
+      "action": "block",
+      "blocked_by": "output_guard",
+      "expect": "block",
+      "ok": true
+    },
+    {
+      "kwargs": {
+        "verdict_action": "flag",
+        "is_streaming": true,
+        "enforcement_mode": "block",
+        "verdict_threat_type": "pii"
+      },
+      "action": "block",
+      "blocked_by": "output_guard",
+      "expect": "block",
+      "ok": true
+    },
+    {
+      "kwargs": {
+        "verdict_action": "flag",
+        "is_streaming": false,
+        "enforcement_mode": "monitor",
+        "verdict_threat_type": "pii"
+      },
+      "action": "flag",
+      "blocked_by": null,
+      "expect": "flag",
+      "ok": true
+    }
+  ],
+  "config_mutation": {
+    "put_http": 200,
+    "synced_control_and_redis": true,
+    "wait_s": 0.07,
+    "control": {
+      "output_pii_enabled": true,
+      "output_pii_action": "rewrite",
+      "enforcement_mode": "block",
+      "response_filtering_enabled": true,
+      "firewall_enabled": true
+    },
+    "redis": {
+      "output_pii_enabled": true,
+      "output_pii_action": "rewrite",
+      "enforcement_mode": "block",
+      "response_filtering_enabled": null,
+      "firewall_enabled": true
+    }
+  },
+  "streaming": {
+    "http_status": 200,
+    "request_id": "zs-5e93221c92a5",
+    "blocked_by": "sse_output_blocked",
+    "code": null,
+    "final_action": "redact",
+    "raw_email_present": false,
+    "redaction_markers": [
+      "j***@c***.example"
+    ],
+    "content_preview": "",
+    "output_guard_stage": {
+      "name": "output_guardrail",
+      "action": "block",
+      "detail": "PII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************",
+      "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+      "guard_action": "allow",
+      "latency_ms": 0.0
+    },
+    "sse_error": {
+      "message": "Response blocked: pii detected in output.",
+      "type": "output_blocked",
+      "code": "output_blocked"
+    },
+    "observed_action": "block",
+    "body_head": "data: {\"error\": {\"message\": \"Response blocked: pii detected in output.\", \"type\": \"output_blocked\", \"code\": \"output_blocked\"}}\n\ndata: {\"id\": \"chatcmpl-zs-5e93221c92a5\", \"object\": \"chat.completion.chunk\", \"created\": 1783664441, \"model\": \"cohere/north-mini-code:free\", \"choices\": [], \"zeroshield\": {\"request_id\": \"zs-5e93221c92a5\", \"action\": \"block\", \"reason\": \"Streaming response blocked by output guard.\", \"detail\": \"PII/secret detected in output: email_smart_masked \\u2014 email_smart_masked=j****************\", \"detection_tier\": \"output_guard\", \"threat_type\": \"pii\", \"confidence\": 0.85, \"matched_pat",
+    "body_tail": "t\": 0.0}, {\"stage\": \"policy\", \"latency_ms\": 0.0, \"share_pct\": 0.0}, {\"stage\": \"input_scan\", \"latency_ms\": 0.0, \"share_pct\": 0.0}, {\"stage\": \"kill_switch\", \"latency_ms\": 0.0, \"share_pct\": 0.0}, {\"stage\": \"model_routing\", \"latency_ms\": 0.0, \"share_pct\": 0.0}, {\"stage\": \"model_input\", \"latency_ms\": 0.0, \"share_pct\": 0.0}, {\"stage\": \"model_output\", \"latency_ms\": 0.0, \"share_pct\": 0.0}, {\"stage\": \"output_guardrail\", \"latency_ms\": 0.0, \"share_pct\": 0.0}], \"dominant_stage\": \"\", \"dominant_latency_ms\": 0.0, \"dominant_share_pct\": 0.0, \"overhead_ms\": 3042.1, \"overhead_share_pct\": 100.0, \"hints\": [{\"stage\": \"overhead\", \"severity\": \"high\", \"message\": \"Unattributed overhead took 3042.1ms (100% of total).\", \"actions\": [\"Overhead dominates \\u2014 check network RTT, serialization, and gateway load.\", \"Co-locate clients with the gateway or enable HTTP keep-alive.\"]}]}, \"ttft_ms\": 1141.75}}\n\ndata: [DONE]\n\n",
+    "model": "cohere/north-mini-code:free",
+    "mode": "stream"
+  },
+  "non_streaming": {
+    "http_status": 200,
+    "request_id": "zs-7593e95c51bf",
+    "blocked_by": null,
+    "code": null,
+    "final_action": "redact",
+    "raw_email_present": false,
+    "redaction_markers": [
+      "j***@c***.example"
+    ],
+    "content_preview": "The user wants to contact someone with the email address [redacted]. The email address is partially redacted: \"[redacted]\". The user likely wants to generate the full email address or contact that person. However, we don't have enough information to reconstruct the full email address. The user might be trying to contact someone, but we don't have the full email address.",
+    "output_guard_stage": {
+      "name": "output_guardrail",
+      "action": "redact",
+      "detail": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+      "guard_reason": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+      "guard_action": "redact",
+      "latency_ms": 849.1
+    },
+    "sse_error": null,
+    "observed_action": "redact",
+    "body_head": "{\"id\":\"chatcmpl-1783664443-JAXpEq68vvw03VLJ9enP\",\"created\":1783664443,\"model\":\"cohere/north-mini-code:free\",\"object\":\"chat.completion\",\"system_fingerprint\":null,\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"message\":{\"content\":\"The user wants to contact someone with the email address [redacted]. The email address is partially redacted: \\\"[redacted]\\\". The user likely wants to generate the full email address or contact that person. However, we don't have enough information to reconstruct the full email address. The user might be trying to contact someone, but we don't have the full email addr",
+    "body_tail": "_switch\",\"latency_ms\":0.3,\"share_pct\":0.0},{\"stage\":\"model_input\",\"latency_ms\":0.2,\"share_pct\":0.0},{\"stage\":\"model_routing\",\"latency_ms\":0.0,\"share_pct\":0.0}],\"dominant_stage\":\"input_scan\",\"dominant_latency_ms\":2047.6,\"dominant_share_pct\":29.1,\"overhead_ms\":2627.1,\"overhead_share_pct\":37.3,\"hints\":[{\"stage\":\"input_scan\",\"severity\":\"medium\",\"message\":\"Input Scan took 2047.6ms (29% of total).\",\"actions\":[\"Run Tier-2 (Bedrock) scans asynchronously when policy allows.\",\"Disable Tier-2 for low-risk endpoints or monitor-only posture.\",\"Narrow scan scope (fewer PII/secret detectors) if compliance permits.\"]},{\"stage\":\"overhead\",\"severity\":\"medium\",\"message\":\"Unattributed overhead took 2627.1ms (37% of total).\",\"actions\":[\"Overhead dominates \u2014 check network RTT, serialization, and gateway load.\",\"Co-locate clients with the gateway or enable HTTP keep-alive.\"]}]},\"request_id\":\"zs-7593e95c51bf\"}}",
+    "model": "cohere/north-mini-code:free",
+    "mode": "non_stream"
+  },
+  "request_ids": {
+    "stream": "zs-5e93221c92a5",
+    "non_stream": "zs-7593e95c51bf"
+  },
+  "status": {
+    "stream": 200,
+    "non_stream": 200
+  },
+  "verdict": "CONFIRMED",
+  "observed_action": {
+    "stream": "block",
+    "non_stream": "redact"
+  },
+  "notes": [
+    "Unit: rewrite+is_streaming \u2192 block (ok)",
+    "Unit: rewrite+nonstream \u2192 rewrite (ok)",
+    "Live STREAM blocked (not rewritten email). blocked_by=sse_output_blocked sse={'message': 'Response blocked: pii detected in output.', 'type': 'output_blocked', 'code': 'output_blocked'}",
+    "Live NONSTREAM observed=redact blocked_by=None final=redact",
+    "Live NONSTREAM under rewrite: HTTP 200 final_action=redact (masked email in assistant text) \u2014 rewrite did NOT deliver a rewritten email; path redacted. STREAM path blocked via SSE output_blocked (coerce rewrite\u2192block)."
+  ],
+  "unit_rewrite_stream_to_block": true,
+  "restored": true,
+  "restore_values": {
+    "control": {
+      "output_pii_enabled": true,
+      "output_pii_action": "flag",
+      "enforcement_mode": "block",
+      "response_filtering_enabled": true,
+      "firewall_enabled": true
+    },
+    "redis": {
+      "output_pii_enabled": true,
+      "output_pii_action": "flag",
+      "enforcement_mode": "block",
+      "response_filtering_enabled": null,
+      "firewall_enabled": true
+    }
+  },
+  "hypothesis": "UI rewrite + streaming cannot surgically rewrite mid-stream \u2192 enforce_output coerces rewrite\u2192block when is_streaming=True",
+  "method": "Snapshot full firewall config; PUT output_pii_action=rewrite; stream+nonstream chat with Contact john.doe@corp.example (enable_routing false, north-mini); restore; unit enforce_output in gateway container"
+}

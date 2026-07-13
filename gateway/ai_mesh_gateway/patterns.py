@@ -1047,6 +1047,24 @@ def is_safety_refusal_output(text: str) -> bool:
     return hits >= 2
 
 
+_SAFETY_CLASSIFIER_RE = re.compile(
+    r"^User Safety:\s*(?:safe|unsafe)\s*(?:\nSafety Categories:\s*.+)?\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def is_safety_classifier_output(text: str) -> bool:
+    """True when the model returned safety-classifier metadata (not user-facing prose).
+
+    OpenRouter / guard models often emit ``User Safety: …`` + ``Safety Categories: …``
+    instead of an answer. Category names like ``PII/Privacy`` are labels, not literals.
+    """
+    t = (text or "").strip()
+    if not t or len(t) > 500:
+        return False
+    return bool(_SAFETY_CLASSIFIER_RE.match(t))
+
+
 def _detect_pii_core(text: str) -> Dict[str, str]:
     """Raw PII/PHI/PCI detection over one text form (no canonicalization)."""
     found: Dict[str, str] = {}

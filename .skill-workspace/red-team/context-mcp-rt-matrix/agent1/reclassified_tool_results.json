@@ -1,0 +1,850 @@
+{
+  "counts": {
+    "gateway_pii_secret_scan_block": 3,
+    "allow": 79,
+    "upstream_tool_error_other": 55,
+    "upstream_schema_validation_error": 31
+  },
+  "rows": [
+    {
+      "server": "semgrep-mcp",
+      "tool": "scan_directory",
+      "classification": "gateway_pii_secret_scan_block"
+    },
+    {
+      "server": "semgrep-mcp",
+      "tool": "list_rules",
+      "classification": "allow"
+    },
+    {
+      "server": "semgrep-mcp",
+      "tool": "analyze_results",
+      "classification": "allow"
+    },
+    {
+      "server": "semgrep-mcp",
+      "tool": "create_rule",
+      "classification": "allow"
+    },
+    {
+      "server": "semgrep-mcp",
+      "tool": "filter_results",
+      "classification": "allow"
+    },
+    {
+      "server": "semgrep-mcp",
+      "tool": "export_results",
+      "classification": "allow"
+    },
+    {
+      "server": "semgrep-mcp",
+      "tool": "compare_results",
+      "classification": "allow"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_close",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_resize",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_console_messages",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_handle_dialog",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_evaluate",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_file_upload",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_drop",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_fill_form",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_press_key",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_type",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_navigate",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_navigate_back",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_network_requests",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_network_request",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_run_code_unsafe",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_take_screenshot",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_snapshot",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_click",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_drag",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_hover",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_select_option",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_tabs",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright-mcp",
+      "tool": "browser_wait_for",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "echo",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "get-annotated-message",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "get-env",
+      "classification": "gateway_pii_secret_scan_block"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "get-resource-links",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "get-resource-reference",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "get-structured-content",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "get-sum",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "get-tiny-image",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "gzip-file-as-resource",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "toggle-simulated-logging",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "toggle-subscriber-updates",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "trigger-long-running-operation",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool": "simulate-research-query",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "echo",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "get-annotated-message",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "get-env",
+      "classification": "gateway_pii_secret_scan_block"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "get-resource-links",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "get-resource-reference",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "get-structured-content",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "get-sum",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "get-tiny-image",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "gzip-file-as-resource",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "toggle-simulated-logging",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "toggle-subscriber-updates",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "trigger-long-running-operation",
+      "classification": "allow"
+    },
+    {
+      "server": "cp09-verify",
+      "tool": "simulate-research-query",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_close",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_resize",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_console_messages",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_handle_dialog",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_evaluate",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_file_upload",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_drop",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_fill_form",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_press_key",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_type",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_navigate",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_navigate_back",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_network_requests",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_network_request",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_run_code_unsafe",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_take_screenshot",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_snapshot",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_click",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_drag",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_hover",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_select_option",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_tabs",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "playwright",
+      "tool": "browser_wait_for",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "everything-1",
+      "tool": "echo",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-1",
+      "tool": "get-annotated-message",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-1",
+      "tool": "get-env",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-1",
+      "tool": "get-resource-links",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-1",
+      "tool": "get-resource-reference",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-1",
+      "tool": "get-structured-content",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-1",
+      "tool": "get-sum",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-1",
+      "tool": "get-tiny-image",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-1",
+      "tool": "gzip-file-as-resource",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-1",
+      "tool": "toggle-simulated-logging",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-1",
+      "tool": "toggle-subscriber-updates",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-1",
+      "tool": "trigger-long-running-operation",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-1",
+      "tool": "simulate-research-query",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "everything-2",
+      "tool": "echo",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-2",
+      "tool": "get-annotated-message",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-2",
+      "tool": "get-env",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-2",
+      "tool": "get-resource-links",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-2",
+      "tool": "get-resource-reference",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-2",
+      "tool": "get-structured-content",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-2",
+      "tool": "get-sum",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-2",
+      "tool": "get-tiny-image",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-2",
+      "tool": "gzip-file-as-resource",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-2",
+      "tool": "toggle-simulated-logging",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-2",
+      "tool": "toggle-subscriber-updates",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-2",
+      "tool": "trigger-long-running-operation",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-2",
+      "tool": "simulate-research-query",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "everything-3",
+      "tool": "echo",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-3",
+      "tool": "get-annotated-message",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-3",
+      "tool": "get-env",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-3",
+      "tool": "get-resource-links",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-3",
+      "tool": "get-resource-reference",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-3",
+      "tool": "get-structured-content",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-3",
+      "tool": "get-sum",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-3",
+      "tool": "get-tiny-image",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-3",
+      "tool": "gzip-file-as-resource",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-3",
+      "tool": "toggle-simulated-logging",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-3",
+      "tool": "toggle-subscriber-updates",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-3",
+      "tool": "trigger-long-running-operation",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-3",
+      "tool": "simulate-research-query",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "everything-4",
+      "tool": "echo",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-4",
+      "tool": "get-annotated-message",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-4",
+      "tool": "get-env",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-4",
+      "tool": "get-resource-links",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-4",
+      "tool": "get-resource-reference",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-4",
+      "tool": "get-structured-content",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-4",
+      "tool": "get-sum",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-4",
+      "tool": "get-tiny-image",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-4",
+      "tool": "gzip-file-as-resource",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-4",
+      "tool": "toggle-simulated-logging",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-4",
+      "tool": "toggle-subscriber-updates",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-4",
+      "tool": "trigger-long-running-operation",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-4",
+      "tool": "simulate-research-query",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "everything-5",
+      "tool": "echo",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-5",
+      "tool": "get-annotated-message",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-5",
+      "tool": "get-env",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-5",
+      "tool": "get-resource-links",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-5",
+      "tool": "get-resource-reference",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-5",
+      "tool": "get-structured-content",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-5",
+      "tool": "get-sum",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-5",
+      "tool": "get-tiny-image",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-5",
+      "tool": "gzip-file-as-resource",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-5",
+      "tool": "toggle-simulated-logging",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-5",
+      "tool": "toggle-subscriber-updates",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-5",
+      "tool": "trigger-long-running-operation",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-5",
+      "tool": "simulate-research-query",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "filesystem-canary",
+      "tool": "read_file",
+      "classification": "upstream_tool_error_other"
+    },
+    {
+      "server": "filesystem-canary",
+      "tool": "read_multiple_files",
+      "classification": "allow"
+    },
+    {
+      "server": "filesystem-canary",
+      "tool": "write_file",
+      "classification": "allow"
+    },
+    {
+      "server": "filesystem-canary",
+      "tool": "edit_file",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "filesystem-canary",
+      "tool": "create_directory",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "filesystem-canary",
+      "tool": "list_directory",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "filesystem-canary",
+      "tool": "directory_tree",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "filesystem-canary",
+      "tool": "move_file",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "filesystem-canary",
+      "tool": "search_files",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "filesystem-canary",
+      "tool": "get_file_info",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "filesystem-canary",
+      "tool": "list_allowed_directories",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "echo",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "get-annotated-message",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "get-env",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "get-resource-links",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "get-resource-reference",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "get-structured-content",
+      "classification": "upstream_schema_validation_error"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "get-sum",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "get-tiny-image",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "gzip-file-as-resource",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "toggle-simulated-logging",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "toggle-subscriber-updates",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "trigger-long-running-operation",
+      "classification": "allow"
+    },
+    {
+      "server": "everything-mcp",
+      "tool": "simulate-research-query",
+      "classification": "upstream_tool_error_other"
+    }
+  ]
+}

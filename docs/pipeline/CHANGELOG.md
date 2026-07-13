@@ -2,6 +2,93 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0030 (2026-07-06)
+
+**Scan 296170 — output-guard smart-mask noop, simulator routing parity, withheld-output forensics, model label honesty.**
+
+Root Cause:
+- Output guard scanned `content + reasoning_content` but `_output_redact_redaction_possible`
+  probed `response_text or scan_text` — when completion `content` was benign, smart-mask markers
+  in `reasoning_content` were missed → false `output_blocked` 403 (scan zs-cbbd43e9b779).
+- Attack Simulator always sent `routing_preferences.enable_routing: false` (PIPELINE-0028 pin),
+  desynced from org `routing_enabled`.
+- `build_pipeline_trace` cleared `output_text` on `output_guardrail` block — operators saw only
+  "Response withheld" despite `metadata.raw_output` in telemetry.
+- `_RESERVED_MODEL_TOKENS` bare `"120b"` collapsed BYOK `nemotron-3-super-120b` to
+  `zeroshield-model` in Request Details.
+- OpenRouter `north-mini-code` for scan zs-cbbd43e9b779: gateway log proves
+  `llm_router._resolve_runtime_model` remapped inactive nemotron to first active router model
+  (`cohere/north-mini-code:free`) — NOT a trace bug; separate Bedrock tier-2 scan used
+  `zeroshield-guard` as expected.
+
+Fix:
+- `main.py`: probe `scan_text` first for smart-mask noop; pre-compute `redaction_possible` on
+  first `_enforce_output` in `proxy_chat`; thread `response_text` into blocked trace.
+- `pipeline_trace.py`: on `output_guardrail` block set `output_withheld` + operator
+  `output_text` preview (client 403 unchanged).
+- `liveGateway.js`: `simulatorRoutingPreferences(model, { orgRoutingEnabled })`; Attack +
+  Isolation simulators wired via `useFirewallConfig`.
+- `pipelineTrace.js` + `LogDetailPage.jsx`: withheld banner + "Model output (withheld from client)".
+- `security_views.py`: remove bare `"120b"` from `_RESERVED_MODEL_TOKENS`.
+
+Verification:
+- `test_pipeline_pre_masked_redact.py` (+reasoning-channel noop), `test_pipeline_trace_input_output.py`,
+  `test_model_canonicalize.py`, `liveGateway.test.js`, `pipelineTrace.test.js`.
+- Live log correlation: `grep zs-cbbd43e9b779` → remapping warning + LiteLLM north-mini.
+- Gateway + control rebuild; Attack Simulator smart-mask prompt → 200 not 403.
+
+## PIPELINE-0029 (2026-07-06)
+
+**OutputVerdict JSON 500 + output-guard UI honesty (post-PIPELINE-0028).**
+
+Root Cause:
+- After PIPELINE-0028 allowed smart-mask output through, `proxy_chat` left
+  `_pipeline_output_scan_verdict` (an `OutputVerdict` dataclass) on `llm_resp`
+  → `JSONResponse` raised `TypeError: Object of type OutputVerdict is not JSON
+  serializable` (HTTP 500).
+- Frontend `latencyForStage` read `output_guard_ms` but gateway writes
+  `output_guardrail_ms` → output guard always showed ~0.1ms.
+- On 500 with no `pipeline_trace`, `buildSimulatorStages` showed output guard
+  as "allow / Output guard not evaluated" even when the guard had run.
+
+Fix:
+- `main.py`: `_strip_internal_completion_keys()` pops internal keys before
+  client `JSONResponse` (proxy_chat + sync_pre_llm paths).
+- `_resolve_pipeline_blocked_by`: `code=="output_blocked"` → `output_guardrail`.
+- `liveGateway.js`: `output_guardrail_ms` metric key + honest 500 labeling when
+  output guard ran before the internal error.
+
+Verification:
+- `test_pipeline_pre_masked_redact.py` (+2 strip/blocked-by tests).
+- `liveGateway.test.js` (+2 latency/500 labeling tests).
+- Gateway rebuild + deploy.
+
+## PIPELINE-0028 (2026-07-06)
+
+**Output smart-mask parity + reasoning promotion + routing pin (P8).**
+
+Root Cause:
+- PIPELINE-0012 fixed input_scan smart-mask no-op blocking but output guard
+  still fail-closed on identical bytes (`redaction_possible=False` → block).
+- OpenRouter/Cohere reasoning models return tokens in `reasoning_content` with
+  empty `content`; gateway trace/UI showed "No completion body".
+- Simulators sent `model` without `routing_preferences.enable_routing: false`,
+  so org adjudicator overwrote user selection with cheapest free model.
+
+Fix:
+- `main.py`: `_output_redact_redaction_possible()` mirrors input B1 smart-mask
+  exemption on both output redact paths; `_maybe_promote_reasoning_to_content()`
+  copies reasoning into empty content (env `GATEWAY_PROMOTE_REASONING_TO_CONTENT`,
+  default on).
+- `pipeline_trace.py`: policy stage hint when no regex match on pre-masked prompt.
+- `liveGateway.js`: `pinnedModelRoutingPreferences()` + SSE folds
+  `reasoning_content` deltas; Attack/Isolation simulators pin model.
+- `ModelRoutingSimulator.jsx`: explicit `enable_routing: true`.
+
+Verification:
+- `test_pipeline_pre_masked_redact.py` (+5 output/reasoning tests).
+- Gateway suite targeted + full pytest gate.
+
 ## PIPELINE-0027 (2026-07-03)
 
 **CISO 100-rule policy package seed (P7 item 27).**

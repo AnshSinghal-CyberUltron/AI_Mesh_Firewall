@@ -1,0 +1,1275 @@
+{
+  "target": "http://127.0.0.1:8300",
+  "openai_base_url": "http://127.0.0.1:8300/v1",
+  "generated_at_utc": "2026-07-07T10:46:02Z",
+  "api_key_redacted": "XlI7...I1I2",
+  "servers_tested": 12,
+  "servers_total": 16,
+  "per_server": [
+    {
+      "slug": "semgrep-mcp",
+      "transport": "stdio",
+      "canary": "RT-LIVE-semgrep-mcp-85db60106c",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [
+        {
+          "tool": "scan_directory",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "scan_directory",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "scan_directory",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        }
+      ],
+      "status": "TESTED",
+      "tool_count": 7
+    },
+    {
+      "slug": "playwright-mcp",
+      "transport": "stdio",
+      "canary": "RT-LIVE-playwright-mcp-fab7db1824",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [
+        {
+          "tool": "browser_navigate",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_navigate",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_navigate",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_navigate_back",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_navigate_back",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_navigate_back",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_snapshot",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_snapshot",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_snapshot",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        }
+      ],
+      "status": "TESTED",
+      "tool_count": 23
+    },
+    {
+      "slug": "cp09-ens8do",
+      "transport": "stdio",
+      "canary": "RT-LIVE-cp09-ens8do-7884587317",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [
+        {
+          "tool": "echo",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        }
+      ],
+      "status": "TESTED",
+      "tool_count": 13
+    },
+    {
+      "slug": "cp09-verify",
+      "transport": "stdio",
+      "canary": "RT-LIVE-cp09-verify-4389b7fc72",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [
+        {
+          "tool": "echo",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        }
+      ],
+      "status": "TESTED",
+      "tool_count": 13
+    },
+    {
+      "slug": "playwright",
+      "transport": "stdio",
+      "canary": "RT-LIVE-playwright-15d032fbfe",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [
+        {
+          "tool": "browser_navigate",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_navigate",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_navigate",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_navigate_back",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_navigate_back",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_navigate_back",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_snapshot",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_snapshot",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "browser_snapshot",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        }
+      ],
+      "status": "TESTED",
+      "tool_count": 23
+    },
+    {
+      "slug": "ws-everything-stub",
+      "transport": "websocket",
+      "canary": "RT-LIVE-ws-everything-stub-8b1ded1167",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [],
+      "status": "ERROR_LIST",
+      "reason": {
+        "code": -32002,
+        "message": "egress denied: cannot resolve host 'ws-everything.stub' ([Errno -2] Name or service not known)"
+      }
+    },
+    {
+      "slug": "sse-everything-stub",
+      "transport": "sse",
+      "canary": "RT-LIVE-sse-everything-stub-6de3729f71",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [],
+      "status": "ERROR_LIST",
+      "reason": {
+        "code": -32002,
+        "message": "egress denied: cannot resolve host 'sse-everything.stub' ([Errno -2] Name or service not known)"
+      }
+    },
+    {
+      "slug": "http-everything-stub",
+      "transport": "streamable-http",
+      "canary": "RT-LIVE-http-everything-stub-e6ef25e488",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [],
+      "status": "ERROR_LIST",
+      "reason": {
+        "code": -32002,
+        "message": "egress denied: cannot resolve host 'http-everything.stub' ([Errno -2] Name or service not known)"
+      }
+    },
+    {
+      "slug": "linear-manual-oauth",
+      "transport": "streamable-http",
+      "canary": "RT-LIVE-linear-manual-oauth-b9b6e7db24",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [],
+      "status": "ERROR_LIST",
+      "reason": {
+        "code": -32001,
+        "message": "upstream returned 401; re-authenticate"
+      }
+    },
+    {
+      "slug": "everything-5",
+      "transport": "stdio",
+      "canary": "RT-LIVE-everything-5-f0eb68ed41",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [
+        {
+          "tool": "echo",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        }
+      ],
+      "status": "TESTED",
+      "tool_count": 13
+    },
+    {
+      "slug": "everything-4",
+      "transport": "stdio",
+      "canary": "RT-LIVE-everything-4-6578f04825",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [
+        {
+          "tool": "echo",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        }
+      ],
+      "status": "TESTED",
+      "tool_count": 13
+    },
+    {
+      "slug": "everything-3",
+      "transport": "stdio",
+      "canary": "RT-LIVE-everything-3-6c917f5ffd",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [
+        {
+          "tool": "echo",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        }
+      ],
+      "status": "TESTED",
+      "tool_count": 13
+    },
+    {
+      "slug": "everything-2",
+      "transport": "stdio",
+      "canary": "RT-LIVE-everything-2-f6c3b0991d",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [
+        {
+          "tool": "echo",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        }
+      ],
+      "status": "TESTED",
+      "tool_count": 13
+    },
+    {
+      "slug": "everything-1",
+      "transport": "stdio",
+      "canary": "RT-LIVE-everything-1-34fcf744bf",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [
+        {
+          "tool": "echo",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        }
+      ],
+      "status": "TESTED",
+      "tool_count": 13
+    },
+    {
+      "slug": "filesystem-canary",
+      "transport": "stdio",
+      "canary": "RT-LIVE-filesystem-canary-ed59600d42",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [
+        {
+          "tool": "read_file",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "read_file",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "read_file",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "read_multiple_files",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "read_multiple_files",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "read_multiple_files",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "write_file",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "write_file",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "write_file",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        }
+      ],
+      "status": "TESTED",
+      "tool_count": 11
+    },
+    {
+      "slug": "everything-mcp",
+      "transport": "stdio",
+      "canary": "RT-LIVE-everything-mcp-ae9aa96177",
+      "tools_list": {
+        "http_status": 200,
+        "blocked": false,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      },
+      "tool_calls": [
+        {
+          "tool": "echo",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": true,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "echo",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": true,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "benign",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "pii",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        },
+        {
+          "tool": "get-sum",
+          "variant": "injection",
+          "analysis": {
+            "http_status": 200,
+            "blocked": false,
+            "raw_pii_in_response": [],
+            "redaction_markers": false,
+            "canary_present": false,
+            "compliance_tags": []
+          }
+        }
+      ],
+      "status": "TESTED",
+      "tool_count": 13
+    }
+  ],
+  "cross_org": {
+    "blocked": true,
+    "response": {
+      "status_code": 403,
+      "body": {
+        "error": "org_scope_violation",
+        "message": "API key organization does not match URL."
+      }
+    }
+  },
+  "cross_mcp_leaks": [],
+  "openai_sdk": [
+    {
+      "label": "sdk_chat_benign",
+      "status": "error",
+      "analysis": {
+        "http_status": null,
+        "blocked": null,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      }
+    },
+    {
+      "label": "sdk_chat_pii_mcp_context",
+      "status": "error",
+      "analysis": {
+        "http_status": null,
+        "blocked": null,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      }
+    },
+    {
+      "label": "sdk_chat_injection",
+      "status": "error",
+      "analysis": {
+        "http_status": null,
+        "blocked": null,
+        "raw_pii_in_response": [],
+        "redaction_markers": false,
+        "canary_present": false,
+        "compliance_tags": []
+      }
+    }
+  ]
+}

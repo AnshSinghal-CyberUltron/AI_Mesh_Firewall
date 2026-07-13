@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "scan_control_rows": 0,
+  "scan_controls_configured": false,
+  "egress_text": "Echo: SSN 123-45-6789",
+  "raw_ssn_visible": true,
+  "masked": false,
+  "expect_when_zero": {
+    "configured": false,
+    "raw_ssn_visible": true
+  },
+  "expect_when_configured": {
+    "configured": true,
+    "masked": true
+  }
+}

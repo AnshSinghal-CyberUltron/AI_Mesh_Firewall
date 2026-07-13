@@ -111,7 +111,8 @@ if _PROM_AVAILABLE:
     # HIPAA/PCI-DSS/SOC2/GDPR...).
     mcp_scan_decisions_total = Counter(
         "amf_gateway_mcp_scan_decisions_total",
-        "MCP tool-call scan/enforcement decisions per org (block/redact/allow/monitor).",
+        "MCP tool-call scan/enforcement decisions per org "
+        "(block/redact/allow/monitor/scan_skipped/rate_limited/error).",
         ["org", "decision"],
         registry=REGISTRY,
     )
@@ -284,8 +285,10 @@ def record_mcp_scan_decision(org_slug: str, decision: str, compliance_tags=None,
     Best-effort / fail-safe (no-op when prometheus_client is absent). Called from the
     MCP audit sink (``mcp_proxy._record_gateway_event``) so every block/redact/allow/
     monitor decision the 1.4 chain makes is visible to Prometheus, not just the MCPEvent
-    audit trail. Cardinality is bounded (org × {block,redact,allow,monitor}; org × the
-    fixed compliance-tag set)."""
+    audit trail. Cardinality is bounded
+    (org × {block,redact,allow,monitor,scan_skipped,rate_limited,error}; org × the
+    fixed compliance-tag set). ``scan_skipped`` = zero scan-control rows
+    (no Tier-1/Tier-2 ran) — distinct from ``allow`` (scanned and clean)."""
     if not _PROM_AVAILABLE:
         return
     org = _safe_label(org_slug, "anonymous")

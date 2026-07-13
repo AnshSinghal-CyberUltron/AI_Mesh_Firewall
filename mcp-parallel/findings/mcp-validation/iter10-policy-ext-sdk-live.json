@@ -1,0 +1,219 @@
+{
+  "policy_matrix": {
+    "policy_count": 15,
+    "all_mcp_disabled": {
+      "bulk_update": {
+        "ok": true,
+        "updated": 15,
+        "stderr": ""
+      },
+      "gateway": {
+        "status": 200,
+        "text": "Echo: SSN 123-45-6789",
+        "blocked": false,
+        "masked": false,
+        "raw_ssn_visible": true,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Echo: SSN 123-45-6789"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": "0ef06273-9c01-4726-9805-3587d6fff691"
+        }
+      },
+      "control": {
+        "status": 200,
+        "decision": "allow",
+        "text": "Echo: SSN 123-45-6789",
+        "masked": false,
+        "raw_ssn_visible": true,
+        "compliance_tags": []
+      },
+      "pass": true
+    },
+    "mcp_policies_restored": {
+      "bulk_update": {
+        "ok": true,
+        "updated": 15,
+        "stderr": ""
+      },
+      "gateway": {
+        "status": 200,
+        "text": "Echo: SSN 123-45-6789",
+        "blocked": false,
+        "masked": false,
+        "raw_ssn_visible": true,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Echo: SSN 123-45-6789"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": "b9e04ae6-f033-4bbd-8053-b02cbbb34a9f"
+        }
+      },
+      "control": {
+        "status": 200,
+        "decision": "allow",
+        "text": "Echo: SSN [REDACTED_SSN]",
+        "masked": true,
+        "raw_ssn_visible": false,
+        "compliance_tags": []
+      },
+      "compile": {
+        "status": 200,
+        "body": {
+          "status": "compiled",
+          "version": 737,
+          "policy_count": 46,
+          "rule_count": 264,
+          "compiled_at": 1783585149.0574849
+        }
+      },
+      "pass": true
+    },
+    "pass": true
+  },
+  "ext_proxy": {
+    "F-002_note": "ext_mcp_proxy passes enabled_info=None \u2014 org scan_controls gate skipped; tier1 still runs with scan_action=tag. Disallowed host \u2192 403; org @ 0 controls \u2192 raw.",
+    "org_gateway_zero_controls": {
+      "status": 200,
+      "text": "Echo: SSN 123-45-6789",
+      "blocked": false,
+      "masked": false,
+      "raw_ssn_visible": true,
+      "body": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Echo: SSN 123-45-6789"
+            }
+          ]
+        },
+        "jsonrpc": "2.0",
+        "id": "e78cd786-be6e-49b4-9c82-4345316c3ed4"
+      }
+    },
+    "disallowed_host": {
+      "status": 403,
+      "host": "evil.example.com",
+      "error_message": "Domain evil.example.com not in MCP proxy allowlist",
+      "blocked_inbound": false,
+      "text": "Domain evil.example.com not in MCP proxy allowlist",
+      "body": {
+        "error": {
+          "message": "Domain evil.example.com not in MCP proxy allowlist",
+          "type": "permission_error",
+          "param": null,
+          "code": "Domain evil.example.com not in MCP proxy allowlist"
+        },
+        "request_id": "zs-fce1a2411b24"
+      }
+    },
+    "allowed_host_session_error": {
+      "status": 200,
+      "host": "mcp.context7.com",
+      "error_message": "Tool 'echo' arguments matched compliance tags: SECRET.",
+      "blocked_inbound": true,
+      "text": "Tool 'echo' arguments matched compliance tags: SECRET.",
+      "body": {
+        "jsonrpc": "2.0",
+        "id": "c3c5c435-2453-4d66-b249-7d10e62c4d09",
+        "error": {
+          "code": -32000,
+          "message": "Tool 'echo' arguments matched compliance tags: SECRET."
+        }
+      }
+    },
+    "pass": true
+  },
+  "live_sdk_chat": {
+    "ok": true,
+    "http_status": 200,
+    "final_action": "allow",
+    "stages": [
+      "policy",
+      "input_scan",
+      "route",
+      "route",
+      "output_guard"
+    ],
+    "content_hint": true,
+    "payload_excerpt": "{\"id\": \"chatcmpl-1783585151-yjBNEeYQZptpx4dUxkVs\", \"created\": 1783585151, \"model\": \"cohere/north-mini-code:free\", \"object\": \"chat.completion\", \"system_fingerprint\": null, \"choices\": [{\"finish_reason\": \"stop\", \"index\": 0, \"message\": {\"content\": \"Hello!\", \"role\": \"assistant\", \"tool_calls\": null, \"function_call\": null, \"reasoning_content\": \"We need to respond with a greeting in one short sentence. Pr"
+  },
+  "gvisor": {
+    "runsc_installed": true,
+    "sandbox_runtimes": [],
+    "runtimes": [
+      "io.containerd.runc.v2",
+      "runc",
+      "runsc"
+    ],
+    "sandbox_runtime": "runsc",
+    "sandbox_container": "zeroshield-mcp-sandbox",
+    "pass": true,
+    "infra_blocker": false
+  },
+  "container_parity": {
+    "control_scan_controls_f009": {
+      "container": "ai_mesh_firewall-control-1",
+      "needle": "configured: bool = False",
+      "grep_count": 1,
+      "present": true
+    },
+    "gateway_tier1_action_f010": {
+      "container": "ai_mesh_firewall-gateway-1",
+      "needle": "_resolved_tier1_action",
+      "grep_count": 2,
+      "present": true
+    },
+    "pass": true
+  },
+  "multi_org": {
+    "cases": [
+      {
+        "org": "zeroshield",
+        "status": 200,
+        "raw_ssn": true,
+        "pass": true
+      },
+      {
+        "org": "org-a",
+        "status": 200,
+        "raw_ssn": true,
+        "pass": true
+      },
+      {
+        "org": "org-b",
+        "status": 200,
+        "raw_ssn": true,
+        "pass": true
+      }
+    ],
+    "pass": true
+  },
+  "checks": {
+    "policy_matrix_pass": true,
+    "ext_proxy_pass": true,
+    "multi_org_pass": true,
+    "live_sdk_chat_pass": true,
+    "container_parity_pass": true,
+    "gvisor_pass": true,
+    "gvisor_infra_blocker": false
+  },
+  "baseline": {
+    "scan_controls_configured": false,
+    "scan_row_count": 0
+  },
+  "ok": true
+}

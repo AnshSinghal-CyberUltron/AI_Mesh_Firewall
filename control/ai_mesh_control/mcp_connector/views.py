@@ -327,6 +327,75 @@ def _store_oauth_tokens(server, tok: dict) -> None:
     server.auth_type = "oauth"
     update_fields.append("auth_type")
     server.save(update_fields=update_fields)
+    _mirror_oauth_token_to_gateway(server, tok)
+
+
+def _mirror_oauth_token_to_gateway(server, tok: dict) -> None:
+    """Best-effort mirror of control-plane OAuth tokens into gateway Redis.
+
+    HTTP OAuth servers route through the sandbox; ``get_stored_token(org, url)``
+    must find the token after control ``_store_oauth_tokens`` or refresh.
+    Failures are logged and swallowed — the control DB row remains authoritative.
+    """
+    org = getattr(server, "organization", None)
+    org_slug = getattr(org, "slug", "") if org else ""
+    server_url = (getattr(server, "url", "") or "").strip()
+    access = (tok.get("access_token") or getattr(server, "auth_token", "") or "").strip()
+    if not org_slug or not server_url or not access:
+        return
+    gateway_url = (
+        (getattr(settings, "GATEWAY_URL", "") or "").strip().rstrip("/")
+        or os.environ.get("GATEWAY_URL", "").strip().rstrip("/")
+        or "http://gateway:8300"
+    )
+    internal_key = (
+        (getattr(settings, "GATEWAY_INTERNAL_API_KEY", "") or "").strip()
+        or os.environ.get("GATEWAY_INTERNAL_API_KEY", "").strip()
+    )
+    if not internal_key:
+        logger.warning(
+            "OAuth token mirror skipped for %s: GATEWAY_INTERNAL_API_KEY not configured",
+            getattr(server, "server_slug", "?"),
+        )
+        return
+    payload = {
+        "org_slug": org_slug,
+        "server_url": server_url,
+        "access_token": access,
+        "refresh_token": tok.get("refresh_token") or getattr(server, "oauth_refresh_token", "") or "",
+        "expires_in": tok.get("expires_in"),
+        "token_type": tok.get("token_type") or "bearer",
+        "token_endpoint": getattr(server, "oauth_token_endpoint", "") or "",
+        "client_id": getattr(server, "oauth_client_id", "") or "",
+        "client_secret": getattr(server, "oauth_client_secret", "") or "",
+        "resource": getattr(server, "oauth_resource", "") or "",
+        "scope": tok.get("scope") or getattr(server, "oauth_scope", "") or "",
+    }
+    try:
+        resp = requests.post(
+            f"{gateway_url}/v1/mcp/internal/oauth-token-mirror",
+            json=payload,
+            headers={
+                "Content-Type": "application/json",
+                "X-Gateway-Internal-Key": internal_key,
+            },
+            timeout=5,
+        )
+        if resp.status_code >= 400:
+            logger.warning(
+                "OAuth token mirror HTTP %s for %s/%s: %s",
+                resp.status_code,
+                org_slug,
+                getattr(server, "server_slug", "?"),
+                resp.text[:300],
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "OAuth token mirror failed for %s/%s: %s",
+            org_slug,
+            getattr(server, "server_slug", "?"),
+            exc,
+        )
 
 
 def _oauth_token_present_and_unexpired(server) -> bool:
@@ -353,6 +422,14 @@ def _is_auth_rejection_message(msg: str) -> bool:
     )
 
 
+def _oauth_pending_initial_authorization(server) -> bool:
+    """True when OAuth is configured but the operator has never completed authorize."""
+    return (
+        getattr(server, "auth_type", "") == "oauth"
+        and not getattr(server, "auth_token", None)
+    )
+
+
 def _ensure_oauth_token_fresh(server) -> bool:
     """Refresh the OAuth access token in place when missing or near expiry.
 
@@ -368,6 +445,9 @@ def _ensure_oauth_token_fresh(server) -> bool:
     """
     if getattr(server, "auth_type", "") != "oauth":
         return True
+    if _oauth_pending_initial_authorization(server):
+        # Never completed OAuth — pending authorization, not a re-auth failure.
+        return False
     expires_at = getattr(server, "oauth_token_expires_at", None)
     has_token = bool(server.auth_token)
     near_expiry = bool(expires_at) and expires_at <= timezone.now() + timedelta(seconds=60)
@@ -448,6 +528,8 @@ MCP_ERR_CRASH = "MCP_SERVER_CRASHED"
 MCP_ERR_IMAGE = "MCP_IMAGE_UNAVAILABLE"
 MCP_ERR_TIMEOUT = "MCP_TIMEOUT"
 MCP_ERR_START = "MCP_START_FAILED"
+MCP_ERR_HOST_TOOL = "MCP_HOST_TOOL_FAILED"
+MCP_ERR_PROTOCOL = "MCP_PROTOCOL_FAILED"
 MCP_ERR_UNAVAILABLE = "MCP_UNAVAILABLE"
 
 
@@ -515,13 +597,23 @@ def _classify_sync_error(low: str) -> tuple[str, str]:
                               "not ready", "provisioning", "starting up")):
         return MCP_ERR_TIMEOUT, ("The MCP server did not respond in time. Please "
                                  "retry in a moment.")
+    if any(k in low for k in ("host tool install failed", "mcp_host_tools",
+                              "host tool not in allowlist", "host tool manager")):
+        return MCP_ERR_HOST_TOOL, ("A required CLI tool could not be installed in the "
+                                   "sandbox. Verify the Host CLI tools declaration and "
+                                   "retry, or contact support.")
+    if "mcp_protocol_handshake_failed" in low or "host_cli_tools_installed" in low:
+        return MCP_ERR_PROTOCOL, (
+            "The command exited without speaking MCP JSON-RPC. Verify it launches an MCP "
+            "server (not a one-off script). Host CLI tools were installed successfully."
+        )
     if any(k in low for k in ("exited with code", "failed to start", "process exited",
                               "missing host dependency", "wrong package",
                               "stdout stream closed", "did not start")):
         return MCP_ERR_START, ("The MCP server could not be started — it stopped "
                                "immediately during startup. Verify the command and package "
-                               "name; a server needing an extra host tool (e.g. a required "
-                               "CLI binary such as semgrep) may not run in the isolated sandbox.")
+                               "name; if the server shells out to a required CLI binary, "
+                               "declare it in the server's Host CLI tools / MCP_HOST_TOOLS.")
     return MCP_ERR_UNAVAILABLE, ("The MCP server could not be reached or returned an "
                                  "error. Verify the configuration and retry.")
 
@@ -645,6 +737,11 @@ def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
     if server.transport in ("streamable-http", "sse") and hasattr(server, "auth_type"):
         auth_type = getattr(server, "auth_type", "none") or "none"
         if auth_type == "oauth":
+            # Defer discovery until the operator completes OAuth — background
+            # sync on a freshly registered HTTP OAuth server must NOT mark
+            # needs_reauth or surface "token expired" before first authorize.
+            if _oauth_pending_initial_authorization(server):
+                return [], None
             # Refresh if needed, then forward the OAuth access token as a
             # normal bearer so the gateway needs no OAuth awareness. Only
             # forward when the token is usable; an expired/unrefreshable token
@@ -744,7 +841,11 @@ def _resync_server_tools(server, org) -> dict:
         stale.delete()
     server.tools_count = MCPToolRegistration.objects.filter(server=server).count()
     server.last_sync_at = timezone.now()
-    server.connection_status = "connected" if (sync_error is None) else "failed"
+    oauth_pending = _oauth_pending_initial_authorization(server) and sync_error is None
+    if oauth_pending:
+        server.connection_status = "unknown"
+    else:
+        server.connection_status = "connected" if (sync_error is None) else "failed"
     update_fields = ["tools_count", "last_sync_at", "connection_status", "updated_at"]
     # OAuth token PRESENT + UNEXPIRED but the upstream STILL rejected it (401/403):
     # re-authorizing just re-mints a token of the same kind the server already
@@ -765,7 +866,7 @@ def _resync_server_tools(server, org) -> dict:
             "access to it." + (f" {_ref.group(0)}" if _ref else "")
         )
     if hasattr(server, "last_sync_error"):
-        server.last_sync_error = sync_error or ""
+        server.last_sync_error = "" if oauth_pending else (sync_error or "")
         update_fields.append("last_sync_error")
     # Map an interactive-auth / BYOK-OAuth failure (e.g. a stdio `mcp-remote`
     # server whose headless OAuth login the gateway detected and short-circuited)
@@ -773,24 +874,29 @@ def _resync_server_tools(server, org) -> dict:
     # the operator sees "re-authenticate" rather than an opaque error. Cleared
     # on success or any non-auth failure.
     if hasattr(server, "needs_reauth"):
-        _err_l = (sync_error or "").lower()
-        server.needs_reauth = sync_error is not None and any(
-            h in _err_l
-            for h in (
-                "interactive authentication",
-                "requires re-authentication",
-                "re-authentication",
-                "re-authenticate",
-                "byok / oauth",
-                "needs_reauth",
-                # Bearer-token BYOK failures: an invalid/expired token the
-                # client supplied at runtime — actionable as "provide valid
-                # credentials" rather than an opaque generic failure.
-                "invalid_token",
-                "invalid token",
-                "unauthorized",
+        if oauth_pending:
+            server.needs_reauth = False
+        else:
+            _err_l = (sync_error or "").lower()
+            server.needs_reauth = sync_error is not None and any(
+                h in _err_l
+                for h in (
+                    "interactive authentication",
+                    "requires re-authentication",
+                    "re-authentication",
+                    "re-authenticate",
+                    "re-authorize",
+                    "byok / oauth",
+                    "needs_reauth",
+                    # HTTP OAuth via sandbox (-32001 / upstream 401)
+                    "upstream returned 401",
+                    "401;",
+                    " 401",
+                    "invalid_token",
+                    "invalid token",
+                    "unauthorized",
+                )
             )
-        )
         update_fields.append("needs_reauth")
     if hasattr(server, "last_sync_attempt_at"):
         server.last_sync_attempt_at = timezone.now()
@@ -821,12 +927,24 @@ class _MCPToolCallError(requests.RequestException):
         self.http_status = http_status
 
 
-def _call_tool_via_gateway(server, org, tool_name: str, arguments: dict) -> dict:
+def _call_tool_via_gateway(
+    server,
+    org,
+    tool_name: str,
+    arguments: dict,
+    *,
+    actor: dict | None = None,
+) -> dict:
     """Execute a tool through the gateway's internal MCP route.
 
     This is used for all MCP server transports (stdio, websocket,
     streamable-http, sse). The gateway proxies directly to the upstream
     URL (or spawns the stdio process) and enforces policy in-band.
+
+    ``actor`` is optional ``{user_id, agent_id, roles}`` so the gateway
+    adapter scan path can honor actor-scoped MCP policies / field RBAC
+    (parity with org_mcp_jsonrpc). Control already evaluated policies
+    with the same actor; the gateway re-uses it for field projection.
     """
     gateway_url = (
         (getattr(settings, "GATEWAY_URL", "") or "").strip().rstrip("/")
@@ -848,6 +966,17 @@ def _call_tool_via_gateway(server, org, tool_name: str, arguments: dict) -> dict
         "url": server.url or "",
         "transport": server.transport or "streamable-http",
     }
+    if actor:
+        # Only forward non-empty identity fields (gateway treats missing as None).
+        _actor_out: dict = {}
+        if actor.get("user_id") is not None:
+            _actor_out["user_id"] = actor["user_id"]
+        if actor.get("agent_id"):
+            _actor_out["agent_id"] = str(actor["agent_id"])[:64]
+        if actor.get("roles"):
+            _actor_out["roles"] = [str(r)[:64] for r in list(actor["roles"])[:16]]
+        if _actor_out:
+            payload["actor"] = _actor_out
 
     if server.transport in ("streamable-http", "sse") and hasattr(server, "auth_type"):
         auth_type = getattr(server, "auth_type", "none") or "none"
@@ -1590,7 +1719,17 @@ class MCPToolCallView(APIView):
                 resolved_server.server_slug,
                 (resolved_server.transport or "").strip().lower(),
             )
-            result = _call_tool_via_gateway(resolved_server, org, tool_name, arguments)
+            result = _call_tool_via_gateway(
+                resolved_server,
+                org,
+                tool_name,
+                arguments,
+                actor={
+                    "user_id": actor_user_id,
+                    "agent_id": agent_id,
+                    "roles": list(actor_roles),
+                },
+            )
         except requests.RequestException as exc:
             latency_ms = int((time.time() - t0) * 1000)
             mcp_firewall_client.postflight_audit(
@@ -1814,10 +1953,18 @@ class MCPToolCallView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        # 'monitor' posture: detect + audit but DO NOT mutate (observe-only).
-        # Anything else (redact / tag / inherit-fallback) applies the prior
-        # output redaction (output-direction hints then G7 field redaction).
-        _output_monitor = _scan_action == "monitor" and _output_pii_detected
+        # Observe-only: monitor (and tag without a policy redact verdict) detect + audit,
+        # no output mutation. Policy-authored redact still applies under tag.
+        _policy_output_redact = (
+            eval_out is not None
+            and eval_out.action == "redact"
+            and bool(eval_out.redaction_hints)
+        )
+        _output_monitor = (
+            _scan_action in ("monitor", "tag")
+            and _output_pii_detected
+            and not _policy_output_redact
+        )
         if eval_out is not None and eval_out.redaction_hints and not _output_monitor:
             try:
                 result = redact_structured(result, eval_out.redaction_hints, "output")
@@ -2005,6 +2152,7 @@ def _record_event(
                     "redact": 200,
                     "monitor": 200,
                     "allow": 200,
+                    "scan_skipped": 200,
                     "error": 502,
                 }
                 _status_code = _status_code_map.get(decision, 200)
@@ -2013,11 +2161,14 @@ def _record_event(
                 # 'allow' is recorded as 'monitor' so success traffic still
                 # appears on dashboard timelines without being mis-tagged
                 # as a block. 'error' is also recorded as 'monitor'.
+                # 'scan_skipped' = zero scan controls (no Tier-1/Tier-2) —
+                # observably distinct in MCPEvent, mapped to monitor for SOC.
                 _action_map = {
                     "block": "block",
                     "redact": "redact",
                     "monitor": "monitor",
                     "allow": "monitor",
+                    "scan_skipped": "monitor",
                     "error": "monitor",
                 }
                 _action = _action_map.get(decision, "monitor")
@@ -2027,6 +2178,7 @@ def _record_event(
                     "redact": 55,
                     "monitor": 25,
                     "allow": 10,
+                    "scan_skipped": 5,
                     "error": 40,
                 }
                 _risk = _risk_map.get(decision, 10)
@@ -2454,7 +2606,7 @@ class MCPGatewayEnabledToolsView(APIView):
             "default_presidio_action": server.default_scan_action,
             "tool_presidio_actions": tool_actions,
             "scan_controls": scan_rows,
-            "scan_controls_configured": True,
+            "scan_controls_configured": bool(scan_rows),
             "effective_scan_controls": org_effective,
             "effective_scan_controls_by_tool": effective_by_tool,
             "mcp_tier2_enabled": mcp_tier2_enabled,
@@ -2473,7 +2625,7 @@ class MCPGatewayRecordEventView(APIView):
         Body: {
             "server_slug": "<slug>",
             "tool_name": "<name>",
-            "decision": "allow|block|redact|error",
+            "decision": "allow|block|redact|monitor|scan_skipped|error",
             "reason": "<text>",
             "request_id": "<id>",
             "latency_ms": <int>,
@@ -3052,6 +3204,13 @@ p{{margin:6px 0;line-height:1.5}} a{{color:#60a5fa}}</style></head>
         server.oauth_state = ""
         server.oauth_code_verifier = ""
         server.save(update_fields=["oauth_state", "oauth_code_verifier", "updated_at"])
+        _clear_needs_reauth(server)
+        if hasattr(server, "last_sync_error"):
+            server.last_sync_error = ""
+            server.save(update_fields=["last_sync_error", "updated_at"])
+        org = getattr(server, "organization", None)
+        if org is not None:
+            _trigger_background_sync(server, org)
 
         return self._html(
             True,

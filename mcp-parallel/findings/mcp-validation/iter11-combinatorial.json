@@ -1,0 +1,259 @@
+{
+  "matrix": [
+    {
+      "case": "baseline_zero_controls",
+      "expect": {
+        "raw_ssn_visible": true,
+        "masked": false,
+        "blocked": false
+      },
+      "got": {
+        "request_id": "i11-baseline_zer",
+        "status": 200,
+        "egress_text": "Echo: SSN 123-45-6789",
+        "blocked": false,
+        "raw_ssn_visible": true,
+        "masked": false
+      },
+      "pass": true
+    },
+    {
+      "case": "org_both_monitor",
+      "expect": {
+        "blocked": false,
+        "raw_ssn_visible": true
+      },
+      "got": {
+        "request_id": "i11-org_both_mon",
+        "status": 200,
+        "egress_text": "Echo: SSN 123-45-6789",
+        "blocked": false,
+        "raw_ssn_visible": true,
+        "masked": false
+      },
+      "pass": true
+    },
+    {
+      "case": "org_input_redact",
+      "expect": {
+        "masked": true,
+        "blocked": false
+      },
+      "got": {
+        "request_id": "i11-org_input_re",
+        "status": 200,
+        "egress_text": "Echo: SSN ***-**-6789",
+        "blocked": false,
+        "raw_ssn_visible": false,
+        "masked": true
+      },
+      "pass": true
+    },
+    {
+      "case": "org_output_redact",
+      "expect": {
+        "masked": true,
+        "blocked": false
+      },
+      "got": {
+        "request_id": "i11-org_output_r",
+        "status": 200,
+        "egress_text": "Echo: SSN ***-**-6789",
+        "blocked": false,
+        "raw_ssn_visible": false,
+        "masked": true
+      },
+      "pass": true
+    },
+    {
+      "case": "org_both_block",
+      "expect": {
+        "blocked": true
+      },
+      "got": {
+        "request_id": "i11-org_both_blo",
+        "status": 200,
+        "egress_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: GDPR-PII, HIPAA-PHI.",
+        "blocked": true,
+        "raw_ssn_visible": false,
+        "masked": true
+      },
+      "pass": true
+    },
+    {
+      "case": "org_input_block",
+      "expect": {
+        "blocked": true
+      },
+      "got": {
+        "request_id": "i11-org_input_bl",
+        "status": 200,
+        "egress_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: GDPR-PII, HIPAA-PHI.",
+        "blocked": true,
+        "raw_ssn_visible": false,
+        "masked": true
+      },
+      "pass": true
+    },
+    {
+      "case": "org_output_block",
+      "expect": {
+        "blocked": true
+      },
+      "got": {
+        "request_id": "i11-org_output_b",
+        "status": 200,
+        "egress_text": "[BLOCKED] Response from 'echo' matched compliance tags: GDPR-PII, HIPAA-PHI.",
+        "blocked": true,
+        "raw_ssn_visible": false,
+        "masked": true
+      },
+      "pass": true
+    },
+    {
+      "case": "server_output_block",
+      "expect": {
+        "blocked": true
+      },
+      "got": {
+        "request_id": "i11-server_outpu",
+        "status": 200,
+        "egress_text": "[BLOCKED] Response from 'echo' matched compliance tags: GDPR-PII, HIPAA-PHI.",
+        "blocked": true,
+        "raw_ssn_visible": false,
+        "masked": true
+      },
+      "pass": true
+    },
+    {
+      "case": "precedence_tool_block_over_org_monitor",
+      "expect": {
+        "blocked": true
+      },
+      "got": {
+        "request_id": "i11-precedence_t",
+        "status": 200,
+        "egress_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: GDPR-PII, HIPAA-PHI.",
+        "blocked": true,
+        "raw_ssn_visible": false,
+        "masked": true
+      },
+      "pass": true
+    },
+    {
+      "case": "org_output_block_maskable_pii",
+      "expect": {
+        "blocked": true
+      },
+      "got": {
+        "request_id": "i11-org_output_b",
+        "status": 200,
+        "egress_text": "[BLOCKED] Response from 'echo' matched compliance tags: GDPR-PII, HIPAA-PHI.",
+        "blocked": true,
+        "raw_ssn_visible": false,
+        "masked": true
+      },
+      "pass": true
+    },
+    {
+      "case": "post_cleanup_zero_controls",
+      "expect": {
+        "raw_ssn_visible": true,
+        "masked": false,
+        "blocked": false
+      },
+      "got": {
+        "request_id": "i11-post_cleanup",
+        "status": 200,
+        "egress_text": "Echo: SSN 123-45-6789",
+        "blocked": false,
+        "raw_ssn_visible": true,
+        "masked": false
+      },
+      "pass": true
+    }
+  ],
+  "tier2": {
+    "org_tier2_disabled": true,
+    "egress": {
+      "request_id": "tier2-577772",
+      "status": 200,
+      "egress_text": "Echo: SSN 123-45-6789",
+      "blocked": false,
+      "raw_ssn_visible": true,
+      "masked": false
+    },
+    "stages": [
+      "tier1_skipped",
+      "tier1_skipped"
+    ],
+    "decision": "allow",
+    "pass": true
+  },
+  "cross_plane": {
+    "scan_controls": 0,
+    "mcp_policies_enabled": true,
+    "gateway": {
+      "request_id": "i11-bc17bd21",
+      "status": 200,
+      "egress_text": "Echo: SSN 123-45-6789",
+      "blocked": false,
+      "raw_ssn_visible": true,
+      "masked": false
+    },
+    "control": {
+      "status": 200,
+      "decision": "allow",
+      "egress_text": "Echo: SSN [REDACTED_SSN]",
+      "raw_ssn_visible": false,
+      "masked": true,
+      "compliance_tags": []
+    },
+    "pass": true,
+    "finding": "F-005 \u2014 independent policy plane on control /tools/call/"
+  },
+  "compliance": {
+    "decision": "scan_skipped",
+    "tags": [],
+    "scan_trace": [
+      "scan_skipped",
+      "scan_skipped"
+    ],
+    "raw_egress": true,
+    "pass": true
+  },
+  "ext_proof": {
+    "ok": true,
+    "exit_code": 0,
+    "summary": "guard_allows_safe_public_host\n  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:4908: DeprecationWarning: \n          on_event is deprecated, use lifespan event handlers instead.\n  \n          Read more about it in the\n          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).\n          \n    @app.on_event(\"shutdown\")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n6 passed, 54 deselected, 4 warnings in 0.39s"
+  },
+  "sdk": {
+    "ok": true,
+    "exit_code": 0,
+    "summary": "ay/main.py:4908: DeprecationWarning: \n          on_event is deprecated, use lifespan event handlers instead.\n  \n          Read more about it in the\n          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).\n          \n    @app.on_event(\"shutdown\")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n7 passed, 41 deselected, 4 warnings in 1.05s\n"
+  },
+  "image_parity": {
+    "control_scan_controls": {
+      "local_sha256_prefix": "f457086f4b11db98",
+      "container_sha256_prefix": "f457086f4b11db98",
+      "match": true
+    },
+    "gateway_mcp_proxy": {
+      "local_sha256_prefix": "2695700c60a10e75",
+      "container_sha256_prefix": "2695700c60a10e75",
+      "match": true
+    },
+    "pass": true,
+    "note": "False match means hot-deploy drift \u2014 rebuild images to bake fixes"
+  },
+  "checks": {
+    "matrix_pass": true,
+    "tier2_pass": true,
+    "compliance_pass": true,
+    "cross_plane_pass": true,
+    "ext_pytest_pass": true,
+    "sdk_pass": true,
+    "image_parity_pass": true
+  },
+  "ok": true
+}

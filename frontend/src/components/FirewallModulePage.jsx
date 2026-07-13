@@ -39,8 +39,11 @@ export function FirewallModulePage({
 }) {
   const [timeRange, setTimeRange] = useState(DEFAULT_TIME_RANGE_BY_MODULE[moduleId] || "24h");
   const firewallData = useFirewallData(moduleId, timeRange);
-  const hasSidebar =
-    (Array.isArray(flowNodes) && flowNodes.length > 0) || (Array.isArray(inspectionPanels) && inspectionPanels.length > 0);
+  // Only reserve a right column when there is real inspection content.
+  // Flow-only sidebars (e.g. module 1.4) left a large empty gap and starved
+  // control panels of width — traffic path renders full-width above instead.
+  const hasInspectionSidebar = Array.isArray(inspectionPanels) && inspectionPanels.length > 0;
+  const hasFlowNodes = Array.isArray(flowNodes) && flowNodes.length > 0;
 
   const pageConfig = getModulePageConfig(moduleId);
   const pageData = useMemo(
@@ -201,8 +204,11 @@ export function FirewallModulePage({
           title={pageConfig.workspaceTitle}
           description={pageConfig.workspaceDescription}
         />
-        <div className={cn("grid gap-6", hasSidebar && "xl:grid-cols-[1.4fr,0.9fr]")}>
-          <div className="space-y-6 min-w-0">
+        {hasFlowNodes && !hasInspectionSidebar ? (
+          <FlowSection flowNodes={flowNodes} summary={pageData.summary} layout="strip" />
+        ) : null}
+        <div className={cn("grid gap-6", hasInspectionSidebar && "xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]")}>
+          <div className="min-w-0 space-y-6">
             {controlPanels.length > 0 ? (
               <PanelLane label={pageConfig.panelLabels.control} panels={resolvedControlPanels} />
             ) : null}
@@ -214,12 +220,12 @@ export function FirewallModulePage({
             ) : null}
           </div>
 
-          {hasSidebar ? (
-            <div className="space-y-6 min-w-0 xl:sticky xl:top-6 xl:self-start">
-              <FlowSection flowNodes={flowNodes} summary={pageData.summary} />
-              {inspectionPanels.length > 0 ? (
-                <PanelLane label={pageConfig.panelLabels.inspection} panels={inspectionPanels} />
+          {hasInspectionSidebar ? (
+            <div className="min-w-0 space-y-6 xl:sticky xl:top-6 xl:self-start">
+              {hasFlowNodes ? (
+                <FlowSection flowNodes={flowNodes} summary={pageData.summary} />
               ) : null}
+              <PanelLane label={pageConfig.panelLabels.inspection} panels={inspectionPanels} />
             </div>
           ) : null}
         </div>
@@ -313,19 +319,36 @@ function PanelLane({ label, panels }) {
   );
 }
 
-function FlowSection({ flowNodes = [], summary }) {
+function FlowSection({ flowNodes = [], summary, layout = "stack" }) {
   if (!Array.isArray(flowNodes) || flowNodes.length === 0) {
     return null;
   }
 
+  const isStrip = layout === "strip";
+
   return (
-    <div className="ai-mesh-card rounded-[28px] p-6">
+    <div className={cn("ai-mesh-card rounded-[28px]", isStrip ? "p-4 sm:p-5" : "p-6")}>
       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-teal-600 dark:text-teal-300">Traffic path</div>
-      <div className="mt-4 space-y-3">
+      <div
+        className={cn(
+          "mt-4",
+          isStrip
+            ? "grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+            : "space-y-3",
+        )}
+      >
         {flowNodes.map((node) => (
-          <div key={`${node.label}-${node.value}`} className="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/45">
+          <div
+            key={`${node.label}-${node.value}`}
+            className={cn(
+              "rounded-2xl border border-slate-200/80 bg-white/80 dark:border-slate-700 dark:bg-slate-950/45",
+              isStrip ? "px-4 py-3" : "px-4 py-4",
+            )}
+          >
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{node.label}</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">{typeof node.format === "function" ? node.format(summary) : node.value}</div>
+            <div className={cn("font-semibold text-slate-950 dark:text-slate-50", isStrip ? "mt-1.5 text-xl" : "mt-2 text-2xl")}>
+              {typeof node.format === "function" ? node.format(summary) : node.value}
+            </div>
           </div>
         ))}
       </div>

@@ -1,0 +1,315 @@
+{
+  "policy_matrix": [
+    {
+      "case": "input_redact",
+      "action": "redact",
+      "direction": "input",
+      "policy_id": 56,
+      "dry_run": {
+        "status": 200,
+        "action": "redact",
+        "matched_policies": [
+          "VAL_ITER13_input_redact"
+        ],
+        "matched_rules": [
+          "VAL_ITER13_input_redact-rule"
+        ],
+        "message": "Content redacted by policy",
+        "dry_run": true,
+        "policy_engine_matched": true,
+        "redacted_prompt": "tool:echo patient SSN is [REDACTED_SSN]",
+        "redacted_response": "",
+        "redacted_input_args": {
+          "message": "patient SSN is [REDACTED_SSN]"
+        }
+      },
+      "control_live": {
+        "status": 200,
+        "decision": "allow",
+        "text": "Echo: patient SSN is [REDACTED_SSN]",
+        "blocked": false,
+        "masked": true,
+        "raw_ssn_visible": false,
+        "compliance_tags": []
+      },
+      "gateway_live": {
+        "status": 200,
+        "text": "Echo: patient SSN is 123-45-6789",
+        "blocked": false,
+        "masked": false,
+        "raw_ssn_visible": true,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Echo: patient SSN is 123-45-6789"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": "48389cd4-afac-444e-a97d-1808ce167bdd"
+        }
+      },
+      "pass": true
+    },
+    {
+      "case": "output_redact",
+      "action": "redact",
+      "direction": "output",
+      "policy_id": 57,
+      "dry_run": {
+        "status": 200,
+        "action": "redact",
+        "matched_policies": [
+          "VAL_ITER13_output_redact"
+        ],
+        "matched_rules": [
+          "VAL_ITER13_output_redact-rule"
+        ],
+        "message": "Content redacted by policy",
+        "dry_run": true,
+        "policy_engine_matched": true,
+        "redacted_prompt": "tool:echo patient SSN is [REDACTED_SSN]",
+        "redacted_response": "",
+        "redacted_input_args": {
+          "message": "patient SSN is 123-45-6789"
+        },
+        "redacted_output": {
+          "message": "patient SSN is [REDACTED_SSN]"
+        }
+      },
+      "control_live": {
+        "status": 200,
+        "decision": "allow",
+        "text": "Echo: patient SSN is [REDACTED_SSN]",
+        "blocked": false,
+        "masked": true,
+        "raw_ssn_visible": false,
+        "compliance_tags": []
+      },
+      "gateway_live": {
+        "status": 200,
+        "text": "Echo: patient SSN is 123-45-6789",
+        "blocked": false,
+        "masked": false,
+        "raw_ssn_visible": true,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Echo: patient SSN is 123-45-6789"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": "169b6159-3b8a-42a6-be61-10299da51f80"
+        }
+      },
+      "pass": true
+    },
+    {
+      "case": "both_block",
+      "action": "block",
+      "direction": "both",
+      "policy_id": 58,
+      "dry_run": {
+        "status": 200,
+        "action": "block",
+        "matched_policies": [
+          "VAL_ITER13_both_block"
+        ],
+        "matched_rules": [
+          "VAL_ITER13_both_block-rule"
+        ],
+        "message": "Request blocked by policy",
+        "dry_run": true,
+        "policy_engine_matched": true
+      },
+      "control_live": {
+        "status": 403,
+        "decision": null,
+        "text": "Tool call blocked by policy",
+        "blocked": false,
+        "masked": true,
+        "raw_ssn_visible": false,
+        "compliance_tags": []
+      },
+      "gateway_live": {
+        "status": 200,
+        "text": "Echo: patient SSN is 123-45-6789",
+        "blocked": false,
+        "masked": false,
+        "raw_ssn_visible": true,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Echo: patient SSN is 123-45-6789"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": "58eeb134-9bc9-41c8-ace3-d32bd7be3da0"
+        }
+      },
+      "pass": true
+    },
+    {
+      "case": "both_monitor",
+      "action": "monitor",
+      "direction": "both",
+      "policy_id": 59,
+      "dry_run": {
+        "status": 200,
+        "action": "monitor",
+        "matched_policies": [
+          "VAL_ITER13_both_monitor"
+        ],
+        "matched_rules": [
+          "VAL_ITER13_both_monitor-rule"
+        ],
+        "message": "Request allowed; event recorded for monitoring",
+        "dry_run": true,
+        "policy_engine_matched": true
+      },
+      "control_live": {
+        "status": 200,
+        "decision": "monitor",
+        "text": "Echo: patient SSN is 123-45-6789",
+        "blocked": false,
+        "masked": false,
+        "raw_ssn_visible": true,
+        "compliance_tags": []
+      },
+      "gateway_live": {
+        "status": 200,
+        "text": "Echo: patient SSN is 123-45-6789",
+        "blocked": false,
+        "masked": false,
+        "raw_ssn_visible": true,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Echo: patient SSN is 123-45-6789"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": "0e0cbc3c-58c6-497c-9124-99c7d651368c"
+        }
+      },
+      "pass": true
+    },
+    {
+      "case": "block_beats_redact",
+      "dry_run": {
+        "status": 200,
+        "action": "block",
+        "matched_policies": [
+          "VAL_ITER13_PRECEDENCE"
+        ],
+        "matched_rules": [
+          "block",
+          "redact"
+        ],
+        "message": "Request blocked by policy",
+        "dry_run": true,
+        "policy_engine_matched": true
+      },
+      "pass": true
+    }
+  ],
+  "cross_plane": {
+    "baseline": {
+      "gateway": {
+        "status": 200,
+        "text": "Echo: patient SSN is 123-45-6789",
+        "blocked": false,
+        "masked": false,
+        "raw_ssn_visible": true,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Echo: patient SSN is 123-45-6789"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": "10818ed6-fb1b-427e-b3d5-e5ed0e82ebd1"
+        }
+      },
+      "control": {
+        "status": 200,
+        "decision": "allow",
+        "text": "Echo: patient SSN is 123-45-6789",
+        "blocked": false,
+        "masked": false,
+        "raw_ssn_visible": true,
+        "compliance_tags": []
+      }
+    },
+    "baseline_pass": true
+  },
+  "ext_live": {
+    "echo_ssn": {
+      "status": 200,
+      "host": "mcp-stub:9999",
+      "text": "patient SSN is ***-**-6789",
+      "raw_ssn_visible": false,
+      "masked": true,
+      "blocked_inbound": false,
+      "error_message": "",
+      "body": {
+        "jsonrpc": "2.0",
+        "id": "a4903502-0ae8-4c08-93d4-6e039c704974",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "patient SSN is ***-**-6789"
+            }
+          ]
+        }
+      }
+    },
+    "echo_cred": {
+      "status": 200,
+      "host": "mcp-stub:9999",
+      "text": "Tool 'echo' arguments matched compliance tags: HIPAA, PII, SECRET.",
+      "raw_ssn_visible": false,
+      "masked": true,
+      "blocked_inbound": false,
+      "error_message": "Tool 'echo' arguments matched compliance tags: HIPAA, PII, SECRET.",
+      "body": {
+        "jsonrpc": "2.0",
+        "id": "92a72969-5598-4741-b920-6ac0798dc60a",
+        "error": {
+          "code": -32000,
+          "message": "Tool 'echo' arguments matched compliance tags: HIPAA, PII, SECRET."
+        }
+      }
+    },
+    "env": {
+      "MCP_EXT_PROXY_HTTP_HOSTS": "mcp-stub:9999",
+      "MCP_EXT_ALLOWED_DOMAINS": "mcp-stub:9999"
+    },
+    "pass": true
+  },
+  "env": {
+    "MCP_EXT_PROXY_HTTP_HOSTS": "mcp-stub:9999",
+    "MCP_EXT_ALLOWED_DOMAINS": "mcp-stub:9999"
+  },
+  "checks": {
+    "policy_matrix_pass": true,
+    "baseline_pass": true,
+    "ext_live_pass": true
+  },
+  "ok": true
+}

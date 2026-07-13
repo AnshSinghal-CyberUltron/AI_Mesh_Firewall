@@ -1,0 +1,28 @@
+{
+  "cases": [
+    {
+      "name": "tier2_enabled",
+      "has_tier2_stage": true,
+      "trace_stages": [
+        "tier1",
+        "tier2",
+        "tier1",
+        "tier2"
+      ]
+    },
+    {
+      "name": "tier2_disabled_org",
+      "tier2_skipped": true,
+      "reason": "org_mcp_tier2_disabled",
+      "has_tier2_stage": false,
+      "trace_stages": [
+        "tier1",
+        "tier2_skipped",
+        "tier1",
+        "tier2_skipped"
+      ],
+      "pass": true
+    }
+  ],
+  "tier2GatePass": true
+}

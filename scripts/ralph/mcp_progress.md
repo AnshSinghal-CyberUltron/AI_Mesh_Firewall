@@ -1,5 +1,10 @@
 # MCP Gateway Ralph Progress   (mark [x] when DONE + verified; never fake green)
 
+## ARCH-VALIDATION (2026-07-08, Ralph loop iteration 2)
+- SCAN-OFF LIVE GAP (HIGH, FIXED hot-deploy): source `mcp_proxy._mcp_security_scan` gates on `scan_controls_configured is False` but running `ai_mesh_firewall-gateway-1` image lacked it → live scanned+redacted SSN with 0 DB rows. Fix: `docker cp` mcp_proxy.py + `docker kill -s HUP`. Post-fix: gateway raw SSN + scan_trace `no_scan_controls_configured`; create scan control → mask; delete → raw. **Durable:** rebuild gateway image. Evidence: `mcp-parallel/findings/mcp-arch-validation-2026-07-08/`.
+- POLICIES ≠ SCAN CONTROLS: 0 `MCPScanControl` rows disables two-tier scan on **gateway JSON-RPC** only; control `/tools/call/` still applies MCP policies (PII_MCP_2 → `[REDACTED_SSN]`). UI "0 Scan Controls" ≠ "no enforcement" if policies enabled (10 PKG2 policies live).
+- CP40 precedence: `cp40Pass:true` (org/server/edit/delete). Multi-org canary: 3 orgs, foreign_leak=0. Transports live: stdio+ws echo OK; streamable-http 200 (body inspect); sse timed out @120s (investigate).
+
 ## Codebase Patterns (append reusable learnings at top)
 - P4.13 4/4 DONE (iter39): Cross-seam Blocker 2 — `MCPServerRegistration.url` CharField + migration `0015`;
   `ws-everything.stub` in `MCP_ALLOW_INTERNAL_HOSTS`; ws stub echo prefix. **4/4 transports PASS ROUNDS=3**;

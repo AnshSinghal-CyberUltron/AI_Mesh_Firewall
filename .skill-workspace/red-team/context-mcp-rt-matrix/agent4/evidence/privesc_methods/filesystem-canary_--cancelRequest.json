@@ -1,0 +1,48 @@
+{
+  "phase": "privesc_method_escalation",
+  "server": "filesystem-canary",
+  "method": "$/cancelRequest",
+  "params": {
+    "id": 1
+  },
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/filesystem-canary",
+    "headers": {
+      "Authorization": "Bearer XlI7...I1I2",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "$/cancelRequest",
+      "params": {
+        "id": 1
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "error": {
+        "code": -32601,
+        "message": "Method not found: $/cancelRequest"
+      }
+    },
+    "duration_s": 0.001
+  },
+  "analysis": {
+    "http_status": 200,
+    "blocked": false,
+    "is_error_result": false,
+    "canary_present": false,
+    "secret_marker_leak_raw": false,
+    "exfil_url_undefanged": false,
+    "compliance_tags": [],
+    "jsonrpc_error": {
+      "code": -32601,
+      "message": "Method not found: $/cancelRequest"
+    }
+  }
+}

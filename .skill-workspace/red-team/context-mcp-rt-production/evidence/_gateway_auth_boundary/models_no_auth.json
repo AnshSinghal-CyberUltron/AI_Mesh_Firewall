@@ -1,0 +1,43 @@
+{
+  "server_slug": "_gateway_auth_boundary",
+  "label": "models_no_auth",
+  "captured_at_utc": "2026-07-07T09:58:20Z",
+  "request": {
+    "method": "GET",
+    "url": "https://aimeshgateway.zeroshield.ai/v1/models",
+    "headers": {},
+    "body": null
+  },
+  "response": {
+    "status_code": 401,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 09:58:20 GMT",
+      "content-type": "application/json",
+      "content-length": "163",
+      "connection": "keep-alive",
+      "server": "cloudflare",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "x-request-id": "zs-d4d0a3c61fa2",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "content-security-policy": "frame-ancestors 'none'",
+      "strict-transport-security": "max-age=31536000",
+      "cf-cache-status": "DYNAMIC",
+      "speculation-rules": "\"/cdn-cgi/speculation\"",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=ymiLmkwvD3umMnutMxpIjFZRAfa2aB2ZhQCKeo%2FZd3aqg%2Bi99DNgVOMd7nOBRNm85QISnlmZu2Ewnoq2%2F%2FSciWkS%2FKWWutSUqG31Mvy8djCgn5cOpPWOPnsFdaZlXBxGtVazK7IkFcW%2Bdf1%2Ffhc%3D\"}]}",
+      "cf-ray": "a175fd78da47002d-BOM",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": {
+      "error": {
+        "message": "A valid API key is required to list models.",
+        "type": "authentication_error",
+        "param": null,
+        "code": "unauthorized"
+      },
+      "request_id": "zs-d4d0a3c61fa2"
+    }
+  },
+  "notes": ""
+}

@@ -1,0 +1,73 @@
+{
+  "org": "zeroshield",
+  "server": "everything-1",
+  "cases": [
+    {
+      "name": "scan_controls_zero_raw_ssn",
+      "gw": {
+        "request_id": "pl-a-7a6453a5",
+        "egress": "Echo: SSN 123-45-6789",
+        "raw_ssn": true,
+        "masked": false,
+        "blocked": false
+      },
+      "decision": "allow",
+      "tags": [],
+      "scan_skipped": true,
+      "pass": true
+    },
+    {
+      "name": "scan_control_monitor_policy_redacts_input",
+      "gw": {
+        "request_id": "pl-b-68e101ca",
+        "egress": "Echo: SSN ***-**-6789",
+        "raw_ssn": false,
+        "masked": true,
+        "blocked": false
+      },
+      "decision": "allow",
+      "tags": [],
+      "tier1_actions": [],
+      "note": "MCP Security Policies (PII_MCP_2 redact) mutate args under monitor; not E12 floor",
+      "pass": true
+    },
+    {
+      "name": "scan_control_output_redact",
+      "gw": {
+        "request_id": "pl-c-c0f0a274",
+        "egress": "Echo: SSN ***-**-6789",
+        "raw_ssn": false,
+        "masked": true,
+        "blocked": false
+      },
+      "decision": "monitor",
+      "pass": true
+    },
+    {
+      "name": "empty_compliance_frameworks_still_tags_on_scan",
+      "gw": {
+        "request_id": "pl-d-0c738840",
+        "egress": "Echo: SSN ***-**-6789",
+        "raw_ssn": false,
+        "masked": true,
+        "blocked": false
+      },
+      "decision": "allow",
+      "tags": [
+        "GDPR-PII",
+        "HIPAA-PHI"
+      ],
+      "frameworks_empty": true,
+      "pass": true
+    }
+  ],
+  "firewall_config": {
+    "compliance_frameworks": [
+      "SOC2",
+      "ISO27001"
+    ],
+    "mcp_tier2_enabled": false
+  },
+  "baseline_scan_rows": 0,
+  "planesPass": true
+}

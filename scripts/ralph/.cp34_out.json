@@ -1,0 +1,71 @@
+{
+  "checkpoint": "34",
+  "cp34Pass": true,
+  "results": [
+    {
+      "name": "cp34-everything",
+      "ok": true,
+      "discovered": 13,
+      "tools_count_field": 13,
+      "with_description": 13,
+      "with_input_schema": 13,
+      "expect_min": 8,
+      "sample": [
+        "echo",
+        "get-annotated-message",
+        "get-env",
+        "get-resource-links",
+        "get-resource-reference",
+        "get-structured-content"
+      ]
+    },
+    {
+      "name": "cp34-memory",
+      "ok": true,
+      "discovered": 9,
+      "tools_count_field": 9,
+      "with_description": 9,
+      "with_input_schema": 9,
+      "expect_min": 5,
+      "sample": [
+        "add_observations",
+        "create_entities",
+        "create_relations",
+        "delete_entities",
+        "delete_observations",
+        "delete_relations"
+      ]
+    },
+    {
+      "name": "cp34-filesystem",
+      "ok": true,
+      "discovered": 14,
+      "tools_count_field": 14,
+      "with_description": 14,
+      "with_input_schema": 14,
+      "expect_min": 8,
+      "sample": [
+        "create_directory",
+        "directory_tree",
+        "edit_file",
+        "get_file_info",
+        "list_allowed_directories",
+        "list_directory"
+      ]
+    },
+    {
+      "name": "cp34-context7",
+      "ok": true,
+      "discovered": 2,
+      "tools_count_field": 2,
+      "with_description": 2,
+      "with_input_schema": 2,
+      "expect_min": 1,
+      "sample": [
+        "query-docs",
+        "resolve-library-id"
+      ]
+    }
+  ]
+}
+CP34: PASS — 38 tools discovered w/ metadata across 4/4 servers

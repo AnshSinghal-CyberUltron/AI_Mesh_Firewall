@@ -1,0 +1,22 @@
+{
+  "label": "sdk_chat_benign_model",
+  "request": {
+    "request": {
+      "model": "openrouter/free",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Reply with exactly: OK"
+        }
+      ],
+      "max_tokens": 60
+    },
+    "base_url": "http://127.0.0.1:8300/v1"
+  },
+  "response": {
+    "status": "ok",
+    "content": "OK",
+    "model": "openrouter/free",
+    "id": "chatcmpl-1783420629-qQdHdAou864bjhjQtxkn"
+  }
+}

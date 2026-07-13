@@ -1,0 +1,131 @@
+{
+  "story": "P5#17",
+  "bugs": [
+    "B1",
+    "B2",
+    "B4"
+  ],
+  "base": "http://127.0.0.1:8180",
+  "ok": true,
+  "asserts": [
+    {
+      "name": "E2E-B1-1 Linear: no 'no URL' error",
+      "pass": true,
+      "detail": "Linear MCP\nPending authorization\n\nLinear project management via mcp-remote (OAuth handled automatically)\n\nAuthorize to load tools\nhttps://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/linear-mcp\nCopy MCP Config (key placeholder)\nstdio\nSandboxed\nScan: tag\nScan: redact\nScan: block\nAuthorize"
+    },
+    {
+      "name": "E2E-B1-2 Linear: ≤1 Authorize button",
+      "pass": true,
+      "detail": 1
+    },
+    {
+      "name": "E2E-B2-1 HTTP oauth: registered 201",
+      "pass": true,
+      "detail": 201
+    },
+    {
+      "name": "E2E-B2-2 pending authorization badge",
+      "pass": true,
+      "detail": "e2e-combined-http-oauth\nPending authorization\n\nhttps://example.com/mcp\n\nAuthorize to load tools\nhttps://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/e2e-combined-http-oauth\nCopy MCP Config (key placeholder)\nstreamable-http\nSandboxed\nScan: tag\nScan: redact\nScan: block\nAuthorize"
+    },
+    {
+      "name": "E2E-B2-3 Authorize to load tools (no N tools)",
+      "pass": true,
+      "detail": {
+        "cardSnippet": "e2e-combined-http-oauth\nPending authorization\n\nhttps://example.com/mcp\n\nAuthorize to load tools\nhttps://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/e2e-combined-http-oauth\nCopy MCP Config (key placeholder)\nstreamable-http\nSandboxed\nScan: tag\nScan: redact\nScan: block\nAuthorize",
+        "hasPendingAuthBadge": true,
+        "hasAuthorizeToLoadTools": true,
+        "showsNumericToolsCount": false,
+        "hasNoUrlError": false,
+        "authorizeCount": 1,
+        "syncDisabled": true
+      }
+    },
+    {
+      "name": "E2E-B2-4 exactly ONE Authorize",
+      "pass": true,
+      "detail": 1
+    },
+    {
+      "name": "E2E-B2-5 Sync disabled pre-auth",
+      "pass": true,
+      "detail": true
+    },
+    {
+      "name": "E2E-B4 focus kept: name",
+      "pass": true,
+      "detail": {
+        "field": "name",
+        "focusKeptAllKeystrokes": true
+      }
+    },
+    {
+      "name": "E2E-B4 focus kept: url",
+      "pass": true,
+      "detail": {
+        "field": "url",
+        "focusKeptAllKeystrokes": true
+      }
+    },
+    {
+      "name": "E2E-B4 focus kept: description",
+      "pass": true,
+      "detail": {
+        "field": "description",
+        "focusKeptAllKeystrokes": true
+      }
+    },
+    {
+      "name": "E2E-B4 focus kept: stdio-command",
+      "pass": true,
+      "detail": {
+        "field": "stdio-command",
+        "focusKeptAllKeystrokes": true
+      }
+    },
+    {
+      "name": "E2E-B4 no focus loss in any field",
+      "pass": true,
+      "detail": []
+    }
+  ],
+  "findings": {
+    "linear": {
+      "cardSnippet": "Linear MCP\nPending authorization\n\nLinear project management via mcp-remote (OAuth handled automatically)\n\nAuthorize to load tools\nhttps://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/linear-mcp\nCopy MCP Config (key placeholder)\nstdio\nSandboxed\nScan: tag\nScan: redact\nScan: block\nAuthorize",
+      "hasPendingAuthBadge": true,
+      "hasAuthorizeToLoadTools": true,
+      "showsNumericToolsCount": false,
+      "hasNoUrlError": false,
+      "authorizeCount": 1,
+      "syncDisabled": false
+    },
+    "http": {
+      "cardSnippet": "e2e-combined-http-oauth\nPending authorization\n\nhttps://example.com/mcp\n\nAuthorize to load tools\nhttps://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/e2e-combined-http-oauth\nCopy MCP Config (key placeholder)\nstreamable-http\nSandboxed\nScan: tag\nScan: redact\nScan: block\nAuthorize",
+      "hasPendingAuthBadge": true,
+      "hasAuthorizeToLoadTools": true,
+      "showsNumericToolsCount": false,
+      "hasNoUrlError": false,
+      "authorizeCount": 1,
+      "syncDisabled": true
+    },
+    "focusFields": [
+      {
+        "field": "name",
+        "focusKeptAllKeystrokes": true
+      },
+      {
+        "field": "url",
+        "focusKeptAllKeystrokes": true
+      },
+      {
+        "field": "description",
+        "focusKeptAllKeystrokes": true
+      },
+      {
+        "field": "stdio-command",
+        "focusKeptAllKeystrokes": true
+      }
+    ]
+  },
+  "error": null
+}

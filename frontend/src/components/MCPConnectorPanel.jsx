@@ -32,7 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { toAbsoluteGatewayUrl, resolveGatewayBaseUrl } from "../utils/environmentUrls";
+import { toAbsoluteGatewayUrl, resolveMcpGatewayBaseUrl } from "../utils/environmentUrls";
 import { MCPScanControlMatrix } from "./MCPScanControlMatrix";
 import { PolicyManagementPanel } from "./PolicyManagementPanel";
 
@@ -104,13 +104,29 @@ const MCP_PRESETS = [
   { name: "Context7 MCP", url: "https://mcp.context7.com/mcp", transport: "streamable-http", description: "Context7 docs MCP endpoint" },
 
   { name: "Playwright MCP", transport: "stdio", description: "Browser automation via Playwright MCP", command: "npx", args: ["-y", "@playwright/mcp@latest"] },
-  { name: "Semgrep MCP", transport: "stdio", description: "Code security scanning via Semgrep MCP", command: "npx", args: ["-y", "mcp-server-semgrep"] },
+  { name: "Semgrep MCP", transport: "stdio", description: "Code security scanning via Semgrep MCP", command: "npx", args: ["-y", "mcp-server-semgrep"], host_tools: ["pip:semgrep"] },
+  { name: "Host tools demo (cowsay)", transport: "stdio", description: "Minimal MCP server that shells out to cowsay (declares pip:cowsay host CLI)", command: "python3", args: ["-m", "agent.host_tools_demo_mcp"], host_tools: ["pip:cowsay"] },
   { name: "Memory MCP", transport: "stdio", description: "Knowledge graph memory via official MCP memory server", command: "npx", args: ["-y", "@modelcontextprotocol/server-memory"] },
   { name: "Filesystem MCP", transport: "stdio", description: "Official MCP filesystem server (sandbox /data/mcp-auth scope)", command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "/data/mcp-auth"] },
   { name: "Fetch MCP", transport: "stdio", description: "HTTP fetch MCP server (mcp-server-fetch, a uvx/Python package)", command: "uvx", args: ["mcp-server-fetch"] },
   { name: "Everything MCP", transport: "stdio", description: "Official MCP reference/test server (tools echo, add, etc.)", command: "npx", args: ["-y", "@modelcontextprotocol/server-everything"] },
   { name: "Vibe Check MCP", transport: "stdio", description: "Vibe Check MCP for plan/goal alignment", command: "npx", args: ["-y", "@pv-bhat/vibe-check-mcp", "start", "--stdio"] },
 ];
+
+const MCP_HOST_TOOLS_KEY = "MCP_HOST_TOOLS";
+
+const formatHostToolsSpec = (entries) => {
+  if (!Array.isArray(entries) || entries.length === 0) return "";
+  return entries
+    .map((entry) => {
+      if (typeof entry === "string") return entry.trim();
+      const manager = (entry?.manager || "pip").trim();
+      const pkg = (entry?.package || entry?.name || "").trim();
+      return manager === "pip" ? pkg : `${manager}:${pkg}`;
+    })
+    .filter(Boolean)
+    .join(" ");
+};
 
 const makeEmptyAddForm = () => ({
   name: "",
@@ -119,6 +135,7 @@ const makeEmptyAddForm = () => ({
   command: "",
   args: [],
   env_vars: {},
+  host_tools: [],
   description: "",
   auth_type: "none",
   auth_token: "",
@@ -187,6 +204,14 @@ const buildServerPayload = (form) => {
         : form.env_vars && typeof form.env_vars === "object"
         ? form.env_vars
         : {};
+    const hostToolsText =
+      typeof form.host_tools_text === "string" ? form.host_tools_text.trim() : "";
+    if (hostToolsText) {
+      payload.env_vars[MCP_HOST_TOOLS_KEY] = hostToolsText;
+    } else if (!payload.env_vars[MCP_HOST_TOOLS_KEY]) {
+      const catalogSpec = formatHostToolsSpec(form.host_tools);
+      if (catalogSpec) payload.env_vars[MCP_HOST_TOOLS_KEY] = catalogSpec;
+    }
   }
 
   if (form.auth_type === "authheaders") {
@@ -391,6 +416,9 @@ function MCPConnectorPanelInner() {
 
   /* ── org gateway key (auto-provisioned for MCP) ── */
   const [orgGatewayKey, setOrgGatewayKey] = useState(null); // { has_gateway_key, prefix, key, ... }
+  // Scan-controls row count — when 0, gateway skips Tier-1/Tier-2; server
+  // default_scan_action badges must not imply active scanning (UI honesty).
+  const [scanControlsConfigured, setScanControlsConfigured] = useState(null);
 
   /* ── OAuth polling interval (BUG FIX a: tracked + cleaned up) ── */
   const oauthPollRef = useRef(null);
@@ -409,6 +437,18 @@ function MCPConnectorPanelInner() {
       setError(`Failed to load servers: ${e.message}`);
     } finally {
       setLoading(false);
+    }
+  }, [fetchWithAuth]);
+
+  const loadScanControlsConfigured = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth("/api/mcp-connector/scan-controls/");
+      if (!res.ok) return;
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data : data.results ?? [];
+      setScanControlsConfigured(rows.length > 0);
+    } catch {
+      // leave prior value; do not flip honesty banner on transient failure
     }
   }, [fetchWithAuth]);
 
@@ -525,12 +565,13 @@ function MCPConnectorPanelInner() {
 
   /* ── tab-switched loaders ── */
   useEffect(() => {
-    if (tab === "servers") { loadServers(); loadOrgGatewayKey(); loadHealth(); }
+    if (tab === "servers") { loadServers(); loadOrgGatewayKey(); loadHealth(); loadScanControlsConfigured(); }
     if (tab === "tools") loadTools();
     if (tab === "execute") loadTools();
     if (tab === "protection") { loadServers(); }
     if (tab === "observability") { loadEvents(); }
-  }, [tab, loadServers, loadTools, loadHealth, loadEvents, loadOrgGatewayKey]);
+    if (tab === "scan-matrix") { loadScanControlsConfigured(); }
+  }, [tab, loadServers, loadTools, loadHealth, loadEvents, loadOrgGatewayKey, loadScanControlsConfigured]);
 
   /* The header-strip decision StatCards (Allowed / Blocked / Redact·Monitor)
      are ALWAYS visible regardless of the active tab, so the decision summary
@@ -675,6 +716,7 @@ function MCPConnectorPanelInner() {
         description: preset.description,
         command: preset.command || "",
         args: preset.args || [],
+        host_tools: preset.host_tools || [],
         auth_type: preset.suggestedAuthType || "bearer",
       });
       setAddOpen(true);
@@ -694,6 +736,8 @@ function MCPConnectorPanelInner() {
       if (preset.transport === "stdio") {
         payload.command = preset.command || "";
         payload.args = preset.args || [];
+        const hostSpec = formatHostToolsSpec(preset.host_tools);
+        if (hostSpec) payload.env_vars = { [MCP_HOST_TOOLS_KEY]: hostSpec };
       }
       const res = await fetchWithAuth("/api/mcp-connector/servers/", {
         method: "POST",
@@ -732,27 +776,27 @@ function MCPConnectorPanelInner() {
     setSyncingServer(serverId);
     try {
       const res = await fetchWithAuth(`/api/mcp-connector/servers/${serverId}/tools/`, { method: "POST" });
-      // A2 contract: the sync endpoint returns HTTP 200 even on upstream
-      // failure, carrying { synced, pruned, error, connection_status } in the
-      // body. A transport/handshake/auth error is reported via body.error with
-      // connection_status="failed" — NOT via a non-2xx status. So we must
-      // inspect the body instead of relying on res.ok alone.
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(body.detail || body.error || `HTTP ${res.status}`);
       }
       if (body.error || body.connection_status === "failed") {
-        setError(`Sync failed for server: ${body.error || "upstream discovery error"}`);
-        toast(`Sync failed: ${body.error || "upstream discovery error"}`, { tone: "error" });
-      } else {
-        setError(null);
-        toast(`Synced ${body.synced ?? ""} tool${body.synced === 1 ? "" : "s"}`.replace(/\s+/g, " ").trim(), { tone: "success" });
+        const errMsg = body.error || "upstream discovery error";
+        setError(`Sync failed for server: ${errMsg}`);
+        toast(`Sync failed: ${errMsg}`, { tone: "error" });
+        await loadServerTools(serverId);
+        await loadServers();
+        return { ok: false, error: errMsg };
       }
+      setError(null);
+      toast(`Synced ${body.synced ?? ""} tool${body.synced === 1 ? "" : "s"}`.replace(/\s+/g, " ").trim(), { tone: "success" });
       await loadServerTools(serverId);
       await loadServers();
+      return { ok: true };
     } catch (e) {
       setError(`Sync tools failed: ${e.message}`);
       toast(`Sync tools failed: ${e.message}`, { tone: "error" });
+      return { ok: false, error: e.message };
     } finally {
       setSyncingServer(null);
     }
@@ -905,6 +949,34 @@ function MCPConnectorPanelInner() {
    */
   const syncBlockedForAuth = (srv) => srv.auth_type === "oauth" && !srv.oauth_authorized;
 
+  const isAuthRelatedSyncError = (srv) => {
+    const err = (srv.last_sync_error || "").toLowerCase();
+    if (!err) return false;
+    return (
+      srv.needs_reauth ||
+      err.includes("re-authenticat") ||
+      err.includes("re-authorize") ||
+      err.includes("unauthorized") ||
+      err.includes("401") ||
+      err.includes("oauth") ||
+      err.includes("invalid_token") ||
+      err.includes("invalid token") ||
+      err.includes("rejected your oauth")
+    );
+  };
+
+  const isOAuthConfigMismatch = (srv) => {
+    const err = srv.last_sync_error || "";
+    return err.includes("re-authorizing will not help") || err.includes("OAuth configuration");
+  };
+
+  const oauthExpiresWithin24h = (srv) => {
+    if (!srv.oauth_token_expires_at) return false;
+    const exp = new Date(srv.oauth_token_expires_at).getTime();
+    const now = Date.now();
+    return exp > now && exp - now < 24 * 60 * 60 * 1000;
+  };
+
   /** Extract the MCP server URL from mcp-remote args. */
   const extractMcpRemoteUrl = (args) => {
     if (!Array.isArray(args)) return null;
@@ -940,7 +1012,7 @@ function MCPConnectorPanelInner() {
     setOauthBusy(srv.id);
     setError(null);
     try {
-      const gwBase = resolveGatewayBaseUrl();
+      const gwBase = resolveMcpGatewayBaseUrl();
       if (!gwBase) {
         if (popup) popup.close();
         throw new Error("Gateway URL is not configured.");
@@ -1044,8 +1116,12 @@ function MCPConnectorPanelInner() {
               setOauthBusy(null);
               if (!popup.closed) popup.close();
               await loadServers();
-              await syncServerTools(srv.id);
-              toast("OAuth authorized", { tone: "success" });
+              const syncOutcome = await syncServerTools(srv.id);
+              if (syncOutcome?.ok) {
+                toast("OAuth authorized", { tone: "success" });
+              } else if (!syncOutcome?.error) {
+                toast("OAuth authorized", { tone: "success" });
+              }
               return;
             }
           }
@@ -1275,11 +1351,56 @@ function MCPConnectorPanelInner() {
     // grey "Unknown" status + "0 tools" (which misleads the operator into thinking
     // it is ready/empty). needs_reauth has its own badge and takes precedence.
     const awaitingAuth = !srv.needs_reauth && serverAwaitingAuth(srv);
+    const showAuthBanner = srv.needs_reauth || (srv.connection_status === "failed" && isAuthRelatedSyncError(srv));
+    const configMismatch = showAuthBanner && isOAuthConfigMismatch(srv);
+    const tokenExpiringSoon = serverUsesHttpOAuth(srv) && oauthExpiresWithin24h(srv) && !showAuthBanner;
     return (
       <Card key={srv.id}>
         <CardContent className="p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
+          {showAuthBanner && (
+            <div
+              className={`mb-3 rounded-lg border px-3 py-2.5 flex flex-wrap items-start justify-between gap-3 ${
+                configMismatch
+                  ? "border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
+                  : "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40"
+              }`}
+              data-testid={`mcp-auth-alert-${srv.server_slug}`}
+            >
+              <div className="flex items-start gap-2 min-w-0 flex-1">
+                <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${configMismatch ? "text-sky-600 dark:text-sky-400" : "text-amber-600 dark:text-amber-400"}`} />
+                <div className="min-w-0">
+                  <p className={`text-xs font-semibold ${configMismatch ? "text-sky-900 dark:text-sky-100" : "text-amber-900 dark:text-amber-100"}`}>
+                    {configMismatch ? "OAuth configuration mismatch" : "OAuth token expired or rejected"}
+                  </p>
+                  <p className={`text-[11px] mt-0.5 break-all ${configMismatch ? "text-sky-800 dark:text-sky-200" : "text-amber-800 dark:text-amber-200"}`}>
+                    {configMismatch
+                      ? (srv.last_sync_error || "The upstream rejected a valid token — check scopes, audience, and account access.")
+                      : (srv.last_sync_error || "Re-authorize this server to restore tool discovery and calls.")}
+                  </p>
+                </div>
+              </div>
+              {(serverUsesHttpOAuth(srv) || serverNeedsOAuth(srv)) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => (serverUsesHttpOAuth(srv) ? startControlOAuth(srv) : startOAuth(srv))}
+                  disabled={oauthBusy === srv.id}
+                >
+                  {oauthBusy === srv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Shield className="w-3 h-3" />}
+                  Re-authorize
+                </Button>
+              )}
+            </div>
+          )}
+          {tokenExpiringSoon && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/80 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200 flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              OAuth token expires within 24 hours — re-authorize soon to avoid sync interruptions.
+            </div>
+          )}
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 flex-1">
               <h4 className="font-medium text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
                 <Server className="w-4 h-4 text-teal-500 shrink-0" />
                 {srv.name}
@@ -1326,15 +1447,15 @@ function MCPConnectorPanelInner() {
               )}
               {srv.gateway_endpoint && (
                 <div className="mt-2 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <code className="text-[10px] bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded font-mono text-slate-600 dark:text-slate-300 break-all">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <code className="min-w-0 flex-1 text-[10px] bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded font-mono text-slate-600 dark:text-slate-300 break-all">
                       {absUrl}
                     </code>
                     <Tooltip content="Copy gateway URL only">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-9 w-9"
+                        className="h-9 w-9 shrink-0"
                         aria-label="Copy gateway URL"
                         onClick={() => copyEndpoint(absUrl)}
                       >
@@ -1358,7 +1479,7 @@ function MCPConnectorPanelInner() {
                 </div>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 min-w-0 lg:max-w-[min(100%,28rem)] lg:justify-end shrink-0">
               <Badge variant="secondary">{srv.transport}</Badge>
               {/* Every transport runs in the per-org sandbox (bug #3 / CP15) — the
                   gateway never dials the upstream directly, so show it for ALL. */}
@@ -1370,12 +1491,26 @@ function MCPConnectorPanelInner() {
                 onChange={(e) => setServerScanDefault(srv.id, e.target.value)}
                 aria-label="Default scan enforcement"
                 className="w-auto text-[11px] py-1"
-                title="Default scan enforcement after Tier-1/Tier-2 (tag = observe only)"
+                title={
+                  scanControlsConfigured === false
+                    ? "Scanning is OFF (0 Scan Controls). Tier-1/Tier-2 do not run until you add a control on the Scan Controls tab. This posture only applies after scanning is enabled."
+                    : "Default scan enforcement after Tier-1/Tier-2 (tag = observe only)"
+                }
+                disabled={scanControlsConfigured === false}
               >
                 <option value="tag">Scan: tag</option>
                 <option value="redact">Scan: redact</option>
                 <option value="block">Scan: block</option>
               </Select>
+              {scanControlsConfigured === false && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] text-amber-700 dark:text-amber-300"
+                  title="Zero scan-control rows — gateway skips Tier-1/Tier-2 entirely"
+                >
+                  Scanning off
+                </Badge>
+              )}
               {serverNeedsOAuth(srv) && (
                 <Tooltip content="Authorize OAuth — opens popup for upstream provider login">
                   <Button
@@ -1448,7 +1583,7 @@ function MCPConnectorPanelInner() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-red-500 hover:text-red-700"
+                  className="h-9 w-9 text-red-500 hover:text-red-700"
                   aria-label="Delete server"
                   onClick={() => deleteServerById(srv.id)}
                 >
@@ -1640,11 +1775,10 @@ function MCPConnectorPanelInner() {
               <h4 className="text-xs font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">Stdio Transport Settings</h4>
               <p className="text-xs text-teal-700/80 dark:text-teal-300/80">
                 Command must be an allow-listed interpreter (<code>npx</code>, <code>node</code>,
-                <code> python</code>, <code>python3</code>) — not a path. Production runs the
-                command inside your org&apos;s Docker sandbox (not a gateway subprocess); the
-                package&apos;s runtime dependency must be present in the sandbox image
-                (e.g. Semgrep MCP requires the <code>semgrep</code> binary). Missing
-                dependencies surface a clear error below the server.
+                <code> python</code>, <code>python3</code>, <code>uvx</code>) — not a path. Production
+                runs inside your org&apos;s Docker sandbox. If the MCP server shells out to an extra
+                CLI binary, declare it under <strong>Host CLI tools</strong> (installed on demand
+                before startup) or set <code>MCP_HOST_TOOLS</code> in environment variables.
               </p>
               <div>
                 <label className="block text-sm font-medium mb-1">Command</label>
@@ -1673,6 +1807,24 @@ function MCPConnectorPanelInner() {
                   onChange={(e) => setAddForm({ ...addForm, args_text: e.target.value })}
                   placeholder="-y, @playwright/mcp@latest"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Host CLI tools (one per line or space-separated)</label>
+                <textarea
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono dark:bg-slate-800 dark:border-slate-600"
+                  rows={2}
+                  value={
+                    addForm.host_tools_text !== undefined
+                      ? addForm.host_tools_text
+                      : formatHostToolsSpec(addForm.host_tools)
+                  }
+                  onChange={(e) => setAddForm({ ...addForm, host_tools_text: e.target.value })}
+                  placeholder={"pip:semgrep\nnpm:some-cli"}
+                />
+                <p className="text-xs text-teal-600/80 dark:text-teal-400/80 mt-1">
+                  Installed into the sandbox before the server starts. Prefix with <code>pip:</code>,{" "}
+                  <code>uv:</code>, or <code>npm:</code> (bare name defaults to pip).
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Environment Variables (KEY=VALUE, one per line)</label>
@@ -1981,7 +2133,11 @@ function MCPConnectorPanelInner() {
   };
 
   const renderScanMatrix = () => (
-    <MCPScanControlMatrix fetchWithAuth={fetchWithAuth} servers={servers} />
+    <MCPScanControlMatrix
+      fetchWithAuth={fetchWithAuth}
+      servers={servers}
+      onControlsChanged={loadScanControlsConfigured}
+    />
   );
 
   const renderProtection = () => renderPolicies();

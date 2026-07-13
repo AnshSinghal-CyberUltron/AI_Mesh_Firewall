@@ -1,6 +1,7 @@
 """Retriever stage: execute vector DB query with circuit breaker and rate limiting."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import time
@@ -62,7 +63,17 @@ class RetrieverStage:
                     )
 
         # ── 2. Circuit breaker check for vector DB ──
-        cb_key = f"vectordb:{inp.vector_db_type}"
+        # BYOK: each org has its OWN provider client + credentials, so key the
+        # breaker per-org (project_id). Otherwise one tenant's provider outage /
+        # bad-credentials failures open the SHARED ``vectordb:{type}`` breaker and
+        # block every other tenant on the same provider type — even those whose
+        # own provider is healthy (a cross-tenant availability coupling; the rate
+        # limiter above is already org-scoped). The gateway-env client (no
+        # per-request override) is genuinely shared, so it keeps a global key.
+        if inp.vector_client is not None and inp.project_id:
+            cb_key = f"vectordb:{inp.vector_db_type}:{inp.project_id}"
+        else:
+            cb_key = f"vectordb:{inp.vector_db_type}"
         if self._cb is not None:
             status = await self._cb.check(cb_key)
             cb_state = status.state.value
@@ -96,13 +107,25 @@ class RetrieverStage:
         # ── 4. Execute query ──
         try:
             project_id = inp.project_id if self._config.get("vector_db_isolation", True) else None
-            documents = await client.query(
-                collection_name=inp.collection_name,
-                query_text=inp.query_text,
-                n_results=inp.n_results,
-                where=inp.where_filter,
-                namespace=inp.namespace,
-                project_id=project_id,
+            # Bound the vector query so a hanging/slow provider (network failure,
+            # unresponsive server) cannot block the request indefinitely — the SDK
+            # calls run in a ThreadPoolExecutor with no timeout, and Chroma's
+            # HttpClient / Pinecone index set none. On timeout we raise below, the
+            # circuit breaker records the error (repeated timeouts OPEN it -> fast
+            # fail subsequent queries, capping thread accumulation), and the caller
+            # gets a clean block instead of a hung connection. (VECTOR PROVIDER:
+            # timeouts / network failures)
+            _q_timeout = float(self._config.get("rag_query_timeout_s", 30.0) or 30.0)
+            documents = await asyncio.wait_for(
+                client.query(
+                    collection_name=inp.collection_name,
+                    query_text=inp.query_text,
+                    n_results=inp.n_results,
+                    where=inp.where_filter,
+                    namespace=inp.namespace,
+                    project_id=project_id,
+                ),
+                timeout=_q_timeout,
             )
 
             if self._cb is not None:
@@ -132,7 +155,14 @@ class RetrieverStage:
         # scoring. Fail-open: rerank() returns the original order on any error.
         if documents and hasattr(client, "rerank") and getattr(client, "_reranker_model", ""):
             try:
-                documents = await client.rerank(inp.query_text, documents, top_n=inp.n_results)
+                # Bound the rerank (fail-open) — a hanging provider-hosted reranker
+                # must not block the request after retrieval already succeeded. On
+                # timeout we keep the retrieval order, same as any rerank error. (#26)
+                _rr_timeout = float(self._config.get("rag_rerank_timeout_s", 15.0) or 15.0)
+                documents = await asyncio.wait_for(
+                    client.rerank(inp.query_text, documents, top_n=inp.n_results),
+                    timeout=_rr_timeout,
+                )
             except Exception as exc:  # noqa: BLE001
                 LOG.warning("Reranker step failed (keeping retrieval order): %s", exc)
 
@@ -159,7 +189,19 @@ class RetrieverStage:
         # sits below 0.75). So default OFF and let operators opt in to a calibrated
         # threshold; the filter is now functional when they do. Degenerate matches
         # from embedding failure are already prevented upstream (fail-closed embed).
-        relevance_threshold = self._config.get("rag_relevance_threshold", 0.0)
+        # Per-request policy (carrying the per-org FirewallConfig value the RAG
+        # handler merges in) overrides the static startup default, so an org's
+        # configured relevance threshold actually applies. Previously the retriever
+        # read ONLY the static config and silently ignored the per-org frontend
+        # setting — a config→runtime mismatch (same class as the query-stage
+        # injection thresholds). Float-coerced; falls back to static config.
+        try:
+            relevance_threshold = float(inp.policy.get(
+                "rag_relevance_threshold",
+                self._config.get("rag_relevance_threshold", 0.0),
+            ))
+        except (TypeError, ValueError):
+            relevance_threshold = float(self._config.get("rag_relevance_threshold", 0.0) or 0.0)
         if documents and relevance_threshold > 0:
             documents = [doc for doc in documents if _relevance(doc) >= relevance_threshold]
 

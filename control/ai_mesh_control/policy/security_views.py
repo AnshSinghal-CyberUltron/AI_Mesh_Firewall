@@ -71,7 +71,6 @@ _CANONICAL_PLATFORM_MODEL_NAME = "zeroshield-model"
 _RESERVED_MODEL_TOKENS = (
     "zeroshield-guard",
     "gpt-oss",
-    "120b",
     "bedrock",  # Bedrock is platform-reserved (clients are BYOK-only), so any bedrock id is the platform's.
     # Platform Bedrock-Haiku id SHAPE + version — specific enough to de-leak the
     # platform model id (bedrock/global.anthropic.claude-haiku-4-5-...) WITHOUT

@@ -1,0 +1,48 @@
+{
+  "server_slug": "filesystem-canary",
+  "label": "tools_call_get_file_info_injection",
+  "captured_at_utc": "2026-07-07T10:56:19Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/filesystem-canary",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "get_file_info",
+        "arguments": {
+          "path": "/tmp/rt-matrix-probe.txt"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:56:18 GMT",
+      "server": "uvicorn",
+      "content-length": "161",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Error: ENOENT: no such file or directory, stat '/tmp/rt-matrix-probe.txt'"
+          }
+        ],
+        "isError": true
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    },
+    "_latency_ms": 41.8
+  },
+  "notes": ""
+}

@@ -23,6 +23,7 @@ here. Map + evidence: `docs/mcp/broker-sandbox-lifecycle.md`.
   per-org `MCP_REMOTE_CONFIG_DIR` pinned (`:144`). Keep this fail-closed.
 - **Fail-closed broker auth**: every `/v1/sandbox/*` route requires `X-MCP-Broker-Key` (`auth.py:17`).
 - Command allowlist `npx,node,python,python3,uvx,uv` (`stdio_manager.py:37/40`); path-qualified commands rejected (`:202`).
+- **Host CLI tools (`MCP_HOST_TOOLS`):** operators declare extra CLI binaries (e.g. `pip:semgrep`) in server `env_vars`; the agent runs `uv tool install` / `npm install -g` into writable tmpfs **before** spawn (`stdio_manager._ensure_host_tools`). Contract + validation: `shared/ai_mesh_shared/mcp_host_tools.py`. Optional broker gate: `MCP_HOST_TOOLS_ALLOWLIST` (comma-separated package names; empty = allow any declared tool).
 
 ## Gotchas (verified — see request-path/lifecycle docs)
 - **Readiness ≠ running.** `DockerManager.ensure` returns when the *container* is `running`
@@ -100,3 +101,8 @@ here. Map + evidence: `docs/mcp/broker-sandbox-lifecycle.md`.
   actual Node MCP-server child ran WITHOUT the cap — added to the passthrough so CP20 reaches the
   real servers. Changing `_SAFE_ENV_PASSTHROUGH` requires a sandbox image rebuild (the shared module
   is baked) + a gateway `docker cp` (in-process path).
+
+## Host-tools cowsay UX (2026-07-07)
+- `agent/host_tools_demo_mcp.py` — minimal stdio MCP server (`moo` tool shells out to `cowsay`); use with `MCP_HOST_TOOLS=pip:cowsay`.
+- `MCP_PROTOCOL_FAILED` — when host CLI tools install succeeded but the command is not an MCP server (marker `mcp_protocol_handshake_failed` / `host_cli_tools_installed` in agent reason → gateway + control classifiers).
+- Harness: `scripts/ralph/mcp_page_host_tools_{live,quick,purge}.py`; Ruflo `mcp-page/changes` key `host-tools-cowsay-ux-0156`.

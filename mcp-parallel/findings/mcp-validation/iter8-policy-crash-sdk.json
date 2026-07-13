@@ -1,0 +1,178 @@
+{
+  "matrix": [
+    {
+      "case": "org_both_monitor",
+      "gateway": {
+        "status": 200,
+        "text": "Echo: SSN 123-45-6789",
+        "blocked": false,
+        "masked": false,
+        "raw_ssn_visible": true,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Echo: SSN 123-45-6789"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": "fef90eff-ea94-4c43-bb8b-d79f55b717ae"
+        }
+      },
+      "control": {
+        "status": 200,
+        "decision": "allow",
+        "text": "Echo: SSN [REDACTED_SSN]",
+        "masked": true,
+        "raw_ssn_visible": false,
+        "compliance_tags": []
+      },
+      "pass": true
+    },
+    {
+      "case": "org_input_monitor_tag",
+      "gateway": {
+        "status": 200,
+        "text": "Echo: SSN 123-45-6789",
+        "blocked": false,
+        "masked": false,
+        "raw_ssn_visible": true,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Echo: SSN 123-45-6789"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": "84c4d3de-781b-450d-8e44-6c1016956dad"
+        }
+      },
+      "control": {
+        "status": 200,
+        "decision": "allow",
+        "text": "Echo: SSN [REDACTED_SSN]",
+        "masked": true,
+        "raw_ssn_visible": false,
+        "compliance_tags": []
+      },
+      "pass": true
+    },
+    {
+      "case": "org_output_block_maskable_pii",
+      "gateway": {
+        "status": 200,
+        "text": "[BLOCKED] Response from 'echo' matched compliance tags: GDPR-PII, HIPAA-PHI.",
+        "blocked": true,
+        "masked": true,
+        "raw_ssn_visible": false,
+        "body": {
+          "jsonrpc": "2.0",
+          "id": "7e1d9cb6-a987-4107-952a-52af21d07345",
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "[BLOCKED] Response from 'echo' matched compliance tags: GDPR-PII, HIPAA-PHI."
+              }
+            ],
+            "isError": true
+          }
+        }
+      },
+      "control": {
+        "status": 200,
+        "decision": "allow",
+        "text": "Echo: SSN [REDACTED_SSN]",
+        "masked": true,
+        "raw_ssn_visible": false,
+        "compliance_tags": []
+      },
+      "pass": true
+    }
+  ],
+  "policy_plane": {
+    "zero_controls": {
+      "scan_controls_configured": false,
+      "gateway": {
+        "status": 200,
+        "text": "Echo: SSN 123-45-6789",
+        "blocked": false,
+        "masked": false,
+        "raw_ssn_visible": true,
+        "body": {
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Echo: SSN 123-45-6789"
+              }
+            ]
+          },
+          "jsonrpc": "2.0",
+          "id": "36bc6cdb-2681-40f1-9a60-6ba485c4469c"
+        }
+      },
+      "control": {
+        "status": 200,
+        "decision": "allow",
+        "text": "Echo: SSN [REDACTED_SSN]",
+        "masked": true,
+        "raw_ssn_visible": false,
+        "compliance_tags": []
+      }
+    },
+    "pass": true
+  },
+  "sandbox_crash": {
+    "container": "zeroshield-mcp-sandbox",
+    "candidates": [
+      "zeroshield-mcp-sandbox",
+      "mcp-sandbox-zeroshield"
+    ],
+    "running_before": true,
+    "recovered": false,
+    "post_recovery_echo": {
+      "status": 200,
+      "text": "Echo: POST-CRASH SSN 123-45-6789",
+      "blocked": false,
+      "masked": false,
+      "raw_ssn_visible": true,
+      "body": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Echo: POST-CRASH SSN 123-45-6789"
+            }
+          ]
+        },
+        "jsonrpc": "2.0",
+        "id": "be91b9a2-3e1b-4c00-a5ab-296d56bf39f9"
+      }
+    },
+    "pass": true
+  },
+  "sdk": {
+    "ok": true,
+    "stdout_tail": "eaming_parses_as_chat_completion\n  /home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py:4908: DeprecationWarning: \n          on_event is deprecated, use lifespan event handlers instead.\n  \n          Read more about it in the\n          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).\n          \n    @app.on_event(\"shutdown\")\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n46 passed, 2 xpassed, 4 warnings in 2.37s\n",
+    "exit": 0
+  },
+  "findings": {
+    "F-009": {
+      "tier1_input_enabled": false,
+      "tier1_output_action": "block"
+    }
+  },
+  "checks": {
+    "matrix_pass": true,
+    "policy_plane_pass": true,
+    "sandbox_crash_pass": true,
+    "sdk_pass": true
+  },
+  "ok": true
+}

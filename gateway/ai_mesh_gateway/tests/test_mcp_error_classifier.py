@@ -77,6 +77,7 @@ def test_timeout_exception():
     ("getaddrinfo failed for host", C.MCP_DNS_FAILURE),
     ("connection refused", C.MCP_CONNECTION_REFUSED),
     ("failed to start: missing host dependency", C.MCP_START_FAILED),
+    ("mcp_protocol_handshake_failed: host_cli_tools_installed", C.MCP_PROTOCOL_FAILED),
     ("something totally unexpected", C.MCP_UNAVAILABLE),
 ])
 def test_raw_text_classification(raw, expect):
@@ -151,3 +152,18 @@ async def test_diagnostic_write_uses_gateway_raw_key_and_full_cause(monkeypatch)
     assert "secret-internal-host.corp" in rec["raw_cause"]
     # ... but NEVER in the client body
     assert "secret-internal-host" not in json.dumps(body)
+
+
+def test_raw_host_tool_install_failure_maps_to_host_tool_code():
+    code, msg = C.classify_mcp_failure(
+        raw="host tool install failed: 'semgrep' (pip): package not found"
+    )
+    assert code == C.MCP_HOST_TOOL_FAILED
+    assert "CLI tool" in msg
+    assert "semgrep" not in msg
+
+
+def test_raw_mcp_host_tools_hint_maps_to_host_tool_code():
+    code, _ = C.classify_mcp_failure(raw="invalid MCP_HOST_TOOLS entry")
+    assert code == C.MCP_HOST_TOOL_FAILED
+

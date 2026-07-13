@@ -261,7 +261,8 @@ async def test_block_termination_emits_block_trace_once():
 
 
 @pytest.mark.asyncio
-async def test_flag_upgraded_to_block_under_block_enforcement_traces_block():
+async def test_flag_under_block_enforcement_traces_flag():
+    """F-003: flag stays flag under enforcement_mode=block (UI honesty)."""
     async def inner():
         yield 'data: {"choices":[{"delta":{"content":"hello. "}}]}\n\n'
         yield "data: [DONE]\n\n"
@@ -275,7 +276,8 @@ async def test_flag_upgraded_to_block_under_block_enforcement_traces_block():
     )
     traces = _trace_frames(chunks)
     assert len(traces) == 1
-    assert traces[0]["zeroshield"]["action"] == "block"
+    assert traces[0]["zeroshield"]["action"] == "flag"
+    assert not any("output_blocked" in c for c in chunks)
 
 
 @pytest.mark.asyncio

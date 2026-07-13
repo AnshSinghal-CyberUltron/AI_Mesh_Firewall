@@ -8,7 +8,7 @@ from drf_spectacular.views import SpectacularAPIView
 from core.views import health_view, services_health_view
 from core.poc_views import poc_questionnaire_page, poc_questionnaire_submit
 from core.alertmanager_webhook_views import alertmanager_webhook_view
-from main_app.schema_views import docs_view
+from main_app.schema_views import ProtectedSpectacularAPIView, docs_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -38,6 +38,6 @@ urlpatterns = [
     path("api/admin/", include("core.admin_urls")),
     path("ai-mesh-poc", poc_questionnaire_page, name="poc-questionnaire-page"),
     path("api/poc-questionnaire", poc_questionnaire_submit, name="poc-questionnaire-submit"),
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/schema/", ProtectedSpectacularAPIView.as_view(), name="schema"),
     path("docs/", docs_view, name="docs"),
 ]

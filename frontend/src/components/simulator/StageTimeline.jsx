@@ -1,6 +1,10 @@
 import { useRef, useState } from "react";
 import { Clock, Shield, AlertTriangle, XCircle, CheckCircle, Pin, X, ArrowRightLeft } from "lucide-react";
-import { normalizeStages, formatRouteDestination } from "../../utils/pipelineTrace";
+import { normalizeStages, formatRouteDestination, honestStageAction } from "../../utils/pipelineTrace";
+import { summarizeRoutingDecision } from "../../utils/routingExplain";
+import { summarizeInputScanStage } from "../../utils/inputScanExplain";
+import { RoutingTechnicalDetails } from "../RoutingTechnicalDetails";
+import { InputScanTechnicalDetails } from "../InputScanTechnicalDetails";
 import {
   formatDecisionSource,
   formatDetectionTier,
@@ -170,8 +174,9 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
 
       <div className="-mx-1 flex items-stretch gap-2 overflow-x-auto pb-2 pt-1 sm:mx-0 sm:gap-3">
         {stages.map((stage, i) => {
-          const theme = ACTION_THEME[stage.action] || ACTION_THEME.skip;
-          const Icon = ACTION_ICONS[stage.action] || Clock;
+          const displayAction = honestStageAction(stage);
+          const theme = ACTION_THEME[displayAction] || ACTION_THEME.skip;
+          const Icon = ACTION_ICONS[displayAction] || Clock;
           const isHovered = hoveredStage === i;
           const isExpanded = expandedStage === i;
           const isActive = isHovered || isExpanded;
@@ -188,7 +193,7 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
                 onBlur={() => setHoveredStage((cur) => (cur === i ? null : cur))}
                 onClick={() => handleStageClick(i)}
                 aria-expanded={isExpanded}
-                aria-label={`Pipeline stage ${(stage.name || "").replace(/_/g, " ")}: ${stage.action}, ${formatStageLatency(stage)}. ${
+                aria-label={`Pipeline stage ${(stage.name || "").replace(/_/g, " ")}: ${displayAction}, ${formatStageLatency(stage)}. ${
                   isExpanded ? "Details pinned; activate to unpin." : "Activate to pin details."
                 }`}
                 className={`group relative min-h-11 min-w-[120px] cursor-pointer rounded-2xl border px-3 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:min-w-[132px] ${theme.card} ${
@@ -200,7 +205,7 @@ export function StageTimeline({ stages: rawStages = [], className = "" }) {
                     <Icon className={`h-4 w-4 ${theme.icon}`} />
                   </div>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${theme.badge}`}>
-                    {stage.action}
+                    {displayAction}
                   </span>
                 </div>
 
@@ -284,7 +289,8 @@ const BEFORE_AFTER_LABELS = {
 };
 
 function StageDetailCard({ stage, onClose, isPinned }) {
-  const theme = ACTION_THEME[stage.action] || ACTION_THEME.skip;
+  const displayAction = honestStageAction(stage);
+  const theme = ACTION_THEME[displayAction] || ACTION_THEME.skip;
   const hasWeights = stage.weights && typeof stage.weights === "object" && Object.keys(stage.weights).length > 0;
   const hasDecisionFactors = Array.isArray(stage.decision_factors) && stage.decision_factors.length > 0;
 
@@ -321,14 +327,22 @@ function StageDetailCard({ stage, onClose, isPinned }) {
   // block for the same stage to avoid showing the same text twice.
   const showPromptSubmitted = Boolean(stage.prompt_submitted) && !hasBeforeAfter;
 
+  const isModelRouting = stage.name === "model_routing";
+  const routingExplain = isModelRouting ? summarizeRoutingDecision(stage) : null;
+  const isInputScan = stage.name === "input_scan";
+  const inputScanExplain = isInputScan ? summarizeInputScanStage(stage) : null;
+  const collapseInputScanGuardRaw = isInputScan && (
+    stage.scan_outcome === "analyzed" || stage.redact_noop === true
+  );
+
   return (
     <div className={`rounded-2xl border bg-white/95 p-4 shadow-2xl backdrop-blur-sm dark:bg-slate-900/95 ${theme.card}`}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <h4 className="text-sm font-semibold capitalize text-slate-900 dark:text-slate-100">
           {(stage.name || "").replace(/_/g, " ")}
-          {stage.action && (
+          {displayAction && (
             <span className={`ml-1.5 inline-block rounded px-1.5 py-0.5 align-middle text-xs font-semibold ${theme.badge}`}>
-              {stage.action}
+              {displayAction}
             </span>
           )}
         </h4>
@@ -343,7 +357,31 @@ function StageDetailCard({ stage, onClose, isPinned }) {
       </div>
 
       <div className="grid grid-cols-1 gap-2 text-xs text-slate-600 dark:text-slate-300 sm:grid-cols-2">
-        {(stage.name === "input_scan" || stage.name === "output_guardrail" || stage.name === "policy") && stage.guard_reason && (
+        {isModelRouting && routingExplain?.summary && (
+          <div className="col-span-2 rounded-xl border border-violet-200/80 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-500/10">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+              Why this model
+            </div>
+            <p className="font-sans text-[11px] leading-relaxed text-slate-800 dark:text-slate-100">
+              {routingExplain.summary}
+            </p>
+            <RoutingTechnicalDetails technical={routingExplain.technical} />
+          </div>
+        )}
+        {isInputScan && inputScanExplain?.summary && (
+          <div className="col-span-2 rounded-xl border border-violet-200/80 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-500/10">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+              Why this stage
+            </div>
+            <p className="font-sans text-[11px] leading-relaxed text-slate-800 dark:text-slate-100">
+              {inputScanExplain.summary}
+            </p>
+            <InputScanTechnicalDetails technical={inputScanExplain.technical} />
+          </div>
+        )}
+        {((stage.name === "output_guardrail" || stage.name === "policy")
+          || (stage.name === "input_scan" && !collapseInputScanGuardRaw))
+          && stage.guard_reason && (
           <div className="col-span-2 rounded-xl border border-violet-200/80 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-500/10">
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
               {stage.name === "policy"
@@ -381,9 +419,11 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             <span className="text-slate-700 dark:text-slate-200">{detailText}</span>
           </div>
         )}
-        {stage.action === "allow" && stage.name === "input_scan" && stage.tier && (
+        {displayAction === "allow" && stage.name === "input_scan" && stage.tier && (
           <div className="col-span-2 text-[11px] text-emerald-700 dark:text-emerald-300">
-            Scan ran ({stage.tier}) — request was not blocked; later stages executed normally.
+            {stage.scan_outcome === "analyzed"
+              ? `Scan ran (${stage.tier}) — context analyzed after policy redaction; no additional masking.`
+              : `Scan ran (${stage.tier}) — request was not blocked; later stages executed normally.`}
           </div>
         )}
         {stage.name === "input_scan" && (() => {
@@ -393,7 +433,7 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             confidence: stage.confidence,
             risk_score: stage.risk_score,
             scan_outcome: stage.scan_outcome,
-            action: stage.action,
+            action: displayAction,
           });
           return (
             <>
@@ -448,7 +488,7 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             <span className="font-mono text-slate-700 dark:text-slate-200">{stage.selected_model}</span>
           </div>
         )}
-        {stage.decision_source && (
+        {stage.decision_source && !isModelRouting && (
           <div>
             <span className="text-slate-500 dark:text-slate-400">Decision source:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">
@@ -456,7 +496,7 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             </span>
           </div>
         )}
-        {stage.routing_reason && (
+        {stage.routing_reason && !isModelRouting && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Routing reason:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">
@@ -464,19 +504,19 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             </span>
           </div>
         )}
-        {stage.policy_summary && (
+        {stage.policy_summary && !isModelRouting && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Policy summary:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">{stage.policy_summary}</span>
           </div>
         )}
-        {hasDecisionFactors && (
+        {hasDecisionFactors && !isModelRouting && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Decision factors:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">{stage.decision_factors.join(", ")}</span>
           </div>
         )}
-        {hasWeights && (
+        {hasWeights && !isModelRouting && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Applied weights:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">
@@ -490,22 +530,16 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             </span>
           </div>
         )}
-        {Number(stage.routing_score) > 0 && (
+        {Number(stage.routing_score) > 0 && !isModelRouting && (
           <div>
             <span className="text-slate-500 dark:text-slate-400">Routing score:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">{Number(stage.routing_score).toFixed(3)}</span>
           </div>
         )}
-        {Number(stage.candidate_count) > 0 && (
+        {Number(stage.candidate_count) > 0 && !isModelRouting && (
           <div>
             <span className="text-slate-500 dark:text-slate-400">Candidates:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">{stage.candidate_count}</span>
-          </div>
-        )}
-        {stage.guard_reason && stage.name === "model_routing" && (
-          <div className="col-span-2">
-            <span className="text-slate-500 dark:text-slate-400">Why:</span>{" "}
-            <span className="whitespace-pre-wrap text-slate-700 dark:text-slate-200">{stage.guard_reason}</span>
           </div>
         )}
         {stage.tier && stage.name !== "input_scan" && (

@@ -1,0 +1,27 @@
+{
+  "server_slug": "_gateway",
+  "label": "health",
+  "captured_at_utc": "2026-07-07T10:55:21Z",
+  "request": {
+    "url": "http://127.0.0.1:8300/health"
+  },
+  "response": {
+    "status_code": 200,
+    "body": {
+      "status": "ok",
+      "agent_id": "42a53886-c2d7-46a3-9888-d69c952a2894",
+      "policy_cache_loaded": true,
+      "policy_cache_version": 491,
+      "policy_count": 49,
+      "config_sync_loaded": false,
+      "firewall_enabled": true,
+      "enforcement_mode": "block",
+      "vector_policy_cache_loaded": true,
+      "vector_policy_cache_version": 495,
+      "vector_policy_count": 13,
+      "vector_clients": [],
+      "telemetry_queue_depth": 0
+    }
+  },
+  "notes": ""
+}

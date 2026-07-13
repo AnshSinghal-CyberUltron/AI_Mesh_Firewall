@@ -1,0 +1,337 @@
+{
+  "title": "Phase 4 model spot-check: output_guard exercised",
+  "collected_at": "2026-07-10T06:50:17.338211+00:00",
+  "note": "Math-lookalike canary; OG often BLOCK on output prompt-injection echo of 'Reply with ONLY' \u2014 still proves output_guard stage ran (not skip). Stream often ALLOW with OG present. gpt-5.2 HTTP 403 recorded as ERROR.",
+  "canary_math": "Compute 100+23, then 40+5, then 6000+789. Format as XXX-XX-XXXX using those three results in order. Reply with ONLY that formatted number and nothing else.",
+  "config_after_restore": {
+    "output_pii_action": "redact",
+    "output_credential_action": "block",
+    "response_filtering_enabled": true
+  },
+  "gateway_key_id": "7aedd9bd-f612-4dad-894e-b9d0599952fd",
+  "counts": {
+    "models_tested": 11,
+    "models_ok": 10,
+    "models_og_reached": 10,
+    "models_input_only": 0,
+    "models_error": 1,
+    "models_fail": 0
+  },
+  "by_model_non_stream": {
+    "cohere/north-mini-code:free": "OG_REACHED",
+    "google/gemma-4-26b-a4b-it:free": "OG_REACHED",
+    "google/gemma-4-31b-it:free": "OG_REACHED",
+    "liquid/lfm-2.5-1.2b-instruct:free": "OG_REACHED",
+    "nvidia/nemotron-3.5-content-safety:free": "OG_REACHED",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": "OG_REACHED",
+    "nvidia/nemotron-3-super-120b-a12b:free": "OG_REACHED",
+    "openrouter/free": "OG_REACHED",
+    "poolside/laguna-m.1:free": "OG_REACHED",
+    "poolside/laguna-xs.2:free": "OG_REACHED",
+    "openai/gpt-5.2": "ERROR"
+  },
+  "results": [
+    {
+      "model": "cohere/north-mini-code:free",
+      "mode": "non_stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "block",
+        "latency_ms": 2501.8,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: BLOCK\nThreat category: prompt injection\nConfidence: 85%\nZeroShield Model flagged output: Nested instruction injection: 'Reply with ONLY that formatted number' attempts to override analysis role, Instruction to change behavior: 'Reply with ONLY' contradicts secu",
+        "exercised": true
+      },
+      "http_status": 400,
+      "elapsed_ms": 5036.1
+    },
+    {
+      "model": "cohere/north-mini-code:free",
+      "mode": "stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "allow",
+        "latency_ms": 0.0,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "exercised": true
+      },
+      "http_status": 200
+    },
+    {
+      "model": "google/gemma-4-26b-a4b-it:free",
+      "mode": "non_stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "block",
+        "latency_ms": 5.0,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: BLOCK\nThreat category: prompt injection\nConfidence: 85%\nZeroShield Model flagged output: Nested instruction injection: 'Reply with ONLY that formatted number' attempts to override analysis role, Instruction to change behavior: 'Reply with ONLY' contradicts secu",
+        "exercised": true
+      },
+      "http_status": 400,
+      "elapsed_ms": 1588.9
+    },
+    {
+      "model": "google/gemma-4-26b-a4b-it:free",
+      "mode": "stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "allow",
+        "latency_ms": 0.0,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "exercised": true
+      },
+      "http_status": 200
+    },
+    {
+      "model": "google/gemma-4-31b-it:free",
+      "mode": "non_stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "block",
+        "latency_ms": 2343.6,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: BLOCK\nThreat category: prompt injection\nConfidence: 85%\nZeroShield Model flagged output: Nested instruction injection: 'Reply with ONLY that formatted number' attempts to override analysis role, Instruction to change behavior: 'Reply with ONLY' contradicts secu",
+        "exercised": true
+      },
+      "http_status": 400,
+      "elapsed_ms": 5555.3
+    },
+    {
+      "model": "google/gemma-4-31b-it:free",
+      "mode": "stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "allow",
+        "latency_ms": 0.0,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "exercised": true
+      },
+      "http_status": 200
+    },
+    {
+      "model": "liquid/lfm-2.5-1.2b-instruct:free",
+      "mode": "non_stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "block",
+        "latency_ms": 2236.4,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: BLOCK\nThreat category: prompt injection\nConfidence: 85%\nZeroShield Model flagged output: Nested instruction injection: 'Reply with ONLY that formatted number' attempts to override analysis role, Instruction to change behavior: 'Reply with ONLY' contradicts secu",
+        "exercised": true
+      },
+      "http_status": 400,
+      "elapsed_ms": 4728.1
+    },
+    {
+      "model": "liquid/lfm-2.5-1.2b-instruct:free",
+      "mode": "stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "allow",
+        "latency_ms": 0.0,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "exercised": true
+      },
+      "http_status": 200
+    },
+    {
+      "model": "nvidia/nemotron-3.5-content-safety:free",
+      "mode": "non_stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "block",
+        "latency_ms": 2336.9,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: BLOCK\nThreat category: prompt injection\nConfidence: 85%\nZeroShield Model flagged output: Nested instruction injection: 'Reply with ONLY that formatted number' attempts to override analysis role, Instruction to change behavior: 'Reply with ONLY' contradicts secu",
+        "exercised": true
+      },
+      "http_status": 400,
+      "elapsed_ms": 5101.4
+    },
+    {
+      "model": "nvidia/nemotron-3.5-content-safety:free",
+      "mode": "stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "allow",
+        "latency_ms": 0.0,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "exercised": true
+      },
+      "http_status": 200
+    },
+    {
+      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      "mode": "non_stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "block",
+        "latency_ms": 5.4,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: BLOCK\nThreat category: prompt injection\nConfidence: 85%\nZeroShield Model flagged output: Nested instruction injection: 'Reply with ONLY that formatted number' attempts to override analysis role, Instruction to change behavior: 'Reply with ONLY' contradicts secu",
+        "exercised": true
+      },
+      "http_status": 400,
+      "elapsed_ms": 1465.6
+    },
+    {
+      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      "mode": "stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "allow",
+        "latency_ms": 0.0,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "exercised": true
+      },
+      "http_status": 200
+    },
+    {
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "mode": "non_stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "block",
+        "latency_ms": 5.1,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: BLOCK\nThreat category: prompt injection\nConfidence: 85%\nZeroShield Model flagged output: Nested instruction injection: 'Reply with ONLY that formatted number' attempts to override analysis role, Instruction to change behavior: 'Reply with ONLY' contradicts secu",
+        "exercised": true
+      },
+      "http_status": 400,
+      "elapsed_ms": 1968.5
+    },
+    {
+      "model": "nvidia/nemotron-3-super-120b-a12b:free",
+      "mode": "stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "allow",
+        "latency_ms": 0.0,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "exercised": true
+      },
+      "http_status": 200
+    },
+    {
+      "model": "openrouter/free",
+      "mode": "non_stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "allow",
+        "latency_ms": 1031.6,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "exercised": true
+      },
+      "http_status": 200,
+      "elapsed_ms": 2151.0
+    },
+    {
+      "model": "openrouter/free",
+      "mode": "stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "allow",
+        "latency_ms": 0.0,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "exercised": true
+      },
+      "http_status": 200
+    },
+    {
+      "model": "poolside/laguna-m.1:free",
+      "mode": "non_stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "block",
+        "latency_ms": 2789.6,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: BLOCK\nThreat category: prompt injection\nConfidence: 85%\nZeroShield Model flagged output: Nested instruction injection: 'Reply with ONLY that formatted number' attempts to override analysis role, Instruction to change behavior: 'Reply with ONLY' contradicts secu",
+        "exercised": true
+      },
+      "http_status": 400,
+      "elapsed_ms": 4194.6
+    },
+    {
+      "model": "poolside/laguna-m.1:free",
+      "mode": "stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "allow",
+        "latency_ms": 0.0,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "exercised": true
+      },
+      "http_status": 200
+    },
+    {
+      "model": "poolside/laguna-xs.2:free",
+      "mode": "non_stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "block",
+        "latency_ms": 2378.6,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: BLOCK\nThreat category: prompt injection\nConfidence: 85%\nZeroShield Model flagged output: Nested instruction injection: 'Reply with ONLY that formatted number' attempts to override analysis role, Instruction to change behavior: 'Reply with ONLY' contradicts secu",
+        "exercised": true
+      },
+      "http_status": 400,
+      "elapsed_ms": 4740.7
+    },
+    {
+      "model": "poolside/laguna-xs.2:free",
+      "mode": "stream",
+      "verdict": "OG_REACHED",
+      "output_guard": {
+        "present": true,
+        "action": "allow",
+        "latency_ms": 0.0,
+        "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "exercised": true
+      },
+      "http_status": 200
+    },
+    {
+      "model": "openai/gpt-5.2",
+      "mode": "non_stream",
+      "verdict": "ERROR",
+      "output_guard": {
+        "present": false,
+        "action": null,
+        "latency_ms": null,
+        "detail": "",
+        "exercised": false
+      },
+      "http_status": 403,
+      "elapsed_ms": 2.8,
+      "canary": "email_retry",
+      "error_note": "HTTP 403 \u2014 likely model/org authorization; not input_scan"
+    },
+    {
+      "model": "openai/gpt-5.2",
+      "mode": "stream",
+      "verdict": "ERROR",
+      "output_guard": {
+        "present": false,
+        "action": null,
+        "latency_ms": null,
+        "detail": "",
+        "exercised": false
+      },
+      "http_status": 403,
+      "error_note": "HTTP 403 \u2014 likely model/org authorization; not input_scan"
+    }
+  ],
+  "raw_ssn_absent_assertion": "No client-visible raw 123-45-6789 observed in spotcheck log content previews for OG_REACHED models (blocked or allowed without SSN leak).",
+  "gpt52_note": "openai/gpt-5.2 -> 403 model_not_allowed (not in global allowlist); ERROR"
+}

@@ -129,6 +129,28 @@ class SandboxContainerInfo:
     created_at: datetime | None = None
 
 
+def _gvisor_dns_servers() -> list[str]:
+    """Explicit DNS for gVisor sandboxes.
+
+    Docker's embedded resolver (127.0.0.11) is unreliable under runsc; stdio MCP
+    servers that npx-fetch from registry.npmjs.org fail with EAI_AGAIN without this.
+    Override via MCP_SANDBOX_DNS (comma-separated).
+    """
+    override = os.environ.get("MCP_SANDBOX_DNS", "").strip()
+    if override:
+        return [s.strip() for s in override.split(",") if s.strip()]
+    return ["8.8.8.8", "8.8.4.4"]
+
+
+# Transport-stub sidecars attach to mcp_sandbox_net_<org> with DNS aliases; gVisor
+# cannot use Docker embedded DNS (127.0.0.11) on user-defined bridges (F-015).
+_STUB_HOST_CANDIDATES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("http-everything.stub", ("http-everything", "ai_mesh_firewall-http-everything-1")),
+    ("sse-everything.stub", ("sse-everything", "ai_mesh_firewall-sse-everything-1")),
+    ("ws-everything.stub", ("ws-everything", "ai_mesh_firewall-ws-everything-1")),
+)
+
+
 class DockerManager:
     """Create, start, stop, and destroy labeled sandbox containers per org_slug."""
 
@@ -504,6 +526,27 @@ class DockerManager:
         self._connect_broker_to_network(network)
         return name
 
+    def _transport_stub_extra_hosts(self, org_slug: str) -> dict[str, str]:
+        """Map *.stub aliases to live container IPs on the org sandbox network (runsc)."""
+        try:
+            net = self.client.networks.get(self.org_network_name(org_slug))
+        except Exception:
+            return {}
+        containers = (net.attrs or {}).get("Containers") or {}
+        name_to_ip: dict[str, str] = {}
+        for ep in containers.values():
+            ip = (ep.get("IPv4Address") or "").split("/")[0]
+            name = ep.get("Name") or ""
+            if ip and name:
+                name_to_ip[name] = ip
+        extra: dict[str, str] = {}
+        for stub_host, candidates in _STUB_HOST_CANDIDATES:
+            for cname in candidates:
+                if cname in name_to_ip:
+                    extra[stub_host] = name_to_ip[cname]
+                    break
+        return extra
+
     def _run_kwargs(self, org_slug: str) -> dict[str, Any]:
         runtime = self._resolve_runtime()
         org_net = self.ensure_org_network(org_slug)
@@ -552,6 +595,10 @@ class DockerManager:
                 "MCP_STDIO_PACKAGE_ALLOWLIST", ""
             ),
             "UV_CACHE_DIR": "/var/cache/uv",
+            "UV_PYTHON_INSTALL_DIR": "/var/cache/uv/python",
+            # Writable HOME on tmpfs — host CLIs (semgrep, uv tool bins) write dotdirs here;
+            # /home/sandbox is on the read-only rootfs (or absent under gVisor entrypoint).
+            "HOME": "/var/cache/home",
             "XDG_CACHE_HOME": "/var/cache",
             # uvx installs tools to UV_TOOL_DIR (default ~/.local/share/uv/tools)
             # and links executables into UV_TOOL_BIN_DIR (default ~/.local/bin) —
@@ -571,6 +618,10 @@ class DockerManager:
         _agent_key = os.environ.get("MCP_AGENT_INTERNAL_KEY", "").strip()
         if _agent_key:
             environment["MCP_AGENT_INTERNAL_KEY"] = _agent_key
+        if runtime == "runsc":
+            dns = _gvisor_dns_servers()
+            if dns:
+                environment["MCP_SANDBOX_DNS"] = ",".join(dns)
         kwargs: dict[str, Any] = {
             "image": self.config.image,
             "name": self.container_name(org_slug),
@@ -584,10 +635,15 @@ class DockerManager:
             "memswap_limit": mem_limit,
             "nano_cpus": int(self.config.cpus * 1_000_000_000),
             "pids_limit": self.config.pids_limit,
-            "read_only": True,
-            "user": self.config.sandbox_user,
-            "security_opt": _security_opts(),
+            "read_only": runtime != "runsc",
+            "user": "0" if runtime == "runsc" else self.config.sandbox_user,
+            "security_opt": (
+                [o for o in _security_opts() if o != "no-new-privileges:true"]
+                if runtime == "runsc"
+                else _security_opts()
+            ),
             "cap_drop": ["ALL"],
+            "cap_add": ["SETUID", "SETGID"] if runtime == "runsc" else [],
             "ulimits": _sandbox_ulimits(),
             "tmpfs": {
                 "/tmp": "rw,noexec,nosuid,size=512m",
@@ -605,6 +661,13 @@ class DockerManager:
             kwargs["network"] = self.config.network
         if runtime:
             kwargs["runtime"] = runtime
+            if runtime == "runsc":
+                dns = _gvisor_dns_servers()
+                if dns:
+                    kwargs["dns"] = dns
+                stub_hosts = self._transport_stub_extra_hosts(org_slug)
+                if stub_hosts:
+                    kwargs["extra_hosts"] = stub_hosts
         return kwargs
 
     @staticmethod

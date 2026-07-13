@@ -1,0 +1,73 @@
+{
+  "results": [
+    {
+      "path": "../../../../etc/passwd",
+      "response": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Error: Access denied - path outside allowed directories: /etc/passwd not in /tmp"
+            }
+          ],
+          "isError": true
+        },
+        "jsonrpc": "2.0",
+        "id": 1
+      },
+      "status": 200
+    },
+    {
+      "path": "/etc/passwd",
+      "response": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Error: Access denied - path outside allowed directories: /etc/passwd not in /tmp"
+            }
+          ],
+          "isError": true
+        },
+        "jsonrpc": "2.0",
+        "id": 1
+      },
+      "status": 200
+    },
+    {
+      "path": "..\\..\\windows\\system32\\config\\sam",
+      "response": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Error: Access denied - path outside allowed directories: /opt/agent/..\\..\\windows\\system32\\config\\sam not in /tmp"
+            }
+          ],
+          "isError": true
+        },
+        "jsonrpc": "2.0",
+        "id": 1
+      },
+      "status": 200
+    },
+    {
+      "path": "/tmp/../etc/shadow",
+      "response": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "Error: Access denied - path outside allowed directories: /etc/shadow not in /tmp"
+            }
+          ],
+          "isError": true
+        },
+        "jsonrpc": "2.0",
+        "id": 1
+      },
+      "status": 200
+    }
+  ],
+  "_captured_at": "2026-07-07T09:27:53.243304+00:00"
+}

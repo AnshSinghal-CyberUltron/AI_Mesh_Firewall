@@ -1,0 +1,227 @@
+[
+  {
+    "tool": "echo",
+    "note": "raw PII baseline (expect BLOCK)",
+    "status": "BLOCKED",
+    "blocked_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: GDPR, HIPAA, PII, SECRET.",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_raw_pii.json"
+  },
+  {
+    "tool": "echo",
+    "note": "base64 SSN",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_b64_ssn.json"
+  },
+  {
+    "tool": "echo",
+    "note": "base64 AWS key",
+    "status": "BLOCKED",
+    "blocked_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: SECRET.",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_b64_aws.json"
+  },
+  {
+    "tool": "echo",
+    "note": "base64 email",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_b64_email.json"
+  },
+  {
+    "tool": "echo",
+    "note": "double base64 SSN",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_b64b64_ssn.json"
+  },
+  {
+    "tool": "echo",
+    "note": "hex SSN",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_hex_ssn.json"
+  },
+  {
+    "tool": "echo",
+    "note": "hex AWS key",
+    "status": "BLOCKED",
+    "blocked_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: SECRET.",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_hex_aws.json"
+  },
+  {
+    "tool": "echo",
+    "note": "url-encoded email+key",
+    "status": "BLOCKED",
+    "blocked_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: SECRET.",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_urlenc.json"
+  },
+  {
+    "tool": "echo",
+    "note": "html-entity SSN",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_htmlent_ssn.json"
+  },
+  {
+    "tool": "echo",
+    "note": "zero-width-split SSN",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_zwsp_ssn.json"
+  },
+  {
+    "tool": "echo",
+    "note": "zero-width-split AWS key",
+    "status": "BLOCKED",
+    "blocked_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: SECRET.",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_zwsp_aws.json"
+  },
+  {
+    "tool": "echo",
+    "note": "fullwidth-digit SSN",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_fullwidth_ssn.json"
+  },
+  {
+    "tool": "echo",
+    "note": "markdown-split SSN",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_mdsplit_ssn.json"
+  },
+  {
+    "tool": "echo",
+    "note": "markdown-split AWS key",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_mdsplit_aws.json"
+  },
+  {
+    "tool": "echo",
+    "note": "markdown exfil beacon w/ email",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_exfil_md_email.json"
+  },
+  {
+    "tool": "echo",
+    "note": "html img exfil beacon w/ SSN",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_exfil_html_ssn.json"
+  },
+  {
+    "tool": "echo",
+    "note": "markdown exfil beacon w/ base64(SSN|AWS)",
+    "status": "BLOCKED",
+    "blocked_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: HIPAA, PII, SECRET.",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_exfil_md_b64.json"
+  },
+  {
+    "tool": "echo",
+    "note": "decoy-padded base64 AWS key (20 decoys)",
+    "status": "BLOCKED",
+    "blocked_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: SECRET.",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_decoy_padded_aws.json"
+  },
+  {
+    "tool": "echo",
+    "note": "raw PCI card+cvv",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_pci_raw.json"
+  },
+  {
+    "tool": "echo",
+    "note": "base64 PCI card",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_pci_b64.json"
+  },
+  {
+    "tool": "echo",
+    "note": "raw stripe secret key",
+    "status": "BLOCKED",
+    "blocked_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: SECRET, SOC2.",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_stripe_raw.json"
+  },
+  {
+    "tool": "echo",
+    "note": "raw anthropic key format",
+    "status": "BLOCKED",
+    "blocked_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: SECRET.",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_anthropic_raw.json"
+  },
+  {
+    "tool": "echo",
+    "note": "raw github PAT",
+    "status": "BLOCKED",
+    "blocked_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: SECRET.",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_ghp_raw.json"
+  },
+  {
+    "tool": "echo",
+    "note": "raw JWT",
+    "status": "BLOCKED",
+    "blocked_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: SECRET, SOC2.",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_jwt_raw.json"
+  },
+  {
+    "tool": "echo",
+    "note": "HIPAA phi bundle",
+    "status": "clean/no-match",
+    "blocked_text": "",
+    "raw_hits": {},
+    "pii_scan": {},
+    "evidence": ".skill-workspace/red-team/context-mcp-rt-matrix/agent3/evidence/obfuscation/echo_hipaa_raw.json"
+  }
+]

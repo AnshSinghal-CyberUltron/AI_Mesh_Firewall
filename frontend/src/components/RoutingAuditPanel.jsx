@@ -11,6 +11,8 @@ import {
   getRoutingExtra,
   getEventMetadata,
 } from "../utils/routingEventFields";
+import { summarizeRoutingDecision } from "../utils/routingExplain";
+import { RoutingTechnicalDetails } from "./RoutingTechnicalDetails";
 
 const SENSITIVITY_COLORS = {
   restricted: "bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300",
@@ -164,6 +166,20 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
               ? extra.rerouted
               : (originalModel !== "auto" && originalModel !== routedModel);
             const isExpanded = expandedId === ev.id;
+            const routingExplain = summarizeRoutingDecision({
+              requested_model: originalModel,
+              selected_model: routedModel,
+              routed_model: routedModel,
+              routing_reason: reason !== "—" ? reason : "",
+              decision_source: decisionSource,
+              policy_summary: policySummary,
+              decision_factors: decisionFactors,
+              weights,
+              routing_score: score,
+              candidate_count: extra.candidate_count ?? meta.candidate_count,
+              fallback_chain: fallbacks,
+              rerouted,
+            });
 
             return (
               <div
@@ -220,60 +236,13 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
                 {isExpanded && (
                   <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 space-y-3">
                     <div>
-                      <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Routing Reason</span>
-                      <p className="text-xs text-slate-700 dark:text-slate-300 mt-0.5">{reason}</p>
-                      {policySummary && (
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{policySummary}</p>
-                      )}
+                      <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Why</span>
+                      <p className="text-xs text-slate-700 dark:text-slate-300 mt-0.5 leading-relaxed">
+                        {routingExplain.summary}
+                      </p>
                     </div>
 
-                    {decisionSource && (
-                      <div className="flex gap-4 text-[10px] text-slate-500 dark:text-slate-400">
-                        <span>Decision source: {decisionSource}</span>
-                      </div>
-                    )}
-
-                    {Array.isArray(decisionFactors) && decisionFactors.length > 0 && (
-                      <div>
-                        <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Decision Factors</span>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          {decisionFactors.map((factor, i) => (
-                            <span key={i} className="px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-800/30 text-[10px] font-mono text-indigo-700 dark:text-indigo-300">
-                              {String(factor)}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {Object.keys(weights).length > 0 && (
-                      <div>
-                        <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Applied Weights</span>
-                        <div className="flex gap-3 mt-1">
-                          {Object.entries(weights).map(([k, v]) => (
-                            <div key={k} className="flex items-center gap-1">
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400 capitalize">{k}:</span>
-                              <span className="text-[10px] font-mono font-semibold text-slate-700 dark:text-slate-300">
-                                {(v * 100).toFixed(0)}%
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {fallbacks.length > 0 && (
-                      <div>
-                        <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Fallback Chain</span>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          {fallbacks.map((fb, i) => (
-                            <span key={i} className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-[10px] font-mono text-slate-600 dark:text-slate-400">
-                              {fb}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    <RoutingTechnicalDetails technical={routingExplain.technical} />
 
                     <div className="flex gap-4 text-[10px] text-slate-500 dark:text-slate-400">
                       {ev.user_id && <span>User: {ev.user_display || ev.user_id}</span>}

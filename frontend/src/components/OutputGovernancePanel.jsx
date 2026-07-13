@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
 import { OutputPipelineTimeline } from "./OutputPipelineTimeline";
 import { TIME_RANGE_TO_HOURS } from "../hooks/useFirewallData";
+import { isRedactNoop, selectOutputGovernanceEvents } from "../utils/outputGovernanceFeed";
 
 // Extracted so each state carries its own bg+text pair (not a ternary
 // cross-product) — keeps the detector's gray-on-color heuristic honest and
@@ -58,6 +59,7 @@ function EventRow({ event, isExpanded, onToggle }) {
   const rawOutput = extra.raw_output || meta.raw_output || responseSnippet;
   const sanitizedOutput = extra.sanitized_output || meta.sanitized_output || "";
   const guardrailReasoning = extra.guardrail_reasoning || meta.guardrail_reasoning || detail;
+  const redactNoop = isRedactNoop(event);
   const confidence = meta.risk_score || meta.security_risk_score || 0;
   const model = meta.model || "--";
   const latency = meta.latency_ms || extra.latency_ms || 0;
@@ -75,6 +77,11 @@ function EventRow({ event, isExpanded, onToggle }) {
         aria-expanded={isExpanded}
       >
         <ActionBadge action={action} />
+        {redactNoop && (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            No bytes changed
+          </span>
+        )}
         <span className="text-xs font-medium text-slate-700 dark:text-slate-300 capitalize truncate max-w-[120px]">{threatType.replace(/_/g, " ")}</span>
         <ConfidenceMeter confidence={typeof confidence === "number" && confidence <= 1 ? confidence : (confidence / 100)} />
         <span className="text-xs text-slate-500 dark:text-slate-400 ml-auto tabular-nums">{ts}</span>
@@ -137,15 +144,11 @@ export function OutputGovernancePanel({ timeRange = "24h" }) {
       // limit=500 (not 50): the feed is filtered to output events client-side, so
       // a small page can be entirely crowded out by recent non-output traffic.
       const res = await fetchWithAuth(
-        `/api/security/threat-feed/?hours=${hours}&limit=500&source=security_scan`
+        `/api/security/threat-feed/?hours=${hours}&limit=500&source=security_scan&collapse=false`
       );
       if (res.ok) {
         const data = await res.json();
-        const outputEvents = (data.results || []).filter((ev) => {
-          const et = (ev.metadata?.event_type || "").toLowerCase();
-          return et === "output_guard" || et === "output_scan";
-        });
-        setEvents(outputEvents);
+        setEvents(selectOutputGovernanceEvents(data.results || []));
       }
     } finally {
       setLoading(false);

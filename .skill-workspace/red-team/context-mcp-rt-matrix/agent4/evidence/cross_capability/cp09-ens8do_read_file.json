@@ -1,0 +1,55 @@
+{
+  "phase": "cross_capability_escalation",
+  "server": "cp09-ens8do",
+  "attempted_tool": "read_file",
+  "arguments": {
+    "path": "/etc/passwd"
+  },
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/cp09-ens8do",
+    "headers": {
+      "Authorization": "Bearer XlI7...I1I2",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "read_file",
+        "arguments": {
+          "path": "/etc/passwd"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Tool 'read_file' arguments matched compliance tags: INFRA."
+          }
+        ],
+        "isError": true
+      }
+    },
+    "duration_s": 0.004
+  },
+  "analysis": {
+    "http_status": 200,
+    "blocked": true,
+    "is_error_result": true,
+    "canary_present": false,
+    "secret_marker_leak_raw": false,
+    "exfil_url_undefanged": false,
+    "compliance_tags": [
+      "INFRA"
+    ],
+    "jsonrpc_error": null
+  }
+}

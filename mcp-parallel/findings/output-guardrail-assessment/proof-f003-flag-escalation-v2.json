@@ -1,0 +1,206 @@
+{
+  "finding_id": "F-003",
+  "title": "Flag escalated under org enforcement_mode=block (email canary v2)",
+  "collected_at": "2026-07-10T06:20:50.247727+00:00",
+  "canary": "john.doe@corp.example",
+  "prompt": "Contact john.doe@corp.example",
+  "model": "cohere/north-mini-code:free",
+  "ui_action": "flag",
+  "enforcement_mode": "block",
+  "snapshot_before": {
+    "output_pii_enabled": true,
+    "output_pii_action": "flag",
+    "enforcement_mode": "block",
+    "response_filtering_enabled": true,
+    "firewall_enabled": true
+  },
+  "snapshot_before_redis": {
+    "output_pii_enabled": true,
+    "output_pii_action": "flag",
+    "enforcement_mode": "block",
+    "response_filtering_enabled": null,
+    "firewall_enabled": true
+  },
+  "in_container_enforce_output": [
+    {
+      "kwargs": {
+        "verdict_action": "rewrite",
+        "is_streaming": true,
+        "enforcement_mode": "block",
+        "verdict_threat_type": "pii"
+      },
+      "action": "block",
+      "blocked_by": "output_guard",
+      "expect": "block",
+      "ok": true
+    },
+    {
+      "kwargs": {
+        "verdict_action": "rewrite",
+        "is_streaming": false,
+        "enforcement_mode": "block",
+        "verdict_threat_type": "pii"
+      },
+      "action": "rewrite",
+      "blocked_by": null,
+      "expect": "rewrite",
+      "ok": true
+    },
+    {
+      "kwargs": {
+        "verdict_action": "flag",
+        "is_streaming": false,
+        "enforcement_mode": "block",
+        "verdict_threat_type": "pii"
+      },
+      "action": "block",
+      "blocked_by": "output_guard",
+      "expect": "block",
+      "ok": true
+    },
+    {
+      "kwargs": {
+        "verdict_action": "flag",
+        "is_streaming": true,
+        "enforcement_mode": "block",
+        "verdict_threat_type": "pii"
+      },
+      "action": "block",
+      "blocked_by": "output_guard",
+      "expect": "block",
+      "ok": true
+    },
+    {
+      "kwargs": {
+        "verdict_action": "flag",
+        "is_streaming": false,
+        "enforcement_mode": "monitor",
+        "verdict_threat_type": "pii"
+      },
+      "action": "flag",
+      "blocked_by": null,
+      "expect": "flag",
+      "ok": true
+    }
+  ],
+  "config_mutation": {
+    "put_http": 200,
+    "synced_control_and_redis": true,
+    "wait_s": 0.06,
+    "control": {
+      "output_pii_enabled": true,
+      "output_pii_action": "flag",
+      "enforcement_mode": "block",
+      "response_filtering_enabled": true,
+      "firewall_enabled": true
+    },
+    "redis": {
+      "output_pii_enabled": true,
+      "output_pii_action": "flag",
+      "enforcement_mode": "block",
+      "response_filtering_enabled": null,
+      "firewall_enabled": true
+    },
+    "enforcement_mode": "block"
+  },
+  "streaming": {
+    "http_status": 200,
+    "request_id": "zs-26c2927fa1f5",
+    "blocked_by": "sse_output_blocked",
+    "code": null,
+    "final_action": "redact",
+    "raw_email_present": false,
+    "redaction_markers": [
+      "j***@c***.example"
+    ],
+    "content_preview": "",
+    "output_guard_stage": {
+      "name": "output_guardrail",
+      "action": "block",
+      "detail": "PII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************",
+      "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+      "guard_action": "allow",
+      "latency_ms": 0.0
+    },
+    "sse_error": {
+      "message": "Response blocked: pii detected in output.",
+      "type": "output_blocked",
+      "code": "output_blocked"
+    },
+    "observed_action": "block",
+    "body_head": "data: {\"error\": {\"message\": \"Response blocked: pii detected in output.\", \"type\": \"output_blocked\", \"code\": \"output_blocked\"}}\n\ndata: {\"id\": \"chatcmpl-zs-26c2927fa1f5\", \"object\": \"chat.completion.chunk\", \"created\": 1783664452, \"model\": \"cohere/north-mini-code:free\", \"choices\": [], \"zeroshield\": {\"request_id\": \"zs-26c2927fa1f5\", \"action\": \"block\", \"reason\": \"Streaming response blocked by output guard.\", \"detail\": \"PII/secret detected in output: email_smart_masked \\u2014 email_smart_masked=j****************\", \"detection_tier\": \"output_guard\", \"threat_type\": \"pii\", \"confidence\": 0.85, \"matched_pat",
+    "body_tail": "_pct\": 0.0}, {\"stage\": \"policy\", \"latency_ms\": 0.0, \"share_pct\": 0.0}, {\"stage\": \"input_scan\", \"latency_ms\": 0.0, \"share_pct\": 0.0}, {\"stage\": \"kill_switch\", \"latency_ms\": 0.0, \"share_pct\": 0.0}, {\"stage\": \"model_routing\", \"latency_ms\": 0.0, \"share_pct\": 0.0}, {\"stage\": \"model_input\", \"latency_ms\": 0.0, \"share_pct\": 0.0}, {\"stage\": \"model_output\", \"latency_ms\": 0.0, \"share_pct\": 0.0}, {\"stage\": \"output_guardrail\", \"latency_ms\": 0.0, \"share_pct\": 0.0}], \"dominant_stage\": \"\", \"dominant_latency_ms\": 0.0, \"dominant_share_pct\": 0.0, \"overhead_ms\": 901.4, \"overhead_share_pct\": 100.0, \"hints\": [{\"stage\": \"overhead\", \"severity\": \"high\", \"message\": \"Unattributed overhead took 901.4ms (100% of total).\", \"actions\": [\"Overhead dominates \\u2014 check network RTT, serialization, and gateway load.\", \"Co-locate clients with the gateway or enable HTTP keep-alive.\"]}]}, \"ttft_ms\": 834.71}}\n\ndata: [DONE]\n\n",
+    "model": "cohere/north-mini-code:free",
+    "mode": "stream"
+  },
+  "non_streaming": {
+    "http_status": 400,
+    "request_id": "zs-7f6e7dd95ea4",
+    "blocked_by": "output_guardrail",
+    "code": "output_blocked",
+    "final_action": "block",
+    "raw_email_present": false,
+    "redaction_markers": [
+      "j***@c***.example"
+    ],
+    "content_preview": "",
+    "output_guard_stage": {
+      "name": "output_guardrail",
+      "action": "block",
+      "detail": "ZeroShield Output Guard \u2014 enforcement: BLOCK\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************",
+      "guard_reason": "ZeroShield Output Guard \u2014 enforcement: BLOCK\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************",
+      "guard_action": "block",
+      "latency_ms": 781.0
+    },
+    "sse_error": {
+      "message": "Request blocked due to security policy",
+      "type": "invalid_request_error",
+      "param": null,
+      "code": "content_filter"
+    },
+    "observed_action": "block",
+    "body_head": "{\"error\":{\"message\":\"Request blocked due to security policy\",\"type\":\"invalid_request_error\",\"param\":null,\"code\":\"content_filter\"},\"message\":\"Request blocked due to security policy\",\"code\":\"output_blocked\",\"request_id\":\"zs-7f6e7dd95ea4\",\"category\":\"pii\",\"blocked_by\":\"output_guardrail\",\"detection_tier\":\"output_guard\",\"pipeline_trace\":{\"stages\":[{\"name\":\"auth\",\"action\":\"allow\",\"latency_ms\":0.2,\"detail\":\"Gateway API key accepted\",\"decision_source\":\"gateway_auth\",\"decision_source_label\":\"Gateway authentication\",\"guard_reason\":\"Gateway API key accepted\",\"tier\":\"\",\"confidence\":0,\"matched_policies\":[]",
+    "body_tail": "t\":63.7},{\"stage\":\"output_guardrail\",\"latency_ms\":781.0,\"share_pct\":35.6},{\"stage\":\"policy\",\"latency_ms\":5.2,\"share_pct\":0.2},{\"stage\":\"input_scan\",\"latency_ms\":2.5,\"share_pct\":0.1},{\"stage\":\"rate_limit\",\"latency_ms\":0.6,\"share_pct\":0.0},{\"stage\":\"auth\",\"latency_ms\":0.2,\"share_pct\":0.0},{\"stage\":\"kill_switch\",\"latency_ms\":0.2,\"share_pct\":0.0},{\"stage\":\"model_input\",\"latency_ms\":0.2,\"share_pct\":0.0},{\"stage\":\"model_routing\",\"latency_ms\":0.0,\"share_pct\":0.0}],\"dominant_stage\":\"model_output\",\"dominant_latency_ms\":1399.4,\"dominant_share_pct\":63.7,\"overhead_ms\":7.0,\"overhead_share_pct\":0.3,\"hints\":[{\"stage\":\"model_output\",\"severity\":\"high\",\"message\":\"Model Output took 1399.4ms (64% of total).\",\"actions\":[\"Switch to a smaller or faster model for this workload.\",\"Enable prompt/response caching for repeat traffic.\",\"Lower max_tokens or simplify tool schemas.\"]}]},\"request_id\":\"zs-7f6e7dd95ea4\"}}",
+    "model": "cohere/north-mini-code:free",
+    "mode": "non_stream"
+  },
+  "request_ids": {
+    "stream": "zs-26c2927fa1f5",
+    "non_stream": "zs-7f6e7dd95ea4"
+  },
+  "status": {
+    "stream": 200,
+    "non_stream": 400
+  },
+  "verdict": "CONFIRMED",
+  "observed_action": {
+    "stream": "block",
+    "non_stream": "block"
+  },
+  "notes": [
+    "Unit: flag+enforcement_mode=block \u2192 block (ok)",
+    "Unit: flag+enforcement_mode=monitor \u2192 flag (ok)",
+    "Live BLOCK under flag+block mode. stream=block/sse_output_blocked nonstream=block/output_guardrail",
+    "Live NONSTREAM: HTTP 400 blocked_by=output_guardrail final_action=block (hard block). Live STREAM: SSE output_blocked (no raw email). No raw flag delivery."
+  ],
+  "unit_flag_block_mode_to_block": true,
+  "restored": true,
+  "restore_values": {
+    "control": {
+      "output_pii_enabled": true,
+      "output_pii_action": "flag",
+      "enforcement_mode": "block",
+      "response_filtering_enabled": true,
+      "firewall_enabled": true
+    },
+    "redis": {
+      "output_pii_enabled": true,
+      "output_pii_action": "flag",
+      "enforcement_mode": "block",
+      "response_filtering_enabled": null,
+      "firewall_enabled": true
+    }
+  },
+  "hypothesis": "UI flag under org enforcement_mode=block is escalated to block by enforce_output (D-18 harmonization)",
+  "method": "Confirm enforcement_mode=block; PUT output_pii_action=flag; stream+nonstream email echo; restore; unit enforce_output flag+block\u2192block / flag+monitor\u2192flag"
+}

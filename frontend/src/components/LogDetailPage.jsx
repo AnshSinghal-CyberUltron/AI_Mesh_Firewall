@@ -18,7 +18,9 @@ import {
   resolveTotalLatencyMs,
   resolveTtftMs,
 } from "../utils/pipelineTrace";
-import { formatDecisionSource, formatRoutingReason } from "../constants/zeroshieldBrand";
+import { formatDecisionSource } from "../constants/zeroshieldBrand";
+import { summarizeRoutingDecision } from "../utils/routingExplain";
+import { RoutingTechnicalDetails } from "./RoutingTechnicalDetails";
 import { CHART_PALETTE } from "../utils/chartTheme";
 
 const METRIC_ICON_CLASS = {
@@ -544,13 +546,23 @@ export function LogDetailPage({ logData, onBack }) {
                 />
               )}
               {pipelineIO.outputWithheld ? (
-                <div>
-                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
-                    Output (response)
-                  </span>
-                  <p className="mt-1 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-800 dark:text-red-200">
-                    {pipelineIO.outputWithheldReason || "[Response withheld — not delivered to client]"}
-                  </p>
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                      Output (response)
+                    </span>
+                    <p className="mt-1 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-800 dark:text-red-200">
+                      {pipelineIO.outputWithheldReason || "[Response withheld — not delivered to client]"}
+                    </p>
+                  </div>
+                  {pipelineIO.outputWithheldPreview ? (
+                    <ContentBlock
+                      label="Model output (withheld from client)"
+                      text={pipelineIO.outputWithheldPreview}
+                      onCopy={() => handleCopy(pipelineIO.outputWithheldPreview, "WithheldOutput")}
+                      copied={copiedField === "WithheldOutput"}
+                    />
+                  ) : null}
                 </div>
               ) : (
                 <ContentBlock
@@ -738,12 +750,7 @@ function MetricCard({ icon: Icon, label, value, color }) {
 }
 
 function RoutingDecisionCard({ routing }) {
-  const factors = Array.isArray(routing.decision_factors) ? routing.decision_factors : [];
-  const weights = routing.weights && typeof routing.weights === "object" ? routing.weights : {};
-  const weightEntries = Object.entries(weights);
-  const formattedReason = routing.routing_reason
-    ? formatRoutingReason(routing.routing_reason, { decisionSource: routing.decision_source })
-    : "";
+  const { summary, technical } = summarizeRoutingDecision(routing);
   const sourceLabel = routing.decision_source_label
     || formatDecisionSource(routing.decision_source);
 
@@ -778,42 +785,11 @@ function RoutingDecisionCard({ routing }) {
             <span>{sourceLabel}</span>
           </div>
         )}
-        {Number(routing.routing_score) > 0 && (
-          <div>
-            <span className="text-slate-500 dark:text-slate-400">Score:</span>{" "}
-            <span>{Number(routing.routing_score).toFixed(3)}</span>
-          </div>
-        )}
-        {Number(routing.candidate_count) > 0 && (
-          <div>
-            <span className="text-slate-500 dark:text-slate-400">Candidates:</span>{" "}
-            <span>{routing.candidate_count}</span>
-          </div>
-        )}
       </div>
-      {formattedReason && (
-        <p className="mt-3 text-xs leading-relaxed text-slate-700 dark:text-slate-200">{formattedReason}</p>
+      {summary && (
+        <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-slate-200">{summary}</p>
       )}
-      {routing.policy_summary && (
-        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
-          <span className="font-medium text-slate-500 dark:text-slate-400">Policy:</span> {routing.policy_summary}
-        </p>
-      )}
-      {factors.length > 0 && (
-        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
-          <span className="font-medium text-slate-500 dark:text-slate-400">Factors:</span> {factors.join(", ")}
-        </p>
-      )}
-      {weightEntries.length > 0 && (
-        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
-          <span className="font-medium text-slate-500 dark:text-slate-400">Weights:</span>{" "}
-          {weightEntries.map(([k, v]) => {
-            const raw = Number(v);
-            const pct = Number.isFinite(raw) ? `${Math.round(raw * 100)}%` : String(v);
-            return `${k}=${pct}`;
-          }).join(", ")}
-        </p>
-      )}
+      <RoutingTechnicalDetails technical={technical} />
     </div>
   );
 }

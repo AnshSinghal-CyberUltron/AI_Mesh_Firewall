@@ -383,16 +383,51 @@ class SecureStreamingResponse:
                 self._emit_degraded_telemetry(verdict, flush_reason=reason)
 
             effective_action = verdict.action
-            if verdict.action == "flag" and self._enforcement_mode == "block":
-                effective_action = "block"
-            # F2: 'rewrite' has no mid-stream analog — the non-stream path re-infers
-            # AFTER the full response exists, which streaming cannot do. Without this,
-            # a rewrite verdict matched none of the block/redact/flag handlers and
-            # fell through to the clean-release path, streaming the ORIGINAL unsafe
-            # content. Coerce rewrite -> block so the original is never delivered
-            # (the non-stream rewrite intent is "do not deliver the original").
-            if verdict.action == "rewrite":
-                effective_action = "block"
+            # F-003: §1.7 Flag means deliver + flag telemetry. Do NOT escalate
+            # flag→block when org enforcement_mode is "block" — that made the UI
+            # dishonest (Flag looked like Block at runtime).
+            # F-002: rewrite is honored at DONE (hold mid-stream; rewrite then).
+            # Never coerce rewrite→block (that withheld a rewritten completion).
+
+            if effective_action == "rewrite":
+                if reason != FlushReason.DONE:
+                    # Hold the original — do not release unsafe bytes. Keep
+                    # buffers so the final DONE flush sees the full response.
+                    LOG.info(
+                        "Output guard rewrite pending until stream end "
+                        "(type=%s, flush=%s, request_id=%s)",
+                        verdict.threat_type,
+                        reason.value,
+                        self._request_id,
+                    )
+                    return
+                try:
+                    from output_guard import rewrite_output_response_text
+                except ImportError:
+                    from .output_guard import rewrite_output_response_text
+                rewritten = rewrite_output_response_text(
+                    verdict.threat_type or "",
+                    getattr(verdict, "detail", None),
+                    original_text=full_text,
+                )
+                # Deterministic safety net: never let a residual PII/secret slip
+                # through a static/LLM rewrite on the stream path.
+                if self._scanner is not None and hasattr(self._scanner, "redact_pii"):
+                    rewritten = self._scanner.redact_pii(rewritten)
+                LOG.info(
+                    "Output guard rewrote streaming content (type=%s, flush=%s)",
+                    verdict.threat_type,
+                    reason.value,
+                )
+                self._record_output(rewritten)
+                self._record_guard_metrics("rewrite", verdict)
+                self._emit_guard_telemetry(verdict, action="rewrite", flush_reason=reason)
+                self._audit_output_guard(verdict, action="rewrite")
+                self._record_metric("rewrite")
+                for rewritten_chunk in self._yield_redacted(rewritten):
+                    yield rewritten_chunk
+                self._clear_buffers()
+                return
 
             if effective_action == "block":
                 LOG.warning(

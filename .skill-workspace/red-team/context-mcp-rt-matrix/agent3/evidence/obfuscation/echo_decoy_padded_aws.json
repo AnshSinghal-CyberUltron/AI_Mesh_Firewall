@@ -1,0 +1,42 @@
+{
+  "server": "everything-mcp",
+  "tool": "echo",
+  "note": "decoy-padded base64 AWS key (20 decoys)",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 18,
+      "method": "tools/call",
+      "params": {
+        "name": "echo",
+        "arguments": {
+          "message": "ZGVjb3ktMC1iZW5pZ24tdGV4dC1wYWRkaW5n ZGVjb3ktMS1iZW5pZ24tdGV4dC1wYWRkaW5n ZGVjb3ktMi1iZW5pZ24tdGV4dC1wYWRkaW5n ZGVjb3ktMy1iZW5pZ24tdGV4dC1wYWRkaW5n ZGVjb3ktNC1iZW5pZ24tdGV4dC1wYWRkaW5n ZGVjb3ktNS1iZW5pZ24tdGV4dC1wYWRkaW5n ZGVjb3ktNi1iZW5pZ24tdGV4dC1wYWRkaW5n ZGVjb3ktNy1iZW5pZ24tdGV4dC1wYWRkaW5n ZGVjb3ktOC1iZW5pZ24tdGV4dC1wYWRkaW5n ZGVjb3ktOS1iZW5pZ24tdGV4dC1wYWRkaW5n ZGVjb3ktMTAtYmVuaWduLXRleHQtcGFkZGluZw== ZGVjb3ktMTEtYmVuaWduLXRleHQtcGFkZGluZw== ZGVjb3ktMTItYmVuaWduLXRleHQtcGFkZGluZw== ZGVjb3ktMTMtYmVuaWduLXRleHQtcGFkZGluZw== ZGVjb3ktMTQtYmVuaWduLXRleHQtcGFkZGluZw== ZGVjb3ktMTUtYmVuaWduLXRleHQtcGFkZGluZw== ZGVjb3ktMTYtYmVuaWduLXRleHQtcGFkZGluZw== ZGVjb3ktMTctYmVuaWduLXRleHQtcGFkZGluZw== ZGVjb3ktMTgtYmVuaWduLXRleHQtcGFkZGluZw== ZGVjb3ktMTktYmVuaWduLXRleHQtcGFkZGluZw== QUtJQUlPU0ZPRE5ON0VYQU1QTEU= RT3-3960c6b95f"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 18,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: SECRET."
+          }
+        ],
+        "isError": true
+      }
+    }
+  },
+  "elapsed_s": 0.013,
+  "_pii_scan": {},
+  "_raw_substring_hits": {}
+}

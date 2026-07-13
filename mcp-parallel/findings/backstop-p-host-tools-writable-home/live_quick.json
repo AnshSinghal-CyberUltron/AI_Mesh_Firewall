@@ -1,0 +1,27 @@
+{
+  "hostToolsQuickPass": true,
+  "semgrep": {
+    "pass": true,
+    "sync_status": 200,
+    "connection_status": "connected",
+    "tools_count": 7,
+    "error_code": "",
+    "error_preview": ""
+  },
+  "bogus": {
+    "pass": true,
+    "sync_status": 200,
+    "connection_status": "failed",
+    "tools_count": 0,
+    "error_code": "MCP_HOST_TOOL_FAILED",
+    "error_preview": ""
+  },
+  "cowsay": {
+    "pass": true,
+    "sync_status": 200,
+    "connection_status": "failed",
+    "tools_count": 0,
+    "error_code": "MCP_UNAVAILABLE",
+    "error_preview": ""
+  }
+}

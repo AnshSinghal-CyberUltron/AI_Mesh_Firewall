@@ -155,9 +155,21 @@ class GeneratorStage:
                 doc_id = doc.get("_doc_id", "")
                 content = doc.get("content", "")
 
-                if doc_id and doc_id not in approved_ids:
-                    LOG.warning("Generator received unapproved doc %s — removing", doc_id)
-                    rejected_doc_ids.append(doc_id)
+                # Fail-closed chain-of-custody: a manifest IS present, so every
+                # document must carry a retriever-assigned ``_doc_id`` that the
+                # ranker approved. A doc with NO _doc_id cannot be proven
+                # ranker-approved, so the old ``doc_id and …`` guard silently
+                # TRUSTED it (fail-open) — an injected/unidentified chunk reached
+                # the generator context with context_integrity_verified still
+                # True. Drop it instead (the invariant is "only approved
+                # documents reach the generator"). Retriever always sets a
+                # non-empty _doc_id, so this never drops a legitimate document.
+                if not doc_id or doc_id not in approved_ids:
+                    LOG.warning(
+                        "Generator received unapproved/unidentified doc %r — removing",
+                        doc_id or "<no _doc_id>",
+                    )
+                    rejected_doc_ids.append(doc_id or "<no _doc_id>")
                     context_verified = False
                     continue
 
@@ -253,7 +265,11 @@ class GeneratorStage:
         binding_id = ""
         binding_enabled = self._config.get("rag_context_binding_enabled", True)
         if self._redis is not None and context_chunks and binding_enabled:
-            binding_id = f"rag_ctx:{uuid.uuid4().hex[:16]}"
+            # #24: scope the binding key to the org (project_id carries the
+            # immutable org id). The reader verifies this prefix so a leaked
+            # binding id (it ships in the X-ZeroShield-RAG-Context-ID response
+            # header) cannot be replayed cross-tenant within the TTL.
+            binding_id = f"rag_ctx:{inp.project_id}:{uuid.uuid4().hex[:16]}"
             ttl = self._config.get("rag_context_binding_ttl", 300)
             try:
                 await self._redis.set(binding_id, _json.dumps(context_chunks), ex=ttl)

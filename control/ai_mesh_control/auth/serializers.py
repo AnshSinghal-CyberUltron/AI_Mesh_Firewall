@@ -239,7 +239,7 @@ class UserCreateSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150, required=False, default="")
     email = serializers.EmailField()
-    password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(write_only=True, min_length=12)
     offering = serializers.ChoiceField(choices=list(OFFERING_ROLES.keys()))
     role = serializers.ChoiceField(choices=["admin", "user"])
 

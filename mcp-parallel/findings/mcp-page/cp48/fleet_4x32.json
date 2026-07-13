@@ -1,0 +1,35 @@
+{
+  "checkpoint": "47",
+  "gateway": "http://127.0.0.1:8300",
+  "orgs": 3,
+  "mcps": 5,
+  "workers": 4,
+  "conn_per_worker": 32,
+  "target_calls": 100000000,
+  "duration_s_mode": 10.0,
+  "wall_s": 12.26,
+  "calls_made": 562,
+  "achieved_rps": 45.8,
+  "ok": 562,
+  "backpressure": 0,
+  "drops": 0,
+  "drop_rate": 0.0,
+  "transient_recovered": 0,
+  "isolation": {
+    "id_mismatch": 0,
+    "content_mismatch": 0,
+    "arith_mismatch": 0,
+    "cross_tenant": 0
+  },
+  "status_hist": {
+    "200": 562
+  },
+  "latency_ms": {
+    "p50": 2697.7,
+    "p90": 2934.9,
+    "p99": 3108.0,
+    "max": 3185.0,
+    "mean": 2553.3
+  },
+  "canary_leak": 0
+}

@@ -26,6 +26,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 
+from ai_mesh_shared.mcp_host_tools_runtime import ensure_host_tools
 from ai_mesh_shared.mcp_stdio_common import (
     _args_have_oauth_header,
     _build_child_env,
@@ -478,6 +479,10 @@ async def _ensure_process(key: str, command: str, args: list[str],
                 f"limit ({_MAX_PROCESSES_PER_ORG}). Close an existing server "
                 "connection and retry."
             )
+
+        # Install operator-declared host CLI tools (MCP_HOST_TOOLS) before spawn —
+        # parity with the sandbox agent path (production default).
+        await ensure_host_tools(requested_env)
 
         proc_env = _build_child_env(requested_env, org_slug, log=LOG)
 

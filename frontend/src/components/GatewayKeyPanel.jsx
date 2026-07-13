@@ -111,11 +111,18 @@ export function GatewayKeyPanel() {
     }
   };
 
-  const handleRevoke = async (id) => {
-    if (!window.confirm("Revoke this API key? It will immediately stop working.")) return;
+  const handleDelete = async (id, isActive) => {
+    const msg = isActive
+      ? "Permanently delete this API key? It will stop working immediately and cannot be recovered."
+      : "Permanently delete this revoked API key from the database? This cannot be undone.";
+    if (!window.confirm(msg)) return;
     setActionLoading(id);
     try {
-      await fetchWithAuth(`/api/gateways/keys/${id}/`, { method: "DELETE" });
+      const res = await fetchWithAuth(`/api/gateways/keys/${id}/`, { method: "DELETE" });
+      if (!res.ok) {
+        // Keep the row visible on failure so operators can retry.
+        return;
+      }
       await fetchKeys();
     } finally {
       setActionLoading(null);
@@ -257,16 +264,14 @@ export function GatewayKeyPanel() {
                       {actionLoading === k.id ? (
                         <Loader2 className="w-4 h-4 text-teal-500 animate-spin" />
                       ) : (
-                        k.is_active && (
-                          <button
-                            onClick={() => handleRevoke(k.id)}
-                            className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
-                            aria-label={`Revoke gateway key ${k.name || k.prefix || ""}`.trim()}
-                            title="Revoke Key"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )
+                        <button
+                          onClick={() => handleDelete(k.id, !!k.is_active)}
+                          className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
+                          aria-label={`Delete gateway key ${k.name || k.prefix || ""}`.trim()}
+                          title={k.is_active ? "Delete key" : "Delete revoked key"}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
                   </td>

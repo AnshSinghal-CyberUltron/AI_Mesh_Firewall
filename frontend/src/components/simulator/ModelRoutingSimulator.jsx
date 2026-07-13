@@ -93,6 +93,7 @@ export function ModelRoutingSimulator() {
           model: gatewayModels.selectedModel,
           runInference: false,
           routingPreferences: {
+            enable_routing: true,
             preferred_model: gatewayModels.selectedModel,
             cost_weight: prefs.cost_weight,
             latency_weight: prefs.latency_weight,

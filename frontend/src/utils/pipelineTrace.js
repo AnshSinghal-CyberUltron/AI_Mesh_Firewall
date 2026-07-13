@@ -36,7 +36,12 @@ export const STAGE_LABELS = {
 export function honestStageAction(stage) {
   let a = String((stage && stage.action) || "allow").toLowerCase();
   const noop = stage && ((stage.metadata && stage.metadata.redact_noop) || stage.redact_noop);
-  if (a === "redact" && noop) a = "flag";
+  const analyzed = stage && stage.scan_outcome === "analyzed";
+  if (analyzed && a === "allow") return a;
+  if (a === "redact" && noop) {
+    if (analyzed) return "allow";
+    a = "flag";
+  }
   return a;
 }
 
@@ -401,18 +406,20 @@ export function resolvePipelineInputOutput(sources = {}) {
   const outputWithheldReason = trace?.output_withheld_reason
     || (outputWithheld ? "[Response blocked — not delivered to client]" : "");
 
+  const withheldPreview = trace?.output_text
+    ?? trace?.final_response
+    ?? meta?.raw_output
+    ?? extra?.raw_output
+    ?? meta?.response_snippet
+    ?? extra?.response_snippet
+    ?? meta?.sanitized_output
+    ?? extra?.sanitized_output
+    ?? sources.responseText
+    ?? "";
+
   const outputText = outputWithheld
     ? outputWithheldReason
-    : (trace?.output_text
-      ?? trace?.final_response
-      ?? meta?.output_text
-      ?? extra?.output_text
-      ?? meta?.sanitized_output
-      ?? meta?.response_snippet
-      ?? extra?.sanitized_output
-      ?? extra?.response_snippet
-      ?? sources.responseText
-      ?? "");
+    : (withheldPreview || "");
 
   const inputWasRedacted = Boolean(trace?.input_was_redacted)
     || (promptSubmitted && inputText && promptSubmitted !== inputText);
@@ -426,6 +433,7 @@ export function resolvePipelineInputOutput(sources = {}) {
     outputText,
     outputWithheld,
     outputWithheldReason,
+    outputWithheldPreview: outputWithheld ? withheldPreview : "",
     inputWasRedacted,
     inputBefore,
     inputAfter,

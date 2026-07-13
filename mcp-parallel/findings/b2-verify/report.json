@@ -1,0 +1,76 @@
+{
+  "story": "P4#15",
+  "bug": "B2",
+  "base": "http://127.0.0.1:8180",
+  "ok": true,
+  "asserts": [
+    {
+      "name": "B2-1 distinct 'Pending authorization' badge shown",
+      "pass": true,
+      "detail": {
+        "cardSnippet": "b2-verify-pending\nPending authorization\n\nhttps://example.com/mcp\n\nAuthorize to load tools\nhttps://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/b2-verify-pending\nCopy MCP Config (key placeholder)\nstreamable-http\nScan: tag\nScan: redact\nScan: block\nAuthorize",
+        "hasPendingAuthBadge": true,
+        "hasAuthorizeToLoadTools": true,
+        "showsNumericToolsCount": false,
+        "readsConnected": false,
+        "readsUnknownStatus": false,
+        "authorizeCount": 1,
+        "syncDisabled": true
+      }
+    },
+    {
+      "name": "B2-2a shows 'Authorize to load tools' (not a numeric tools count)",
+      "pass": true,
+      "detail": {
+        "hasHint": true,
+        "numeric": false
+      }
+    },
+    {
+      "name": "B2-2b does NOT read as Connected/Unknown ready card",
+      "pass": true,
+      "detail": {
+        "connected": false,
+        "unknown": false
+      }
+    },
+    {
+      "name": "B2-3 Sync button DISABLED pre-auth",
+      "pass": true,
+      "detail": true
+    },
+    {
+      "name": "B2-4 exactly ONE Authorize button",
+      "pass": true,
+      "detail": 1
+    },
+    {
+      "name": "B2-5 backend tools_count is 0 and oauth_authorized false pre-auth",
+      "pass": true,
+      "detail": {
+        "tools_count": 0,
+        "oauth_authorized": false,
+        "connection_status": "failed"
+      }
+    }
+  ],
+  "findings": {
+    "registerStatus": 201,
+    "card": {
+      "cardSnippet": "b2-verify-pending\nPending authorization\n\nhttps://example.com/mcp\n\nAuthorize to load tools\nhttps://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/b2-verify-pending\nCopy MCP Config (key placeholder)\nstreamable-http\nScan: tag\nScan: redact\nScan: block\nAuthorize",
+      "hasPendingAuthBadge": true,
+      "hasAuthorizeToLoadTools": true,
+      "showsNumericToolsCount": false,
+      "readsConnected": false,
+      "readsUnknownStatus": false,
+      "authorizeCount": 1,
+      "syncDisabled": true
+    },
+    "backend": {
+      "tools_count": 0,
+      "oauth_authorized": false,
+      "connection_status": "failed"
+    }
+  },
+  "error": null
+}

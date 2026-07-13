@@ -1,0 +1,810 @@
+{
+  "checkpoint": "02/03",
+  "argsString": "a,b,c --flag,x",
+  "ok": true,
+  "fields": {
+    "name": {
+      "expected": "srv,one,two",
+      "finalValue": "srv,one,two",
+      "valueCorrect": true,
+      "typedLength": 11,
+      "valueLength": 11,
+      "focusKeptAllKeystrokes": true,
+      "focusLossAtKeystroke": null,
+      "commasTyped": 2,
+      "commasKept": 2,
+      "commaDrop": false,
+      "keystrokes": [
+        {
+          "index": 0,
+          "char": "s",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "my-mcp-server",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 1
+          }
+        },
+        {
+          "index": 1,
+          "char": "r",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "my-mcp-server",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 2
+          }
+        },
+        {
+          "index": 2,
+          "char": "v",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "my-mcp-server",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 3
+          }
+        },
+        {
+          "index": 3,
+          "char": ",",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "my-mcp-server",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 4
+          }
+        },
+        {
+          "index": 4,
+          "char": "o",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "my-mcp-server",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 5
+          }
+        },
+        {
+          "index": 5,
+          "char": "n",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "my-mcp-server",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 6
+          }
+        },
+        {
+          "index": 6,
+          "char": "e",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "my-mcp-server",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 7
+          }
+        },
+        {
+          "index": 7,
+          "char": ",",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "my-mcp-server",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 8
+          }
+        },
+        {
+          "index": 8,
+          "char": "t",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "my-mcp-server",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 9
+          }
+        },
+        {
+          "index": 9,
+          "char": "w",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "my-mcp-server",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 10
+          }
+        },
+        {
+          "index": 10,
+          "char": "o",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "my-mcp-server",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 11
+          }
+        }
+      ]
+    },
+    "url": {
+      "expected": "https://x.io/a,b",
+      "finalValue": "https://x.io/a,b",
+      "valueCorrect": true,
+      "typedLength": 16,
+      "valueLength": 16,
+      "focusKeptAllKeystrokes": true,
+      "focusLossAtKeystroke": null,
+      "commasTyped": 1,
+      "commasKept": 1,
+      "commaDrop": false,
+      "keystrokes": [
+        {
+          "index": 0,
+          "char": "h",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 1
+          }
+        },
+        {
+          "index": 1,
+          "char": "t",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 2
+          }
+        },
+        {
+          "index": 2,
+          "char": "t",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 3
+          }
+        },
+        {
+          "index": 3,
+          "char": "p",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 4
+          }
+        },
+        {
+          "index": 4,
+          "char": "s",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 5
+          }
+        },
+        {
+          "index": 5,
+          "char": ":",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 6
+          }
+        },
+        {
+          "index": 6,
+          "char": "/",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 7
+          }
+        },
+        {
+          "index": 7,
+          "char": "/",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 8
+          }
+        },
+        {
+          "index": 8,
+          "char": "x",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 9
+          }
+        },
+        {
+          "index": 9,
+          "char": ".",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 10
+          }
+        },
+        {
+          "index": 10,
+          "char": "i",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 11
+          }
+        },
+        {
+          "index": 11,
+          "char": "o",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 12
+          }
+        },
+        {
+          "index": 12,
+          "char": "/",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 13
+          }
+        },
+        {
+          "index": 13,
+          "char": "a",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 14
+          }
+        },
+        {
+          "index": 14,
+          "char": ",",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 15
+          }
+        },
+        {
+          "index": 15,
+          "char": "b",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "https://my-server.example.com/mcp",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 16
+          }
+        }
+      ]
+    },
+    "command": {
+      "expected": "npx -y srv,a",
+      "finalValue": "npx -y srv,a",
+      "valueCorrect": true,
+      "typedLength": 12,
+      "valueLength": 12,
+      "focusKeptAllKeystrokes": true,
+      "focusLossAtKeystroke": null,
+      "commasTyped": 1,
+      "commasKept": 1,
+      "commaDrop": false,
+      "keystrokes": [
+        {
+          "index": 0,
+          "char": "n",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "npx",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 1
+          }
+        },
+        {
+          "index": 1,
+          "char": "p",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "npx",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 2
+          }
+        },
+        {
+          "index": 2,
+          "char": "x",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "npx",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 3
+          }
+        },
+        {
+          "index": 3,
+          "char": " ",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "npx",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 4
+          }
+        },
+        {
+          "index": 4,
+          "char": "-",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "npx",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 5
+          }
+        },
+        {
+          "index": 5,
+          "char": "y",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "npx",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 6
+          }
+        },
+        {
+          "index": 6,
+          "char": " ",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "npx",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 7
+          }
+        },
+        {
+          "index": 7,
+          "char": "s",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "npx",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 8
+          }
+        },
+        {
+          "index": 8,
+          "char": "r",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "npx",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 9
+          }
+        },
+        {
+          "index": 9,
+          "char": "v",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "npx",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 10
+          }
+        },
+        {
+          "index": 10,
+          "char": ",",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "npx",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 11
+          }
+        },
+        {
+          "index": 11,
+          "char": "a",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "npx",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 12
+          }
+        }
+      ]
+    },
+    "args": {
+      "expected": "a,b,c --flag,x",
+      "finalValue": "a,b,c --flag,x",
+      "valueCorrect": true,
+      "typedLength": 14,
+      "valueLength": 14,
+      "focusKeptAllKeystrokes": true,
+      "focusLossAtKeystroke": null,
+      "commasTyped": 3,
+      "commasKept": 3,
+      "commaDrop": false,
+      "keystrokes": [
+        {
+          "index": 0,
+          "char": "a",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 1
+          }
+        },
+        {
+          "index": 1,
+          "char": ",",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 2
+          }
+        },
+        {
+          "index": 2,
+          "char": "b",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 3
+          }
+        },
+        {
+          "index": 3,
+          "char": ",",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 4
+          }
+        },
+        {
+          "index": 4,
+          "char": "c",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 5
+          }
+        },
+        {
+          "index": 5,
+          "char": " ",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 6
+          }
+        },
+        {
+          "index": 6,
+          "char": "-",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 7
+          }
+        },
+        {
+          "index": 7,
+          "char": "-",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 8
+          }
+        },
+        {
+          "index": 8,
+          "char": "f",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 9
+          }
+        },
+        {
+          "index": 9,
+          "char": "l",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 10
+          }
+        },
+        {
+          "index": 10,
+          "char": "a",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 11
+          }
+        },
+        {
+          "index": 11,
+          "char": "g",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 12
+          }
+        },
+        {
+          "index": 12,
+          "char": ",",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 13
+          }
+        },
+        {
+          "index": 13,
+          "char": "x",
+          "keptFocus": true,
+          "active": {
+            "kind": "element",
+            "tag": "INPUT",
+            "type": "text",
+            "placeholder": "-y, @playwright/mcp@latest",
+            "ariaLabel": null,
+            "id": null,
+            "valueLen": 14
+          }
+        }
+      ]
+    }
+  },
+  "error": null,
+  "argsFieldFound": true,
+  "commaDropFields": [],
+  "focusLossFields": [],
+  "bugReproduced": false
+}

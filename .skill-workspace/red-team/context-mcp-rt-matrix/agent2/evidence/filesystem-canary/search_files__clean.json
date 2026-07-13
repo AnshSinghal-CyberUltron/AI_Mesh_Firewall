@@ -1,0 +1,47 @@
+{
+  "run_id": "690df2a7",
+  "server_slug": "filesystem-canary",
+  "label": "search_files__clean",
+  "captured_at_utc": "2026-07-07T10:57:20Z",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/filesystem-canary",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 54,
+      "method": "tools/call",
+      "params": {
+        "name": "search_files",
+        "arguments": {
+          "path": "/tmp",
+          "pattern": "benign hello world request RT-A2-filesystem-canary-b7606c4b8c"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "elapsed_s": 0.119,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "No matches found"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 54
+    },
+    "classified_action": "ALLOW",
+    "compliance_tags_found": [],
+    "raw_markers_in_response": [],
+    "canary_present_in_response": false,
+    "possible_leak": false
+  },
+  "notes": "tool=search_files variant=clean"
+}

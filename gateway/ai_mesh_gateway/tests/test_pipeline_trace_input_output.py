@@ -101,5 +101,6 @@ def test_output_guard_block_withholds_response():
         zeroshield={"action": "block", "threat_type": "prompt_injection", "detection_tier": "output_guard"},
     )
     assert trace["output_withheld"] is True
-    assert trace["output_text"] == ""
+    assert trace["output_text"] == "leaked injection payload"
+    assert trace["final_response"] == trace["output_text"]
     assert "output guard" in trace["output_withheld_reason"].lower()

@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/definitely-not-a-real-server-slug-rt",
+  "status_code": 200,
+  "elapsed_s": 0.122,
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list"
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "tools": []
+    }
+  },
+  "response_headers": {
+    "date": "Tue, 07 Jul 2026 09:27:50 GMT",
+    "server": "uvicorn",
+    "content-length": "46",
+    "content-type": "application/json"
+  },
+  "_captured_at": "2026-07-07T09:27:51.046921+00:00"
+}

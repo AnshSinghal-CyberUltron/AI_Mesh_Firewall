@@ -11,7 +11,7 @@ dependencies = [
     "cryptography>=43.0.0",
     "daphne>=4.0",
     "dataclasses-json==0.6.3",
-    "django>=6.0",
+    "django>=6.0.5,<6.1",
     "django-cors-headers>=4.0",
     "djangorestframework>=3.16",
     "djangorestframework-simplejwt>=5.3",

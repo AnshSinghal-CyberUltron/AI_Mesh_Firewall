@@ -1,0 +1,50 @@
+{
+  "server_slug": "cp09-verify",
+  "label": "tools_call_gzip-file-as-resource_pii",
+  "captured_at_utc": "2026-07-07T10:55:46Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/cp09-verify",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "gzip-file-as-resource",
+        "arguments": {
+          "name": "rt-probe.txt",
+          "data": "SSN=123-45-6789 email=redteam.live@corp.example key=AKIAIOSFODNN7EXAMPLE RT-LIVE-cp09-verify-84c495cd7a",
+          "outputType": "resource"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:45 GMT",
+      "server": "uvicorn",
+      "content-length": "187",
+      "content-type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Tool 'gzip-file-as-resource' arguments matched compliance tags: GDPR, HIPAA, PII, SECRET."
+          }
+        ],
+        "isError": true
+      }
+    },
+    "_latency_ms": 3.8
+  },
+  "notes": ""
+}

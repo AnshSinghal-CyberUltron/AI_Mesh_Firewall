@@ -1,0 +1,53 @@
+{
+  "server_slug": "semgrep-mcp",
+  "label": "tools_call_create_rule_benign",
+  "captured_at_utc": "2026-07-07T10:55:35Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/semgrep-mcp",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "create_rule",
+        "arguments": {
+          "output_path": "/tmp/rt-matrix-rule.yaml",
+          "pattern": "benign RT-LIVE-semgrep-mcp-f86a1f7b3d",
+          "language": "python",
+          "message": "benign RT-LIVE-semgrep-mcp-f86a1f7b3d",
+          "severity": "INFO",
+          "id": "rt-matrix-rule"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:35 GMT",
+      "server": "uvicorn",
+      "content-length": "158",
+      "content-type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Tool 'create_rule' arguments matched compliance tags: INFRA."
+          }
+        ],
+        "isError": true
+      }
+    },
+    "_latency_ms": 4.0
+  },
+  "notes": ""
+}

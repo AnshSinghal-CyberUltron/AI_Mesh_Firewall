@@ -1,0 +1,201 @@
+{
+  "checkpoint": "48",
+  "oom_baseline": {
+    "zeroshield-mcp-sandbox": "false",
+    "org-a-mcp-sandbox": "false",
+    "org-b-mcp-sandbox": "false",
+    "ai_mesh_mcp_broker": "false",
+    "ai_mesh_firewall-gateway-1": "false"
+  },
+  "fleet_sweep": [
+    {
+      "inflight": 8,
+      "rps": 37.5,
+      "made": 381,
+      "p50": 202.9,
+      "p99": 672.9,
+      "drops": 0,
+      "backpressure": 0,
+      "status_hist": {
+        "200": 381
+      },
+      "canary_leak": 0
+    },
+    {
+      "inflight": 16,
+      "rps": 42.7,
+      "made": 444,
+      "p50": 334.9,
+      "p99": 746.3,
+      "drops": 0,
+      "backpressure": 0,
+      "status_hist": {
+        "200": 444
+      },
+      "canary_leak": 0
+    },
+    {
+      "inflight": 32,
+      "rps": 46.9,
+      "made": 486,
+      "p50": 671.5,
+      "p99": 1018.1,
+      "drops": 0,
+      "backpressure": 0,
+      "status_hist": {
+        "200": 486
+      },
+      "canary_leak": 0
+    },
+    {
+      "inflight": 64,
+      "rps": 47.4,
+      "made": 528,
+      "p50": 1307.3,
+      "p99": 1806.2,
+      "drops": 0,
+      "backpressure": 0,
+      "status_hist": {
+        "200": 528
+      },
+      "canary_leak": 0
+    },
+    {
+      "inflight": 128,
+      "rps": 46.5,
+      "made": 580,
+      "p50": 2603.8,
+      "p99": 3518.1,
+      "drops": 0,
+      "backpressure": 0,
+      "status_hist": {
+        "200": 580
+      },
+      "canary_leak": 0
+    }
+  ],
+  "single_server_sweep": [
+    {
+      "inflight": 1,
+      "rps": 13.2,
+      "made": 106,
+      "p50": 73.7,
+      "p99": 100.6,
+      "drops": 0,
+      "backpressure": 0,
+      "status_hist": {
+        "200": 106
+      },
+      "canary_leak": 0
+    },
+    {
+      "inflight": 2,
+      "rps": 21.4,
+      "made": 172,
+      "p50": 93.7,
+      "p99": 116.2,
+      "drops": 0,
+      "backpressure": 0,
+      "status_hist": {
+        "200": 172
+      },
+      "canary_leak": 0
+    },
+    {
+      "inflight": 4,
+      "rps": 31.9,
+      "made": 257,
+      "p50": 124.4,
+      "p99": 218.3,
+      "drops": 0,
+      "backpressure": 0,
+      "status_hist": {
+        "200": 257
+      },
+      "canary_leak": 0
+    },
+    {
+      "inflight": 8,
+      "rps": 39.3,
+      "made": 320,
+      "p50": 212.8,
+      "p99": 307.9,
+      "drops": 0,
+      "backpressure": 0,
+      "status_hist": {
+        "200": 320
+      },
+      "canary_leak": 0
+    },
+    {
+      "inflight": 16,
+      "rps": 45.3,
+      "made": 378,
+      "p50": 333.8,
+      "p99": 624.0,
+      "drops": 0,
+      "backpressure": 0,
+      "status_hist": {
+        "200": 378
+      },
+      "canary_leak": 0
+    }
+  ],
+  "cross_tenant": {
+    "inflight": 32,
+    "rps": 44.9,
+    "made": 472,
+    "p50": 658.4,
+    "p99": 1939.8,
+    "drops": 0,
+    "backpressure": 0,
+    "status_hist": {
+      "200": 472
+    },
+    "canary_leak": 0
+  },
+  "peak_stats": {
+    "ai_mesh_firewall-gateway-1": {
+      "cpu": "0.45%",
+      "mem": "1.425GiB / 58.85GiB",
+      "pids": "45"
+    },
+    "zeroshield-mcp-sandbox": {
+      "cpu": "0.08%",
+      "mem": "481.1MiB / 2GiB",
+      "pids": "176"
+    },
+    "org-b-mcp-sandbox": {
+      "cpu": "0.08%",
+      "mem": "443.2MiB / 2GiB",
+      "pids": "176"
+    },
+    "org-a-mcp-sandbox": {
+      "cpu": "0.07%",
+      "mem": "447.6MiB / 2GiB",
+      "pids": "176"
+    },
+    "ai_mesh_mcp_broker": {
+      "cpu": "0.26%",
+      "mem": "110.8MiB / 58.85GiB",
+      "pids": "27"
+    }
+  },
+  "oom_after": {
+    "zeroshield-mcp-sandbox": "false",
+    "org-a-mcp-sandbox": "false",
+    "org-b-mcp-sandbox": "false",
+    "ai_mesh_mcp_broker": "false",
+    "ai_mesh_firewall-gateway-1": "false"
+  },
+  "verdict": {
+    "fleet_ceiling_rps": 47.4,
+    "single_server_ceiling_rps": 45.3,
+    "single_server_flat": false,
+    "fleet_approx_n\u00d7single": 226.5,
+    "any_oom": false,
+    "any_503": false,
+    "canary_leak": 0,
+    "diagnosis": "per-server RPS SCALES with in-flight \u2014 bottleneck is NOT per-server serialization; inspect aggregate broker/gateway/pool limits."
+  }
+}

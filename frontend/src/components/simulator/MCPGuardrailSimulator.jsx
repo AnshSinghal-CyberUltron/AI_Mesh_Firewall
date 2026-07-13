@@ -15,6 +15,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { toAbsoluteGatewayUrl } from "../../utils/environmentUrls";
 
 /**
  * MCPGuardrailSimulator — live MCP tool-call sandbox for the active org.
@@ -427,7 +428,7 @@ export function MCPGuardrailSimulator() {
             </select>
             {selectedServer && (
               <p className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">
-                {selectedServer.url || selectedServer.gateway_endpoint || "—"}
+                {selectedServer.url || toAbsoluteGatewayUrl(selectedServer.gateway_endpoint) || "—"}
               </p>
             )}
           </div>

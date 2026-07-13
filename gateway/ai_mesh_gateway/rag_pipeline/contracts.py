@@ -104,6 +104,10 @@ class RankerStageInput:
     escalation_level: int
     # M-04: request actor ({user_id, agent_id, roles}) for actor-scoped policies.
     actor: dict[str, Any] | None = None
+    # Org-scoped compiled policies for THIS request. Passed per-request (not
+    # stored on the shared singleton RankerStage) so concurrent multi-org
+    # requests cannot clobber each other's policy set — see pipeline.execute.
+    compiled_policies: list[dict[str, Any]] | None = None
 
 
 @dataclass

@@ -1,0 +1,49 @@
+{
+  "agent": "agent1",
+  "scope": "context-assembly|least-privilege|context-minimization|cross-mcp-leakage",
+  "server_slug": "everything-1",
+  "label": "allowlist_bypass___proto__",
+  "captured_at_utc": "2026-07-07T10:55:54Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-1",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "__proto__",
+        "arguments": {
+          "a": 1
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:54 GMT",
+      "server": "uvicorn",
+      "content-length": "129",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "MCP error -32602: Tool __proto__ disabled"
+          }
+        ],
+        "isError": true
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    }
+  },
+  "notes": ""
+}

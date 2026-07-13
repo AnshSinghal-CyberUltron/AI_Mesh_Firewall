@@ -1,0 +1,48 @@
+{
+  "agent": "agent1",
+  "scope": "context-assembly|least-privilege|context-minimization|cross-mcp-leakage",
+  "server_slug": "everything-2",
+  "label": "tools_call_toggle-simulated-logging_clean_plus_foreign_canary",
+  "captured_at_utc": "2026-07-07T10:55:43Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-2",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "toggle-simulated-logging",
+        "arguments": {
+          "_agent1_context_probe": "RT-A1-everything-3-4e6f81ff4a"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:43 GMT",
+      "server": "uvicorn",
+      "content-length": "120",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Stopped simulated logging for session undefined"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    }
+  },
+  "notes": ""
+}

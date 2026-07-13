@@ -1,0 +1,130 @@
+{
+  "checkpoint": "33",
+  "total": 10,
+  "connected": 6,
+  "clean_error": 3,
+  "broken": 1,
+  "results": [
+    {
+      "name": "cp33-github",
+      "outcome": "create_failed",
+      "status": 400,
+      "detail": "{'auth_token': ['auth_token is required for bearer auth.']}"
+    },
+    {
+      "name": "cp33-linear",
+      "transport": "stdio",
+      "connection_status": "failed",
+      "tool_count": 0,
+      "error_code": "MCP_AUTH_FAILED",
+      "outcome": "clean_error",
+      "sample_tools": []
+    },
+    {
+      "name": "cp33-context7",
+      "transport": "streamable-http",
+      "connection_status": "connected",
+      "tool_count": 2,
+      "error_code": null,
+      "outcome": "CONNECTED",
+      "sample_tools": [
+        "query-docs",
+        "resolve-library-id"
+      ]
+    },
+    {
+      "name": "cp33-playwright",
+      "transport": "stdio",
+      "connection_status": "connected",
+      "tool_count": 23,
+      "error_code": null,
+      "outcome": "CONNECTED",
+      "sample_tools": [
+        "browser_click",
+        "browser_close",
+        "browser_console_messages",
+        "browser_drag",
+        "browser_drop"
+      ]
+    },
+    {
+      "name": "cp33-semgrep",
+      "transport": "stdio",
+      "connection_status": "failed",
+      "tool_count": 0,
+      "error_code": "MCP_START_FAILED",
+      "outcome": "clean_error",
+      "sample_tools": []
+    },
+    {
+      "name": "cp33-memory",
+      "transport": "stdio",
+      "connection_status": "connected",
+      "tool_count": 9,
+      "error_code": null,
+      "outcome": "CONNECTED",
+      "sample_tools": [
+        "add_observations",
+        "create_entities",
+        "create_relations",
+        "delete_entities",
+        "delete_observations"
+      ]
+    },
+    {
+      "name": "cp33-filesystem",
+      "transport": "stdio",
+      "connection_status": "connected",
+      "tool_count": 14,
+      "error_code": null,
+      "outcome": "CONNECTED",
+      "sample_tools": [
+        "create_directory",
+        "directory_tree",
+        "edit_file",
+        "get_file_info",
+        "list_allowed_directories"
+      ]
+    },
+    {
+      "name": "cp33-fetch",
+      "transport": "stdio",
+      "connection_status": "failed",
+      "tool_count": 0,
+      "error_code": "MCP_START_FAILED",
+      "outcome": "clean_error",
+      "sample_tools": []
+    },
+    {
+      "name": "cp33-everything",
+      "transport": "stdio",
+      "connection_status": "connected",
+      "tool_count": 13,
+      "error_code": null,
+      "outcome": "CONNECTED",
+      "sample_tools": [
+        "echo",
+        "get-annotated-message",
+        "get-env",
+        "get-resource-links",
+        "get-resource-reference"
+      ]
+    },
+    {
+      "name": "cp33-vibecheck",
+      "transport": "stdio",
+      "connection_status": "connected",
+      "tool_count": 5,
+      "error_code": null,
+      "outcome": "CONNECTED",
+      "sample_tools": [
+        "check_constitution",
+        "reset_constitution",
+        "update_constitution",
+        "vibe_check",
+        "vibe_learn"
+      ]
+    }
+  ]
+}
+CP33: NEEDS-TRIAGE — 6 connected, 3 clean-error, 1 broken

@@ -289,6 +289,7 @@ class AuthMiddleware:
         _INTERNAL_MCP_PATHS = (
             "/v1/mcp/internal/discover-tools",
             "/v1/mcp/internal/tools-call",
+            "/v1/mcp/internal/oauth-token-mirror",
         )
         if path.startswith("/v1/admin/") or path in _INTERNAL_MCP_PATHS:
             internal_secret = os.environ.get("GATEWAY_INTERNAL_API_KEY", "").strip()

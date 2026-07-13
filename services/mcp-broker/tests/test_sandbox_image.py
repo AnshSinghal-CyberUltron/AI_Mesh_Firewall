@@ -38,6 +38,8 @@ def test_dockerfile_exists_and_declares_port():
     assert "EXPOSE 9320" in text
     assert "uvicorn" in text
     assert "agent.main:app" in text
+    assert "docker-entrypoint.sh" in text
+    assert "MCP_SANDBOX_DNS" in Path(REPO_ROOT / "services/mcp-broker/src/sandbox/docker_manager.py").read_text()
 
 
 def test_dockerfile_bakes_global_npmrc_ignore_scripts():

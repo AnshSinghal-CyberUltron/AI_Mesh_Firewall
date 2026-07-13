@@ -180,3 +180,19 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   CISO_PKG_<org> with 100 regex/keyword rules (semantic → keyword phrases); idempotent
   ciso_rule_id; compile+push POLICY_SYNC. LIVE zeroshield: 100 seeded, Redis v310, 264 rules in
   bundle. VERIFY: test_ciso_policy_package 7 passed; seed_ciso_policy_package --org-slug zeroshield.
+- PIPELINE-0029 (2026-07-06) — OUTPUTVERDICT JSON 500 FIX: main.py _strip_internal_completion_keys
+  pops _pipeline_output_scan_verdict before client JSONResponse; _resolve_pipeline_blocked_by
+  output_blocked→output_guardrail; liveGateway output_guardrail_ms + honest 500 labeling. +2 GW +2 FE
+  tests. VERIFY: pytest + npm test:unit; gateway rebuild.
+- PIPELINE-0030 (2026-07-06) — SCAN 296170 FIX: output-guard smart-mask noop probes reasoning channel
+  (main.py _output_redact_redaction_possible + proxy_chat redaction_possible); pipeline_trace
+  output_guard block keeps operator output_text preview; simulatorRoutingPreferences respects org
+  routing_enabled (Attack+Isolation); remove bare 120b from _canonicalize_model_name tokens;
+  LogDetailPage withheld preview. north-mini = llm_router inactive-model remap (documented).
+  +tests GW/FE/control. VERIFY: pytest pre_masked+trace_io; gateway+control rebuild; live repro.
+- PIPELINE-0028 (2026-07-06) — OUTPUT SMART-MASK PARITY + REASONING + ROUTING PIN: main.py
+  _output_redact_redaction_possible (PIPELINE-0012 output parity on both redact paths) +
+  _maybe_promote_reasoning_to_content (reasoning→content when blank, env default on);
+  pipeline_trace policy hint for pre-masked prompts; liveGateway pinnedModelRoutingPreferences +
+  SSE reasoning_content; Attack/Isolation simulators enable_routing:false. +5 tests
+  test_pipeline_pre_masked_redact.py. VERIFY: gateway pytest gate.

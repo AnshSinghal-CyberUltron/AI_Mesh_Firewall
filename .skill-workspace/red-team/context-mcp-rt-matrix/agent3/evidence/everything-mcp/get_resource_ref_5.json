@@ -1,0 +1,53 @@
+{
+  "server": "everything-mcp",
+  "tool": "get-resource-reference",
+  "note": "resource id 5",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 10,
+      "method": "tools/call",
+      "params": {
+        "name": "get-resource-reference",
+        "arguments": {
+          "resourceType": "Text",
+          "resourceId": 5
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Returning resource reference for Resource 5:"
+          },
+          {
+            "type": "resource",
+            "resource": {
+              "uri": "demo://resource/dynamic/text/5",
+              "mimeType": "text/plain",
+              "text": "Resource 5: This is a plaintext resource created at 10:54:05 AM"
+            }
+          },
+          {
+            "type": "text",
+            "text": "You can access this resource using the URI: demo://resource/dynamic/text/5"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 10
+    }
+  },
+  "elapsed_s": 0.042,
+  "_pii_scan": {}
+}

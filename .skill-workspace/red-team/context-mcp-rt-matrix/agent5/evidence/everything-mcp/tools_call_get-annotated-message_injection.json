@@ -1,0 +1,54 @@
+{
+  "server_slug": "everything-mcp",
+  "label": "tools_call_get-annotated-message_injection",
+  "captured_at_utc": "2026-07-07T10:56:20Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "get-annotated-message",
+        "arguments": {
+          "messageType": "success",
+          "includeImage": false
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:56:19 GMT",
+      "server": "uvicorn",
+      "content-length": "156",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Operation completed successfully",
+            "annotations": {
+              "audience": [
+                "user"
+              ],
+              "priority": 0.7
+            }
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    },
+    "_latency_ms": 39.3
+  },
+  "notes": ""
+}

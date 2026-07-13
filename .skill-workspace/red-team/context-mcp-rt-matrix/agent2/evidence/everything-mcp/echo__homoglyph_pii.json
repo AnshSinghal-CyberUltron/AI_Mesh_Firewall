@@ -1,0 +1,46 @@
+{
+  "run_id": "e733a9e2",
+  "server_slug": "everything-mcp",
+  "label": "echo__homoglyph_pii",
+  "captured_at_utc": "2026-07-07T10:54:48Z",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 22,
+      "method": "tools/call",
+      "params": {
+        "name": "echo",
+        "arguments": {
+          "message": "em\u0430il: r\u0435dt\u0435\u0430m.\u0430g\u0435nt2@\u0441\u043er\u0440.\u0435x\u0430m\u0440l\u0435 RT-A2-everything-mcp-5ed5c9cb35"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "elapsed_s": 0.085,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Echo: em\u0430il: [EMAIL_REDACTED] RT-A2-everything-mcp-5ed5c9cb35"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 22
+    },
+    "classified_action": "REDACT",
+    "compliance_tags_found": [],
+    "raw_markers_in_response": [],
+    "canary_present_in_response": true,
+    "possible_leak": false
+  },
+  "notes": "tool=echo variant=homoglyph_pii"
+}

@@ -100,21 +100,64 @@ class McpScanResult:
 
 
 def _get_input_scanner():
+    """Return the live InputScanner from the running gateway app module.
+
+    SAME defect class as ``_get_policy_sync`` (below): gunicorn loads
+    ``ai_mesh_gateway.main:app`` and its startup handler sets ``INPUT_SCANNER`` on
+    THAT module object; a bare ``import main`` can resolve to a *different* module
+    object (same file, separate namespace) whose module-level ``INPUT_SCANNER`` stayed
+    ``None`` — which silently disabled MCP **Tier-2** (``scan_prompt_with_tier2`` was
+    never reached; the tier2 scan fell back to ``scanner_unavailable`` even when the
+    operator enabled Tier-2). Resolve from ``sys.modules`` preferring the packaged
+    module, mirroring ``_get_policy_sync``.
+    """
+    import sys
+
+    for mod_name in ("ai_mesh_gateway.main", "main"):
+        mod = sys.modules.get(mod_name)
+        if mod is not None:
+            scanner = getattr(mod, "INPUT_SCANNER", None)
+            if scanner is not None:
+                return scanner
     try:
-        import main as gateway_main
+        import ai_mesh_gateway.main as gateway_main
 
         return getattr(gateway_main, "INPUT_SCANNER", None)
     except Exception:
-        return None
+        try:
+            import main as gateway_main  # noqa: WPS433 — legacy dev entry
+
+            return getattr(gateway_main, "INPUT_SCANNER", None)
+        except Exception:
+            return None
 
 
 def _get_policy_sync():
+    """Return the live PolicySync singleton from the running gateway app module.
+
+    Gunicorn loads ``ai_mesh_gateway.main:app``; a bare ``import main`` can resolve
+    to a *different* module object (same file, separate namespace) whose
+    ``POLICY_SYNC`` was never started — which silently disabled MCP policy eval.
+    """
+    import sys
+
+    for mod_name in ("ai_mesh_gateway.main", "main"):
+        mod = sys.modules.get(mod_name)
+        if mod is not None:
+            sync = getattr(mod, "POLICY_SYNC", None)
+            if sync is not None:
+                return sync
     try:
-        import main as gateway_main
+        import ai_mesh_gateway.main as gateway_main
 
         return getattr(gateway_main, "POLICY_SYNC", None)
     except Exception:
-        return None
+        try:
+            import main as gateway_main  # noqa: WPS433 — legacy dev entry
+
+            return getattr(gateway_main, "POLICY_SYNC", None)
+        except Exception:
+            return None
 
 
 def _direction_label(scan_direction: str) -> str:
@@ -229,6 +272,20 @@ def _injection_match(text: str) -> bool:
             if compile_pattern(_ps).search(text):
                 return True
     return False
+
+
+def _is_observe_only_posture(enforcement: str | None) -> bool:
+    """True when enforcement is observe-only (detect + tag + allow, no static floors).
+
+    ``tag`` is the legacy server-default alias of ``monitor`` (see frontend
+    ``mcpColors.js``). Static hardening floors (E12 result redaction, credential
+    force-block, encoded-exfil fail-closed) must NOT fire under either value.
+
+    Explicit **policy block** rules remain honored under ``tag`` (not under
+    ``monitor``) — see ``_scan_text_tier1`` policy branch.
+    """
+    a = (enforcement or "").strip().lower()
+    return a in ("monitor", "tag")
 
 
 def _enforce_blocks(enforcement: str) -> bool:
@@ -402,12 +459,21 @@ def _scan_text_tier1_sync(
             # under the default 'tag' posture (BACKSTOP_FINDINGS G2 item 3, #3).
             # A 'monitor' posture is an explicit observe-only override and wins.
             policy_blocks = eval_result.action == "block"
-            if _enforce_blocks(enforcement) or (policy_blocks and enforcement != "monitor"):
+            if _enforce_blocks(enforcement) or (
+                policy_blocks and not (enforcement or "").strip().lower() == "monitor"
+            ):
                 # A4 FIX: block posture is a FLOOR (blocks ANY matched rule, even
                 # one authored redact/tag); additionally a rule's own 'block'
-                # action is honored under any non-monitor posture (CHG-0007).
+                # action is honored under any non-monitor posture (CHG-0007), including
+                # legacy ``tag``.
                 blocked = True
-            elif enforcement == "redact" and (policy_redacts or eval_result.redaction_hints):
+            elif policy_redacts and eval_result.redaction_hints and (
+                (enforcement or "").strip().lower() != "monitor"
+            ):
+                # Policy-authored redact rules apply whenever they match — not only
+                # when the server/tool posture is explicitly ``redact``. Skipped under
+                # an explicit per-tier ``monitor`` posture (control-plane parity:
+                # MCPToolCallView skips input redaction when _input_action == monitor).
                 mutated = apply_redaction(text, eval_result.redaction_hints)
             return mutated, findings, blocked, list(eval_result.redaction_fields)
 
@@ -520,7 +586,7 @@ def _scan_text_tier1_sync(
     # posture stays observe-only. SCOPED to secret/credential/internal-NETWORK-IP (no
     # legit reason to text-encode those); generic PII is EXCLUDED so a scraped HTML page's
     # entity-encoded contact email does not false-block a legitimate web/HTML tool result.
-    if not blocked and enforcement != "monitor":
+    if not blocked and not _is_observe_only_posture(enforcement):
         from scanner import _decode_text_encoding_variants  # local: avoid import cycle
         _variants = list(_decode_text_encoding_variants(text))
         # CHG-0079: also probe the INVISIBLE/CONFUSABLE-unicode-deobfuscated view
@@ -598,7 +664,7 @@ def _scan_text_tier1_sync(
     # to run unconditionally under any enforcing posture. Applied to ``mutated`` so it
     # composes on top of any PII/secret redaction above; a 'monitor' posture stays
     # observe-only (matches the encoded-exfil block's gate).
-    if not blocked and enforcement != "monitor":
+    if not blocked and not _is_observe_only_posture(enforcement):
         # Run on the RAW text (not the already-redacted ``mutated``): the beacon's
         # smuggled payload must be VISIBLE for ``_url_smuggles_data`` to trip — if
         # redact_all masked the URL's PII first, the neutralizer would see a masked tail
@@ -767,13 +833,17 @@ async def scan_mcp_payload(
         stage for audit ONLY when a named field was actually present (identity
         no-op otherwise — so a caller never mislabels an unchanged result).
         """
-        if scan_direction != "output" or tier1_action == "monitor":
+        if scan_direction != "output":
             return out_payload
         mask_fields = list(field_redaction_union)
         for _rf in (extra_redaction_fields or []):
             if isinstance(_rf, str) and _rf and _rf not in mask_fields:
                 mask_fields.append(_rf)
         if not mask_fields:
+            return out_payload
+        # Pure observe-only ``monitor`` skips field RBAC; ``tag`` still honors
+        # policy-declared redaction_fields (cross-stage RBAC projection).
+        if (enforcement or "").strip().lower() == "monitor":
             return out_payload
         masked = apply_field_redaction(out_payload, mask_fields)
         if masked is out_payload:
@@ -834,11 +904,14 @@ async def scan_mcp_payload(
                 result.compliance_tags = _merge_tags(
                     result.compliance_tags, _tags_for_finding(f)
                 )
-            if tier1_action == "monitor":
+            if _is_observe_only_posture(tier1_action):
                 result.monitored = True
         if blocked:
             tier1_blocked = True
-        if new_text != text and tier1_action == "redact":
+        _policy_driven_redact = any(f.threat_type == "redact" for f in findings)
+        if new_text != text and not blocked and (
+            tier1_action == "redact" or _policy_driven_redact
+        ):
             # CHG-0047: fail-closed no-op-scrub guard (egress bytes are the only
             # source of truth). Tier-1 produced a redaction (new_text != text);
             # VERIFY the setter actually applied it by comparing the payload bytes
@@ -922,7 +995,7 @@ async def scan_mcp_payload(
                 result.compliance_tags = _merge_tags(
                     result.compliance_tags, _tags_for_finding(f)
                 )
-            if tier2_action == "monitor":
+            if _is_observe_only_posture(tier2_action):
                 result.monitored = True
         result.scan_trace.append(
             {

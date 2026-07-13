@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-06T23:45:04.095Z",
+  "projectRoot": "/home/contact_cyberultron_com/AI_Mesh_Firewall/frontend",
+  "structure": {
+    "hasPackageJson": true,
+    "hasTsConfig": false,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1783381504095
+}

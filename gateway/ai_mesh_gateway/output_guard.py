@@ -773,7 +773,16 @@ class OutputGuard:
                 if ip_verdict.action != "allow":
                     verdicts.append(ip_verdict)
 
-        if cfg.get("hallucination_flag_enabled", self._config.get("hallucination_flag_enabled", True)):
+        # UI enable is `factuality_check_enabled` (control); sync maps it to
+        # `hallucination_flag_enabled`. OR the two so a stale/partial bundle
+        # cannot leave §1.7 Hallucination OFF while the UI toggle is ON.
+        if "hallucination_flag_enabled" in cfg or "factuality_check_enabled" in cfg:
+            _hall_enabled = bool(cfg.get("hallucination_flag_enabled")) or bool(
+                cfg.get("factuality_check_enabled")
+            )
+        else:
+            _hall_enabled = bool(self._config.get("hallucination_flag_enabled", True))
+        if _hall_enabled:
             hall_action = _action("output_hallucination_action", "flag")
             if hall_action != "allow":
                 hall_verdict = await self._check_hallucination_markers(
@@ -1639,40 +1648,84 @@ def _sanitize_output_core(
     # the rest of the answer — never nuke the whole response to [REDACTED].
     if threat == "exfil_channel":
         return redact_pii_fn(response_text) if redact_pii_fn is not None else response_text
-    # 1.7: PII / secret / credential (+ pci / phi — C-1) are ALWAYS surgically
-    # redacted (deterministic token-level masking via redact_pii_fn), never
-    # routed through the non-deterministic "rewrite" path — regardless of action.
+    if action == "rewrite":
+        # Honor UI rewrite for ALL threat types (incl. pii/secret). Surgical
+        # redact above only applies when action is redact/block-downgraded —
+        # previously redactable categories ignored action==rewrite and always
+        # surgically masked, so non-stream sanitize callers could never rewrite.
+        return rewrite_output_response_text(
+            threat,
+            verdict.detail or None,
+            original_text=response_text,
+        )
+    if action != "redact":
+        return response_text
+    if threat == "hallucination":
+        return rewrite_output_response_text(
+            threat,
+            verdict.detail or None,
+            original_text=response_text,
+        )
     if threat in _REDACTABLE_OUTPUT_CATEGORIES:
         base = redact_pii_fn(response_text) if redact_pii_fn is not None else "[REDACTED]"
-        # G10: the deterministic redactor above has no regex for semantically-detected
-        # PII/secret (free-text names, non-standard layouts, passphrases). Mask the
-        # tier-2 guard model's identified spans (+ any raw matched_values that survived)
-        # with a typed placeholder so the redact actually removes the bytes instead of
-        # being a no-op that egresses raw.
         spans = list(verdict.redaction_spans or []) + [
             str(v) for v in (verdict.matched_values or {}).values()
         ]
         return _mask_spans_typed(base, spans, threat)
-    # E15: internal infrastructure leakage (internal IP / hostname / URL) is
-    # surgically masked via the deterministic redactor — never whole-response
-    # rewritten — so a REAL internal address that survived FP suppression cannot
-    # egress raw on the client channel, regardless of the configured action
-    # (flag/redact). Kept OUT of _REDACTABLE_OUTPUT_CATEGORIES so an org's explicit
-    # opt-in hard 'block' is preserved (that set also drives the block->redact
-    # downgrade, which must NOT fire for an opt-in IP block).
     if threat == "ip_leakage":
         if redact_pii_fn is not None:
             return redact_pii_fn(response_text)
         return response_text
-    if action == "rewrite":
-        return rewrite_output_response_text(threat, verdict.detail or None)
-    if action != "redact":
-        return response_text
-    if threat == "hallucination":
-        return rewrite_output_response_text(threat, verdict.detail or None)
     if redact_pii_fn is not None:
         return redact_pii_fn(response_text)
     return "[REDACTED]"
+
+
+def output_verdict_applies_to_delivered_text(
+    verdict: OutputVerdict | None,
+    delivered_text: str,
+) -> bool:
+    """True when at least one matched span appears in the bytes delivered to the client."""
+    if verdict is None or verdict.action not in ("redact", "flag", "block"):
+        return True
+    matched = dict(getattr(verdict, "matched_values", None) or {})
+    if not matched:
+        return True
+    delivered = delivered_text or ""
+    return any(v and v in delivered for v in matched.values())
+
+
+def coalesce_output_guard_verdict_for_delivery(
+    verdict: OutputVerdict | None,
+    *,
+    delivered_text: str,
+) -> OutputVerdict | None:
+    """Downgrade false-positive redact/flag when detection is outside delivered content.
+
+    The scan input can include reasoning/tool channels that are not returned to the
+    client. A smart-masked echo of already-redacted input there must not mark the
+    visible answer as redacted (noop redact on safety-classifier metadata).
+    """
+    if verdict is None or verdict.action not in ("redact", "flag"):
+        return verdict
+    if output_verdict_applies_to_delivered_text(verdict, delivered_text):
+        return verdict
+    try:
+        from patterns import is_safety_classifier_output
+    except ImportError:
+        from .patterns import is_safety_classifier_output
+    delivered = (delivered_text or "").strip()
+    if is_safety_classifier_output(delivered):
+        detail = (
+            "Safety classifier metadata only; matched PII was not present in "
+            "delivered model content."
+        )
+    else:
+        detail = (
+            "Matched PII/secret was outside delivered model content "
+            "(non-user-visible channel)."
+        )
+    return OutputVerdict(detail=detail)
 
 
 def output_guard_telemetry_meta(
@@ -1682,6 +1735,10 @@ def output_guard_telemetry_meta(
     sanitized_output: str,
 ) -> dict:
     """Shared telemetry fields for output-guard incidents."""
+    redact_noop = (
+        str(getattr(verdict, "action", "") or "").lower() == "redact"
+        and (raw_output or "") == (sanitized_output or "")
+    )
     return {
         "detail": verdict.detail,
         "response_snippet": raw_output,
@@ -1696,4 +1753,5 @@ def output_guard_telemetry_meta(
         "matched_values": {k: _mask_value_for_detail(str(v)) for k, v in (verdict.matched_values or {}).items()},
         "output_snippet_truncated": True,
         "full_output_scanned": True,
+        "redact_noop": redact_noop,
     }
