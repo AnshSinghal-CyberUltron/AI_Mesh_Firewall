@@ -29,6 +29,10 @@ from app.pipeline import build_pipeline_view, build_rag_pipeline_view
 from app.sdk_scenarios import attach_sdk_scenario_meta
 from app.status_reason import attach_status_reason, derive_status_reason
 
+FILES_PROMPT_CHAR_CAP = 40_000
+GATEWAY_INPUT_SCAN_SOFT_LIMIT = 10_000
+FILES_UPLOAD_MAX_MB = 64
+
 
 class ZeroShieldClient:
     """Production reference client for ZeroShield OpenAI-compatible gateway."""
@@ -1073,7 +1077,7 @@ class ZeroShieldClient:
             return attach_sdk_scenario_meta(err, "routing")
 
     @staticmethod
-    def build_files_analysis_prompt(documents: list[dict]) -> str:
+    def build_files_analysis_prompt(documents: list[dict]) -> tuple[str, dict[str, Any]]:
         """Build a deterministic analysis prompt from locally extracted documents."""
         parts: list[str] = []
         for doc in documents:
@@ -1084,16 +1088,37 @@ class ZeroShieldClient:
             if text:
                 parts.append(f"### {name}\n{text}")
         combined = "\n\n".join(parts)
-        return (
-            "Analyze the following uploaded documents. Summarize key points and flag any risks.\n\n"
-            f"{combined[:120000]}"
-        )
+        header = "Analyze the following uploaded documents. Summarize key points and flag any risks.\n\n"
+        extracted_total = len(combined)
+        body = combined[:FILES_PROMPT_CHAR_CAP]
+        truncated = extracted_total > FILES_PROMPT_CHAR_CAP
+        prompt = f"{header}{body}"
+        meta = {
+            "extracted_chars_total": extracted_total,
+            "prompt_chars_sent": len(prompt),
+            "truncated": truncated,
+            "gateway_input_scan_soft_limit": GATEWAY_INPUT_SCAN_SOFT_LIMIT,
+            "supported_formats": [".pdf", ".docx", ".txt", ".csv"],
+            "upload_max_mb": 64,
+        }
+        if truncated:
+            meta["truncation_notice"] = (
+                f"Only the first {FILES_PROMPT_CHAR_CAP:,} characters of extracted text were analyzed."
+            )
+        if extracted_total > GATEWAY_INPUT_SCAN_SOFT_LIMIT:
+            meta["scan_limit_notice"] = (
+                f"Extracted text exceeds the gateway input-scan soft limit "
+                f"({GATEWAY_INPUT_SCAN_SOFT_LIMIT:,} chars). Analysis may be blocked as a safety measure."
+            )
+        return prompt, meta
 
     def scenario_files_analyze(self, documents: list[dict], *, model: str = "auto") -> dict:
         readable = [d for d in documents if isinstance(d, dict) and str(d.get("text") or "").strip()]
-        prompt = self.build_files_analysis_prompt(readable)
+        prompt, extraction_meta = self.build_files_analysis_prompt(readable)
         out = self.respond(prompt, model=model)
         if isinstance(out, dict):
+            out = dict(out)
+            out["extraction_meta"] = extraction_meta
             return attach_status_reason(out, context="files")
         return out
 

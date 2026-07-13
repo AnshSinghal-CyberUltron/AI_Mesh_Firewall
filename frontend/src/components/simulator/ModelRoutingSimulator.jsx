@@ -3,6 +3,7 @@ import { GitBranch, Sliders } from "lucide-react";
 import { useSimulatorEngine } from "../../hooks/useSimulatorEngine";
 import { useSimulatorGatewayModels } from "../../hooks/useSimulatorGatewayModels";
 import { chatCompletionBody, normalizeRoutingResult } from "../../utils/liveGateway";
+import { errorToText, formatRoutingError } from "../../utils/errorToText";
 import { SimulatorShell } from "./SimulatorShell";
 import { SimulatorModelSelector } from "./SimulatorModelSelector";
 
@@ -78,6 +79,7 @@ export function ModelRoutingSimulator() {
       return;
     }
     const prefs = selected?.preferences || weights;
+    const compliance = selected?.compliance || [];
     const res = await engine.gatewayFetch("/v1/chat/completions", {
       method: "POST",
       body: JSON.stringify(
@@ -91,7 +93,8 @@ export function ModelRoutingSimulator() {
             latency_weight: prefs.latency_weight,
             priority_weight: prefs.quality_weight,
             risk_weight: prefs.risk_weight,
-            compliance_requirements: selected?.compliance || [],
+            compliance_requirements: compliance,
+            ...(compliance.length ? { data_sensitivity: "restricted" } : {}),
           },
         }),
       ),
@@ -104,12 +107,13 @@ export function ModelRoutingSimulator() {
       res.ok
         ? normalizeRoutingResult(res.data)
         : {
-            error: res.data?.message || res.data?.error || "Request failed",
+            error: formatRoutingError(res.data, res.status),
             action: allowlistDenied ? "block" : "error",
             success: false,
             httpStatus: res.status,
             allowlistDenied,
             requested_model: gatewayModels.selectedModel,
+            code: res.data?.code || errorToText(res.data?.error),
             ...res.data,
           },
     );
@@ -182,7 +186,10 @@ export function ModelRoutingSimulator() {
     >
       {result?.error && (
         <div className="px-4 py-3 space-y-2">
-          <p className="text-sm text-red-700 dark:text-red-300">{result.error}</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{errorToText(result.error)}</p>
+          {result.code ? (
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">{result.code}</p>
+          ) : null}
           {result.allowlistDenied && gatewayModels.selectedModel ? (
             <button
               type="button"

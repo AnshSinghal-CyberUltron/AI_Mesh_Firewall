@@ -47,3 +47,8 @@ echo "=== enforcement clean (expect 200) ==="
 curl -s -o /dev/null -w 'clean -> %{http_code}\n' -X POST http://127.0.0.1:8300/v1/chat/completions -H "Authorization: Bearer $NEWKEY" -H 'Content-Type: application/json' -d '{"model":"auto","messages":[{"role":"user","content":"What is the capital of France? Answer in one word."}]}'
 echo "=== demo container ==="
 $COMPOSE ps --format '{{.Service}} {{.Status}}' demo
+
+echo "=== recreate nginx (refresh upstream IPs after control/gateway/demo recreate) ==="
+$COMPOSE up -d --force-recreate nginx </dev/null
+sleep 3
+$COMPOSE exec -T nginx nginx -t </dev/null || true

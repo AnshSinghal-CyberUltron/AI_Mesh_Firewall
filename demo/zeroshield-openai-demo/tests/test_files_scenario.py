@@ -8,18 +8,20 @@ from app.status_reason import attach_files_response
 
 
 def test_build_files_analysis_prompt_includes_document_names():
-    prompt = ZeroShieldClient.build_files_analysis_prompt(
+    prompt, meta = ZeroShieldClient.build_files_analysis_prompt(
         [{"name": "team.csv", "text": "name,role\nAlice,CEO"}],
     )
     assert "team.csv" in prompt
     assert "Alice" in prompt
     assert prompt.startswith("Analyze the following uploaded documents")
+    assert meta["extracted_chars_total"] > 0
 
 
 def test_build_files_analysis_prompt_caps_length():
     long_text = "x" * 130000
-    prompt = ZeroShieldClient.build_files_analysis_prompt([{"name": "big.txt", "text": long_text}])
-    assert len(prompt) <= 120000 + 200
+    prompt, meta = ZeroShieldClient.build_files_analysis_prompt([{"name": "big.txt", "text": long_text}])
+    assert len(prompt) <= 40_000 + 200
+    assert meta["truncated"] is True
 
 
 def test_scenario_files_analyze_uses_respond_with_files_context():

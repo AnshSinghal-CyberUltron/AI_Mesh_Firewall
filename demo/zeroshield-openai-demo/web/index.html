@@ -100,7 +100,7 @@
 
     <section class="panel hidden" id="panel-files">
       <h2>File Upload + Analysis</h2>
-      <p class="hint">Files are read on the demo server; only extracted text is sent to ZeroShield for governed analysis.</p>
+      <p class="hint">Supported: PDF, DOCX, TXT, CSV (save legacy .doc as .docx). Max upload 64&nbsp;MB per request. For reliable analysis, keep extracted text under ~10,000 characters — only text is sent to the gateway, not the raw file.</p>
       <input type="file" id="file-input" multiple accept=".pdf,.docx,.txt,.csv" />
       <label>Selected files<textarea id="files-selected" rows="3" readonly placeholder="Choose one or more files to analyze."></textarea></label>
       <button id="file-analyze">Analyze via Gateway</button>

@@ -29,19 +29,25 @@ export function GatewayKeyPanel() {
   const [actionLoading, setActionLoading] = useState(null);
   const [copied, setCopied] = useState(false);
   const [formError, setFormError] = useState("");
+  const [fetchError, setFetchError] = useState(null);
   const [adoptingSimulator, setAdoptingSimulator] = useState(false);
   const [simulatorAdopted, setSimulatorAdopted] = useState(false);
 
   const fetchKeys = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const res = await fetchWithAuth("/api/gateways/keys/");
       if (res.ok) {
         const data = await res.json();
         setKeys(Array.isArray(data) ? data : data.results || []);
+      } else {
+        setKeys([]);
+        setFetchError(`Failed to load gateway API keys (${res.status}).`);
       }
     } catch {
       setKeys([]);
+      setFetchError("Failed to load gateway API keys. Check your session and retry.");
     } finally {
       setLoading(false);
     }
@@ -196,12 +202,25 @@ export function GatewayKeyPanel() {
         </button>
       </div>
 
+      {fetchError ? (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200" role="alert">
+          <p>{fetchError}</p>
+          <button
+            type="button"
+            onClick={fetchKeys}
+            className="mt-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
+
       {loading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-5 h-5 text-teal-500 animate-spin" />
           <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading API keys...</span>
         </div>
-      ) : keys.length === 0 ? (
+      ) : keys.length === 0 && !fetchError ? (
         <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
           No API keys created. Create one to authenticate gateway requests.
         </div>

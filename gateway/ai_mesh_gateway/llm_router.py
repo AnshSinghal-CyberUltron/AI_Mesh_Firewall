@@ -32,6 +32,7 @@ from ai_mesh_gateway.platform_models import (
     is_platform_model_name,
     resolve_platform_bedrock_model,
 )
+from ai_mesh_gateway.routing_isolation import compliance_tags_satisfied
 
 from litellm.exceptions import (
     APIConnectionError,
@@ -1722,10 +1723,8 @@ class LLMRouter:
                 continue
             if allowed_set and model_name.lower() not in allowed_set and model_id.lower() not in allowed_set:
                 continue
-            if required_tags:
-                model_tags = model.get("compliance_tags") or []
-                if not all(tag in model_tags for tag in required_tags):
-                    continue
+            if required_tags and not compliance_tags_satisfied(model.get("compliance_tags"), required_tags):
+                continue
             model_sens = _SENSITIVITY_ORDER.get(str(model.get("data_sensitivity_level", "public")).strip().lower(), 0)
             if model_sens < req_sens_level:
                 continue

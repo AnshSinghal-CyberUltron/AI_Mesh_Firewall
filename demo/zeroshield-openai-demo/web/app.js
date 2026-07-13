@@ -475,6 +475,56 @@ function renderRoutingOutput(outputEl, result) {
   outputEl.innerHTML = `${reason}${prefs}${summary}${body}${raw}`;
 }
 
+const FILES_UPLOAD_MAX_BYTES = 64 * 1024 * 1024;
+const FILES_SUPPORTED_EXT = new Set([".pdf", ".docx", ".txt", ".csv"]);
+const FILES_GATEWAY_SCAN_SOFT_LIMIT = 10000;
+
+function mapFilesAnalyzeHttpError(res, text) {
+  const isHtml = /^\s*</.test(text || "");
+  if (res.status === 413) {
+    return "File exceeds the 64 MB upload limit. Compress or split the document and try again.";
+  }
+  if (res.status === 502 || res.status === 503) {
+    return "The demo analysis service is temporarily unavailable. Try a smaller file or retry in a moment.";
+  }
+  if (res.status === 504 || (isHtml && /524|timeout|timed out/i.test(text))) {
+    return "File analysis timed out at the edge or proxy. Use a smaller excerpt (under ~10,000 characters) or try the Chat tab.";
+  }
+  if (isHtml) {
+    return "File analysis returned an HTML error page (edge/proxy timeout or gateway unavailable). Try a smaller file, or use the Chat tab for short excerpts.";
+  }
+  return null;
+}
+
+function validateFilesBeforeUpload(files) {
+  const list = Array.from(files || []);
+  if (!list.length) return "Choose at least one file.";
+  let total = 0;
+  for (const f of list) {
+    total += f.size || 0;
+    const ext = String(f.name || "").toLowerCase().slice(f.name.lastIndexOf("."));
+    if (!FILES_SUPPORTED_EXT.has(ext)) {
+      return `Unsupported file type for "${f.name}". Use PDF, DOCX, TXT, or CSV (legacy .doc is not supported — save as .docx).`;
+    }
+  }
+  if (total > FILES_UPLOAD_MAX_BYTES) {
+    return "Total upload exceeds the 64 MB limit. Split files or compress before retrying.";
+  }
+  return null;
+}
+
+function renderExtractionMeta(meta) {
+  if (!meta || typeof meta !== "object") return "";
+  const parts = [];
+  if (meta.truncation_notice) {
+    parts.push(`<p class="muted">${String(meta.truncation_notice).replace(/</g, "&lt;")}</p>`);
+  }
+  if (meta.scan_limit_notice) {
+    parts.push(`<p class="output-inline warn">${String(meta.scan_limit_notice).replace(/</g, "&lt;")}</p>`);
+  }
+  return parts.join("");
+}
+
 function formatFileSize(bytes) {
   const n = Number(bytes) || 0;
   if (n < 1024) return `${n} B`;
@@ -515,9 +565,10 @@ function renderFilesOutput(outputEl, result) {
   const warnings = Array.isArray(result?.file_warnings) && result.file_warnings.length
     ? `<details class="file-warnings"><summary>${result.file_warnings.length} file(s) skipped</summary><ul>${result.file_warnings.map((w) => `<li class="muted">${String(w).replace(/</g, "&lt;")}</li>`).join("")}</ul></details>`
     : "";
+  const extractionMeta = renderExtractionMeta(result?.extraction_meta || analysis?.extraction_meta);
   if (result?.error && !analysis) {
     const msg = friendlyErrorText(result) || result.status_reason?.message || "Uploaded files could not be analyzed.";
-    outputEl.innerHTML = `${reason}${manifest}${warnings}<p class="output-inline">${msg.replace(/</g, "&lt;")}</p>`;
+    outputEl.innerHTML = `${reason}${manifest}${warnings}${extractionMeta}<p class="output-inline">${msg.replace(/</g, "&lt;")}</p>`;
     return;
   }
   const content = analysis?.content || surface?.content || "";
@@ -525,7 +576,7 @@ function renderFilesOutput(outputEl, result) {
     ? `<div class="assistant-text">${String(content).replace(/</g, "&lt;")}</div>`
     : `<p class="muted">No summary returned.</p>`;
   const technical = `<details><summary>Technical details</summary><pre class="output-inline">${JSON.stringify(result, null, 2).replace(/</g, "&lt;")}</pre></details>`;
-  outputEl.innerHTML = `${reason}${manifest}${warnings}${summary}${technical}`;
+  outputEl.innerHTML = `${reason}${manifest}${warnings}${extractionMeta}${summary}${technical}`;
 }
 
 function renderStatusReason(result) {
@@ -1152,14 +1203,40 @@ document.getElementById("file-analyze").addEventListener("click", async () => {
   const files = document.getElementById("file-input").files;
   if (!files.length) return;
   const outEl = document.getElementById("file-out");
+  const validationError = validateFilesBeforeUpload(files);
+  if (validationError) {
+    outEl.innerHTML = `<p class="output-inline">[Error] ${validationError.replace(/</g, "&lt;")}</p>`;
+    return;
+  }
   showOutputLoading(outEl, "Reading files and sending extracted text to ZeroShield…");
   showPipelineLoading("Analyzing file content…");
   try {
     const fd = new FormData();
     for (const f of files) fd.append("files", f);
-    const res = await fetch(rel(`/api/files/analyze?model=${encodeURIComponent(getSelectedModel())}`), { method: "POST", headers: authHeaders(), body: fd });
+    const res = await fetch(rel(`/api/files/analyze?model=${encodeURIComponent(getSelectedModel())}`), {
+      method: "POST",
+      headers: authHeaders(),
+      body: fd,
+      credentials: "same-origin",
+    });
     if (handleAuthFailure(res)) return;
-    const out = await res.json();
+    const text = await res.text();
+    let out;
+    try {
+      out = JSON.parse(text);
+    } catch {
+      const mapped = mapFilesAnalyzeHttpError(res, text);
+      throw new Error(mapped || "Invalid JSON from file analysis API.");
+    }
+    if (!res.ok) {
+      const mapped = mapFilesAnalyzeHttpError(res, text);
+      const msg = mapped
+        || out?.message
+        || out?.detail
+        || out?.status_reason?.message
+        || `HTTP ${res.status}`;
+      throw new Error(typeof msg === "string" ? msg : "File analysis failed.");
+    }
     renderFilesOutput(outEl, out);
     renderPipelineForTab("files", out.analysis || out);
   } catch (e) {

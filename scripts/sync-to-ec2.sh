@@ -69,6 +69,11 @@ for s in "${OBS_SCRIPTS[@]}"; do
   [[ -f "${ROOT}/scripts/${s}" ]] || continue
   _scp "${ROOT}/scripts/${s}" "${SSH_HOST}:${REMOTE_DIR}/scripts/"
 done
+# Post-deploy prod helpers (demo key mint/bind, gateway verify).
+for s in "${ROOT}"/scripts/_prod_*.sh; do
+  [[ -f "${s}" ]] || continue
+  _scp "${s}" "${SSH_HOST}:${REMOTE_DIR}/scripts/"
+done
 if [[ -f "${ROOT}/deploy/observability/cloudwatch-agent-config.json" ]]; then
   _scp \
     "${ROOT}/deploy/observability/cloudwatch-agent-config.json" \

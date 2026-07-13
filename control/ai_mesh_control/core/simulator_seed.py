@@ -181,6 +181,49 @@ def ensure_firewall_excludes_guard_model(org) -> None:
             config.save(update_fields=["allowed_models"])
 
 
+def ensure_compliance_capable_inference_model(org) -> None:
+    """
+    Dev bootstrap: ensure at least one routable user model can satisfy HIPAA/restricted routing.
+
+    The internal zeroshield guard model is excluded from inference pools; demos and Module 1.5
+    HIPAA scenarios need a user-managed model tagged restricted + HIPAA.
+    """
+    if org is None:
+        return
+    from core.models import LLMModelConfig, is_reserved_inference_model_name
+
+    routable = [
+        m
+        for m in LLMModelConfig.queryset_user_managed(
+            LLMModelConfig.objects.filter(organization=org, is_active=True)
+        )
+        if _model_is_gateway_routable(m)
+        and not is_reserved_inference_model_name(m.model_name, m.model_id)
+    ]
+    if not routable:
+        return
+
+    def _hipaa_restricted(model) -> bool:
+        tags = {str(t).strip().lower() for t in (model.compliance_tags or [])}
+        return str(model.data_sensitivity_level or "").strip().lower() == "restricted" and "hipaa" in tags
+
+    if any(_hipaa_restricted(m) for m in routable):
+        return
+
+    model = routable[0]
+    tags = list(model.compliance_tags or [])
+    if not any(str(t).strip().lower() == "hipaa" for t in tags):
+        tags.append("HIPAA")
+    model.compliance_tags = tags
+    model.data_sensitivity_level = "restricted"
+    model.save(update_fields=["compliance_tags", "data_sensitivity_level", "updated_at"])
+    logger.info(
+        "Tagged inference model %r restricted+HIPAA for simulator bootstrap (org=%s)",
+        model.model_name,
+        getattr(org, "slug", org),
+    )
+
+
 def ensure_simulator_dev_bootstrap(org=None) -> bool:
     """
     Apply dev-only simulator bootstrap (LLM model + firewall helpers).
@@ -205,6 +248,7 @@ def ensure_simulator_dev_bootstrap(org=None) -> bool:
     try:
         ensure_default_llm_model(org)
         ensure_routable_inference_model(org)
+        ensure_compliance_capable_inference_model(org)
         ensure_firewall_excludes_guard_model(org)
         ensure_simulator_firewall_keywords_cleared(org)
         return True

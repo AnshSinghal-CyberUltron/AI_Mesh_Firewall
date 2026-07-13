@@ -427,6 +427,8 @@ async def analyze_files(
 
     analysis = _client().scenario_files_analyze(readable, model=model)
     payload: dict[str, Any] = {"files_manifest": files_manifest, "analysis": analysis}
+    if isinstance(analysis, dict) and analysis.get("extraction_meta"):
+        payload["extraction_meta"] = analysis["extraction_meta"]
     if file_warnings:
         payload["file_warnings"] = file_warnings
     return attach_files_response(payload)
