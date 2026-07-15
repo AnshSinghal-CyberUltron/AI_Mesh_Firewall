@@ -24,23 +24,45 @@ export function GatewayKeyPanel() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [formError, setFormError] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const fetchKeys = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchWithAuth("/api/gateways/keys/");
-      if (res.ok) {
+      // Global DRF PAGE_SIZE is 10; follow pages (and request a larger page) so
+      // the scrollable table can actually show every org key.
+      const collected = [];
+      let path = "/api/gateways/keys/?page_size=500";
+      let guard = 0;
+      while (path && guard < 50) {
+        guard += 1;
+        const res = await fetchWithAuth(path);
+        if (!res.ok) {
+          setLoadError(`Failed to load API keys (HTTP ${res.status}).`);
+          return;
+        }
         const data = await res.json();
-        setKeys(Array.isArray(data) ? data : data.results || []);
-        setLoadError("");
-      } else {
-        // A failed fetch must NOT collapse into the benign "No API keys" empty
-        // state — that hides an outage behind a normal-looking screen.
-        setLoadError(`Failed to load API keys (HTTP ${res.status}).`);
+        if (Array.isArray(data)) {
+          collected.push(...data);
+          break;
+        }
+        collected.push(...(data.results || []));
+        const next = data.next;
+        if (!next) break;
+        // next may be absolute (http://host/api/...) — strip origin for fetchWithAuth
+        try {
+          const u = new URL(next, window.location.origin);
+          path = `${u.pathname}${u.search}`;
+        } catch {
+          path = null;
+        }
       }
+      setKeys(collected);
+      setLoadError("");
     } catch (err) {
       setLoadError(err?.message ? `Failed to load API keys: ${err.message}` : "Failed to load API keys.");
     } finally {
@@ -117,15 +139,46 @@ export function GatewayKeyPanel() {
       : "Permanently delete this revoked API key from the database? This cannot be undone.";
     if (!window.confirm(msg)) return;
     setActionLoading(id);
+    setActionError("");
     try {
       const res = await fetchWithAuth(`/api/gateways/keys/${id}/`, { method: "DELETE" });
       if (!res.ok) {
-        // Keep the row visible on failure so operators can retry.
+        setActionError(`Failed to delete key (HTTP ${res.status}).`);
         return;
       }
       await fetchKeys();
+    } catch (err) {
+      setActionError(err?.message ? `Failed to delete key: ${err.message}` : "Failed to delete key.");
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const revokedCount = keys.filter((k) => !k.is_active).length;
+
+  const handleDeleteAllRevoked = async () => {
+    if (revokedCount === 0) return;
+    const msg =
+      `Permanently delete all ${revokedCount} revoked API key${revokedCount === 1 ? "" : "s"} ` +
+      "from the database? Active keys are not affected. This cannot be undone.";
+    if (!window.confirm(msg)) return;
+    setBulkDeleting(true);
+    setActionError("");
+    try {
+      const res = await fetchWithAuth("/api/gateways/keys/purge-revoked/", { method: "DELETE" });
+      if (!res.ok) {
+        setActionError(`Failed to delete revoked keys (HTTP ${res.status}).`);
+        return;
+      }
+      await fetchKeys();
+    } catch (err) {
+      setActionError(
+        err?.message
+          ? `Failed to delete revoked keys: ${err.message}`
+          : "Failed to delete revoked keys.",
+      );
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -163,13 +216,33 @@ export function GatewayKeyPanel() {
             </div>
           )}
         </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-1.5 rounded-2xl bg-teal-600 px-4 py-2.5 text-xs font-medium text-white transition-colors hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-400"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Create API Key
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {revokedCount > 0 && (
+            <button
+              type="button"
+              onClick={handleDeleteAllRevoked}
+              disabled={bulkDeleting || actionLoading != null}
+              className="flex items-center gap-1.5 rounded-2xl border border-red-300 bg-red-50 px-4 py-2.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40"
+              aria-label={`Delete all ${revokedCount} revoked API keys`}
+              title="Permanently delete all revoked keys from the database"
+            >
+              {bulkDeleting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+              Delete all revoked ({revokedCount})
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="flex items-center gap-1.5 rounded-2xl bg-teal-600 px-4 py-2.5 text-xs font-medium text-white transition-colors hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-400"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Create API Key
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -196,16 +269,19 @@ export function GatewayKeyPanel() {
         </div>
       ) : (
         <>
-          {loadError && (
+          {(loadError || actionError) && (
             <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
               <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-              <span>{loadError}</span>
+              <span>{actionError || loadError}</span>
             </div>
           )}
-          <div className="overflow-x-auto rounded-[24px] border border-slate-200/80 dark:border-slate-700">
+          <div
+            className="max-h-[min(60vh,32rem)] overflow-auto rounded-[24px] border border-slate-200/80 dark:border-slate-700"
+            data-testid="gateway-keys-table-scroll"
+          >
           <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Name</th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Prefix</th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Organization</th>
@@ -261,10 +337,11 @@ export function GatewayKeyPanel() {
                   <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">{formatDate(k.last_used_at)}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1">
-                      {actionLoading === k.id ? (
+                      {actionLoading === k.id || bulkDeleting ? (
                         <Loader2 className="w-4 h-4 text-teal-500 animate-spin" />
                       ) : (
                         <button
+                          type="button"
                           onClick={() => handleDelete(k.id, !!k.is_active)}
                           className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
                           aria-label={`Delete gateway key ${k.name || k.prefix || ""}`.trim()}
