@@ -2,6 +2,17 @@
 .env.*
 !.env.sample
 
+# Cosign private keys / live pubkeys (keep example + .gitkeep under secrets/)
+secrets/cosign.key
+secrets/cosign.pub
+secrets/*.key
+!secrets/.gitkeep
+!secrets/cosign.pub.example
+!secrets/.gitignore
+
+# Local Kind/helm toolchain downloads
+.tools/
+
 __pycache__/
 *.pyc
 .venv/
@@ -16,6 +27,7 @@ postgres_data/
 
 # Verification run artifacts (may contain bearer tokens, payloads, screenshots)
 runs/verification/
+runs/cosign-e2e/
 
 # Terraform cache
 **/.terraform/*

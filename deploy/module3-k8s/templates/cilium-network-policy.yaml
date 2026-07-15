@@ -1,0 +1,40 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- if .Values.networkPolicy.cilium }}
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: vector-db-allow-ai-model
+  namespace: {{ .Values.namespace }}
+spec:
+  endpointSelector:
+    matchLabels:
+      role: vector-db
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            role: ai-model
+      toPorts:
+        - ports:
+            - port: "8443"
+              protocol: TCP
+{{- else }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vector-db-allow-ai-model
+  namespace: {{ .Values.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      role: vector-db
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              role: ai-model
+      ports:
+        - protocol: TCP
+          port: 8443
+{{- end }}
+{{- end }}

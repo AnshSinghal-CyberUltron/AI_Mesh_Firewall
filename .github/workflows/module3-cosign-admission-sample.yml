@@ -1,0 +1,132 @@
+# Sample — Module 3 Cosign register + admission (not required for monorepo CI)
+#
+# Secrets (repository):
+#   MODULE3_COSIGN_PRIVATE_KEY   — PEM private key (cosign.key contents)
+#   MODULE3_CONTROL_URL          — e.g. https://control.example.com
+#   MODULE3_CONTROL_TOKEN        — JWT access token (admin) OR use email/password below
+#   MODULE3_CONTROL_EMAIL        — optional if token not set
+#   MODULE3_CONTROL_PASSWORD     — optional if token not set
+#
+# This workflow is a customer/CI template. Enable manually via workflow_dispatch.
+
+name: module3-cosign-admission-sample
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_name:
+        description: Artifact name
+        required: true
+        default: sample-model
+      model_version:
+        description: Artifact version
+        required: true
+        default: "0.0.1"
+      image_ref:
+        description: Container image reference
+        required: true
+        default: registry.example.com/acme/sample-model:0.0.1
+
+jobs:
+  sign-and-admit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.5.0
+
+      - name: Compute fingerprints and sign
+        id: sign
+        env:
+          MODULE3_COSIGN_PRIVATE_KEY: ${{ secrets.MODULE3_COSIGN_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          # Demo weights: replace with real model path after dvc pull / build
+          printf 'demo-model-bytes' > /tmp/model.bin
+          printf 'demo-data-bytes' > /tmp/data.bin
+          MODEL_SHA=$(sha256sum /tmp/model.bin | awk '{print $1}')
+          DATA_SHA=$(sha256sum /tmp/data.bin | awk '{print $1}')
+          printf '%s' "$MODEL_SHA" > /tmp/payload.txt
+          printf '%s' "$MODULE3_COSIGN_PRIVATE_KEY" > /tmp/cosign.key
+          chmod 600 /tmp/cosign.key
+          COSIGN_PASSWORD="" cosign sign-blob --yes --tlog-upload=false \
+            --key /tmp/cosign.key --output-signature /tmp/payload.sig /tmp/payload.txt
+          SIG_B64=$(base64 -w0 /tmp/payload.sig)
+          echo "model_sha=$MODEL_SHA" >> "$GITHUB_OUTPUT"
+          echo "data_sha=$DATA_SHA" >> "$GITHUB_OUTPUT"
+          echo "sig_b64=$SIG_B64" >> "$GITHUB_OUTPUT"
+
+      - name: Obtain control JWT
+        id: auth
+        env:
+          CONTROL_URL: ${{ secrets.MODULE3_CONTROL_URL }}
+          TOKEN: ${{ secrets.MODULE3_CONTROL_TOKEN }}
+          EMAIL: ${{ secrets.MODULE3_CONTROL_EMAIL }}
+          PASSWORD: ${{ secrets.MODULE3_CONTROL_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -n "${TOKEN:-}" ]; then
+            echo "access=$TOKEN" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ACCESS=$(curl -sf -X POST "$CONTROL_URL/api/auth/token/" \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['access'])")
+          echo "access=$ACCESS" >> "$GITHUB_OUTPUT"
+
+      - name: Register artifact
+        env:
+          CONTROL_URL: ${{ secrets.MODULE3_CONTROL_URL }}
+          ACCESS: ${{ steps.auth.outputs.access }}
+          MODEL_SHA: ${{ steps.sign.outputs.model_sha }}
+          DATA_SHA: ${{ steps.sign.outputs.data_sha }}
+          SIG_B64: ${{ steps.sign.outputs.sig_b64 }}
+          NAME: ${{ inputs.model_name }}
+          VERSION: ${{ inputs.model_version }}
+          IMAGE_REF: ${{ inputs.image_ref }}
+        run: |
+          set -euo pipefail
+          curl -sf -X POST "$CONTROL_URL/api/module3/llmops/artifacts/" \
+            -H "Authorization: Bearer $ACCESS" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"name\": \"$NAME\",
+              \"version\": \"$VERSION\",
+              \"image_ref\": \"$IMAGE_REF\",
+              \"data_sha256\": \"$DATA_SHA\",
+              \"model_sha256\": \"$MODEL_SHA\",
+              \"signature_digest\": \"$SIG_B64\",
+              \"source\": \"ci\"
+            }"
+
+      - name: Admission verify (fail on deny)
+        env:
+          CONTROL_URL: ${{ secrets.MODULE3_CONTROL_URL }}
+          ACCESS: ${{ steps.auth.outputs.access }}
+          MODEL_SHA: ${{ steps.sign.outputs.model_sha }}
+          DATA_SHA: ${{ steps.sign.outputs.data_sha }}
+          SIG_B64: ${{ steps.sign.outputs.sig_b64 }}
+          IMAGE_REF: ${{ inputs.image_ref }}
+        run: |
+          set -euo pipefail
+          RESP=$(curl -sf -X POST "$CONTROL_URL/api/module3/llmops/verify/" \
+            -H "Authorization: Bearer $ACCESS" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"image_ref\": \"$IMAGE_REF\",
+              \"model_sha256\": \"$MODEL_SHA\",
+              \"data_sha256\": \"$DATA_SHA\",
+              \"signature_digest\": \"$SIG_B64\"
+            }")
+          echo "$RESP" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          result = (d.get('decision') or {}).get('result')
+          mode = (d.get('gateway') or {}).get('admission_mode')
+          print('result=', result, 'mode=', mode)
+          if result != 'allow':
+              raise SystemExit('admission denied')
+          "

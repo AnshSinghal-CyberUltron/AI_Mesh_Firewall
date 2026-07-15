@@ -1,0 +1,33 @@
+{{- if .Values.agent.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: module3-mesh-agent
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: module3-mesh-agent
+  template:
+    metadata:
+      labels:
+        app: module3-mesh-agent
+        role: mesh-agent
+    spec:
+      containers:
+        - name: agent
+          image: {{ .Values.images.agent }}
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: module3-agent-credentials
+          env:
+            - name: HEARTBEAT_SECONDS
+              value: {{ .Values.agent.heartbeatSeconds | quote }}
+            - name: PROBE_UNAUTHORIZED
+              value: {{ .Values.agent.probeUnauthorized | ternary "1" "0" | quote }}
+            - name: UNAUTHORIZED_HOST
+              value: vector-db.{{ .Values.namespace }}.svc.cluster.local
+            - name: UNAUTHORIZED_PORT
+              value: "8080"
+{{- end }}

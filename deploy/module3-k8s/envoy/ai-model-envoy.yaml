@@ -1,0 +1,48 @@
+# Envoy sidecar for ai-model: outbound HTTPS/mTLS to vector-db:8443
+static_resources:
+  listeners:
+    - name: egress
+      address:
+        socket_address: { address: 127.0.0.1, port_value: 19000 }
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: model_egress
+                route_config:
+                  name: to_vdb
+                  virtual_hosts:
+                    - name: vdb
+                      domains: ["*"]
+                      routes:
+                        - match: { prefix: "/" }
+                          route:
+                            cluster: vector_db_mtls
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+  clusters:
+    - name: vector_db_mtls
+      connect_timeout: 2s
+      type: STRICT_DNS
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+          common_tls_context:
+            tls_certificates:
+              - certificate_chain: { filename: "/etc/certs/tls.crt" }
+                private_key: { filename: "/etc/certs/tls.key" }
+            validation_context:
+              trusted_ca: { filename: "/etc/certs/ca.crt" }
+      load_assignment:
+        cluster_name: vector_db_mtls
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: vector-db
+                      port_value: 8443

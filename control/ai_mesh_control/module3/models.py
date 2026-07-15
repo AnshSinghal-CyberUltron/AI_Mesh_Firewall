@@ -25,7 +25,8 @@ class ModelArtifact(models.Model):
     image_ref = models.CharField(max_length=512)
     data_sha256 = models.CharField(max_length=64, blank=True)
     model_sha256 = models.CharField(max_length=64, blank=True)
-    signature_digest = models.CharField(max_length=512, blank=True)
+    # Cosign detached signatures (base64 / cosign-blob:…) exceed 512 chars.
+    signature_digest = models.TextField(blank=True)
     signature_status = models.CharField(
         max_length=16,
         choices=SIGNATURE_STATUS_CHOICES,

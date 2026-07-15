@@ -1,0 +1,52 @@
+{{- if .Values.river.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: module3-river
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: module3-river
+  template:
+    metadata:
+      labels:
+        app: module3-river
+        role: river
+    spec:
+      containers:
+        - name: river
+          image: {{ .Values.images.river }}
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: module3-agent-credentials
+          env:
+            - name: REDIS_URL
+              value: redis://module3-redis:6379/0
+            - name: ANOMALY_THRESHOLD
+              value: {{ .Values.river.anomalyThreshold | quote }}
+            - name: POLL_SECONDS
+              value: {{ .Values.river.pollSeconds | quote }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: module3-river-seed-{{ .Release.Revision }}
+  namespace: {{ .Values.namespace }}
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: {{ .Values.images.redis }}
+          command:
+            - sh
+            - -c
+            - |
+              redis-cli -h module3-redis LPUSH module3:embeddings '{"collection":"corp-docs","anomaly_score":0.05,"text":"benign"}'
+              redis-cli -h module3-redis LPUSH module3:embeddings '{"collection":"corp-docs","anomaly_score":0.97,"text":"poison","force_quarantine":true,"quarantine_reason":"River demo poison seed"}'
+{{- end }}

@@ -1,0 +1,19 @@
+# Production Cosign admission overlay for Module 3.
+# Usage (keep workers up so deny → Module 2 incidents run):
+#
+#   1. scripts/module3_gen_cosign_keypair.sh
+#   2. Set GATEWAY_INTERNAL_API_KEY in .env (same value for control + gateway)
+#   3. docker compose -f docker-compose.yml -f docker-compose.module3-verify.yml up -d gateway
+#
+# Default compose remains MODULE3_ADMISSION_MODE=passthrough for demos.
+
+services:
+  gateway:
+    environment:
+      MODULE3_ADMISSION_MODE: verify
+      MODULE3_COSIGN_PUBLIC_KEY_FILE: /run/secrets/cosign.pub
+      MODULE3_COSIGN_BINARY: cosign
+      MODULE3_COSIGN_TIMEOUT_SEC: ${MODULE3_COSIGN_TIMEOUT_SEC:-45}
+      MODULE3_COSIGN_VERIFY_IMAGE: ${MODULE3_COSIGN_VERIFY_IMAGE:-0}
+      # Local private-key blob verifies often skip Rekor upload (`cosign sign-blob --tlog-upload=false`).
+      MODULE3_COSIGN_EXTRA_ARGS: ${MODULE3_COSIGN_EXTRA_ARGS:---insecure-ignore-tlog}

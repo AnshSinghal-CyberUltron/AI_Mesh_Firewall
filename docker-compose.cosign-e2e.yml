@@ -1,0 +1,16 @@
+﻿services:
+  gateway:
+    volumes:
+      - ./runs/cosign-e2e/cosign.pub:/etc/cosign/cosign.pub:ro
+    environment:
+      MODULE3_ADMISSION_MODE: verify
+      MODULE3_COSIGN_PUBLIC_KEY_FILE: /etc/cosign/cosign.pub
+      MODULE3_COSIGN_VERIFY_IMAGE: "0"
+      MODULE3_COSIGN_BINARY: cosign
+      MODULE3_COSIGN_TIMEOUT_SEC: "60"
+      MODULE3_COSIGN_EXTRA_ARGS: --insecure-ignore-tlog
+      GATEWAY_INTERNAL_API_KEY: cosign-e2e-internal-key
+  control:
+    environment:
+      GATEWAY_INTERNAL_API_KEY: cosign-e2e-internal-key
+      GATEWAY_URL: http://gateway:8300

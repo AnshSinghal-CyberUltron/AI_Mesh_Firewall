@@ -98,7 +98,7 @@ class Module3ApiTests(TestCase):
     def test_k8s_topology_returns_clusters(self):
         from module3.management.commands.seed_module3 import Command
 
-        Command().handle()
+        Command().handle(org_slug=self.org.slug)
         resp = self.client.get("/api/module3/k8s-firewall/topology/")
         self.assertEqual(resp.status_code, 200)
         self.assertGreaterEqual(len(resp.json()["clusters"]), 1)
@@ -116,6 +116,12 @@ class Module3ApiTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(NetworkPolicyEvent.objects.filter(organization=self.org, action="drop").exists())
+        self.assertTrue(
+            SecurityIncident.objects.filter(
+                organization=self.org,
+                title__icontains="K8s network drop",
+            ).exists()
+        )
 
     def test_simulator_embedding_poison_creates_incident(self):
         resp = self.client.post(
@@ -148,3 +154,31 @@ class Module3ApiTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 401)
+
+    @override_settings(AGENT_API_KEY="test-agent-key", CELERY_TASK_ALWAYS_EAGER=True)
+    def test_agent_network_drop_creates_incident(self):
+        anon = APIClient()
+        resp = anon.post(
+            "/api/module3/ingest/network-event/",
+            {
+                "organization_slug": self.org.slug,
+                "cluster_name": "agent-cluster",
+                "layer": "ebpf",
+                "action": "drop",
+                "source_ref": "bad/agent",
+                "dest_ref": "vector/db",
+                "reason": "unit test drop",
+            },
+            format="json",
+            HTTP_AUTHORIZATION="Bearer test-agent-key",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(
+            NetworkPolicyEvent.objects.filter(organization=self.org, action="drop").exists()
+        )
+        self.assertTrue(
+            SecurityIncident.objects.filter(
+                organization=self.org,
+                title__icontains="K8s network drop",
+            ).exists()
+        )

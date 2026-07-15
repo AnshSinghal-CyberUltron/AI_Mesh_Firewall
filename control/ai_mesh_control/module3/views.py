@@ -32,7 +32,11 @@ from module3.serializers import (
     NetworkEventIngestSerializer,
     VerifyArtifactSerializer,
 )
-from module3.tasks import emit_admission_deny_incident, emit_embedding_quarantine_incident
+from module3.tasks import (
+    emit_admission_deny_incident,
+    emit_embedding_quarantine_incident,
+    emit_network_drop_incident,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +273,20 @@ class _IngestOrgMixin:
             from auth.models import Organization
 
             return Organization.objects.filter(pk=org_id, is_active=True).first()
+
+        # Global AGENT_API_KEY has no org binding — accept explicit slug/id in body.
+        from auth.models import Organization
+
+        slug = str((request.data.get("organization_slug") or "")).strip()
+        if slug:
+            return Organization.objects.filter(slug=slug, is_active=True).first()
+        raw_pk = request.data.get("organization_id")
+        if raw_pk is not None and str(raw_pk).strip() != "":
+            try:
+                return Organization.objects.filter(pk=int(raw_pk), is_active=True).first()
+            except (TypeError, ValueError):
+                return None
+
         return get_request_organization(request)
 
 
@@ -349,6 +367,8 @@ class NetworkEventIngestView(_IngestOrgMixin, APIView):
             dest_ref=data["dest_ref"],
             reason=data.get("reason") or "",
         )
+        if data["action"] == "drop":
+            emit_network_drop_incident.delay(org.id, event.id, event.reason)
         return Response({"status": "ok", "event_id": event.id}, status=status.HTTP_201_CREATED)
 
 
@@ -400,7 +420,16 @@ class Module3SimulatorIngestView(APIView):
 
         event_type = str(request.data.get("event_type") or "").strip()
         if event_type == "network_drop":
-            ser = NetworkEventIngestSerializer(data=request.data)
+            payload = {
+                "cluster_name": request.data.get("cluster_name") or "demo-cluster",
+                "layer": request.data.get("layer") or "ebpf",
+                "action": "drop",
+                "source_ref": request.data.get("source_ref") or "compromised/pod",
+                "dest_ref": request.data.get("dest_ref") or "vector-db/default",
+                "reason": request.data.get("reason")
+                or "Unauthorized label: missing python-backend",
+            }
+            ser = NetworkEventIngestSerializer(data=payload)
             ser.is_valid(raise_exception=True)
             data = ser.validated_data
             cluster_name = (data.get("cluster_name") or "demo-cluster").strip()
@@ -418,10 +447,19 @@ class Module3SimulatorIngestView(APIView):
                 dest_ref=data.get("dest_ref") or "vector-db/default",
                 reason=data.get("reason") or "Unauthorized label: missing python-backend",
             )
+            emit_network_drop_incident.delay(org.id, event.id, event.reason)
             return Response({"status": "ok", "event_id": event.id})
 
         if event_type == "embedding_poison":
-            ser = EmbeddingInspectionIngestSerializer(data=request.data)
+            payload = {
+                "collection": request.data.get("collection") or "corp-docs",
+                "status": "quarantined",
+                "anomaly_score": request.data.get("anomaly_score") or 0.97,
+                "payload_hash": request.data.get("payload_hash") or "sim-poison-hash",
+                "quarantine_reason": request.data.get("quarantine_reason")
+                or "Extreme distance anomaly — suspected embedding poisoning",
+            }
+            ser = EmbeddingInspectionIngestSerializer(data=payload)
             ser.is_valid(raise_exception=True)
             data = ser.validated_data
             job = EmbeddingInspectionJob.objects.create(

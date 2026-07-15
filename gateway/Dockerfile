@@ -33,6 +33,26 @@ RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
     && node --version && npm --version && npx --version
 
+# Cosign CLI for Module 3 production admission (MODULE3_ADMISSION_MODE=verify).
+# Resolves arch from the build machine so local amd64/arm64 images both work.
+ARG COSIGN_VERSION=2.4.3
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends ca-certificates curl; \
+    arch="$(uname -m)"; \
+    case "$arch" in \
+      x86_64) cosign_arch=amd64 ;; \
+      aarch64|arm64) cosign_arch=arm64 ;; \
+      *) echo "Unsupported arch for Cosign: $arch" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /usr/local/bin/cosign \
+      "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/cosign-linux-${cosign_arch}"; \
+    chmod +x /usr/local/bin/cosign; \
+    cosign version; \
+    apt-get purge -y curl; \
+    apt-get autoremove -y; \
+    rm -rf /var/lib/apt/lists/*
+
 EXPOSE 8300
 
 # Multi-process ASGI server. gunicorn pre-forks WEB_CONCURRENCY uvicorn workers

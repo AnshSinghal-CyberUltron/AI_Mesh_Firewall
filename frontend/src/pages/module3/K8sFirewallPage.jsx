@@ -30,8 +30,8 @@ function TopologyGrid({ topology }) {
     return (
       <Module2EmptyState
         title="No clusters registered"
-        message="Cluster agents report heartbeats to /api/module3/ingest/cluster-heartbeat/."
-        hint="Run: python manage.py seed_module3"
+        message="Bootstrap Kind Phase 2: bash scripts/module3_kind_up.sh (needs AGENT_API_KEY). Or run scripts/module3_ingest_agent_demo.sh."
+        hint="Docs: docs/MODULE3_PHASE2_K8S.md — demo fallback: seed_module3 / Zero-Trust Simulator."
       />
     );
   }
@@ -123,10 +123,13 @@ function K8sSimulator({ api, onSuccess }) {
     <div className="rounded-xl border border-dashed border-violet-300 bg-violet-50/50 p-4 dark:border-violet-800 dark:bg-violet-950/20">
       <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
         <AlertTriangle className="h-4 w-4 text-violet-600" />
-        Zero-Trust Simulator
+        Zero-Trust Simulator (demo fallback)
       </h3>
       <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-        Inject synthetic eBPF drop or poisoned embedding events.
+        JWT demo injector when no Kind agent is running. Prefer{" "}
+        <code className="text-[10px]">scripts/module3_kind_up.sh</code> or{" "}
+        <code className="text-[10px]">scripts/module3_ingest_agent_demo.sh</code>. Drops and
+        quarantines open Module 2 incidents.
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <button
@@ -297,7 +300,10 @@ export function K8sFirewallPage() {
           {networkEvents.length ? (
             <DataTable columns={networkColumns} rows={networkEvents} />
           ) : (
-            <Module2EmptyState title="No network events" message="Events appear when Cilium/Envoy sensors report drops." />
+            <Module2EmptyState
+              title="No network events"
+              message="Agent ingest posts drops to /api/module3/ingest/network-event/ (or use the simulator)."
+            />
           )}
         </div>
         <div>
@@ -305,7 +311,10 @@ export function K8sFirewallPage() {
           {embeddingQueue.length ? (
             <DataTable columns={embeddingColumns} rows={embeddingQueue} />
           ) : (
-            <Module2EmptyState title="Queue empty" message="River workers report inspection results via ingest API." />
+            <Module2EmptyState
+              title="Queue empty"
+              message="Post via /api/module3/ingest/embedding-inspection/ (status=quarantined exercises Module 2 SOC)."
+            />
           )}
         </div>
       </div>

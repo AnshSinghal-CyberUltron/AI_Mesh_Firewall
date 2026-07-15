@@ -36,14 +36,14 @@ class ModelArtifactCreateSerializer(serializers.Serializer):
     image_ref = serializers.CharField(max_length=512)
     data_sha256 = serializers.CharField(max_length=64, required=False, allow_blank=True)
     model_sha256 = serializers.CharField(max_length=64, required=False, allow_blank=True)
-    signature_digest = serializers.CharField(max_length=512, required=False, allow_blank=True)
+    signature_digest = serializers.CharField(required=False, allow_blank=True)
     source = serializers.ChoiceField(choices=["ci", "manual"], default="manual")
 
 
 class VerifyArtifactSerializer(serializers.Serializer):
     artifact_id = serializers.IntegerField(required=False)
     image_ref = serializers.CharField(max_length=512, required=False, allow_blank=True)
-    signature_digest = serializers.CharField(max_length=512, required=False, allow_blank=True)
+    signature_digest = serializers.CharField(required=False, allow_blank=True)
     data_sha256 = serializers.CharField(max_length=64, required=False, allow_blank=True)
     model_sha256 = serializers.CharField(max_length=64, required=False, allow_blank=True)
 

@@ -40,7 +40,7 @@ def verify_admission(payload: dict) -> dict:
         headers["X-Gateway-Internal-Key"] = secret
 
     try:
-        resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=15)
+        resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=90)
     except requests.RequestException as exc:
         logger.warning("Gateway admission verify failed: %s", exc)
         raise RuntimeError(f"Gateway unreachable: {exc}") from exc
@@ -53,5 +53,11 @@ def verify_admission(payload: dict) -> dict:
     if resp.status_code >= 500:
         raise RuntimeError(body.get("reason") or body.get("error") or f"HTTP {resp.status_code}")
 
-    # 403 is expected for denied admissions — body still contains allowed=false
+    # Admission answers are 200 (allow) or 403 (deny with allowed=false). Anything
+    # else (esp. 401 from missing GATEWAY_INTERNAL_API_KEY / middleware) is a
+    # control↔gateway misconfiguration, not an admission decision.
+    if resp.status_code not in (200, 403) or "allowed" not in body:
+        detail = body.get("message") or body.get("error") or body.get("reason") or resp.text[:300]
+        raise RuntimeError(f"Gateway admission auth/config error (HTTP {resp.status_code}): {detail}")
+
     return body

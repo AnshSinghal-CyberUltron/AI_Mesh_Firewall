@@ -1,0 +1,45 @@
+# Envoy frontend for vector-db pod: mTLS on :8443 → localhost:8000 (gauntlet)
+static_resources:
+  listeners:
+    - name: mtls_ingress
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 8443 }
+      filter_chains:
+        - transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain: { filename: "/etc/certs/tls.crt" }
+                    private_key: { filename: "/etc/certs/tls.key" }
+                validation_context:
+                  trusted_ca: { filename: "/etc/certs/ca.crt" }
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: vdb_mtls
+                route_config:
+                  name: local
+                  virtual_hosts:
+                    - name: backend
+                      domains: ["*"]
+                      routes:
+                        - match: { prefix: "/" }
+                          route: { cluster: local_vdb }
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+  clusters:
+    - name: local_vdb
+      connect_timeout: 1s
+      type: STATIC
+      load_assignment:
+        cluster_name: local_vdb
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: 127.0.0.1, port_value: 8000 }

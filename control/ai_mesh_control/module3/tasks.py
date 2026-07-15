@@ -101,3 +101,33 @@ def emit_embedding_quarantine_incident(
             "anomaly_score": job.anomaly_score,
         },
     )
+
+
+@shared_task(queue="compute.heavy", bind=True, max_retries=2)
+def emit_network_drop_incident(self, org_id: int, event_id: int, reason: str = ""):
+    from auth.models import Organization
+    from module3.models import NetworkPolicyEvent
+
+    try:
+        org = Organization.objects.get(pk=org_id)
+        event = NetworkPolicyEvent.objects.get(pk=event_id, organization=org)
+    except (Organization.DoesNotExist, NetworkPolicyEvent.DoesNotExist):
+        return
+
+    title = f"K8s network drop: {event.source_ref} → {event.dest_ref}"
+    notes = reason or event.reason or f"{event.layer} drop between AI workloads"
+    _create_module3_incident(
+        org,
+        title=title,
+        severity="high",
+        event_type="module3_network_drop",
+        notes=notes,
+        extra_meta={
+            "event_id": event.id,
+            "layer": event.layer,
+            "action": event.action,
+            "source_ref": event.source_ref,
+            "dest_ref": event.dest_ref,
+            "cluster_id": event.cluster_id,
+        },
+    )
