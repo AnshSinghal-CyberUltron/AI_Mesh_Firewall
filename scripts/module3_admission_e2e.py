@@ -6,8 +6,10 @@ import base64
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -48,6 +50,64 @@ def http_json(method: str, path: str, body: dict | None = None, token: str | Non
         fail(f"{method} {path}: {exc}")
 
 
+def sign_blob(payload_path: Path, sig_path: Path) -> None:
+    """Sign with host cosign, else gateway container cosign (key already mounted)."""
+    env = os.environ.copy()
+    env.setdefault("COSIGN_PASSWORD", "")
+    if shutil.which("cosign"):
+        subprocess.run(
+            [
+                "cosign",
+                "sign-blob",
+                "--yes",
+                "--tlog-upload=false",
+                "--key",
+                COSIGN_KEY,
+                "--output-signature",
+                str(sig_path),
+                str(payload_path),
+            ],
+            check=True,
+            env=env,
+            stdout=subprocess.DEVNULL,
+        )
+        return
+
+    if not shutil.which("docker"):
+        fail("cosign not found on PATH and docker unavailable")
+
+    ok("using gateway container cosign (host cosign not on PATH)")
+    # Write payload into gateway /tmp, sign with mounted /run/secrets/cosign.key, copy sig out.
+    root = Path(__file__).resolve().parents[1]
+    compose = ["docker", "compose", "-f", str(root / "docker-compose.yml")]
+    remote_payload = f"/tmp/{payload_path.name}"
+    remote_sig = f"/tmp/{sig_path.name}"
+    subprocess.run(compose + ["cp", str(payload_path), f"gateway:{remote_payload}"], check=True)
+    subprocess.run(
+        compose
+        + [
+            "exec",
+            "-T",
+            "-e",
+            "COSIGN_PASSWORD=",
+            "gateway",
+            "cosign",
+            "sign-blob",
+            "--yes",
+            "--tlog-upload=false",
+            "--key",
+            "/run/secrets/cosign.key",
+            "--output-signature",
+            remote_sig,
+            remote_payload,
+        ],
+        check=True,
+        env=env,
+        stdout=subprocess.DEVNULL,
+    )
+    subprocess.run(compose + ["cp", f"gateway:{remote_sig}", str(sig_path)], check=True)
+
+
 def main() -> None:
     if not Path(COSIGN_KEY).is_file():
         fail(f"Missing Cosign key: {COSIGN_KEY}")
@@ -66,27 +126,11 @@ def main() -> None:
     version = "1.0.0"
     image_ref = f"registry.example.com/zeroshield/{name}:{version}"
 
-    payload_path = Path("/tmp") / f"m3-payload-{ts}.txt"
-    sig_path = Path("/tmp") / f"m3-sig-{ts}.sig"
+    tmp = Path(tempfile.gettempdir())
+    payload_path = tmp / f"m3-payload-{ts}.txt"
+    sig_path = tmp / f"m3-sig-{ts}.sig"
     payload_path.write_bytes(model_sha.encode())
-    env = os.environ.copy()
-    env.setdefault("COSIGN_PASSWORD", "")
-    subprocess.run(
-        [
-            "cosign",
-            "sign-blob",
-            "--yes",
-            "--tlog-upload=false",
-            "--key",
-            COSIGN_KEY,
-            "--output-signature",
-            str(sig_path),
-            str(payload_path),
-        ],
-        check=True,
-        env=env,
-        stdout=subprocess.DEVNULL,
-    )
+    sign_blob(payload_path, sig_path)
     sig_b64 = base64.b64encode(sig_path.read_bytes()).decode()
 
     reg = http_json(
