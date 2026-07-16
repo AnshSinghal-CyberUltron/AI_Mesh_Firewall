@@ -10633,13 +10633,33 @@ def _provider_type_supports(provider_type: str, op: str) -> bool:
 
 # ── Dynamic vector client resolution (org config → env-var default) ──
 
-def _resolve_vector_client(vector_db_type: str, org_id: int | str | None = None):
+def _resolve_vector_client(
+    vector_db_type: str,
+    org_id: int | str | None = None,
+    embedding_model_override: str | None = None,
+):
     """
     Resolve a vector DB client using the credential hierarchy:
         1. Org-level VectorProviderConfig from VECTOR_PROVIDER_SYNC cache
         2. Gateway-level VECTOR_CLIENTS from env-var startup
     Returns (client, provider_type_used) or (None, None).
+
+    ``embedding_model_override`` — PER-COLLECTION embedding model. The vector
+    provider config carries ONE org-default embedding model, but a per-collection
+    VectorCollectionPolicy may pin its own (``policy.embedding_model``) so one org
+    can serve indexes of different dimensions (e.g. a 1024-dim e5 collection and a
+    1536-dim OpenAI collection). When set (non-empty), it replaces the provider
+    default for the freshly-built org-BYOK client; the org's credentials
+    (provider ``api_key`` for Pinecone-hosted models, ``embedding_api_key`` for
+    external ones) are still taken from the provider config. Empty/None → the
+    provider default (exact prior behaviour). This is also what makes the
+    embedding-model access check at the rag_query/ingest handlers self-consistent:
+    the model those handlers VALIDATE against (policy.embedding_model) is now the
+    model actually used to embed, not a silently-different provider default. The
+    env-var fallback client (pre-built at startup) cannot be re-modeled per
+    request, so the override applies only to the org-BYOK build path.
     """
+    _emb_override = (embedding_model_override or "").strip()
     # Try org-level config first
     if org_id and VECTOR_PROVIDER_SYNC is not None:
         lookup_types = [vector_db_type]
@@ -10670,7 +10690,7 @@ def _resolve_vector_client(vector_db_type: str, org_id: int | str | None = None)
                         return PineconeClient(
                             api_key=cfg["api_key"],
                             environment=cfg.get("environment", ""),
-                            embedding_model=cfg.get("embedding_model", "text-embedding-3-small"),
+                            embedding_model=_emb_override or cfg.get("embedding_model", "text-embedding-3-small"),
                             embedding_api_key=cfg.get("embedding_api_key", ""),
                             reranker_model=cfg.get("reranker_model", ""),
                         ), "pinecone"
@@ -11330,7 +11350,14 @@ async def rag_query(request: Request):
                 },
             )
 
-        resolved_vector_client, _ = _resolve_vector_client(effective_vector_db_type, org_id=org_id_for_client)
+        resolved_vector_client, _ = _resolve_vector_client(
+            effective_vector_db_type,
+            org_id=org_id_for_client,
+            # Per-collection embedding model (validated above) — authoritative over
+            # the org's provider-default so mixed-dimension collections retrieve
+            # with the right model. Empty policy value → provider default.
+            embedding_model_override=(policy_embedding_model or None),
+        )
         result = await RAG_PIPELINE.execute(
             query_text=query_text,
             collection_name=collection_name,
@@ -12151,7 +12178,13 @@ async def rag_ingest(request: Request):
             )
 
         # ── Synchronous upsert: resolve the per-org BYOK client and store now ──
-        client, used_vdb = _resolve_vector_client(vector_db_type, org_id)
+        # Per-collection embedding model (policy.embedding_model) is authoritative
+        # over the org provider default so a doc is embedded with the SAME model the
+        # collection is queried with (dimension parity). Empty → provider default.
+        client, used_vdb = _resolve_vector_client(
+            vector_db_type, org_id,
+            embedding_model_override=(policy.get("embedding_model") or None),
+        )
         if client is None:
             return JSONResponse(
                 status_code=422,
