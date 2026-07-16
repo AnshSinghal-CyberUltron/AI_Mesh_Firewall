@@ -447,7 +447,13 @@ export function RAGPipelineTelemetry({ ragPipelineKpis: externalKpis }) {
                 <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">Document Filtering Funnel</h4>
               </div>
               <div className="h-40">
-                <SafeResponsiveChart className="h-full" option={funnelOption(funnelData)} />
+                {funnelData.some((d) => d.value > 0) ? (
+                  <SafeResponsiveChart className="h-full" option={funnelOption(funnelData)} />
+                ) : (
+                  <div className="h-full flex items-center justify-center text-center text-slate-500 dark:text-slate-400 text-sm">
+                    No document funnel data for this period
+                  </div>
+                )}
               </div>
               {funnel.retrieved > 0 && (
                 <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 text-center">
