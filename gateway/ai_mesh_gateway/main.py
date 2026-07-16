@@ -4409,7 +4409,15 @@ def _enrich_blocked_event_pipeline_trace(kwargs: dict) -> None:
     if event_type not in _PIPELINE_TRACE_TELEMETRY_EVENTS:
         if not (event_type == "stream_complete" and action == "block"):
             return
-    if action not in ("block", "monitor", "rewrite"):
+    # Only a genuinely BLOCKED event gets a "blocked" (output-withheld,
+    # final_action=block) pipeline trace. rewrite/monitor/flag are DELIVERED actions:
+    # attaching a blocked trace here made the separate output_guard `rewrite` event
+    # carry final_action=block + output_withheld=True, so the Output Governance Log
+    # rendered it as "Output Guard BLOCKED / response withheld" even though its own
+    # action was rewrite (and the request event's trace correctly showed rewrite) — the
+    # exact 3-way (Allowed / Blocked / rewrite) discrepancy for one request. Their
+    # authoritative delivered trace lives on the `request`/`stream_complete` event.
+    if action != "block":
         return
 
     md = dict(kwargs.get("metadata") or {})

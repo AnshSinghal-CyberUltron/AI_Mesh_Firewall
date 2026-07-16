@@ -20,12 +20,15 @@ const AUTO_REFRESH_STYLES = {
 const ACTION_STYLES = {
   block: { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300", icon: ShieldX, label: "Blocked" },
   redact: { bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300", icon: EyeOff, label: "Redacted" },
+  // rewrite was MISSING here, so a rewritten response fell back to ACTION_STYLES.allow
+  // and rendered the badge as "Allowed" in the Output Governance Log (2026-07-16).
+  rewrite: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300", icon: RefreshCw, label: "Rewritten" },
   flag: { bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300", icon: ShieldAlert, label: "Flagged" },
   allow: { bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-300", icon: ShieldCheck, label: "Allowed" },
 };
 
 function ActionBadge({ action }) {
-  const style = ACTION_STYLES[action] || ACTION_STYLES.allow;
+  const style = ACTION_STYLES[String(action || "").toLowerCase()] || ACTION_STYLES.allow;
   const Icon = style.icon;
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>

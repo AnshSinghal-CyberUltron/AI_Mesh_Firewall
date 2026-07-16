@@ -153,7 +153,7 @@ export function OutputPipelineTimeline({ event }) {
   // Stage 2: Raw LLM Output (before guardrails)
   stages.push({
     id: "raw_output",
-    label: "2. Raw Model Output",
+    label: (action === "rewrite" || action === "redact") ? "2. Raw Model Output (initial — before guardrail)" : "2. Raw Model Output",
     content: rawOutput || "(raw output not available)",
     metrics: [
       ...(model ? [{ label: "Model", value: model }] : []),
@@ -205,6 +205,7 @@ export function OutputPipelineTimeline({ event }) {
       ? (redactUnchanged
         ? "REDACTED — Action applied; the visible snippet is unchanged because the masked spans fall outside the displayed preview (see matched spans above)"
         : "REDACTED — Sensitive content removed")
+    : action === "rewrite" ? "REWRITTEN — Response regenerated to neutralize the detected content (compare the initial raw output in step 2 with the final output below)"
     : action === "flag" ? "FLAGGED — Marked for review"
     : "ALLOWED — Clean response delivered";
 
@@ -212,7 +213,7 @@ export function OutputPipelineTimeline({ event }) {
     id: "action",
     label: "5. Guardrail Action",
     content: actionLabel,
-    badge: action === "block" ? "blocked" : action === "redact" ? "redacted" : action === "flag" ? "flagged" : "allowed",
+    badge: action === "block" ? "blocked" : action === "redact" ? "redacted" : action === "rewrite" ? "rewritten" : action === "flag" ? "flagged" : "allowed",
     highlight: true,
     highlightAction: action,
     metrics: [
@@ -221,16 +222,17 @@ export function OutputPipelineTimeline({ event }) {
     ],
   });
 
-  // Stage 6: Final Output
+  // Stage 6: Final Output — for redact/rewrite show the SANITIZED/REWRITTEN output
+  // (distinct from step 2's initial raw output), so operators can compare before/after.
   const finalContent = action === "block"
     ? "[Response blocked — not delivered to user]"
-    : action === "redact"
-      ? sanitizedOutput || "(redacted output)"
+    : (action === "redact" || action === "rewrite")
+      ? sanitizedOutput || rawOutput || (action === "rewrite" ? "(rewritten output)" : "(redacted output)")
       : rawOutput || "(output delivered as-is)";
 
   stages.push({
     id: "final_output",
-    label: "6. Final Output to User",
+    label: action === "rewrite" ? "6. Final Output to User (rewritten)" : "6. Final Output to User",
     content: finalContent,
     highlight: action !== "allow",
     highlightAction: action === "block" ? "block" : "allow",
