@@ -61,9 +61,9 @@ const DETECTORS = [
   },
   {
     id: "policy",
-    label: "Policy Violations",
+    label: "Policy Violations & AI Guard",
     icon: ScrollText,
-    description: "Org policy-engine verdicts enforced on the output path",
+    description: "Each policy rule's own action applies first (authoritative). This action is the FALLBACK for rules with no explicit action, and governs the AI guard model's generic unsafe output (jailbreak / injection / toxic).",
     enableKey: "output_policy_enabled",
     actionKey: "output_policy_action",
     defaultEnabled: true,

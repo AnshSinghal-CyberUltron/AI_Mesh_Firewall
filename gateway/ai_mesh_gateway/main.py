@@ -9033,14 +9033,21 @@ async def proxy_chat(
                 org_slug,
                 actor=_build_policy_actor(auth_ctx, user_id),
             )
-            resp_action = _normalize_output_action(resp_check.get("action") if resp_check else "allow")
-            # §1.7 output policy control: the operator-configured output_policy_action
-            # is authoritative for the output path. When the policy engine reports a
-            # violation, route it through the configured action (block/redact/rewrite/
-            # flag/allow). action="allow" lets operators monitor without enforcing.
-            # Monitor normalizes to flag — do not escalate flag/monitor to block.
-            if resp_check and resp_action not in ("allow", "flag"):
-                resp_action = _normalize_output_action(org_config.get("output_policy_action", "block"))
+            _raw_policy_action = str((resp_check or {}).get("action") or "").lower()
+            resp_action = _normalize_output_action(_raw_policy_action if resp_check else "allow")
+            # PER-RULE AUTHORITATIVE + OPERATOR FALLBACK (2026-07-16): each matched
+            # policy Rule carries its OWN action and the engine aggregates them into the
+            # highest-severity PER-RULE action (policy_engine.evaluate). That per-rule
+            # action is AUTHORITATIVE and is NO LONGER overridden by the global
+            # output_policy_action — a rule configured to "redact"/"block"/"rewrite"/
+            # "flag"/"allow" is honoured exactly. The detector-level output_policy_action
+            # is a FALLBACK ONLY: it applies when a matched rule left its action
+            # non-enforcing ("monitor"/unset), supplying the operator's chosen baseline
+            # posture instead of the old hard-coded monitor->flag. (It also governs the
+            # AI guard model's generic unsafe-output findings via output_guard.py.)
+            # output_policy_enabled still gates whether the output policy path runs.
+            if resp_check and _raw_policy_action in ("", "monitor"):
+                resp_action = _normalize_output_action(org_config.get("output_policy_action", "flag"))
             if resp_check and resp_action == "block":
                 METRICS["blocked"] += 1
                 elapsed_ms = (time.perf_counter() - start) * 1000
