@@ -748,6 +748,12 @@ class OutputGuard:
             the guard model can never impose an action the operator did not choose.
             """
             t = str(threat_type or "").lower()
+            # ALREADY-MASKED IS NOT A LEAK: a guard "masking-detection" finding
+            # (e.g. PII_MASKING_DETECTION) means the value is ALREADY masked in the
+            # output — no raw data to protect → no action, mirroring the static
+            # *_smart_masked drop in _check_pii_secrets.
+            if "smart_masked" in t or "masking" in t or "already_masked" in t:
+                return "allow"
             if any(k in t for k in ("pii", "phi", "pci", "ssn", "email", "phone", "address", "personal")):
                 return _action("output_pii_action", "redact") if _enabled("output_pii_enabled", True) else "allow"
             # Credential/secret aliases — concrete secret shapes the guard model labels
@@ -984,15 +990,26 @@ class OutputGuard:
         """Delegate PII/secret detection to the existing scanner."""
         verdict = await self._scanner.scan_output(text)
         if verdict.threat_type in ("pii", "secret") and verdict.matched_patterns:
-            pattern_keys = verdict.matched_patterns
+            pattern_keys = list(verdict.matched_patterns)
             matched_values = dict(getattr(verdict, "matched_values", None) or {})
-            # FULL OPERATOR CONTROL (2026-07-16): the configured action is honoured
-            # EXACTLY, including for already smart-masked shapes (j***@a***.com,
-            # ***-**-6789). Previously smart-mask-only output was force-flagged
-            # regardless of the operator's selection, so the dropdown looked inert
-            # on already-masked data. Operators who want already-masked PII delivered
-            # untouched select "flag" or "allow"; those who select "redact"/"rewrite"
-            # get that action applied (a smart-masked value is re-masked / rewritten).
+            # ALREADY-MASKED IS NOT A LEAK (2026-07-16): a "*_smart_masked" match means
+            # the value is ALREADY masked in the model output (j***@a***.com,
+            # ***-**-6789) — there is NO raw sensitive data to protect, so it is NOT a
+            # PII leak and MUST NOT trigger any enforcement action (block/redact/rewrite/
+            # flag). "pii" means actual raw data is present; when the model itself
+            # already produced a redacted/masked value there is nothing to act on. Drop
+            # the already-masked shapes; the operator's configured action applies only to
+            # GENUINELY RAW PII. If EVERY match was already masked, the output is clean →
+            # no verdict (delivered unchanged, NO action). This is a DETECTION
+            # correction, not an action override — full operator control is preserved for
+            # real leaks (a raw email alongside a masked one still triggers the action).
+            _raw_keys = [k for k in pattern_keys if not str(k).endswith("_smart_masked")]
+            if not _raw_keys:
+                return OutputVerdict()
+            pattern_keys = _raw_keys
+            matched_values = {
+                k: v for k, v in matched_values.items() if not str(k).endswith("_smart_masked")
+            }
             effective_action = action
             value_detail = ""
             if matched_values:
