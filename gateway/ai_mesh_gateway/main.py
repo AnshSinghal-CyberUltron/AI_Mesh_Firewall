@@ -2638,8 +2638,21 @@ def _extract_chat_routing_preferences(body: dict, org_config: dict, auth_ctx, sc
     # risk entirely"); `or`-coalescing would silently fall back to the default
     # and violate the Σ=1.0 intent. Honor an explicit 0 by checking for None.
     # FIX-5: a non-numeric per-request weight must degrade to the default, never 500.
-    def _weight(pref_key: str, org_key: str, default: float) -> float:
+    # Nested ``weights: {risk, cost, …}`` is accepted as an alias of
+    # ``risk_weight`` / ``cost_weight`` / … (demo + SDK ergonomics).
+    _nested_weights = (
+        routing_preferences.get("weights")
+        if isinstance(routing_preferences.get("weights"), dict)
+        else {}
+    )
+
+    def _weight(pref_key: str, org_key: str, default: float, nested_key: str = "") -> float:
         _w = routing_preferences.get(pref_key)
+        if _w is None and nested_key:
+            _w = _nested_weights.get(nested_key)
+        if _w is None and nested_key:
+            # Also accept nested risk_weight-style keys.
+            _w = _nested_weights.get(pref_key)
         if _w is None:
             _w = org_config.get(org_key, CONFIG.get(org_key, default))
         try:
@@ -2655,10 +2668,10 @@ def _extract_chat_routing_preferences(body: dict, org_config: dict, auth_ctx, sc
         return max(0.0, min(_wf, 1.0))
 
     weights = {
-        "risk": _weight("risk_weight", "routing_risk_weight", 0.30),
-        "cost": _weight("cost_weight", "routing_cost_weight", 0.20),
-        "latency": _weight("latency_weight", "routing_latency_weight", 0.20),
-        "priority": _weight("priority_weight", "routing_priority_weight", 0.30),
+        "risk": _weight("risk_weight", "routing_risk_weight", 0.30, "risk"),
+        "cost": _weight("cost_weight", "routing_cost_weight", 0.20, "cost"),
+        "latency": _weight("latency_weight", "routing_latency_weight", 0.20, "latency"),
+        "priority": _weight("priority_weight", "routing_priority_weight", 0.30, "priority"),
     }
     # FIX-1.5c: ``request_risk_score`` is RISK, not classification CONFIDENCE.
     # The old `or`-chain folded ``scan_verdict.confidence`` straight in, so a
@@ -2746,10 +2759,16 @@ def _build_routing_metadata(
         and original_model not in ("", "auto")
         and selection.model_name != original_model
     )
+    remapped_from = getattr(selection, "remapped_from", "") or ""
+    runtime_model = getattr(selection, "runtime_model", "") or selection.model_name
+    # Prefer served/runtime identity for selected/routed; keep remapped_from honest.
+    served = runtime_model or selection.model_name
+    if remapped_from and remapped_from != served:
+        rerouted = True
     return {
         "original_model": original_model,
-        "selected_model": selection.model_name,
-        "routed_model": selection.model_name,
+        "selected_model": served,
+        "routed_model": served,
         "route_destination": "llm",
         "routing_enabled": routing_enabled,
         "routing_override": routing_override,
@@ -2772,6 +2791,12 @@ def _build_routing_metadata(
         "token_budget_tpm": token_budget_tpm,
         "latency_budget_ms": latency_budget_ms,
         "weights": weights,
+        "sensitivity_fallback": bool(getattr(selection, "sensitivity_fallback", False)),
+        "score_tie": bool(getattr(selection, "score_tie", False)),
+        "candidate_scores": list(getattr(selection, "candidate_scores", None) or []),
+        "remapped_from": remapped_from,
+        "runtime_model": served,
+        "scoring_selected_model": remapped_from or selection.model_name,
     }
 
 
@@ -3108,6 +3133,9 @@ def _build_stream_zeroshield_base(
             # though the decision happened. Org-facing names ONLY — routed_model_id
             # (the raw upstream id) is never set here and is scrubbed by
             # _redact_for_client_response regardless.
+            _remapped_from = getattr(route_selection, "remapped_from", "") or ""
+            if _remapped_from and _remapped_from != routed:
+                _rerouted = True
             zs["routing"] = {
                 "requested_model": requested,
                 "original_model": requested,
@@ -3122,6 +3150,15 @@ def _build_stream_zeroshield_base(
                 "routing_score": getattr(route_selection, "score", 0) or 0,
                 "candidate_count": getattr(route_selection, "candidate_count", 0) or 0,
                 "evaluator_model": getattr(route_selection, "evaluator_model", "") or "",
+                "sensitivity_fallback": bool(
+                    getattr(route_selection, "sensitivity_fallback", False)
+                ),
+                "score_tie": bool(getattr(route_selection, "score_tie", False)),
+                "remapped_from": _remapped_from,
+                "runtime_model": getattr(route_selection, "runtime_model", "") or routed,
+                "candidate_scores": list(
+                    getattr(route_selection, "candidate_scores", None) or []
+                ),
             }
         client_zs = _redact_for_client_response(zs) or {}
         client_zs["request_id"] = request_id
@@ -3674,11 +3711,13 @@ def _routing_identity_set(routing_models: list[dict] | None) -> set[str]:
 
 
 def _routing_compliance_required(routing_prefs: dict) -> bool:
-    """FIX-1.5a: True when the request carries a compliance/sensitivity demand.
+    """True when empty selection must hard-block (403).
 
-    A request demands compliant routing when it lists required compliance tags OR
-    its data sensitivity resolves above 'public'. Benign (no-compliance) requests
-    return False and are never subject to the fail-closed gate below.
+    Compliance tags remain fail-closed. Non-public sensitivity alone no longer
+    triggers this gate when soft-fallback can pick a best-available model
+    (selection is non-None). Sensitivity still contributes when selection is
+    None (no active models at all) so we do not fall through to a raw client
+    model.
     """
     if [t for t in (routing_prefs.get("required_compliance") or []) if t]:
         return True
@@ -3826,7 +3865,20 @@ async def _rewrite_output_response_text_via_router(
         if code == 200:
             text = _extract_response_from_completion(resp)
             if text and text.strip():
-                return redact_all(text.strip()), True
+                clean = text.strip()
+                # FULL-CONTROL HONESTY (2026-07-16): deliver the GENUINE rewrite.
+                # Previously the re-inferred text was blanket-passed through
+                # redact_all(), masking every PII-shaped token into "[redacted]" —
+                # so a legitimate "rewrite" was indistinguishable from "redact" in
+                # the delivered body + trace. Now redact_all is only a RESIDUAL
+                # safety net: if the rewrite model failed to neutralize and left a
+                # real PII/secret token behind (redact_all would change the text),
+                # we mask that residual; otherwise the model's clean rewrite is
+                # delivered verbatim. The strengthened _REWRITE_SYSTEM_PROMPT tells
+                # the model to use natural placeholders (no fake emails/phones), so
+                # a compliant rewrite has no residual and egresses as a true rewrite.
+                residual = redact_all(clean)
+                return (residual if residual != clean else clean), True
         LOG.warning(
             "Output rewrite re-inference returned no usable text (code=%s); using static fallback",
             code,
@@ -4038,6 +4090,18 @@ def _redact_trace_text(text) -> str:
         return ""
 
 
+def _trace_prompt_operator_masked(raw_text: str) -> bool:
+    """True when operator-safe display masking changed the raw prompt bytes.
+
+    Used so the policy Before/After UI can explain why Before already looks
+    masked (display sanitization), not that policy was a no-op.
+    """
+    raw = str(raw_text or "")
+    if not raw:
+        return False
+    return _redact_trace_text(raw) != raw
+
+
 def _build_blocked_pipeline_trace(
     status_code: int,
     code: str,
@@ -4076,6 +4140,7 @@ def _build_blocked_pipeline_trace(
             requested_model=requested_model,
             output_scan_verdict=output_scan_verdict,
             response_text=_redact_trace_text(response_text),
+            prompt_in_operator_masked=_trace_prompt_operator_masked(prompt),
         )
     )
 
@@ -7685,7 +7750,9 @@ async def proxy_chat(
                         build_pipeline_trace(
                             prompt=_redact_trace_text(prompt),
                             forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
-                            policy_redacted_prompt=policy_redacted_prompt,
+                            policy_redacted_prompt=_redact_trace_text(policy_redacted_prompt)
+                            if policy_redacted_prompt
+                            else "",
                             policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
                             scanner_redaction_applied=_scanner_redaction_applied,
                             stage_metrics=stage_metrics,
@@ -7696,6 +7763,7 @@ async def proxy_chat(
                             response_text=_redact_trace_text(_extract_response_from_completion(resp)),
                             requested_model=body.get("model", ""),
                             output_scan_verdict=_out_verdict,
+                            prompt_in_operator_masked=_trace_prompt_operator_masked(prompt),
                         )
                     )
                 # ── SECURITY FIX: Redact sensitive fields from zeroshield metadata before returning to client ──
@@ -7799,6 +7867,9 @@ async def proxy_chat(
                 adjudicator_model=os.getenv("BEDROCK_ADJUDICATOR_MODEL", "").strip() or None,
             )
             if selection:
+                # Remap inactive selections onto highest-scored active candidate;
+                # stamp remapped_from so Requested≠Served is never a silent lie.
+                selection = LLM_ROUTER.resolve_runtime_selection(selection)
                 route_selection = selection
                 requested_model = selection.model_name
                 body["model"] = requested_model
@@ -8454,7 +8525,7 @@ async def proxy_chat(
                     metadata={"detail": "Tier-2 output guard model unavailable — output passed UNSCANNED", "module": "1.7", "module_id": "1.7"},
                 )
             # Capture raw output before any redaction for pipeline visibility
-            _raw_model_output = response_text[:500] if response_text else ""
+            _raw_model_output = response_text[:8000] if response_text else ""
             # §1.7 incident-logging control: when output_incident_logging_enabled is
             # false, non-blocking output-guard actions (redact/flag/rewrite) skip
             # telemetry + audit. Hard blocks always log (and the control-plane
@@ -8699,7 +8770,7 @@ async def proxy_chat(
                         **_output_guard_telemetry_meta(
                             output_verdict,
                             raw_output=_raw_model_output,
-                            sanitized_output=response_text[:500] if response_text else "",
+                            sanitized_output=response_text[:8000] if response_text else "",
                         ),
                         **_telemetry_owasp_metadata(output_verdict.threat_type),
                     },
@@ -8793,7 +8864,7 @@ async def proxy_chat(
                         "detail": output_verdict.detail,
                         "response_snippet": _raw_model_output,
                         "raw_output": _raw_model_output,
-                        "sanitized_output": response_text[:500] if response_text else "",
+                        "sanitized_output": response_text[:8000] if response_text else "",
                         "guardrail_reasoning": output_verdict.detail,
                         "matched_patterns": getattr(output_verdict, "matched_patterns", []),
                         "rewrite_reinferred": _rw_reinferred,
@@ -8845,7 +8916,7 @@ async def proxy_chat(
                     compliance_tags=output_verdict.compliance_tags,
                     pipeline_stage="generator",
                     latency_ms=(time.perf_counter() - start) * 1000,
-                    metadata={"detail": output_verdict.detail, "response_snippet": _raw_model_output, "raw_output": _raw_model_output, "sanitized_output": response_text[:500] if response_text else "", "guardrail_reasoning": output_verdict.detail, "matched_patterns": getattr(output_verdict, 'matched_patterns', [])},
+                    metadata={"detail": output_verdict.detail, "response_snippet": _raw_model_output, "raw_output": _raw_model_output, "sanitized_output": response_text[:8000] if response_text else "", "guardrail_reasoning": output_verdict.detail, "matched_patterns": getattr(output_verdict, 'matched_patterns', [])},
                     prompt_snippet=_prompt_snippet,
                     endpoint_id=endpoint_id,
                 )
@@ -9379,7 +9450,9 @@ async def proxy_chat(
                 build_pipeline_trace(
                     prompt=_redact_trace_text(prompt),
                     forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
-                    policy_redacted_prompt=policy_redacted_prompt,
+                    policy_redacted_prompt=_redact_trace_text(policy_redacted_prompt)
+                    if policy_redacted_prompt
+                    else "",
                     policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
                     scanner_redaction_applied=_scanner_redaction_applied,
                     stage_metrics=stage_metrics,
@@ -9395,6 +9468,7 @@ async def proxy_chat(
                         or body.get("model", "")
                     ),
                     output_scan_verdict=output_verdict,
+                    prompt_in_operator_masked=_trace_prompt_operator_masked(prompt),
                 )
             )
 

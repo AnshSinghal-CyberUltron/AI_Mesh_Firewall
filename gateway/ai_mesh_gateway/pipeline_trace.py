@@ -936,8 +936,15 @@ def build_pipeline_trace(
     blocked_detail: str = "",
     requested_model: str = "",
     output_scan_verdict: Any = None,
+    prompt_in_operator_masked: bool = False,
 ) -> dict[str, Any]:
-    """Return { stages: [...], total_latency_ms, prompt_preview } for the UI."""
+    """Return { stages: [...], total_latency_ms, prompt_preview } for the UI.
+
+    ``prompt_in_operator_masked``: caller already ran operator-safe display masking
+    (``_redact_trace_text``) on ``prompt`` before calling this. When True, the
+    policy stage Before panel must not be read as the literal pre-policy bytes —
+    raw PII was present and was display-masked for the operator UI.
+    """
     zs = zeroshield if isinstance(zeroshield, dict) else {}
     routing = route_metadata if isinstance(route_metadata, dict) else (zs.get("routing") or {})
     if not isinstance(routing, dict):
@@ -1235,6 +1242,22 @@ def build_pipeline_trace(
             "matched_rules": policy_rules,
             "prompt_in": prompt_preview,
             "prompt_out": policy_redacted_preview if policy_redacted else prompt_preview,
+            # Honesty: Before is often display-masked via _redact_trace_text so it
+            # can look nearly identical to After even when policy redacted raw digits.
+            "prompt_in_operator_masked": bool(prompt_in_operator_masked),
+            "redaction_display_note": (
+                "Before is display-masked for operator safety (raw PII is never shown "
+                "in Scan Detail). The policy engine redacted the original request; "
+                "Near-identical Before/After means both sides are masked views, not "
+                "that redaction was a no-op."
+                if prompt_in_operator_masked and policy_redacted
+                else (
+                    "Before is display-masked for operator safety (raw PII is never "
+                    "shown in Scan Detail)."
+                    if prompt_in_operator_masked
+                    else ""
+                )
+            ),
             **_decision_source_fields("policy_engine"),
             "guard_reason": _policy_guard_reason(
                 action=policy_action,
@@ -1453,9 +1476,15 @@ def build_pipeline_trace(
         output_withheld = True
         output_withheld_reason = "Response withheld — output guard blocked delivery to client"
         # Operator forensics: show redacted-safe model bytes in trace (not client 403).
-        output_text = _truncate(out_raw, 2000) if out_raw else ""
+        # Display cap raised 2000 -> 20000 (2026-07-16) so the operator Output panel
+        # shows the full response for all but the largest generations; the client
+        # always receives the COMPLETE body regardless of this trace-display cap.
+        output_text = _truncate(out_raw, 20000) if out_raw else ""
     else:
-        output_text = _truncate(out_raw, 2000) if out_raw else ""
+        # Display cap raised 2000 -> 20000 (2026-07-16) so the operator Output panel
+        # shows the full response for all but the largest generations; the client
+        # always receives the COMPLETE body regardless of this trace-display cap.
+        output_text = _truncate(out_raw, 20000) if out_raw else ""
 
     input_was_redacted = bool(
         policy_redacted

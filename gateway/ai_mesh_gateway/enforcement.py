@@ -400,9 +400,11 @@ def enforce_output(
         threat = str(verdict_threat_type or "").lower()
         _redactable = threat in _REDACTABLE_OUTPUT_THREAT_TYPES
 
-        # Mirror input resolve_and_enforce: maskable categories redact, not block.
-        if act == "block" and _redactable:
-            act = "redact"
+        # FULL OPERATOR CONTROL (2026-07-16): the configured output action is honoured
+        # EXACTLY. Previously a maskable category selected as "block" was coerced to
+        # "redact" here (mirroring the OutputGuard.inspect floor), making "block"
+        # indistinguishable from "redact". That downgrade is removed — an operator
+        # who selects "block" whole-response-blocks; "redact" masks in place.
 
         # F-002/F-003: do NOT coerce rewrite→block on stream or flag→block under
         # org enforcement_mode. The §1.7 UI advertises distinct actions; streaming

@@ -158,7 +158,10 @@ export function OutputPipelineTimeline({ event }) {
     metrics: [
       ...(model ? [{ label: "Model", value: model }] : []),
       ...(outputSnippetTruncated
-        ? [{ label: "Note", value: "First 500 chars shown; detection ran on full output" }]
+        ? [{
+            label: "Note",
+            value: `Showing the first ${Number(rawOutput.length).toLocaleString()} characters for display only — detection ran on the FULL output and the complete response was delivered to the client (nothing was truncated in delivery).`,
+          }]
         : []),
     ],
   });
@@ -200,7 +203,7 @@ export function OutputPipelineTimeline({ event }) {
   const actionLabel = action === "block" ? "BLOCKED — Response not delivered"
     : action === "redact"
       ? (redactUnchanged
-        ? "REDACTED — Action applied; visible snippet unchanged (see matched spans above or content beyond 500 chars)"
+        ? "REDACTED — Action applied; the visible snippet is unchanged because the masked spans fall outside the displayed preview (see matched spans above)"
         : "REDACTED — Sensitive content removed")
     : action === "flag" ? "FLAGGED — Marked for review"
     : "ALLOWED — Clean response delivered";

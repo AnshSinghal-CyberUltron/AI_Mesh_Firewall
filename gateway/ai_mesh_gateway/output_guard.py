@@ -580,6 +580,10 @@ def _mask_spans_typed(text: str, spans, threat_type: str) -> str:
     preferable to egressing the raw sensitive value."""
     if not text or not spans:
         return text
+    try:
+        from patterns import contains_smart_redaction_markers as _smart_ok
+    except ImportError:  # pragma: no cover
+        from .patterns import contains_smart_redaction_markers as _smart_ok
     placeholder = _typed_placeholder(threat_type)
     out = text
     seen: set[str] = set()
@@ -591,6 +595,9 @@ def _mask_spans_typed(text: str, spans, threat_type: str) -> str:
         # span within bounds is masked even if it is a large fraction of a short
         # answer — fail-toward-redaction (a placeholder never "nukes" legit content).
         if s in seen or not (_SPAN_MASK_MIN_LEN <= len(s) <= _SPAN_MASK_MAX_LEN):
+            continue
+        # Already smart-masked (j***@a***.com) — do not replace with [REDACTED_PII].
+        if _smart_ok(s):
             continue
         seen.add(s)
         if s in out:
@@ -755,19 +762,12 @@ class OutputGuard:
                 "output_ip_leakage_action",
                 "block" if self._config.get("output_block_on_ip_leakage", False) else "redact",
             )
-            # R2/E15: ip_leakage is a heuristic, false-positive-prone signal (a single
-            # private/example IP in an educational answer is benign), so it must never
-            # DESTROY the whole response: a whole-response "rewrite" is softened, and a
-            # hard "block" is only honoured when the org EXPLICITLY opted in via
-            # output_block_on_ip_leakage. BUT a REAL internal address that survives FP
-            # suppression (the example-address carve-out + the tier-2 guard_rated_clean
-            # drop below) must be NEUTRALISED, not egressed raw — so the floor is now
-            # "redact" (surgical mask of the infra token), matching PII's always-redact
-            # behaviour, instead of the old "flag" that let it leak in monitor-mode orgs.
-            if ip_action in ("rewrite", "flag"):
-                ip_action = "redact"
-            elif ip_action == "block" and not self._config.get("output_block_on_ip_leakage", False):
-                ip_action = "redact"
+            # FULL OPERATOR CONTROL (2026-07-16): the configured output_ip_leakage_action
+            # is honoured EXACTLY (block/redact/rewrite/flag/allow) — no coercion to
+            # redact. ip_leakage is FP-prone, so the DEFAULT (when the org has no
+            # explicit opinion) is still "redact" (see the _action() default above),
+            # but an operator who deliberately selects flag/rewrite/block gets that
+            # action. This mirrors the honesty contract the §1.7 UI advertises.
             if ip_action != "allow":
                 ip_verdict = self._check_ip_leakage(text, ip_action)
                 if ip_verdict.action != "allow":
@@ -914,18 +914,15 @@ class OutputGuard:
 
         selected = self._select_highest_severity(verdicts)
         selected.scan_degraded = selected.scan_degraded or output_scan_degraded
-        # 1.7 policy: PII / secrets / credentials are SURGICALLY REDACTED and the
-        # response delivered (200) — never whole-response blocked. If any detector
-        # (static or tier-2 guard model) escalated a redactable category to "block",
-        # downgrade to "redact" so the offending tokens are masked in place. Non-
-        # redactable threats (jailbreak/injection/hallucination/etc.) still block.
-        # C-1: the tier-2 guard model emits pci (card numbers) and phi (health
-        # info) as DISTINCT categories from pii — they are equally redactable, so
-        # they must be in the downgrade set too, or a benign answer that happens
-        # to contain a card/MRN gets whole-response HARD-BLOCKED (403) instead of
-        # surgically masked-and-served (200), contradicting the §1.7 contract.
-        if selected.action == "block" and str(selected.threat_type or "") in _REDACTABLE_OUTPUT_CATEGORIES:
-            selected.action = "redact"
+        # FULL OPERATOR CONTROL (2026-07-16): the configured action is honoured
+        # EXACTLY. Previously a redactable category (pii/pci/phi/secret/credential)
+        # escalated to "block" was silently downgraded to "redact" (the §1.7
+        # "surgically redact, never whole-block" floor). That made the "block"
+        # selection indistinguishable from "redact" in the UI + pipeline trace.
+        # Operators now own the choice: selecting "block" whole-response-blocks
+        # (403) even for redactable categories; "redact" masks in place. The
+        # per-detector _action() default remains a sensible value (redact for PII),
+        # so orgs with no explicit opinion are unchanged.
         return selected
 
     async def _check_pii_secrets(self, text: str, action: str = "redact") -> OutputVerdict:
@@ -934,6 +931,14 @@ class OutputGuard:
         if verdict.threat_type in ("pii", "secret") and verdict.matched_patterns:
             pattern_keys = verdict.matched_patterns
             matched_values = dict(getattr(verdict, "matched_values", None) or {})
+            # FULL OPERATOR CONTROL (2026-07-16): the configured action is honoured
+            # EXACTLY, including for already smart-masked shapes (j***@a***.com,
+            # ***-**-6789). Previously smart-mask-only output was force-flagged
+            # regardless of the operator's selection, so the dropdown looked inert
+            # on already-masked data. Operators who want already-masked PII delivered
+            # untouched select "flag" or "allow"; those who select "redact"/"rewrite"
+            # get that action applied (a smart-masked value is re-masked / rewritten).
+            effective_action = action
             value_detail = ""
             if matched_values:
                 # detail is client-facing: embed MASKED values only.
@@ -943,7 +948,7 @@ class OutputGuard:
                     for k, v in matched_values.items()
                 )
             return OutputVerdict(
-                action=action,
+                action=effective_action,
                 threat_type=verdict.threat_type,
                 confidence=verdict.confidence,
                 detail=f"PII/secret detected in output: {', '.join(pattern_keys)}{value_detail}",
@@ -1322,9 +1327,16 @@ _REWRITE_SYSTEM_PROMPT = (
     "You are an output-sanitization assistant for an AI security gateway. You are "
     "given a model response that violated a safety policy. Rewrite it so the "
     "specific sensitive or unsafe content is removed or neutralized, while "
-    "PRESERVING the meaning, tone, and usefulness of everything else. Do not add "
-    "commentary, apologies, or meta explanations beyond what is requested. Output "
-    "ONLY the rewritten response text."
+    "PRESERVING the meaning, tone, and usefulness of everything else. "
+    "CRITICAL: replace each sensitive value with a short NATURAL-LANGUAGE "
+    "placeholder in square brackets that describes what was removed (e.g. "
+    "'[email removed]', '[phone number removed]', '[SSN removed]', "
+    "'[card number removed]', '[internal address removed]'). Do NOT invent "
+    "replacement names, email addresses, phone numbers, card numbers, SSNs, IP "
+    "addresses or other identifiers — the rewritten text must contain NO real or "
+    "fake sensitive identifiers of any kind. Do not add commentary, apologies, or "
+    "meta explanations beyond what is requested. Output ONLY the rewritten "
+    "response text."
 )
 
 _MAX_REWRITE_INPUT_CHARS = 8000
@@ -1376,8 +1388,13 @@ def _content_preserving_rewrite(
     rewritten = _extract_converse_text(result)
     if not rewritten or not rewritten.strip():
         return None
-    # Final deterministic safety net: never let a residual secret/PII survive.
-    return redact_all(rewritten.strip())
+    # FULL-CONTROL HONESTY (2026-07-16): deliver the GENUINE rewrite; apply redact_all
+    # only as a RESIDUAL safety net when the rewrite model left a real PII/secret token
+    # behind (so a compliant rewrite is not blanket-masked into "[redacted]" and thus
+    # made indistinguishable from the redact action).
+    _clean = rewritten.strip()
+    _residual = redact_all(_clean)
+    return _residual if _residual != _clean else _clean
 
 
 def _extract_converse_text(result) -> str:
@@ -1589,6 +1606,15 @@ def neutralize_markdown_split_pii(text: str) -> str:
         # cost (no ReDoS on a pathological multi-KB run) with no loss of coverage.
         if len(run) > 512:
             return run
+        # PIPELINE-0012 / output parity: already smart-masked shapes (j***@a***.com,
+        # ***-**-6789, …) use asterisks as MASKING, not markdown emphasis. Stripping
+        # them reconstructs a weak email and falsely triggers [PII_REDACTED].
+        try:
+            from patterns import contains_smart_redaction_markers as _smart_ok
+        except ImportError:  # pragma: no cover
+            from .patterns import contains_smart_redaction_markers as _smart_ok
+        if _smart_ok(run):
+            return run
         # G50/G51: strip render-invisible separators (emphasis + HTML comments/empty tags);
         # '_' stays literal (CommonMark). G52: then DECODE numeric HTML entities (they
         # render to a char, not nothing).
@@ -1751,7 +1777,9 @@ def output_guard_telemetry_meta(
         # telemetry.py _TEXT_KEYS scrub). Mask each value here at the source — the
         # operator console still gets matched_patterns + a masked value, never raw PII.
         "matched_values": {k: _mask_value_for_detail(str(v)) for k, v in (verdict.matched_values or {}).items()},
-        "output_snippet_truncated": True,
+        "output_snippet_truncated": bool(
+            len(raw_output or "") >= 8000 or len(sanitized_output or "") >= 8000
+        ),
         "full_output_scanned": True,
         "redact_noop": redact_noop,
     }
