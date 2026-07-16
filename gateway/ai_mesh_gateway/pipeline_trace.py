@@ -1129,13 +1129,24 @@ def build_pipeline_trace(
         **zs,
         "detection_tier": zs.get("detection_tier") or "output_guard",
     }
+    # OUTPUT-STAGE HONESTY (2026-07-16): the output guardrail stage must reflect the
+    # OUTPUT guard's OWN enforced action (zs["action"] — e.g. "rewrite"), NOT the
+    # request-global final_action. final_action is the highest-severity action across
+    # ALL stages and is dominated by an INPUT-side policy redact (redact=3 > rewrite=2),
+    # which made the OUTPUT stage display "REDACT" (badge + "enforcement: REDACT"
+    # detail) for a response the output guard actually REWROTE — the operator-visible
+    # mislabel behind "I set rewrite on output guardrails — why does it say redact?".
+    # Attribute the output guard's own action to its own stage + enforcement label.
+    _output_own_action = str(output_guard_zs.get("action") or "").lower()
+    if _output_own_action not in ("block", "redact", "rewrite", "flag", "allow"):
+        _output_own_action = final_action
     output_stage_action = _action("output_guardrail")
-    if final_action in ("redact", "rewrite", "flag") and _enforced_at_output:
-        output_stage_action = final_action
+    if _output_own_action in ("block", "redact", "rewrite", "flag") and _enforced_at_output:
+        output_stage_action = _output_own_action
     output_guard = build_guard_fields(
         verdict=output_scan_verdict,
         stage_action=output_stage_action,
-        final_action=final_action,
+        final_action=(_output_own_action if _enforced_at_output else final_action),
         tier="output_guard",
         zs=output_guard_zs,
         output=True,
