@@ -11398,6 +11398,11 @@ async def rag_query(request: Request):
                 latency_ms=elapsed_rag_ms,
                 metadata={
                     "collection": collection_name,
+                    # Physical tenant namespace this request targeted ({project_id}__
+                    # {collection}); feeds the "Namespaces involved" metric + evidence
+                    # Namespace column (firewall-module-utils.js), which were always
+                    # 0/"--" because no RAG telemetry emitted a namespace.
+                    "namespace": f"{project_id}__{collection_name}",
                     "vector_db_type": vector_db_type,
                     "request_id": result.pipeline_context.request_id if result.pipeline_context else "",
                     "pipeline_request_id": result.pipeline_context.request_id if result.pipeline_context else "",
@@ -11441,6 +11446,7 @@ async def rag_query(request: Request):
             latency_ms=elapsed_rag_ms,
             metadata={
                 "collection": collection_name,
+                "namespace": f"{project_id}__{collection_name}",
                 "vector_db_type": vector_db_type,
                 "total_retrieved": result.total_retrieved,
                 "filtered_count": result.filtered_count,
@@ -12254,6 +12260,7 @@ async def rag_ingest(request: Request):
             risk_score=0.0,
             metadata={
                 "collection": collection_name,
+                "namespace": f"{project_id}__{collection_name}",
                 "provider": vector_db_type,
                 "doc_count": count,
                 "module": "1.3",
