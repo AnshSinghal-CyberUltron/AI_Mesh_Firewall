@@ -1519,6 +1519,16 @@ class InputScanner:
             )
         
         pii_matched = detect_pii(text)
+        # ALREADY-MASKED IS NOT A LEAK (2026-07-16): "*_smart_masked" matches are values
+        # that are ALREADY masked in the model output (j***@a***.com, ***-**-6789) — NOT
+        # raw PII. When the model itself produced a redacted/masked value there is nothing
+        # to protect, so it must NOT be detected as an output PII leak or trigger any
+        # action. Drop the already-masked shapes here at the single output-scan source so
+        # BOTH OutputGuard._check_pii_secrets AND the legacy scan_output fallback
+        # (main.py output_scan_enabled path) treat already-masked output as clean.
+        pii_matched = {
+            k: v for k, v in pii_matched.items() if not str(k).endswith("_smart_masked")
+        }
         if pii_matched:
             return ScanVerdict(
                 action="flag",
@@ -1567,7 +1577,10 @@ class InputScanner:
                 if _vs != _variant:
                     _cands.append(_vs)
                 for _cv in _cands:
-                    _v_pii = detect_pii(_cv)
+                    # ALREADY-MASKED IS NOT A LEAK: drop *_smart_masked (values already
+                    # masked in the output) from the decoder re-scan too — otherwise the
+                    # G35 path re-detected an already-masked j***@a***.com and flagged it.
+                    _v_pii = {k: v for k, v in detect_pii(_cv).items() if not str(k).endswith("_smart_masked")}
                     _v_secret = detect_secrets(_cv)
                     # G88: also the CREDENTIAL + internal-IP detectors. An entity/percent-encoded
                     # credential (bearer / connection-string / stripe key — NOT in the PII/SECRET
@@ -1607,7 +1620,9 @@ class InputScanner:
                 # (markdown ∘ encoding) laundering is caught. Only fires when the decoded form reveals a
                 # value the plaintext lacked, so benign markdown is unaffected.
                 for _md_c in (_md_stripped, *_decode_text_encoding_variants(_md_stripped)):
-                    _m_pii = detect_pii(_md_c)
+                    # ALREADY-MASKED IS NOT A LEAK: drop *_smart_masked from the G44
+                    # markdown-split re-scan too (same rationale as G35 above).
+                    _m_pii = {k: v for k, v in detect_pii(_md_c).items() if not str(k).endswith("_smart_masked")}
                     _m_secret = detect_secrets(_md_c)
                     # G50: also the credential + internal-IP detectors (obfuscated bearer/api
                     # key or ``10.**0**.0.5`` internal IP). Flagged as pii/secret so the guard
@@ -1842,9 +1857,16 @@ class InputScanner:
         for i, word in enumerate(input_words):
             if phrase_idx >= len(phrase_words):
                 break
+            target = phrase_words[phrase_idx]
             similarity = difflib.SequenceMatcher(
-                None, word, phrase_words[phrase_idx]
+                None, word, target
             ).ratio()
+            # Short anchors ("mode", "do", …) false-friend longer stems
+            # ("models", "model", "document"). Require near-equal length so
+            # resume text "Developer Tools" + "architecture models" cannot
+            # fuzzy-match jailbreak phrase "developer mode".
+            if not InputScanner._fuzzy_token_compatible(word, target, similarity, threshold):
+                continue
             if similarity >= threshold:
                 if first_match_idx < 0:
                     first_match_idx = i
@@ -1882,6 +1904,24 @@ class InputScanner:
             avg = sum(matched_similarities) / len(matched_similarities)
             return (True, avg)
         return (False, 0.0)
+
+    @staticmethod
+    def _fuzzy_token_compatible(
+        input_word: str,
+        phrase_word: str,
+        similarity: float,
+        threshold: float,
+    ) -> bool:
+        """Reject short-anchor false friends (mode≈code/models) while keeping long-word typos."""
+        if similarity < threshold:
+            return False
+        # Short anchors ("mode", "do", …) collide with common English
+        # (code, models, model). Require an exact token match for these;
+        # long anchors (developer, ignore, …) keep the normal fuzzy floor so
+        # typos like "developr mode" still fire when "mode" is exact.
+        if len(phrase_word) <= 4:
+            return similarity >= 0.999
+        return True
 
     @staticmethod
     def _normalize_bedrock_action(raw_action: str | None) -> str:
