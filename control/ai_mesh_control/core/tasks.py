@@ -216,6 +216,12 @@ def _build_enforcement_metadata(event: dict) -> dict:
         "is_isolation_event": is_isolation,
         "event_timestamp": event.get("timestamp"),
         "intent": event.get("intent", ""),
+        # PER-STAGE HONESTY (2026-07-16): surface the input vs output actions distinctly
+        # + a clear one-line reason at the top level (the request `action` is now the
+        # OUTPUT delivery action; `input_action` records the separate prompt redaction).
+        "input_action": event_metadata.get("input_action"),
+        "output_action": event_metadata.get("output_action"),
+        "reason": event_metadata.get("reason") or event_metadata.get("detail") or "",
         "extra": event_metadata,
         # Enriched request-level fields for LogDetailPage
         "method": event.get("method", "POST"),

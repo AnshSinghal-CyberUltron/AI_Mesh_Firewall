@@ -534,6 +534,21 @@ class ThreatFeedView(APIView):
                 .values_list("metadata__request_id", flat=True)
             )
             _redacted_only = _redacted_rids - _blocked_rids
+            # rewrite / flag were previously bucketed into "monitor" (invisible in the
+            # action breakdown). Count them distinctly so a rewritten/flagged request
+            # is surfaced, matching the per-detector output actions the operator sets.
+            _rewrite_rids = set(
+                ordered.filter(action="rewrite")
+                .exclude(metadata__request_id__isnull=True)
+                .values_list("metadata__request_id", flat=True)
+            )
+            _flag_rids = set(
+                ordered.filter(action="flag")
+                .exclude(metadata__request_id__isnull=True)
+                .values_list("metadata__request_id", flat=True)
+            )
+            _rewrite_only = _rewrite_rids - _blocked_rids - _redacted_rids
+            _flag_only = _flag_rids - _blocked_rids - _redacted_rids - _rewrite_rids
             _distinct_rids = (
                 ordered.exclude(metadata__request_id__isnull=True)
                 .values("metadata__request_id").distinct().count()
@@ -543,7 +558,13 @@ class ThreatFeedView(APIView):
             action_counts = {
                 "block": len(_blocked_rids),
                 "redact": len(_redacted_only),
-                "monitor": max(0, total_count - len(_blocked_rids) - len(_redacted_only)),
+                "rewrite": len(_rewrite_only),
+                "flag": len(_flag_only),
+                "monitor": max(
+                    0,
+                    total_count - len(_blocked_rids) - len(_redacted_only)
+                    - len(_rewrite_only) - len(_flag_only),
+                ),
             }
             return Response({
                 "count": total_count,

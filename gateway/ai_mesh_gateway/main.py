@@ -9278,9 +9278,32 @@ async def proxy_chat(
 
         METRICS["allowed"] += 1
         elapsed_ms = (time.perf_counter() - start) * 1000
-        _tel_action = "redact" if redacted_prompt is not None else "allow"
-        _tel_threat = (scan_verdict.threat_type if scan_verdict and redacted_prompt is not None else "")
-        _tel_risk = (scan_verdict.confidence if scan_verdict and redacted_prompt is not None else 0.0)
+        # PER-STAGE HONESTY (2026-07-16): the request-level telemetry action is the
+        # DELIVERY outcome — what the OUTPUT guard/policy actually did to the response
+        # the client received. Previously it was PURELY the INPUT prompt-redaction flag
+        # ("redact if the prompt was redacted, else allow"), so a request whose OUTPUT
+        # was rewritten/redacted/flagged was recorded (and shown in the evidence table)
+        # as the INPUT redact/allow — the real output action was dropped, and the
+        # always-emitted `request` event out-ranked + hid the separate output_guard
+        # event in the feed collapse. Now: when the output guard/policy ACTED, the
+        # request action IS that output action (so rewrite/redact/flag appear in the
+        # table + counts, gated or not); otherwise the input prompt-redaction flag.
+        # The input prompt redaction is preserved as `input_action` in metadata + on
+        # the input pipeline-trace stage.
+        _input_prompt_action = "redact" if redacted_prompt is not None else "allow"
+        _output_delivery_action = str((output_enforcement or {}).get("action") or "").lower()
+        _output_acted = _output_delivery_action in ("redact", "rewrite", "flag", "block")
+        _tel_action = _output_delivery_action if _output_acted else _input_prompt_action
+        _tel_threat = (
+            str((output_enforcement or {}).get("threat_type") or "")
+            if _output_acted
+            else (scan_verdict.threat_type if scan_verdict and redacted_prompt is not None else "")
+        )
+        _tel_risk = (
+            float((output_enforcement or {}).get("confidence") or 0.0)
+            if _output_acted
+            else (scan_verdict.confidence if scan_verdict and redacted_prompt is not None else 0.0)
+        )
         # Request telemetry is emitted AFTER pipeline_trace is built (below) so Scan
         # Detail / Activity Preview receive the full 9-stage trace + I/O, not just
         # stage_metrics_ms.
@@ -9484,7 +9507,16 @@ async def proxy_chat(
             from pipeline_trace import build_pipeline_trace
 
             _zs_full = llm_resp.get("zeroshield") if isinstance(llm_resp.get("zeroshield"), dict) else {}
-            _final = _input_decision.action if _input_decision is not None else (_zs_full.get("action") or "allow")
+            # PER-STAGE HONESTY (2026-07-16): the trace top-level final_action is the
+            # DELIVERY outcome (the OUTPUT guard/policy action, _zs_full["action"]) when
+            # the output acted; otherwise the input decision. Previously it was ALWAYS
+            # _input_decision.action, so the request headline showed the INPUT redaction
+            # even when the output was rewritten — the "I set rewrite, why redact?" bug.
+            _out_final = str(_zs_full.get("action") or "").lower()
+            if _out_final in ("redact", "rewrite", "flag", "block"):
+                _final = _out_final
+            else:
+                _final = _input_decision.action if _input_decision is not None else (_zs_full.get("action") or "allow")
             stage_metrics = finalize_stage_metrics(stage_metrics, start, ptimer=_ptimer)
             _scanner_redaction_applied = bool(
                 scan_verdict
@@ -9557,6 +9589,18 @@ async def proxy_chat(
             _tel_md["response_snippet"] = (response_text or "")[:2000]
             _tel_md["sanitized_output"] = (response_text or "")[:2000]
             _tel_md["output_text"] = (response_text or "")[:2000]
+        # PER-STAGE HONESTY (2026-07-16): record the INPUT prompt-redaction action
+        # distinctly from the request (delivery) action, and attach a clear one-line
+        # reason for the delivery outcome ("Response rewritten — pii detected in model
+        # output") instead of only the raw pattern dump.
+        _tel_md["input_action"] = _input_prompt_action
+        _tel_md["output_action"] = _output_delivery_action or "allow"
+        if _output_acted and _tel_action != "allow":
+            _act_word = {"redact": "redacted", "rewrite": "rewritten", "flag": "flagged", "block": "blocked"}.get(_tel_action, _tel_action)
+            _thr = (_tel_threat or "policy").replace("_", " ")
+            _tel_md.setdefault("reason", f"Response {_act_word} — {_thr} detected in model output")
+        elif _input_prompt_action == "redact":
+            _tel_md.setdefault("reason", "Prompt PII redacted before the model; response delivered clean")
         _emit_telemetry(
             event_type="request",
             model=body.get("model", ""),
