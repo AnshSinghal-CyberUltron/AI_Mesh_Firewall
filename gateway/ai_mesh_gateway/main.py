@@ -10693,6 +10693,7 @@ def _resolve_vector_client(
                             embedding_model=_emb_override or cfg.get("embedding_model", "text-embedding-3-small"),
                             embedding_api_key=cfg.get("embedding_api_key", ""),
                             reranker_model=cfg.get("reranker_model", ""),
+                            is_org_byok=True,  # org's own key → list_collections returns all its indexes
                         ), "pinecone"
                     elif resolved_type == "chroma" and cfg.get("connection_url"):
                         # BYOK Chroma: the org connects their own Chroma server.
