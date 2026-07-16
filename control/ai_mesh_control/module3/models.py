@@ -250,3 +250,89 @@ class EmbeddingInspectionJob(models.Model):
 
     def __str__(self):
         return f"{self.collection or 'embedding'} ({self.status})"
+
+
+class ApiQuotaPolicy(models.Model):
+    """Per-tenant/environment token quota enforced at the network edge (OPA)."""
+
+    ENV_CHOICES = [
+        ("dev", "Dev"),
+        ("staging", "Staging"),
+        ("prod", "Prod"),
+    ]
+
+    organization = models.ForeignKey(
+        "auth_api.Organization",
+        on_delete=models.CASCADE,
+        related_name="api_quota_policies",
+    )
+    tenant_id = models.CharField(max_length=128, db_index=True)
+    environment = models.CharField(max_length=16, choices=ENV_CHOICES, default="prod")
+    tokens_per_minute = models.PositiveIntegerField(default=1000)
+    tokens_per_day = models.PositiveIntegerField(default=100_000)
+    enabled = models.BooleanField(default=True)
+    denied_paths = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["tenant_id", "environment"]
+        unique_together = [("organization", "tenant_id", "environment")]
+
+    def __str__(self):
+        return f"{self.tenant_id}/{self.environment}"
+
+
+class ApiQuotaUsage(models.Model):
+    """Rolling usage counters synced into OPA for kill-switch decisions."""
+
+    organization = models.ForeignKey(
+        "auth_api.Organization",
+        on_delete=models.CASCADE,
+        related_name="api_quota_usages",
+    )
+    policy = models.OneToOneField(
+        ApiQuotaPolicy,
+        on_delete=models.CASCADE,
+        related_name="usage",
+    )
+    tokens_minute = models.PositiveIntegerField(default=0)
+    tokens_day = models.PositiveIntegerField(default=0)
+    minute_window_start = models.DateTimeField(null=True, blank=True)
+    day_window_start = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"usage:{self.policy_id}"
+
+
+class ApiGovernanceEvent(models.Model):
+    """Allow/deny audit from Envoy/OPA edge enforcement."""
+
+    ACTION_CHOICES = [
+        ("allow", "Allow"),
+        ("deny", "Deny"),
+    ]
+
+    organization = models.ForeignKey(
+        "auth_api.Organization",
+        on_delete=models.CASCADE,
+        related_name="api_governance_events",
+    )
+    action = models.CharField(max_length=8, choices=ACTION_CHOICES, db_index=True)
+    tenant_id = models.CharField(max_length=128, blank=True)
+    environment = models.CharField(max_length=16, blank=True)
+    estimated_tokens = models.PositiveIntegerField(default=0)
+    path = models.CharField(max_length=512, blank=True)
+    reason = models.TextField(blank=True)
+    source = models.CharField(max_length=64, default="envoy_ext_authz")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.action} {self.tenant_id}/{self.environment}"

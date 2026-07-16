@@ -1,4 +1,4 @@
-# Module 3 Phase 2 — Kind/Helm values
+# Module 3 Phase 2+3 — Kind/Helm Zero-Trust + API governance
 nameOverride: module3-k8s
 namespace: ai-mesh-m3
 
@@ -10,6 +10,9 @@ clusterName: kind-module3
 images:
   agent: module3-mesh-agent:0.1.0
   river: module3-river:0.1.0
+  stateSync: module3-state-sync:0.1.0
+  authzShim: module3-authz-shim:0.1.0
+  opa: openpolicyagent/opa:0.64.1
   # Public placeholder apps; AI process uses python http.server + Envoy sidecar
   envoy: envoyproxy/envoy:v1.29.3
   redis: redis:7-alpine
@@ -25,6 +28,19 @@ river:
   enabled: true
   anomalyThreshold: 0.85
   pollSeconds: 10
+
+opa:
+  enabled: true
+
+stateSync:
+  enabled: true
+  pollSeconds: 5
+
+authzShim:
+  enabled: true
+
+llmEdge:
+  enabled: true
 
 workloads:
   enabled: true

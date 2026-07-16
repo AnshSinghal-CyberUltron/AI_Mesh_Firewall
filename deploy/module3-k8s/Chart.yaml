@@ -1,6 +1,6 @@
 apiVersion: v2
 name: module3-k8s
-description: Module 3 Phase 2 — Kind/Helm Zero-Trust AI mesh (agent, Envoy mTLS, River, Cilium policies)
+description: Module 3 Phase 2+3 — Kind/Helm Zero-Trust AI mesh + OPA/Envoy API governance
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.2.0
+appVersion: "0.2.0"

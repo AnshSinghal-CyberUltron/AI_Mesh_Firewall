@@ -1,0 +1,66 @@
+# Envoy edge listener with ext_authz → authz-shim → OPA → local LLM stub
+static_resources:
+  listeners:
+    - name: llm_edge
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 8080 }
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: llm_edge
+                route_config:
+                  name: local_llm
+                  virtual_hosts:
+                    - name: llm
+                      domains: ["*"]
+                      routes:
+                        - match: { prefix: "/" }
+                          route: { cluster: local_llm_stub }
+                http_filters:
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                      transport_api_version: V3
+                      failure_mode_allow: false
+                      http_service:
+                        server_uri:
+                          uri: http://module3-authz-shim:9191
+                          cluster: authz_shim
+                          timeout: 2s
+                        authorization_request:
+                          allowed_headers:
+                            patterns:
+                              - exact: x-tenant-id
+                              - exact: x-environment
+                              - exact: x-estimated-tokens
+                              - exact: ":path"
+                        path_prefix: /
+                      status_on_error:
+                        code: Forbidden
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+  clusters:
+    - name: authz_shim
+      connect_timeout: 2s
+      type: STRICT_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: authz_shim
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: module3-authz-shim, port_value: 9191 }
+    - name: local_llm_stub
+      connect_timeout: 1s
+      type: STATIC
+      load_assignment:
+        cluster_name: local_llm_stub
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: 127.0.0.1, port_value: 8000 }

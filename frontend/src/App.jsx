@@ -35,6 +35,9 @@ const LlmopsPipelinePage = lazy(() =>
 const K8sFirewallPage = lazy(() =>
   import("./pages/module3/K8sFirewallPage").then((m) => ({ default: m.K8sFirewallPage }))
 );
+const ApiGovernancePage = lazy(() =>
+  import("./pages/module3/ApiGovernancePage").then((m) => ({ default: m.ApiGovernancePage }))
+);
 
 function AppShell() {
   const location = useLocation();
@@ -75,6 +78,7 @@ function AppShell() {
           <Route path="/incidents/:id" element={<IncidentDetailPage />} />
           <Route path="/infrastructure/llmops" element={<LlmopsPipelinePage />} />
           <Route path="/infrastructure/k8s-firewall" element={<K8sFirewallPage />} />
+          <Route path="/infrastructure/api-governance" element={<ApiGovernancePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

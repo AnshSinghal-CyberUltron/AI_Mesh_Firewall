@@ -1,8 +1,13 @@
 from django.urls import path
 
 from module3.views import (
+    ApiGovernanceEventsView,
+    ApiGovernancePoliciesView,
+    ApiGovernancePolicyDetailView,
+    ApiGovernanceSummaryView,
     ClusterHeartbeatIngestView,
     EmbeddingInspectionIngestView,
+    GovernanceEventIngestView,
     K8sFirewallEmbeddingQueueView,
     K8sFirewallNetworkEventsView,
     K8sFirewallSummaryView,
@@ -14,6 +19,8 @@ from module3.views import (
     LlmopsVerifyView,
     Module3SimulatorIngestView,
     NetworkEventIngestView,
+    QuotaSnapshotIngestView,
+    QuotaUsageIngestView,
 )
 
 urlpatterns = [
@@ -26,8 +33,19 @@ urlpatterns = [
     path("k8s-firewall/topology/", K8sFirewallTopologyView.as_view(), name="module3-k8s-topology"),
     path("k8s-firewall/network-events/", K8sFirewallNetworkEventsView.as_view(), name="module3-k8s-network"),
     path("k8s-firewall/embedding-queue/", K8sFirewallEmbeddingQueueView.as_view(), name="module3-k8s-embedding"),
+    path("api-governance/summary/", ApiGovernanceSummaryView.as_view(), name="module3-gov-summary"),
+    path("api-governance/policies/", ApiGovernancePoliciesView.as_view(), name="module3-gov-policies"),
+    path(
+        "api-governance/policies/<int:policy_id>/",
+        ApiGovernancePolicyDetailView.as_view(),
+        name="module3-gov-policy-detail",
+    ),
+    path("api-governance/events/", ApiGovernanceEventsView.as_view(), name="module3-gov-events"),
     path("ingest/cluster-heartbeat/", ClusterHeartbeatIngestView.as_view(), name="module3-ingest-heartbeat"),
     path("ingest/network-event/", NetworkEventIngestView.as_view(), name="module3-ingest-network"),
     path("ingest/embedding-inspection/", EmbeddingInspectionIngestView.as_view(), name="module3-ingest-embedding"),
+    path("ingest/quota-snapshot/", QuotaSnapshotIngestView.as_view(), name="module3-ingest-quota-snapshot"),
+    path("ingest/governance-event/", GovernanceEventIngestView.as_view(), name="module3-ingest-governance"),
+    path("ingest/quota-usage/", QuotaUsageIngestView.as_view(), name="module3-ingest-quota-usage"),
     path("simulator/ingest/", Module3SimulatorIngestView.as_view(), name="module3-simulator-ingest"),
 ]

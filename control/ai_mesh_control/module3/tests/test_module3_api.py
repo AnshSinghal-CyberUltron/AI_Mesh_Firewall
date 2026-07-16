@@ -6,7 +6,14 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
-from module3.models import AdmissionDecision, EmbeddingInspectionJob, ModelArtifact, NetworkPolicyEvent
+from module3.models import (
+    AdmissionDecision,
+    ApiGovernanceEvent,
+    ApiQuotaPolicy,
+    EmbeddingInspectionJob,
+    ModelArtifact,
+    NetworkPolicyEvent,
+)
 from policy.models import SecurityIncident
 
 User = get_user_model()
@@ -180,5 +187,74 @@ class Module3ApiTests(TestCase):
             SecurityIncident.objects.filter(
                 organization=self.org,
                 title__icontains="K8s network drop",
+            ).exists()
+        )
+
+    def test_api_governance_policy_crud(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        resp = self.client.post(
+            "/api/module3/api-governance/policies/",
+            {
+                "tenant_id": "acme",
+                "environment": "prod",
+                "tokens_per_minute": 1000,
+                "tokens_per_day": 50000,
+                "enabled": True,
+            },
+            format="json",
+        )
+        self.assertIn(resp.status_code, (200, 201))
+        self.assertTrue(
+            ApiQuotaPolicy.objects.filter(
+                organization=self.org, tenant_id="acme", environment="prod"
+            ).exists()
+        )
+        listing = self.client.get("/api/module3/api-governance/policies/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertGreaterEqual(listing.json()["count"], 1)
+        summary = self.client.get("/api/module3/api-governance/summary/")
+        self.assertEqual(summary.status_code, 200)
+        self.assertGreaterEqual(summary.json()["policy_count"], 1)
+
+    @override_settings(AGENT_API_KEY="test-agent-key", CELERY_TASK_ALWAYS_EAGER=True)
+    def test_governance_deny_ingest_creates_incident(self):
+        ApiQuotaPolicy.objects.create(
+            organization=self.org,
+            tenant_id="acme",
+            environment="prod",
+            tokens_per_minute=10,
+            tokens_per_day=100,
+        )
+        anon = APIClient()
+        snap = anon.get(
+            "/api/module3/ingest/quota-snapshot/?organization_slug=m3-org",
+            HTTP_AUTHORIZATION="Bearer test-agent-key",
+        )
+        self.assertEqual(snap.status_code, 200)
+        self.assertIn("acme", snap.json()["quotas"])
+
+        resp = anon.post(
+            "/api/module3/ingest/governance-event/",
+            {
+                "organization_slug": self.org.slug,
+                "action": "deny",
+                "tenant_id": "acme",
+                "environment": "prod",
+                "estimated_tokens": 50,
+                "path": "/v1/chat",
+                "reason": "token quota exceeded",
+            },
+            format="json",
+            HTTP_AUTHORIZATION="Bearer test-agent-key",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(
+            ApiGovernanceEvent.objects.filter(organization=self.org, action="deny").exists()
+        )
+        self.assertTrue(
+            SecurityIncident.objects.filter(
+                organization=self.org,
+                title__icontains="API governance kill-switch",
             ).exists()
         )

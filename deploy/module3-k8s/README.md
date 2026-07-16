@@ -12,6 +12,9 @@ Spreadsheets **Phase 2 (3.2)** delivered as an in-repo Kind cluster + Helm chart
 | Mesh agent DaemonSet | Heartbeats + unauthorized probe → Module 3 ingest / SOC |
 | River worker | Redis queue → embedding inspect → quarantine ingest |
 | Redis | In-cluster queue for River |
+| OPA + authz-shim | Rego token quotas; Envoy ext_authz kill-switch |
+| state-sync | Control quota snapshot → OPA data |
+| llm-edge | Demo AI API edge (Envoy :8080 → stub) |
 
 ## Prerequisites
 
@@ -40,9 +43,11 @@ E2E:
 ```bash
 export AGENT_API_KEY=...
 python scripts/module3_phase2_e2e.py
-# or: bash scripts/module3_phase2_e2e.sh
+python scripts/module3_phase3_seed_quotas.py
+python scripts/module3_phase3_e2e.py
 ```
 
-UI: `/infrastructure/k8s-firewall` after agent heartbeats.
+UI: `/infrastructure/k8s-firewall` and `/infrastructure/api-governance`.  
+Phase 3 runbook: [docs/MODULE3_PHASE3_API_GOVERNANCE.md](../../docs/MODULE3_PHASE3_API_GOVERNANCE.md).
 
 Full runbook: [docs/MODULE3_PHASE2_K8S.md](../../docs/MODULE3_PHASE2_K8S.md)

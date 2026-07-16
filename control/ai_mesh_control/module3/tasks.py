@@ -131,3 +131,35 @@ def emit_network_drop_incident(self, org_id: int, event_id: int, reason: str = "
             "cluster_id": event.cluster_id,
         },
     )
+
+
+@shared_task(queue="compute.heavy", bind=True, max_retries=2)
+def emit_api_governance_deny_incident(self, org_id: int, event_id: int, reason: str = ""):
+    from auth.models import Organization
+    from module3.models import ApiGovernanceEvent
+
+    try:
+        org = Organization.objects.get(pk=org_id)
+        event = ApiGovernanceEvent.objects.get(pk=event_id, organization=org)
+    except (Organization.DoesNotExist, ApiGovernanceEvent.DoesNotExist):
+        return
+
+    tenant = event.tenant_id or "unknown"
+    env = event.environment or "unknown"
+    title = f"API governance kill-switch: {tenant}/{env}"
+    notes = reason or event.reason or "Token quota exceeded at Envoy/OPA network edge"
+    _create_module3_incident(
+        org,
+        title=title,
+        severity="critical",
+        event_type="module3_api_governance",
+        notes=notes,
+        extra_meta={
+            "event_id": event.id,
+            "tenant_id": tenant,
+            "environment": env,
+            "estimated_tokens": event.estimated_tokens,
+            "path": event.path,
+            "source": event.source,
+        },
+    )

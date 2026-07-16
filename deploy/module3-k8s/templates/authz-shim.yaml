@@ -1,0 +1,46 @@
+{{- if .Values.authzShim.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: module3-authz-shim
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: module3-authz-shim
+  template:
+    metadata:
+      labels:
+        app: module3-authz-shim
+        role: authz-shim
+    spec:
+      containers:
+        - name: shim
+          image: {{ .Values.images.authzShim }}
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: module3-agent-credentials
+          env:
+            - name: OPA_URL
+              value: http://module3-opa:8181
+            - name: LISTEN_PORT
+              value: "9191"
+          ports:
+            - containerPort: 9191
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: module3-authz-shim
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: module3-authz-shim
+  ports:
+    - name: http
+      port: 9191
+      targetPort: 9191
+{{- end }}

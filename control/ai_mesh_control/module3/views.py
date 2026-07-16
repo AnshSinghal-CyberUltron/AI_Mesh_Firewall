@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from django.utils import timezone
 from rest_framework import status
@@ -18,22 +19,31 @@ from module3.adapters.gateway_admission import verify_admission
 from module3.adapters.ingestion import normalize_pod_payload
 from module3.models import (
     AdmissionDecision,
+    ApiGovernanceEvent,
+    ApiQuotaPolicy,
     ClusterRegistration,
     EmbeddingInspectionJob,
     ModelArtifact,
     NetworkPolicyEvent,
     WorkloadPod,
 )
+from module3.quota_ops import build_opa_quota_snapshot, ensure_usage, increment_usage
 from module3.serializers import (
+    ApiGovernanceEventSerializer,
+    ApiQuotaPolicySerializer,
+    ApiQuotaPolicyWriteSerializer,
     ClusterHeartbeatSerializer,
     EmbeddingInspectionIngestSerializer,
+    GovernanceEventIngestSerializer,
     ModelArtifactCreateSerializer,
     ModelArtifactSerializer,
     NetworkEventIngestSerializer,
+    QuotaUsageIngestSerializer,
     VerifyArtifactSerializer,
 )
 from module3.tasks import (
     emit_admission_deny_incident,
+    emit_api_governance_deny_incident,
     emit_embedding_quarantine_incident,
     emit_network_drop_incident,
 )
@@ -274,13 +284,22 @@ class _IngestOrgMixin:
 
             return Organization.objects.filter(pk=org_id, is_active=True).first()
 
-        # Global AGENT_API_KEY has no org binding — accept explicit slug/id in body.
+        # Global AGENT_API_KEY has no org binding — accept explicit slug/id in body or query.
         from auth.models import Organization
 
-        slug = str((request.data.get("organization_slug") or "")).strip()
+        data = getattr(request, "data", None) or {}
+        slug = str(
+            (data.get("organization_slug") if hasattr(data, "get") else None)
+            or request.query_params.get("organization_slug")
+            or ""
+        ).strip()
         if slug:
             return Organization.objects.filter(slug=slug, is_active=True).first()
-        raw_pk = request.data.get("organization_id")
+        raw_pk = None
+        if hasattr(data, "get"):
+            raw_pk = data.get("organization_id")
+        if raw_pk is None:
+            raw_pk = request.query_params.get("organization_id")
         if raw_pk is not None and str(raw_pk).strip() != "":
             try:
                 return Organization.objects.filter(pk=int(raw_pk), is_active=True).first()
@@ -477,3 +496,199 @@ class Module3SimulatorIngestView(APIView):
             return Response({"status": "ok", "job_id": job.id})
 
         return Response({"detail": "Unknown event_type."}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ApiGovernanceSummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        org = _org_or_403(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+        policies = ApiQuotaPolicy.objects.filter(organization=org)
+        events = ApiGovernanceEvent.objects.filter(organization=org)
+        since = timezone.now() - timedelta(hours=24)
+        recent = events.filter(created_at__gte=since)
+        return Response(
+            {
+                "policy_count": policies.count(),
+                "enabled_policies": policies.filter(enabled=True).count(),
+                "denials_24h": recent.filter(action="deny").count(),
+                "allows_24h": recent.filter(action="allow").count(),
+                "opa_synced": True,
+            }
+        )
+
+
+class ApiGovernancePoliciesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        org = _org_or_403(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+        qs = ApiQuotaPolicy.objects.filter(organization=org).select_related("usage")
+        for policy in qs:
+            ensure_usage(policy)
+        page, page_size = _page_params(request)
+        total = qs.count()
+        start = (page - 1) * page_size
+        rows = qs[start : start + page_size]
+        return Response(
+            {
+                "count": total,
+                "page": page,
+                "page_size": page_size,
+                "results": ApiQuotaPolicySerializer(rows, many=True).data,
+            }
+        )
+
+    def post(self, request):
+        org = _org_or_403(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+        if not IsAdminOrSuperuser().has_permission(request, self):
+            return Response({"detail": "Admin required."}, status=status.HTTP_403_FORBIDDEN)
+        ser = ApiQuotaPolicyWriteSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        policy, created = ApiQuotaPolicy.objects.update_or_create(
+            organization=org,
+            tenant_id=data["tenant_id"],
+            environment=data["environment"],
+            defaults={
+                "tokens_per_minute": data["tokens_per_minute"],
+                "tokens_per_day": data["tokens_per_day"],
+                "enabled": data["enabled"],
+                "denied_paths": data.get("denied_paths") or [],
+            },
+        )
+        ensure_usage(policy)
+        return Response(
+            ApiQuotaPolicySerializer(policy).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class ApiGovernancePolicyDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, policy_id: int):
+        org = _org_or_403(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+        if not IsAdminOrSuperuser().has_permission(request, self):
+            return Response({"detail": "Admin required."}, status=status.HTTP_403_FORBIDDEN)
+        policy = ApiQuotaPolicy.objects.filter(organization=org, pk=policy_id).first()
+        if policy is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        ser = ApiQuotaPolicyWriteSerializer(data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        for key in (
+            "tenant_id",
+            "environment",
+            "tokens_per_minute",
+            "tokens_per_day",
+            "enabled",
+            "denied_paths",
+        ):
+            if key in data:
+                setattr(policy, key, data[key])
+        policy.save()
+        ensure_usage(policy)
+        return Response(ApiQuotaPolicySerializer(policy).data)
+
+
+class ApiGovernanceEventsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        org = _org_or_403(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+        qs = ApiGovernanceEvent.objects.filter(organization=org)
+        action = (request.query_params.get("action") or "").strip()
+        if action in ("allow", "deny"):
+            qs = qs.filter(action=action)
+        page, page_size = _page_params(request)
+        total = qs.count()
+        start = (page - 1) * page_size
+        rows = qs[start : start + page_size]
+        return Response(
+            {
+                "count": total,
+                "page": page,
+                "page_size": page_size,
+                "results": ApiGovernanceEventSerializer(rows, many=True).data,
+            }
+        )
+
+
+class QuotaSnapshotIngestView(_IngestOrgMixin, APIView):
+    authentication_classes = [AgentKeyAuthentication]
+    permission_classes = [AgentAPIKeyPermission]
+
+    def get(self, request):
+        org = self._resolve_ingest_org(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+        return Response({"quotas": build_opa_quota_snapshot(org), "organization_slug": org.slug})
+
+
+class GovernanceEventIngestView(_IngestOrgMixin, APIView):
+    authentication_classes = [AgentKeyAuthentication]
+    permission_classes = [AgentAPIKeyPermission]
+
+    def post(self, request):
+        org = self._resolve_ingest_org(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+        ser = GovernanceEventIngestSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        event = ApiGovernanceEvent.objects.create(
+            organization=org,
+            action=data["action"],
+            tenant_id=data.get("tenant_id") or "",
+            environment=data.get("environment") or "",
+            estimated_tokens=int(data.get("estimated_tokens") or 0),
+            path=data.get("path") or "",
+            reason=data.get("reason") or "",
+            source=data.get("source") or "envoy_ext_authz",
+        )
+        if data["action"] == "deny":
+            emit_api_governance_deny_incident.delay(org.id, event.id, event.reason)
+        return Response(
+            {"status": "ok", "event_id": event.id},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class QuotaUsageIngestView(_IngestOrgMixin, APIView):
+    authentication_classes = [AgentKeyAuthentication]
+    permission_classes = [AgentAPIKeyPermission]
+
+    def post(self, request):
+        org = self._resolve_ingest_org(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+        ser = QuotaUsageIngestSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        data = ser.validated_data
+        policy = ApiQuotaPolicy.objects.filter(
+            organization=org,
+            tenant_id=data["tenant_id"],
+            environment=data["environment"],
+        ).first()
+        if policy is None:
+            return Response({"detail": "Policy not found."}, status=status.HTTP_404_NOT_FOUND)
+        usage = increment_usage(policy, int(data["tokens"]))
+        return Response(
+            {
+                "status": "ok",
+                "policy_id": policy.id,
+                "tokens_minute": usage.tokens_minute,
+                "tokens_day": usage.tokens_day,
+            }
+        )

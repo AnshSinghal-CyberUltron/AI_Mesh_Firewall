@@ -11,6 +11,7 @@ const MODULE2_ROUTE_TO_TAB = {
 const MODULE3_ROUTE_TO_TAB = {
   "/infrastructure/llmops": "m3-llmops",
   "/infrastructure/k8s-firewall": "m3-k8s-firewall",
+  "/infrastructure/api-governance": "m3-api-governance",
 };
 
 const TAB_TO_ROUTE = {
@@ -22,6 +23,7 @@ const TAB_TO_ROUTE = {
   "m2-incidents": "/incidents",
   "m3-llmops": "/infrastructure/llmops",
   "m3-k8s-firewall": "/infrastructure/k8s-firewall",
+  "m3-api-governance": "/infrastructure/api-governance",
 };
 
 export function resolveActiveTab(pathname, searchParams) {

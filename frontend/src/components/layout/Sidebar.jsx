@@ -59,6 +59,7 @@ const menuItems = [
     subItems: [
       { id: "m3-llmops", label: "M3.1 LLMOps Pipeline Security", route: "/infrastructure/llmops" },
       { id: "m3-k8s-firewall", label: "M3.2 K8s-Native AI Firewall", route: "/infrastructure/k8s-firewall" },
+      { id: "m3-api-governance", label: "M3.3 API Governance (OPA)", route: "/infrastructure/api-governance" },
     ],
   },
 ];

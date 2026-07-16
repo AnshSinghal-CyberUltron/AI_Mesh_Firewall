@@ -16,9 +16,11 @@ command -v kubectl >/dev/null || { echo "kubectl not found"; exit 1; }
 command -v helm >/dev/null || { echo "helm not found — install https://helm.sh/ (or place binary in .tools/)"; exit 1; }
 command -v docker >/dev/null || { echo "docker not found"; exit 1; }
 
-echo "==> build agent + river images"
+echo "==> build agent + river + phase3 images"
 docker build -t module3-mesh-agent:0.1.0 "$CHART/agent"
 docker build -t module3-river:0.1.0 "$CHART/river"
+docker build -t module3-state-sync:0.1.0 "$CHART/state-sync"
+docker build -t module3-authz-shim:0.1.0 "$CHART/authz-shim"
 
 if ! kind get clusters 2>/dev/null | grep -qx "$CLUSTER_NAME"; then
   echo "==> create Kind cluster $CLUSTER_NAME"
@@ -43,6 +45,8 @@ fi
 echo "==> load images into Kind"
 kind load docker-image module3-mesh-agent:0.1.0 --name "$CLUSTER_NAME"
 kind load docker-image module3-river:0.1.0 --name "$CLUSTER_NAME"
+kind load docker-image module3-state-sync:0.1.0 --name "$CLUSTER_NAME"
+kind load docker-image module3-authz-shim:0.1.0 --name "$CLUSTER_NAME"
 
 if [[ "${KIND_USE_CILIUM:-0}" == "1" ]]; then
   echo "==> install Cilium"
@@ -95,8 +99,16 @@ helm upgrade --install module3-k8s "$CHART" \
   --set clusterName="kind-$CLUSTER_NAME" \
   --set images.agent=module3-mesh-agent:0.1.0 \
   --set images.river=module3-river:0.1.0 \
+  --set images.stateSync=module3-state-sync:0.1.0 \
+  --set images.authzShim=module3-authz-shim:0.1.0 \
+  --set opa.enabled=true \
+  --set stateSync.enabled=true \
+  --set authzShim.enabled=true \
+  --set llmEdge.enabled=true \
   --set networkPolicy.cilium="$NETWORK_POLICY_CILIUM" \
   --wait --timeout 5m
 
-echo "==> Module 3 Kind stack ready. Open /infrastructure/k8s-firewall after agents heartbeat."
-kubectl -n "$NS" get pods,svc,ciliumnetworkpolicies
+echo "==> Module 3 Kind stack ready (Phase 2+3)."
+echo "    UI: /infrastructure/k8s-firewall  and  /infrastructure/api-governance"
+echo "    Seed quotas: python scripts/module3_phase3_seed_quotas.py"
+kubectl -n "$NS" get pods,svc

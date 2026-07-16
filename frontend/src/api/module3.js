@@ -88,6 +88,15 @@ export function createModule3Api(fetchWithAuth) {
       if (filters.status) params.status = filters.status;
       return get("/k8s-firewall/embedding-queue/", params, opts);
     },
+    getApiGovernanceSummary: (opts = {}) => get("/api-governance/summary/", {}, opts),
+    getApiGovernancePolicies: (page = 1, pageSize = 25, opts = {}) =>
+      get("/api-governance/policies/", { page: String(page), page_size: String(pageSize) }, opts),
+    getApiGovernanceEvents: (filters = {}, opts = {}) => {
+      const params = { page: String(filters.page || 1), page_size: String(filters.page_size || 25) };
+      if (filters.action) params.action = filters.action;
+      return get("/api-governance/events/", params, opts);
+    },
+    createApiGovernancePolicy: (data) => mutate("/api-governance/policies/", "POST", data),
     simulatorIngest: (data) => mutate("/simulator/ingest/", "POST", data),
   };
 }

@@ -1,0 +1,72 @@
+{{- if .Values.opa.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: module3-opa-policy
+  namespace: {{ .Values.namespace }}
+data:
+  authz.rego: |
+{{ .Files.Get "opa/policy/module3/authz.rego" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: module3-opa
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: module3-opa
+  template:
+    metadata:
+      labels:
+        app: module3-opa
+        role: opa
+    spec:
+      containers:
+        - name: opa
+          image: {{ .Values.images.opa }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - run
+            - --server
+            - --addr=0.0.0.0:8181
+            - --log-level=info
+            - /policies
+          ports:
+            - containerPort: 8181
+              name: http
+          volumeMounts:
+            # subPath avoids ConfigMap projected-volume double-load (..data + ..timestamp)
+            - name: policies
+              mountPath: /policies/module3/authz.rego
+              subPath: authz.rego
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health?bundle=false
+              port: 8181
+            initialDelaySeconds: 2
+            periodSeconds: 5
+      volumes:
+        - name: policies
+          configMap:
+            name: module3-opa-policy
+            items:
+              - key: authz.rego
+                path: authz.rego
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: module3-opa
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: module3-opa
+  ports:
+    - name: http
+      port: 8181
+      targetPort: 8181
+{{- end }}

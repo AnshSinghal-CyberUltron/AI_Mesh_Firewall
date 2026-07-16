@@ -1,0 +1,30 @@
+{{- if .Values.stateSync.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: module3-state-sync
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: module3-state-sync
+  template:
+    metadata:
+      labels:
+        app: module3-state-sync
+        role: state-sync
+    spec:
+      containers:
+        - name: syncer
+          image: {{ .Values.images.stateSync }}
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: module3-agent-credentials
+          env:
+            - name: OPA_URL
+              value: http://module3-opa:8181
+            - name: SYNC_POLL_SECONDS
+              value: {{ .Values.stateSync.pollSeconds | quote }}
+{{- end }}
