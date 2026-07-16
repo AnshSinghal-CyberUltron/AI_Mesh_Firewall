@@ -267,8 +267,17 @@ export function LogDetailPage({ logData, onBack }) {
     : mapThreatLevel(logData?.severity || meta?.security_risk_score);
   const _baseSeverity = _STAGE_SEVERITY[String(action || "").toLowerCase()] ?? 0;
   const _promote = stageVerdict.action && stageVerdict.severity > _baseSeverity;
-  const effectiveAction = _promote ? stageVerdict.action : action;
-  const effectiveStatus = _promote ? stageVerdict.action : status;
+  // PER-STAGE HONESTY (2026-07-16): the DELIVERY action (pipeline_trace.final_action) is
+  // authoritative for the overall verdict — it is the OUTPUT-guard outcome, distinct
+  // from the INPUT prompt redaction shown on the input/policy stage. Prefer it so the
+  // overall does NOT get conflated to the input redaction when the output action is a
+  // lower severity (e.g. output flag while the prompt was redacted). Fall back to the
+  // most-severe-stage promotion only for events that carry no trace final_action
+  // (legacy / under-reporting streamed summaries).
+  const _traceFinal = String(pipelineTrace?.final_action || "").toLowerCase();
+  const _traceFinalValid = Object.prototype.hasOwnProperty.call(_STAGE_SEVERITY, _traceFinal);
+  const effectiveAction = _traceFinalValid ? _traceFinal : (_promote ? stageVerdict.action : action);
+  const effectiveStatus = _traceFinalValid ? _traceFinal : (_promote ? stageVerdict.action : status);
   // Incident ID is a backend alias of Request ID (no separate incident-grouping exists);
   // showing two guaranteed-identical IDs is noise. Only surface it when it truly differs.
   const showIncidentId = Boolean(incidentId) && incidentId !== requestId && incidentId !== String(scanId);
@@ -319,6 +328,23 @@ export function LogDetailPage({ logData, onBack }) {
               <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Scan Detail Report</h1>
               <StatusBadge status={effectiveStatus} action={effectiveAction} />
             </div>
+            {(() => {
+              // PER-STAGE HONESTY (2026-07-16): one-line reason for the DELIVERY action,
+              // with the separate INPUT prompt redaction noted distinctly so the two are
+              // never conflated ("Response rewritten — pii… (input: prompt PII redacted)").
+              const _reason = meta?.reason || meta?.extra?.reason || "";
+              const _inAct = String(meta?.input_action || meta?.extra?.input_action || "").toLowerCase();
+              const _outAct = String(effectiveAction || "").toLowerCase();
+              if (!_reason && _inAct !== "redact") return null;
+              return (
+                <p className="mb-2 text-sm text-slate-700 dark:text-slate-300">
+                  {_reason || `Response ${_outAct}.`}
+                  {_inAct === "redact" && _outAct !== "redact" && (
+                    <span className="ml-1 italic text-slate-500 dark:text-slate-400">(input: prompt PII redacted before the model)</span>
+                  )}
+                </p>
+              );
+            })()}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-600 dark:text-slate-400">
               <div className="flex items-center gap-2"><Eye className="w-4 h-4" /><span>Scan ID: {scanId}</span></div>
               <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
@@ -779,10 +805,27 @@ function RoutingDecisionCard({ routing }) {
             <span className="font-mono font-semibold text-indigo-800 dark:text-indigo-200">{routing.routed_model}</span>
           </div>
         )}
+        {routing.remapped_from && routing.remapped_from !== routing.routed_model && (
+          <div className="sm:col-span-2">
+            <span className="text-slate-500 dark:text-slate-400">Remapped from:</span>{" "}
+            <span className="font-mono">{routing.remapped_from}</span>
+            <span className="text-amber-700 dark:text-amber-300"> (inactive → active)</span>
+          </div>
+        )}
         {sourceLabel && (
           <div>
             <span className="text-slate-500 dark:text-slate-400">Decision source:</span>{" "}
             <span>{sourceLabel}</span>
+          </div>
+        )}
+        {routing.sensitivity_fallback && (
+          <div className="sm:col-span-2 text-amber-800 dark:text-amber-200">
+            Sensitivity unsatisfiable — soft-fallback to best available
+          </div>
+        )}
+        {routing.score_tie && (
+          <div className="sm:col-span-2 text-slate-600 dark:text-slate-300">
+            Top candidates tied on weighted score
           </div>
         )}
       </div>
