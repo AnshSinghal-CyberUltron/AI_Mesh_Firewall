@@ -204,29 +204,21 @@ export function FirewallModulePage({
           title={pageConfig.workspaceTitle}
           description={pageConfig.workspaceDescription}
         />
-        {hasFlowNodes && !hasInspectionSidebar ? (
+        {hasFlowNodes ? (
           <FlowSection flowNodes={flowNodes} summary={pageData.summary} layout="strip" />
         ) : null}
-        <div className={cn("grid gap-6", hasInspectionSidebar && "xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]")}>
-          <div className="min-w-0 space-y-6">
-            {controlPanels.length > 0 ? (
-              <PanelLane label={pageConfig.panelLabels.control} panels={resolvedControlPanels} />
-            ) : null}
-            {simulatorPanels.length > 0 ? (
-              <PanelLane label={pageConfig.panelLabels.simulator} panels={simulatorPanels} />
-            ) : null}
-            {secondaryPanels.length > 0 ? (
-              <PanelLane label={pageConfig.panelLabels.secondary} panels={secondaryPanels} />
-            ) : null}
-          </div>
-
+        <div className="space-y-6">
+          {controlPanels.length > 0 ? (
+            <PanelLane label={pageConfig.panelLabels.control} panels={resolvedControlPanels} />
+          ) : null}
+          {simulatorPanels.length > 0 ? (
+            <PanelLane label={pageConfig.panelLabels.simulator} panels={simulatorPanels} />
+          ) : null}
+          {secondaryPanels.length > 0 ? (
+            <PanelLane label={pageConfig.panelLabels.secondary} panels={secondaryPanels} />
+          ) : null}
           {hasInspectionSidebar ? (
-            <div className="min-w-0 space-y-6 xl:sticky xl:top-6 xl:self-start">
-              {hasFlowNodes ? (
-                <FlowSection flowNodes={flowNodes} summary={pageData.summary} />
-              ) : null}
-              <PanelLane label={pageConfig.panelLabels.inspection} panels={inspectionPanels} />
-            </div>
+            <PanelLane label={pageConfig.panelLabels.inspection} panels={inspectionPanels} />
           ) : null}
         </div>
       </section>
