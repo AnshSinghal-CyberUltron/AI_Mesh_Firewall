@@ -750,7 +750,16 @@ class OutputGuard:
             t = str(threat_type or "").lower()
             if any(k in t for k in ("pii", "phi", "pci", "ssn", "email", "phone", "address", "personal")):
                 return _action("output_pii_action", "redact") if _enabled("output_pii_enabled", True) else "allow"
-            if any(k in t for k in ("secret", "credential", "api_key", "apikey", "password", "token")):
+            # Credential/secret aliases — concrete secret shapes the guard model labels
+            # under generic OWASP names (LLM06 sensitive-info / connection strings /
+            # keys) must map to the credential detector, not fall to the policy
+            # catch-all which would override an operator credential="allow".
+            if any(k in t for k in (
+                "secret", "credential", "api_key", "apikey", "password", "token",
+                "connection_string", "private_key", "access_key", "secret_key",
+                "bearer", "certificate", "cert", "sensitive_info", "sensitive_information",
+                "information_disclosure", "data_leak", "dataleak", "llm06",
+            )):
                 return _action("output_credential_action", "redact") if _enabled("output_credential_enabled", True) else "allow"
             if any(k in t for k in ("ip_leak", "ip_leakage", "infrastructure", "internal_url")):
                 return _action("output_ip_leakage_action", "redact") if _enabled("output_ip_leakage_enabled", True) else "allow"

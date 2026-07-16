@@ -386,6 +386,11 @@ def enforce_output(
             )
 
         if scan_degraded:
+            # NOTE (2026-07-16): tier-2 guard-outage fail-closed contract retained
+            # (test_pipeline_degraded_failclosed.py). This force-redact is the ONE
+            # remaining action-override and is a SECURITY fail-safe (guard could not
+            # scan → mask rather than egress unscanned output). Flagged to the operator
+            # as an explicit relax-or-keep decision rather than silently weakened.
             elapsed = int((time.perf_counter() - t0) * 1000)
             return PipelineDecision(
                 action="redact",

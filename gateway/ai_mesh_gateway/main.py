@@ -8551,12 +8551,17 @@ async def proxy_chat(
                 CONFIG.get("pii_detection_enabled", True),
             )
             _og_matched = getattr(output_verdict, "matched_patterns", None)
-            _og_redact_possible = _output_redact_redaction_possible(
-                response_text=response_text,
-                sanitized_text=response_text,
-                scan_text=_og_scan_text,
-                matched_patterns=_og_matched,
-            )
+            # REDACT FIX (2026-07-16): do NOT pre-decide redact->block here. Redaction
+            # has NOT run yet, so probing redaction_possible against the RAW response
+            # (sanitized_text == response_text) always returns False for genuine,
+            # not-yet-masked redactable content — which mis-coerced the operator's
+            # "redact" into a hard block at the first enforce_output BEFORE the real
+            # masker in the redact branch below ever ran. The authoritative no-op->block
+            # decision is made AFTER redaction at the post-redact enforce_output (which
+            # compares against the actual redacted_response). Pass True so a "redact"
+            # verdict proceeds to the masker; a genuine no-op is still caught + blocked
+            # post-redaction (fail-closed).
+            _og_redact_possible = True
             _out_decision = _enforce_output(
                 verdict_action=getattr(output_verdict, "action", None),
                 verdict_threat_type=getattr(output_verdict, "threat_type", None),
@@ -9111,6 +9116,38 @@ async def proxy_chat(
                         "redacted_response": redacted_response,
                     },
                 )
+            elif resp_check and resp_action == "redact":
+                # #4 FAIL-CLOSED (2026-07-16): the per-rule/operator action is "redact"
+                # but the policy engine produced NO redacted_response (unmaskable
+                # violation). Previously this fell through and delivered the RAW response
+                # (a fail-OPEN leak, asymmetric with the output-guard path which
+                # fail-closes). A redact that cannot mask now BLOCKS (fail-closed).
+                METRICS["blocked"] += 1
+                elapsed_ms = (time.perf_counter() - start) * 1000
+                resp_categories = resp_check.get("matched_policy_categories") or []
+                resp_threat_type = _category_to_threat_type(resp_categories[0]) if resp_categories else "policy_violation"
+                _audit_fire_and_forget(
+                    org_slug=org_slug or "",
+                    decision="block",
+                    rule_code=((resp_check.get("matched_rules") or ["policy_response_redact_noop_block"])[0]),
+                    metadata={
+                        "input_bytes": len((response_text or "").encode("utf-8")),
+                        "model_id": body.get("model", ""),
+                        "matched_rules": resp_check.get("matched_rules") or [],
+                        "matched_policies": resp_check.get("matched_policies") or [],
+                    },
+                )
+                return _build_block_response(403, "content_blocked", _build_zeroshield_metadata(
+                    action="block",
+                    reason=resp_check.get("message") or "Response blocked: policy redaction could not mask the violation.",
+                    detail=resp_check.get("message") or "Response blocked: policy redaction could not mask the violation.",
+                    detection_tier="policy",
+                    threat_type=resp_threat_type,
+                    matched_patterns=resp_check.get("matched_rules") or resp_check.get("matched_policies") or [],
+                    original_prompt=prompt,
+                    processing_time_ms=elapsed_ms,
+                    security_incident=True,
+                ))
             elif resp_check and resp_action == "rewrite":
                 resp_categories = resp_check.get("matched_policy_categories") or []
                 resp_threat_type = _category_to_threat_type(resp_categories[0]) if resp_categories else "policy_violation"
