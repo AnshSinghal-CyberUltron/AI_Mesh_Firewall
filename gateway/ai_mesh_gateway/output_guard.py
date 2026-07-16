@@ -740,6 +740,25 @@ class OutputGuard:
             value = str(cfg.get(key, default) or default).lower()
             return value if value in _VALID_OUTPUT_ACTIONS else default
 
+        def _operator_action_for_category(threat_type: str) -> str:
+            """FULL OPERATOR CONTROL (2026-07-16): map a tier-2 guard-model finding
+            to the OPERATOR's configured per-detector action. The guard model only
+            DETECTS; the operator decides the ACTION. Returns 'allow' (drop the
+            finding) when the operator disabled that detector or set it to allow, so
+            the guard model can never impose an action the operator did not choose.
+            """
+            t = str(threat_type or "").lower()
+            if any(k in t for k in ("pii", "phi", "pci", "ssn", "email", "phone", "address", "personal")):
+                return _action("output_pii_action", "redact") if _enabled("output_pii_enabled", True) else "allow"
+            if any(k in t for k in ("secret", "credential", "api_key", "apikey", "password", "token")):
+                return _action("output_credential_action", "redact") if _enabled("output_credential_enabled", True) else "allow"
+            if any(k in t for k in ("ip_leak", "ip_leakage", "infrastructure", "internal_url")):
+                return _action("output_ip_leakage_action", "redact") if _enabled("output_ip_leakage_enabled", True) else "allow"
+            if "hallucinat" in t:
+                return _action("output_hallucination_action", "flag")
+            # policy_violation / compliance / jailbreak / injection / toxic / guard_model / unknown
+            return _action("output_policy_action", "block") if _enabled("output_policy_enabled", True) else "allow"
+
         if _enabled("output_pii_enabled", True):
             pii_action = _action("output_pii_action", "redact")
             if pii_action != "allow":
@@ -845,7 +864,23 @@ class OutputGuard:
                     and t2.action not in ("block", "redact", "flag")
                 ):
                     guard_rated_clean = True
-                if t2 is not None and t2.action in ("block", "redact", "flag"):
+                # FULL OPERATOR CONTROL (2026-07-16): the guard model DETECTS
+                # (t2.action != allow); the OPERATOR's configured per-detector action
+                # for the detected category decides what happens. This replaces the
+                # guard model's own block/redact/flag recommendation, so setting a
+                # detector to "flag"/"allow" is honoured even when the guard would
+                # have blocked. A category the operator set to "allow" (or disabled)
+                # maps to "allow" here and the finding is dropped.
+                _t2_op_action = (
+                    _operator_action_for_category(t2.threat_type)
+                    if t2 is not None
+                    else "allow"
+                )
+                if (
+                    t2 is not None
+                    and t2.action in ("block", "redact", "flag")
+                    and _t2_op_action != "allow"
+                ):
                     t2_patterns = list(getattr(t2, "matched_patterns", []) or [])
                     # Defense-in-depth (M-01): the guard-model ScanVerdict can carry
                     # raw evidence/findings (matched fragments of the model output) in
@@ -862,7 +897,7 @@ class OutputGuard:
                     # the client/telemetry); the display copy below is still masked.
                     t2_redaction_spans = (
                         _redaction_spans_from(t2_patterns, t2.threat_type or "")
-                        if t2.action in ("block", "redact")
+                        if _t2_op_action in ("block", "redact")
                         else []
                     )
                     # G16: mask RAW evidence VALUES (free-text names/passphrases that
@@ -875,7 +910,7 @@ class OutputGuard:
                         t2.detail or "ZeroShield guard model (tier-2) flagged output"
                     )
                     verdicts.append(OutputVerdict(
-                        action=t2.action,
+                        action=_t2_op_action,
                         threat_type=t2.threat_type or "guard_model",
                         confidence=float(getattr(t2, "confidence", 0.0) or 0.0),
                         detail=t2_detail,
@@ -905,7 +940,18 @@ class OutputGuard:
         # letting a tier-2 "clean" rating silently drop the verdict would override
         # the org's explicit policy. Default orgs (no opt-in) still get the FP
         # reduction; opt-in orgs get deterministic blocking tier-2 cannot undo.
-        _ip_hard_block = bool(self._config.get("output_block_on_ip_leakage", False))
+        # FULL OPERATOR CONTROL (2026-07-16): the guard-rated-clean FP-reduction for
+        # the noisy static ip_leakage heuristic is only applied when the operator has
+        # NOT expressed an explicit protective ip-leakage action. If the operator set
+        # output_ip_leakage_action to anything other than "allow" (or opted into the
+        # legacy hard-block flag), their choice wins and the guard cannot silently
+        # drop the ip_leakage verdict. Operators who want the FP reduction set
+        # output_ip_leakage_action="allow" (disables the detector entirely).
+        _ip_op_action = _action("output_ip_leakage_action", "redact")
+        _ip_hard_block = (
+            bool(self._config.get("output_block_on_ip_leakage", False))
+            or _ip_op_action != "allow"
+        )
         if guard_rated_clean and verdicts and not _ip_hard_block:
             verdicts = [v for v in verdicts if str(getattr(v, "threat_type", "")) != "ip_leakage"]
 
