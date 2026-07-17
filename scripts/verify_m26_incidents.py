@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""M2.6 Incident Queue & Forensics — Steps 1–4 API verification."""
+"""Incident Queue & Forensics — Steps 1–4 API verification."""
 from __future__ import annotations
 
 import json
@@ -18,8 +18,8 @@ PASSWORD = os.environ.get("TEST_PASSWORD", "Adm1n!Pass#2024")
 ORG_SLUG = os.environ.get("ORG_SLUG", "zeroshield")
 CONTROL_CONTAINER = os.environ.get("CONTROL_CONTAINER", "ai_mesh_firewall-control-1")
 STAMP = os.environ.get("M26_PROBE_STAMP", datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S"))
-PROBE_TITLE = os.environ.get("M26_PROBE_TITLE", f"M2.6 E2E probe {STAMP}")
-ALERT_RULE_NAME = os.environ.get("M26_ALERT_RULE_NAME", f"M2.6 alert E2E {STAMP}")
+PROBE_TITLE = os.environ.get("M26_PROBE_TITLE", f"Incidents E2E probe {STAMP}")
+ALERT_RULE_NAME = os.environ.get("M26_ALERT_RULE_NAME", f"Incidents alert E2E {STAMP}")
 LIST_URL = f"{BASE}/api/module2/incidents/"
 
 
@@ -98,7 +98,7 @@ def create_probe_incident(title: str) -> int:
         "ev=EnforcementEvent.objects.create("
         "organization=org, action=ACTION_BLOCK, metadata={"
         "'source':'threat_intel','threat_type':'prompt_injection',"
-        "'detail':title,'model':'gpt-4o','key_prefix':'zs_m26'"
+        "'detail':title,'model':'gpt-4o','key_prefix':'zs_incidents'"
         "}); "
         "inc=SecurityIncident.objects.create("
         "organization=org, enforcement_event=ev, title=title, "
@@ -228,7 +228,7 @@ def main() -> int:
         "POST",
         f"{BASE}/api/security/incidents/{incident_id}/investigate-incident/",
         headers=auth,
-        body={"notes": "M2.6 E2E investigate"},
+        body={"notes": "Incidents E2E investigate"},
     )
     check(
         "POST investigate-incident",
@@ -255,7 +255,7 @@ def main() -> int:
         "POST",
         f"{BASE}/api/security/incidents/{incident_id}/escalate-incident/",
         headers=auth,
-        body={"notes": "M2.6 E2E escalate"},
+        body={"notes": "Incidents E2E escalate"},
     )
     check("POST escalate-incident", code == 200 and esc.get("status") == "escalated", f"HTTP {code} status={esc.get('status')}")
 
@@ -271,7 +271,7 @@ def main() -> int:
         "POST",
         f"{BASE}/api/security/incidents/{incident_id}/resolve-incident/",
         headers=auth,
-        body={"notes": "M2.6 E2E resolve"},
+        body={"notes": "Incidents E2E resolve"},
     )
     check("POST resolve-incident", code == 200 and res.get("status") == "resolved", f"HTTP {code}")
     check("resolved_at set", bool(res.get("resolved_at")))

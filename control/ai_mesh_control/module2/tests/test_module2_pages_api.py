@@ -174,6 +174,18 @@ class Module2PagesApiTests(TestCase):
         self.assertIn("total_pages", data)
         self.assertIn("summary", data)
         self.assertIn("by_source", data["summary"])
+        self.assertIn("data_provenance", data)
+        self.assertEqual(data["data_provenance"]["kpi_source"], "policy.SecurityIncident")
+        self.assertEqual(
+            data["data_provenance"]["label"],
+            "From security cases raised by the gateway",
+        )
+        self.assertEqual(
+            data["data_provenance"]["aggregation_service"],
+            "module2.analytics.build_incident_queue_summary",
+        )
+        self.assertEqual(data["data_provenance"]["freshness"]["cache_status"], "live")
+        self.assertEqual(data["data_provenance"]["filters_applied"]["severity"], "high")
         self.assertGreaterEqual(data["count"], 1)
         self.assertTrue(all(row["severity"] == "high" for row in data["results"]))
 

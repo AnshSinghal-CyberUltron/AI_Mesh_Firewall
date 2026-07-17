@@ -1,6 +1,19 @@
 /** Pure data formatters for Module 2 page charts and tables. */
 
 import { formatRiskBandLabel } from "../../utils/riskLabels.js";
+import { stripModuleNumberPrefix } from "../../utils/module2DisplayNames.js";
+
+/**
+ * Map backend `data_provenance` onto the KPI card `dataSource` string.
+ * Prefers the customer-facing `label`; falls back to `kpi_source` when present.
+ */
+export function formatKpiDataSource(provenance) {
+  if (!provenance || typeof provenance !== "object") return undefined;
+  const label = typeof provenance.label === "string" ? provenance.label.trim() : "";
+  if (label) return label;
+  const kpiSource = typeof provenance.kpi_source === "string" ? provenance.kpi_source.trim() : "";
+  return kpiSource || undefined;
+}
 
 const EXPOSURE_COLORS = {
   high: "#ef4444",
@@ -294,7 +307,7 @@ export function normalizeThreatIntelRows(data) {
   return [];
 }
 
-/** Fleet stats for the IOC library table — used on M2.3 SOC panels. */
+/** Fleet stats for the IOC library table — used on Threat Intel SOC panels. */
 export function buildIocFleetStats(entries = []) {
   const list = Array.isArray(entries) ? entries : [];
   const now = Date.now();
@@ -342,7 +355,7 @@ export function buildTelemetryKpis(summary = {}, iocLibrary = {}) {
       key: "total-events",
       label: "Gateway Requests",
       value: summary.requests_inspected ?? summary.total_events ?? 0,
-      helpText: "All gateway requests in this window (live enforcement telemetry — one count per request_id, aligned with Module 1.1 SOC totals).",
+      helpText: "All gateway requests in this window (live enforcement telemetry — one count per request, aligned with gateway request totals).",
     },
     {
       key: "injection-attempts",
@@ -363,7 +376,7 @@ export function buildTelemetryKpis(summary = {}, iocLibrary = {}) {
       label: "API Key Activity",
       value: summary.behavior_scoring_events ?? 0,
       color: "text-sky-600",
-      helpText: "All key-attributed gateway events in this period (feeds M2.2 UEBA; not limited to Threat Intel sync).",
+      helpText: "All key-attributed gateway events in this period (feeds API Key & Identity Risk; not limited to Threat Intel sync).",
     },
     {
       key: "threat-intel-hits",
@@ -423,7 +436,7 @@ export function resolveEventLane(item = {}) {
 }
 
 export function formatTickerHeadline(item = {}) {
-  if (item.title) return item.title;
+  if (item.title) return stripModuleNumberPrefix(item.title) || item.title;
   const meta = item.metadata || {};
   const parts = [];
   if (item.action) parts.push(String(item.action).toUpperCase());
@@ -442,10 +455,10 @@ export function formatTickerDetail(item = {}) {
     const sub = item.subcategory ? ` (${item.subcategory})` : "";
     return `${item.category}${sub}`;
   }
-  if (item.message) return item.message;
+  if (item.message) return stripModuleNumberPrefix(item.message);
   const meta = item.metadata || {};
   const detail = metadataDetail(meta);
-  if (detail) return detail;
+  if (detail) return stripModuleNumberPrefix(detail);
   if (item.timestamp) return item.timestamp.replace("T", " ").slice(0, 19);
   return "";
 }
@@ -483,7 +496,7 @@ export function formatTickerAnalystSummary(item = {}) {
   if (item.title) {
     const sev = item.severity ? `${item.severity} severity` : "unknown severity";
     const status = item.status || "open";
-    return `Incident case (${sev}, ${status}): ${item.title}`;
+    return `Incident case (${sev}, ${status}): ${stripModuleNumberPrefix(item.title)}`;
   }
 
   const meta = item.metadata || {};
@@ -502,10 +515,10 @@ export function formatTickerAnalystSummary(item = {}) {
   if (model) parts.push(`model ${model}`);
 
   const key = meta.key_prefix || meta.api_key_prefix;
-  if (key) parts.push(`key ${key}`);
+  if (key) parts.push(`key ${stripModuleNumberPrefix(key)}`);
 
   const detail = metadataDetail(meta);
-  if (detail) parts.push(detail);
+  if (detail) parts.push(stripModuleNumberPrefix(detail));
 
   return parts.join(" · ");
 }
@@ -515,7 +528,7 @@ export function buildTickerAnalystFields(item = {}) {
   if (item.title) {
     const fields = [
       { label: "Record type", value: "Security incident" },
-      { label: "Title", value: item.title },
+      { label: "Title", value: stripModuleNumberPrefix(item.title) },
     ];
     if (item.severity) fields.push({ label: "Severity", value: item.severity });
     if (item.status) fields.push({ label: "Status", value: item.status });
@@ -547,7 +560,7 @@ export function buildTickerAnalystFields(item = {}) {
   }
 
   const key = meta.key_prefix || meta.api_key_prefix;
-  if (key) fields.push({ label: "API key prefix", value: key });
+  if (key) fields.push({ label: "API key prefix", value: stripModuleNumberPrefix(key) });
   if (meta.pipeline_stage) fields.push({ label: "Pipeline stage", value: meta.pipeline_stage });
   if (meta.collection || meta.vector_collection) {
     fields.push({ label: "Vector collection", value: meta.collection || meta.vector_collection });
@@ -564,7 +577,7 @@ export function buildTickerAnalystFields(item = {}) {
   }
 
   const detail = metadataDetail(meta);
-  if (detail) fields.push({ label: "Reason", value: detail });
+  if (detail) fields.push({ label: "Reason", value: stripModuleNumberPrefix(detail) });
 
   const snippet = meta.prompt_snippet;
   if (snippet) fields.push({ label: "Prompt snippet", value: String(snippet).slice(0, 160) });
@@ -615,11 +628,11 @@ export function metadataDetail(meta = {}) {
 }
 
 const INCIDENT_LANE_DRILL_DOWN = {
-  chat: { to: "/models/exposure", label: "M2.4 Model exposure" },
-  rag: { to: "/models/exposure?tab=rag", label: "M2.4 RAG health" },
-  vector: { to: "/models/exposure?tab=rag", label: "M2.4 Vectors" },
-  mcp: { to: "/mcp/risk", label: "M2.5 MCP risk" },
-  threat_intel: { to: "/threat-intel", label: "M2.3 Threat intel" },
+  chat: { to: "/models/exposure", label: "Model exposure" },
+  rag: { to: "/models/exposure?tab=rag", label: "RAG health" },
+  vector: { to: "/models/exposure?tab=rag", label: "Vectors" },
+  mcp: { to: "/mcp/risk", label: "MCP risk" },
+  threat_intel: { to: "/threat-intel", label: "Threat intel" },
 };
 
 export function incidentLaneDrillDown(source) {
@@ -743,7 +756,7 @@ export function applyIncidentListMutation(data, { incidentId, action, previousSt
   return next;
 }
 
-export function buildIncidentKpiItems(summary = {}, handlers = {}) {
+export function buildIncidentKpiItems(summary = {}, handlers = {}, dataProvenance = null) {
   const {
     statusFilter = "",
     severityFilter = "",
@@ -754,6 +767,7 @@ export function buildIncidentKpiItems(summary = {}, handlers = {}) {
   } = handlers;
   const active = summary.active ?? 0;
   const criticalHigh = summary.critical_high ?? 0;
+  const dataSource = formatKpiDataSource(dataProvenance);
 
   return [
     {
@@ -761,6 +775,7 @@ export function buildIncidentKpiItems(summary = {}, handlers = {}) {
       label: "Active Queue",
       value: active,
       color: active > 0 ? "text-amber-600" : undefined,
+      dataSource,
       clickable: !!onQueueFilter,
       active: queueFilter === "active" && !statusFilter,
       onClick: () => onQueueFilter?.(queueFilter === "active" ? "" : "active"),
@@ -770,6 +785,7 @@ export function buildIncidentKpiItems(summary = {}, handlers = {}) {
       key: "open",
       label: "Open",
       value: summary.open ?? 0,
+      dataSource,
       clickable: !!onStatusFilter,
       active: statusFilter === "open",
       onClick: () => onStatusFilter?.(statusFilter === "open" ? "" : "open"),
@@ -780,6 +796,7 @@ export function buildIncidentKpiItems(summary = {}, handlers = {}) {
       label: "Escalated",
       value: summary.escalated ?? 0,
       color: (summary.escalated ?? 0) > 0 ? "text-red-600" : undefined,
+      dataSource,
       clickable: !!onStatusFilter,
       active: statusFilter === "escalated",
       onClick: () => onStatusFilter?.(statusFilter === "escalated" ? "" : "escalated"),
@@ -790,6 +807,7 @@ export function buildIncidentKpiItems(summary = {}, handlers = {}) {
       label: "Critical / High",
       value: criticalHigh,
       color: criticalHigh > 0 ? "text-red-600" : undefined,
+      dataSource,
       clickable: !!onSeverityFilter,
       active: severityFilter === "critical_high",
       onClick: () => {
@@ -806,6 +824,7 @@ export function buildIncidentKpiItems(summary = {}, handlers = {}) {
       label: "Resolved",
       value: summary.resolved ?? 0,
       color: "text-emerald-600",
+      dataSource,
       clickable: !!onStatusFilter,
       active: statusFilter === "resolved",
       onClick: () => onStatusFilter?.(statusFilter === "resolved" ? "" : "resolved"),

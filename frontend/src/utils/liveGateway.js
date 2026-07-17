@@ -34,7 +34,7 @@ export function describeGatewayHttp403(data) {
   const message = String(data?.message || extractErrorPayload(data).message || "").trim();
   const code = String(data?.code || "").toLowerCase();
   if (code === "forbidden" && /api key is disabled/i.test(message)) {
-    return "Gateway API key is disabled. Re-enable it under API Keys or M2.2 UEBA Fleet.";
+    return "Gateway API key is disabled. Re-enable it under API Keys or API Key & Identity Risk.";
   }
   if (code === "forbidden" && /api key has expired/i.test(message)) {
     return "Gateway API key has expired. Create a new key or extend expiry.";

@@ -41,8 +41,8 @@ const LANE_META = {
     color: "text-sky-500",
     bg: "bg-sky-50 dark:bg-sky-900/20",
     border: "border-sky-200 dark:border-sky-700",
-    helpText: "Direct LLM chat/completion traffic through the gateway ingress.",
-    drillDown: { to: "/models/exposure?tab=model", label: "M2.4 Model exposure" },
+    helpText: "Chat and completion prompts sent through your AI gateway.",
+    drillDown: { to: "/models/exposure?tab=model", label: "Model exposure" },
   },
   rag: {
     label: "RAG",
@@ -50,8 +50,8 @@ const LANE_META = {
     color: "text-violet-500",
     bg: "bg-violet-50 dark:bg-violet-900/20",
     border: "border-violet-200 dark:border-violet-700",
-    helpText: "Retrieval-augmented requests tagged event_type=rag_pipeline.",
-    drillDown: { to: "/models/exposure?tab=rag", label: "M2.4 RAG health" },
+    helpText: "Knowledge-base and retrieval-assisted prompts scanned by the gateway.",
+    drillDown: { to: "/models/exposure?tab=rag", label: "RAG health" },
   },
   vector: {
     label: "Vector",
@@ -59,8 +59,8 @@ const LANE_META = {
     color: "text-emerald-500",
     bg: "bg-emerald-50 dark:bg-emerald-900/20",
     border: "border-emerald-200 dark:border-emerald-700",
-    helpText: "Vector DB access events with collection or namespace metadata.",
-    drillDown: { to: "/models/exposure?tab=rag", label: "M2.4 Vector collections" },
+    helpText: "Vector database lookups that accompany retrieval through the gateway.",
+    drillDown: { to: "/models/exposure?tab=rag", label: "Vector collections" },
   },
   mcp: {
     label: "MCP",
@@ -68,8 +68,8 @@ const LANE_META = {
     color: "text-amber-500",
     bg: "bg-amber-50 dark:bg-amber-900/20",
     border: "border-amber-200 dark:border-amber-700",
-    helpText: "Model Context Protocol tool-call enforcement events.",
-    drillDown: { to: "/mcp/risk", label: "M2.5 MCP risk" },
+    helpText: "Tool and context calls checked by the gateway before they reach the model.",
+    drillDown: { to: "/mcp/risk", label: "MCP risk" },
   },
   threat_intel: {
     label: "Threat Intel",
@@ -77,8 +77,8 @@ const LANE_META = {
     color: "text-red-500",
     bg: "bg-red-50 dark:bg-red-900/20",
     border: "border-red-200 dark:border-red-700",
-    helpText: "Threat intelligence matches and indicator enforcement events.",
-    drillDown: { to: "/threat-intel", label: "M2.3 Threat intel" },
+    helpText: "Prompts and requests that matched your threat indicators at the gateway.",
+    drillDown: { to: "/threat-intel", label: "Threat intel" },
   },
 };
 
@@ -285,7 +285,7 @@ export function DashboardPage() {
 
   const kpis = data?.kpis || {};
   const kpiItems = [
-    { key: "total-events", label: "Gateway Requests", value: kpis.total_events ?? kpis.requests_inspected ?? 0, helpText: "Distinct gateway requests in the selected window (same count as Module 1.1 Requests inspected — one per request_id, not per pipeline stage)." },
+    { key: "total-events", label: "Gateway Requests", value: kpis.total_events ?? kpis.requests_inspected ?? 0, helpText: "Distinct gateway requests in the selected window (one count per request, not per pipeline stage)." },
     { key: "blocked", label: "Blocked", value: kpis.blocked ?? 0, color: "text-red-600", helpText: "Requests hard-stopped by policy (deny / kill-switch)." },
     { key: "redacted", label: "Redacted", value: kpis.redacted ?? 0, color: "text-amber-600", helpText: "Requests allowed after PII or sensitive fields were masked." },
     {
@@ -353,14 +353,14 @@ export function DashboardPage() {
       <div className="mt-6">
         <ChartCard
           title="API Key Activity"
-          titleHelpText="Gateway credentials with enforcement traffic in this window — same fleet data as M2.2 UEBA."
+          titleHelpText="Gateway credentials with enforcement traffic in this window — same fleet data as API Key & Identity Risk."
         >
           <div className="mb-3 flex justify-end">
             <Link
               to={`/ueba/api-keys?period=${period}`}
               className="inline-flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900 dark:text-teal-400 dark:hover:text-teal-300"
             >
-              Open M2.2 UEBA
+              Open API Key & Identity Risk
               <ArrowRight className="h-3 w-3" />
             </Link>
           </div>

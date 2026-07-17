@@ -39,6 +39,7 @@ from module2.analytics import (
     serialize_incident_row,
 )
 from module2.models import ThreatIntelEntry
+from module2.display_sanitization import sanitize_incident_text, sanitize_incident_value
 from module2.serializers import ThreatIntelEntrySerializer
 from module2.tasks import safe_sync_threat_intel_to_redis, build_threat_intel_sync_meta
 from module2.ueba_metrics import POLICY_ESCALATION_THREATS
@@ -150,7 +151,7 @@ def _sanitize_incident_metadata(meta):
             out["extra"] = {k: extra[k] for k in _TIMELINE_EXTRA_ALLOWLIST if k in extra}
             continue
         out[key] = value
-    return out
+    return sanitize_incident_value(out)
 
 
 def _build_event_trend(events_qs, since, hours, bucket_hours):
@@ -1058,7 +1059,7 @@ class UnifiedDashboardView(APIView):
         incidents_snapshot = [
             {
                 "id": i.id,
-                "title": i.title,
+                "title": sanitize_incident_text(i.title),
                 "severity": i.severity,
                 "status": i.status,
                 "created_at": i.created_at.isoformat(),
@@ -1184,6 +1185,36 @@ class ThreatIntelSyncView(APIView):
 
 
 _VALID_INCIDENT_PERIODS = frozenset({"", "1h", "24h", "7d", "30d"})
+
+
+def _incident_data_provenance(
+    *,
+    generated_at,
+    period,
+    status_filter,
+    queue_filter,
+    severity_filter,
+    source_filter,
+    search,
+):
+    return {
+        "kpi_source": "policy.SecurityIncident",
+        "label": "From security cases raised by the gateway",
+        "event_join_source": "policy.EnforcementEvent",
+        "aggregation_service": "module2.analytics.build_incident_queue_summary",
+        "freshness": {
+            "generated_at": generated_at.isoformat(),
+            "cache_status": "live",
+        },
+        "filters_applied": {
+            "period": period or None,
+            "status": status_filter or None,
+            "queue": queue_filter or None,
+            "severity": severity_filter or None,
+            "source": source_filter or None,
+            "search": search or None,
+        },
+    }
 
 
 class IncidentListView(APIView):
@@ -1340,6 +1371,15 @@ class IncidentListView(APIView):
                 "total_pages": total_pages,
                 "period": period or None,
                 "summary": summary,
+                "data_provenance": _incident_data_provenance(
+                    generated_at=timezone.now(),
+                    period=period,
+                    status_filter=status_filter,
+                    queue_filter=queue_filter,
+                    severity_filter=severity_filter,
+                    source_filter=source_filter,
+                    search=search,
+                ),
                 "results": out,
             }
         )
@@ -1379,13 +1419,17 @@ class IncidentE2eSeedView(APIView):
         if org is None and not request.user.is_superuser:
             return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
 
-        probe_title = str(request.data.get("probe_title") or "").strip()
+        probe_title = sanitize_incident_text(str(request.data.get("probe_title") or "").strip())
         bulk_titles = request.data.get("bulk_titles") or []
         if not probe_title:
             return Response({"detail": "probe_title is required."}, status=status.HTTP_400_BAD_REQUEST)
         if not isinstance(bulk_titles, list):
             return Response({"detail": "bulk_titles must be a list."}, status=status.HTTP_400_BAD_REQUEST)
-        bulk_titles = [str(t).strip() for t in bulk_titles if str(t).strip()]
+        bulk_titles = [
+            sanitize_incident_text(str(t).strip())
+            for t in bulk_titles
+            if str(t).strip()
+        ]
         if len(bulk_titles) < 2:
             return Response(
                 {"detail": "bulk_titles must include at least two titles."},
@@ -1401,7 +1445,7 @@ class IncidentE2eSeedView(APIView):
                     "threat_type": "prompt_injection",
                     "detail": title,
                     "model": "gpt-4o",
-                    "key_prefix": "zs_m26",
+                    "key_prefix": "zs_incidents",
                 },
             )
             return SecurityIncident.objects.create(
@@ -1553,9 +1597,10 @@ class IncidentDetailView(APIView):
                 }
             )
 
+        incident_data = sanitize_incident_value(SecurityIncidentSerializer(incident).data)
         return Response(
             {
-                "incident": SecurityIncidentSerializer(incident).data,
+                "incident": incident_data,
                 "source": source,
                 "evidence": evidence,
                 "timeline": timeline,

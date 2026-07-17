@@ -5,11 +5,11 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  CircleHelp,
   Info,
   Radio,
   RefreshCw,
   Search,
+  Sparkles,
   X,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -41,6 +41,7 @@ import {
   sourceBadgeClass,
 } from "./pageData";
 import { ANALYST_BRIEF_TITLE, INCIDENTS_GUIDE, PAGE_BRIEFS } from "./pageCopy";
+import { stripModuleNumberPrefix } from "../../utils/module2DisplayNames";
 
 const REFRESH_DEBOUNCE_MS = 300;
 const PAGE_SIZE = 25;
@@ -215,7 +216,7 @@ function IncidentsGuideModal({ open, onClose }) {
         <div className="sticky top-0 flex items-start justify-between gap-4 border-b border-slate-100 bg-white px-6 py-5 dark:border-slate-700 dark:bg-slate-900">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-teal-600 dark:text-teal-400">
-              M2.6 · Incidents &amp; Forensics
+              Incidents &amp; Forensics
             </p>
             <h2 id="incidents-guide-title" className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
               How this page works
@@ -261,6 +262,7 @@ function IncidentsPageInner() {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [bulkResolving, setBulkResolving] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [guideAttention, setGuideAttention] = useState(true);
   const [rowActionId, setRowActionId] = useState(null);
   const [actionNotice, setActionNotice] = useState(null);
 
@@ -325,6 +327,12 @@ function IncidentsPageInner() {
   }, [load]);
 
   useEffect(() => () => clearTimeout(refreshTimerRef.current), []);
+
+  useEffect(() => {
+    if (!guideAttention) return undefined;
+    const timer = window.setTimeout(() => setGuideAttention(false), 12000);
+    return () => window.clearTimeout(timer);
+  }, [guideAttention]);
 
   const { connected: wsConnected } = useRealtimeNotifications({
     onEnforcementEvent: refreshLive,
@@ -525,14 +533,18 @@ function IncidentsPageInner() {
     queueFilter,
     search,
   });
-  const kpiItems = buildIncidentKpiItems(effectiveSummary, {
-    statusFilter,
-    severityFilter,
-    queueFilter,
-    onStatusFilter: handleStatusFilter,
-    onSeverityFilter: handleSeverityFilter,
-    onQueueFilter: handleQueueFilter,
-  });
+  const kpiItems = buildIncidentKpiItems(
+    effectiveSummary,
+    {
+      statusFilter,
+      severityFilter,
+      queueFilter,
+      onStatusFilter: handleStatusFilter,
+      onSeverityFilter: handleSeverityFilter,
+      onQueueFilter: handleQueueFilter,
+    },
+    data?.data_provenance,
+  );
 
   if (loading && !data) {
     return (
@@ -610,7 +622,7 @@ function IncidentsPageInner() {
       {import.meta.env.DEV && !hasSummary && orgTotal != null && orgTotal > 0 && (
         <div className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-100">
           Showing <strong>{orgTotal}</strong> incidents from the API. For full KPI breakdown and lane chart metrics, rebuild and restart the{" "}
-          <strong>control</strong> Docker service so the latest M2.6 API is active.
+          <strong>control</strong> Docker service so the latest Incidents API is active.
         </div>
       )}
 
@@ -618,11 +630,27 @@ function IncidentsPageInner() {
       <div className="mt-3 flex justify-start">
         <button
           type="button"
-          onClick={() => setGuideOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-teal-300 hover:text-teal-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-teal-600 dark:hover:text-teal-300"
+          onClick={() => {
+            setGuideAttention(false);
+            setGuideOpen(true);
+          }}
+          aria-label="Open analyst guide"
+          className={`group relative inline-flex items-center gap-2 overflow-hidden rounded-xl border px-3.5 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${
+            guideAttention
+              ? "border-cyan-300/70 bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-lg shadow-cyan-700/20 hover:from-cyan-500 hover:to-teal-500 motion-safe:animate-pulse motion-reduce:animate-none"
+              : "border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:text-teal-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-teal-500 dark:hover:text-teal-300"
+          }`}
         >
-          <CircleHelp className="h-3.5 w-3.5" />
-          Guide
+          {guideAttention && (
+            <span className="absolute inset-0 rounded-xl ring-1 ring-cyan-200/70 ring-offset-1 ring-offset-transparent motion-safe:animate-ping motion-reduce:animate-none" />
+          )}
+          <Sparkles className="relative h-3.5 w-3.5" />
+          <span className="relative">Open analyst guide</span>
+          {guideAttention && (
+            <span className="relative rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+              New
+            </span>
+          )}
         </button>
       </div>
 
@@ -765,7 +793,7 @@ function IncidentsPageInner() {
                   to="/threat-intel"
                   className="inline-flex items-center rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700"
                 >
-                  Review M2.3 Threat Intel
+                  Review Threat Intel
                 </Link>
               )}
             />
@@ -815,7 +843,7 @@ function IncidentsPageInner() {
                     </Link>
                   ),
                 },
-                { key: "title", label: "Title", helpText: "Short description from the alert rule or anomaly job." },
+                { key: "title", label: "Title", helpText: "Short description from the alert rule or anomaly job.", render: (r) => stripModuleNumberPrefix(r.title) || r.title || "—" },
                 {
                   key: "source",
                   label: "Lane",

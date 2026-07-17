@@ -118,7 +118,7 @@ function McpRiskDashboard({ data }) {
   return (
     <>
       <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs leading-relaxed text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-amber-100">
-        <strong>MCP risk</strong> summarizes tool-call enforcement from Module 1.4.
+        <strong>MCP risk</strong> summarizes tool-call enforcement from Context Assembly & MCP.
         {" "}Use the <strong>violations</strong> chart to prioritize which tools to restrict, and the{" "}
         <strong>inbound / outbound</strong> cards to see whether problems happen on arguments going in or results coming back.
       </div>

@@ -17,6 +17,7 @@ from policy.request_scoped_metrics import (
     merge_request_action,
     request_key,
 )
+from module2.display_sanitization import sanitize_incident_text
 
 logger = logging.getLogger(__name__)
 
@@ -725,7 +726,7 @@ def _incident_by_source_counts(qs) -> dict:
 
 
 def build_incident_queue_summary(qs, org_id=None) -> dict:
-    """Aggregate incident queue stats for the M2.6 SOC KPI strip (always fresh)."""
+    """Aggregate incident queue stats for the Incidents SOC KPI strip."""
     from django.db.models import Count
 
     stats_qs = _incident_stats_queryset(qs)
@@ -773,8 +774,10 @@ def serialize_incident_row(incident, serializer_data: dict) -> dict:
         meta = incident.enforcement_event.metadata or {}
     return {
         **serializer_data,
+        "title": sanitize_incident_text(serializer_data.get("title", "")),
+        "notes": sanitize_incident_text(serializer_data.get("notes", "")),
         "source": event_source(meta),
-        "key_prefix": key_prefix_from_meta(meta),
+        "key_prefix": sanitize_incident_text(key_prefix_from_meta(meta)),
         "model": meta.get("model") or "",
         "project_id": meta.get("project_id") or "",
         "threat_type": meta.get("threat_type") or "",

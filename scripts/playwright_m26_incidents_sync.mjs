@@ -1,5 +1,5 @@
 /**
- * M2.6 Incident and Forensics — KPI load, filter, escalate, detail timeline, resolve sync gate.
+ * Incident and Forensics — KPI load, filter, escalate, detail timeline, resolve sync gate.
  *
  * Run (host with playwright):
  *   NODE_PATH="$PWD/tests/e2e/node_modules" BASE_URL=http://127.0.0.1:8180 \
@@ -25,9 +25,9 @@ const ORG_SLUG = process.env.ORG_SLUG || "zeroshield";
 const OUT = process.env.E2E_REPORT || "runs/playwright_m26_incidents_sync.json";
 const SHOT_DIR = process.env.SHOT_DIR || "runs/m26-incidents-sync";
 const STAMP = process.env.M26_PROBE_STAMP || String(Date.now());
-const PROBE_TITLE = process.env.M26_PROBE_TITLE || `M2.6 E2E probe ${STAMP}`;
-const BULK_TITLE_A = `M2.6 E2E bulk A ${STAMP}`;
-const BULK_TITLE_B = `M2.6 E2E bulk B ${STAMP}`;
+const PROBE_TITLE = process.env.M26_PROBE_TITLE || `Incidents E2E probe ${STAMP}`;
+const BULK_TITLE_A = `Incidents E2E bulk A ${STAMP}`;
+const BULK_TITLE_B = `Incidents E2E bulk B ${STAMP}`;
 const PRESEED_ID = process.env.M26_INCIDENT_ID ? Number(process.env.M26_INCIDENT_ID) : null;
 const CONTROL_CONTAINER = process.env.CONTROL_CONTAINER || "ai_mesh_firewall-control-1";
 
@@ -65,13 +65,13 @@ function tryDockerSeed() {
     `bulk_a=${JSON.stringify(BULK_TITLE_A)}; bulk_b=${JSON.stringify(BULK_TITLE_B)}; ` +
     `org=Organization.objects.filter(slug=${JSON.stringify(ORG_SLUG)}).first(); assert org; ` +
     `ev=EnforcementEvent.objects.create(organization=org, action=ACTION_BLOCK, metadata={` +
-    `'source':'threat_intel','threat_type':'prompt_injection','detail':title,'model':'gpt-4o','key_prefix':'zs_m26'}); ` +
+    `'source':'threat_intel','threat_type':'prompt_injection','detail':title,'model':'gpt-4o','key_prefix':'zs_incidents'}); ` +
     `inc=SecurityIncident.objects.create(organization=org, enforcement_event=ev, title=title, severity='high', status='open'); ` +
     `ev_a=EnforcementEvent.objects.create(organization=org, action=ACTION_BLOCK, metadata={` +
-    `'source':'threat_intel','threat_type':'prompt_injection','detail':bulk_a,'model':'gpt-4o','key_prefix':'zs_m26'}); ` +
+    `'source':'threat_intel','threat_type':'prompt_injection','detail':bulk_a,'model':'gpt-4o','key_prefix':'zs_incidents'}); ` +
     `inc_a=SecurityIncident.objects.create(organization=org, enforcement_event=ev_a, title=bulk_a, severity='high', status='open'); ` +
     `ev_b=EnforcementEvent.objects.create(organization=org, action=ACTION_BLOCK, metadata={` +
-    `'source':'threat_intel','threat_type':'prompt_injection','detail':bulk_b,'model':'gpt-4o','key_prefix':'zs_m26'}); ` +
+    `'source':'threat_intel','threat_type':'prompt_injection','detail':bulk_b,'model':'gpt-4o','key_prefix':'zs_incidents'}); ` +
     `inc_b=SecurityIncident.objects.create(organization=org, enforcement_event=ev_b, title=bulk_b, severity='medium', status='open'); ` +
     `print(f"{inc.id},{inc_a.id},{inc_b.id}")`;
   try {
@@ -336,7 +336,7 @@ async function bulkResolveFromQueue(page) {
   await page.goto(`${BASE}/incidents`, { waitUntil: "domcontentloaded", timeout: 120000 });
   await page.getByRole("heading", { name: /Incident and Forensics/i }).waitFor({ state: "visible", timeout: 60000 });
   if (!PRESEED_ID) {
-    await page.getByPlaceholder(/Search title or notes/i).fill("M2.6 E2E bulk");
+    await page.getByPlaceholder(/Search title or notes/i).fill("Incidents E2E bulk");
     await page.getByPlaceholder(/Search title or notes/i).press("Enter");
     await page.waitForResponse(
       (r) => r.url().includes("/api/module2/incidents/") && r.url().includes("search=") && r.ok(),

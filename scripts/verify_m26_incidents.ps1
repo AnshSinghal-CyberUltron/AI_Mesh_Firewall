@@ -1,4 +1,4 @@
-# M2.6 Incident Queue & Forensics — API + Playwright UI sync (Steps 1–4).
+# Incident Queue & Forensics — API + Playwright UI sync (Steps 1–4).
 #
 # Usage (local docker):
 #   .\scripts\verify_m26_incidents.ps1
@@ -28,8 +28,8 @@ if (-not $Password) {
 $script:pass = 0
 $script:fail = 0
 $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$probeTitle = "M2.6 E2E probe $stamp"
-$alertRuleName = "M2.6 alert E2E $stamp"
+$probeTitle = "Incidents E2E probe $stamp"
+$alertRuleName = "Incidents alert E2E $stamp"
 
 function Write-Check {
   param([string]$Name, [bool]$Ok, [string]$Detail = "")
@@ -52,7 +52,7 @@ from policy.constants import ACTION_BLOCK
 title='$Title'
 org=Organization.objects.filter(slug='$OrgSlug').first()
 assert org
-ev=EnforcementEvent.objects.create(organization=org, action=ACTION_BLOCK, metadata={'source':'threat_intel','threat_type':'prompt_injection','detail':title,'model':'gpt-4o','key_prefix':'zs_m26'})
+ev=EnforcementEvent.objects.create(organization=org, action=ACTION_BLOCK, metadata={'source':'threat_intel','threat_type':'prompt_injection','detail':title,'model':'gpt-4o','key_prefix':'zs_incidents'})
 inc=SecurityIncident.objects.create(organization=org, enforcement_event=ev, title=title, severity='high', status='open')
 print(inc.id)
 "@
@@ -62,7 +62,7 @@ print(inc.id)
   return [int]$id
 }
 
-Write-Host "=== M2.6 Incident Queue E2E (stamp=$stamp) ===" -ForegroundColor Cyan
+Write-Host "=== Incident Queue E2E (stamp=$stamp) ===" -ForegroundColor Cyan
 
 $env:BASE_URL = $BaseUrl
 $env:TEST_EMAIL = $Email
@@ -77,18 +77,18 @@ python scripts/verify_m26_incidents.py
 $apiExit = $LASTEXITCODE
 Write-Check "API verify_m26_incidents.py" ($apiExit -eq 0) "exit=$apiExit"
 if ($apiExit -ne 0) {
-  Write-Host "`n=== M2.6 Result: $script:pass PASS / $script:fail FAIL (API failed; skipping Playwright) ===" -ForegroundColor Yellow
+  Write-Host "`n=== Incidents Result: $script:pass PASS / $script:fail FAIL (API failed; skipping Playwright) ===" -ForegroundColor Yellow
   exit 1
 }
 
 if ($SkipPlaywright) {
-  Write-Host "`n=== M2.6 Result: $script:pass PASS / $script:fail FAIL (Playwright skipped) ===" -ForegroundColor Cyan
+  Write-Host "`n=== Incidents Result: $script:pass PASS / $script:fail FAIL (Playwright skipped) ===" -ForegroundColor Cyan
   exit 0
 }
 
 Write-Host "`n=== Playwright UI sync gate ===" -ForegroundColor Cyan
 $uiStamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$uiTitle = "M2.6 E2E probe $uiStamp"
+$uiTitle = "Incidents E2E probe $uiStamp"
 $incidentId = Seed-OpenIncident -Title $uiTitle
 Write-Host "Seeded UI probe incident id=$incidentId title=$uiTitle"
 
@@ -107,6 +107,6 @@ docker run --rm --network $DockerNetwork -v "${repoRoot}:/work" -w /work `
 $pwExit = $LASTEXITCODE
 Write-Check "Playwright playwright_m26_incidents_sync.mjs" ($pwExit -eq 0) "exit=$pwExit"
 
-Write-Host "`n=== M2.6 Result: $script:pass PASS / $script:fail FAIL ===" -ForegroundColor Cyan
+Write-Host "`n=== Incidents Result: $script:pass PASS / $script:fail FAIL ===" -ForegroundColor Cyan
 if ($script:fail -gt 0) { exit 1 }
 exit 0

@@ -1,4 +1,4 @@
-/** Human-readable timestamps for M2.2 recent-prompt views. */
+/** Human-readable timestamps for API key recent-prompt views. */
 
 export function formatUebaRequestTime(timestamp, { now = new Date() } = {}) {
   if (!timestamp) return "—";

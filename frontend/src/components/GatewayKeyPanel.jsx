@@ -356,7 +356,7 @@ export function GatewayKeyPanel() {
                 </div>
                 <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
                   This key is now the active Attack Simulator credential for your org.
-                  M2.2 UEBA marks the matching fleet row as <strong>Simulator</strong>.
+                  API Key & Identity Risk marks the matching fleet row as <strong>Simulator</strong>.
                 </p>
                 {!simulatorAdopted && (
                   <button
@@ -371,7 +371,7 @@ export function GatewayKeyPanel() {
                 )}
                 {simulatorAdopted && (
                   <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
-                    Active simulator key updated. Open M2.2 UEBA to see the matching row marked Simulator.
+                    Active simulator key updated. Open API Key & Identity Risk to see the matching row marked Simulator.
                   </p>
                 )}
                 </div>

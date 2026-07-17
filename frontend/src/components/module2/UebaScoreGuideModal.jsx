@@ -108,7 +108,7 @@ export function UebaScoreGuideModal({ open, onClose, mediumThreshold, highThresh
                 UEBA score guide
               </h2>
               <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                Plain-language reference for M2.2 behavioral risk
+                Plain-language reference for API key behavioral risk
               </p>
             </div>
           </div>

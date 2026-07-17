@@ -248,7 +248,7 @@ function ThreatIntelSocPanel({ summary, iocLibrary, fleetStats, topVector, perio
           to={INCIDENTS_THREAT_INTEL_PATH}
           className="mt-3 inline-flex text-teal-600 hover:underline dark:text-teal-400"
         >
-          Open M2.6 incidents (threat intel lane) →
+          Open Incidents (threat intel lane) →
         </Link>
       </div>
     </div>

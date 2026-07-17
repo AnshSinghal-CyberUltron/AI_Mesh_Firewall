@@ -306,9 +306,9 @@ def build() -> None:
     )
     pdf.body("Inbound high = review argument policies. Outbound high = tighten what tool results may return.")
 
-    # M2.6
+    # Incidents
     pdf.add_page()
-    pdf.section_title("M2.6 - Incidents & Forensics")
+    pdf.section_title("Incidents & Forensics")
     pdf.body(
         "A security incident is a formal case opened when alert rules decide enforcement is serious enough to track. "
         "Not the same as a single block - it is the SOC record until closed."

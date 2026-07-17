@@ -143,7 +143,7 @@ function ModelRagGuideModal({ open, onClose }) {
         <div className="sticky top-0 flex items-start justify-between gap-4 border-b border-slate-100 bg-white px-6 py-5 dark:border-slate-700 dark:bg-slate-900">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-teal-600 dark:text-teal-400">
-              M2.4 · Model &amp; RAG Health Guide
+              Model &amp; RAG Health Guide
             </p>
             <h2 id="model-rag-guide-title" className="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
               What this page shows
@@ -607,7 +607,7 @@ function ModelExposurePageInner() {
             <Module2EmptyState
               title="No model traffic in this period"
               message="Routed LLM requests with model metadata will populate exposure scores, block rates, and the active-models table."
-              hint="Tip: Run Attack Simulator under Module 1.1 to generate model-attributed enforcement events."
+              hint="Tip: Run Attack Simulator under AI Gateway & Traffic Ingress to generate model-attributed enforcement events."
             />
           )}
           {data && hasModelActivity && (

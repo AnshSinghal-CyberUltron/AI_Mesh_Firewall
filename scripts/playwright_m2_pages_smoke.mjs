@@ -1,5 +1,5 @@
 /**
- * Quick smoke: M2.2 UEBA, M2.4 Model/RAG, M2.6 Incidents render + guide buttons.
+ * Quick smoke: UEBA, Model/RAG, and Incidents render + guide buttons.
  * Run:
  *   docker run --rm --add-host=host.docker.internal:host-gateway -v "%CD%:/work" -w /work \
  *     mcr.microsoft.com/playwright:v1.60.0-jammy node /work/scripts/playwright_m2_pages_smoke.mjs
@@ -63,15 +63,15 @@ async function main() {
 
     await page.goto(`${BASE}/incidents`, { waitUntil: "domcontentloaded", timeout: 120000 });
     await page.waitForTimeout(3000);
-    await assertNoRenderError(page, "M2.6");
-    const guide26 = page.getByRole("button", { name: /^Guide$/i });
-    step("M2.6: Guide button present", await guide26.count() > 0);
-    const alwaysOpenPanel = page.getByText("M2.6 · SOC Guide", { exact: false });
-    step("M2.6: guide not always-open sidebar", await alwaysOpenPanel.count() === 0);
+    await assertNoRenderError(page, "Incidents");
+    const guide26 = page.getByRole("button", { name: /Open analyst guide/i });
+    step("Incidents: Guide button present", await guide26.count() > 0);
+    const alwaysOpenPanel = page.getByText("Incidents · SOC Guide", { exact: false });
+    step("Incidents: guide not always-open sidebar", await alwaysOpenPanel.count() === 0);
     await guide26.first().click();
     await page.waitForTimeout(500);
     const guide26Modal = page.getByRole("dialog");
-    step("M2.6: Guide modal opens", await guide26Modal.count() > 0);
+    step("Incidents: Guide modal opens", await guide26Modal.count() > 0);
 
     report.ok = true;
     console.log(JSON.stringify(report, null, 2));

@@ -1,4 +1,4 @@
-/** Kill-switch and gateway key control APIs for M2.2 analyst response actions. */
+/** Kill-switch and gateway key control APIs for API Key & Identity Risk analyst response actions. */
 
 import { notifyContainmentChanged } from "../utils/containmentEvents.js";
 

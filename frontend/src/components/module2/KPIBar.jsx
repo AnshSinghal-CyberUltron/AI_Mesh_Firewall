@@ -40,6 +40,11 @@ export function KPIBar({ items, loading = false }) {
             <p className={`mt-1 text-2xl font-bold ${item.color || "text-slate-900 dark:text-slate-100"}`}>
               {item.value}
             </p>
+            {item.dataSource && (
+              <p className="mt-1 text-[11px] leading-snug text-slate-400 dark:text-slate-500">
+                {item.dataSource}
+              </p>
+            )}
             {item.sub && (
               <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{item.sub}</p>
             )}

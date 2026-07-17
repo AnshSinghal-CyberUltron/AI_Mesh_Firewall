@@ -100,7 +100,7 @@ function FleetRowActions({
     if (!orgId) return;
     const confirmed = window.confirm(
       `Use API key ${row.prefix} as the Attack Simulator credential? `
-      + "Module 1 simulators and M2.2 UEBA will track traffic under this key.",
+      + "Module 1 simulators and API Key & Identity Risk will track traffic under this key.",
     );
     if (!confirmed) return;
     setLoading("simulator");

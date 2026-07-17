@@ -6,6 +6,7 @@ import { Badge } from "../ui/Badge";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
+import { formatModuleDisplayName } from "../../utils/module2DisplayNames";
 
 function useOfferingVisibility(user) {
   const roles = user?.roles || [];
@@ -156,12 +157,12 @@ const TAB_TITLES = {
   "firewall-1-6": "Model Isolation & Kill-Switch",
   "firewall-1-7": "Output Guardrails",
   "firewall-config": "Module 1 Inputs",
-  "m2-dashboard": "M2.1 Gateway Intelligence",
-  "m2-ueba-api-keys": "M2.2 API Key Behavior (UEBA)",
-  "m2-threat-intel": "M2.3 Threat Intelligence Ops",
-  "m2-models-exposure": "M2.4 Model Health & Exposure",
-  "m2-mcp-risk": "M2.5 MCP & Context Risk",
-  "m2-incidents": "M2.6 Incidents & Forensics",
+  "m2-dashboard": "Gateway Intelligence",
+  "m2-ueba-api-keys": "API Key & Identity Risk",
+  "m2-threat-intel": "Threat Intelligence Ops",
+  "m2-models-exposure": "Model & RAG Health",
+  "m2-mcp-risk": "MCP & Context Risk",
+  "m2-incidents": "Incidents & Forensics",
 };
 
 export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSearchSubmit, onTabChange, onMobileMenuToggle }) {
@@ -267,9 +268,11 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
 
   const searchValue = onSearchQueryChange !== undefined ? searchQuery : localQuery;
   const setSearchValue = onSearchQueryChange || setLocalQuery;
-  const pageTitle =
+  const pageTitle = formatModuleDisplayName(
     TAB_TITLES[activeTab]
-    || (activeTab?.startsWith("m2-") ? "Gateway Behaviour Intelligence" : "Control Console");
+      || (activeTab?.startsWith("m2-") ? "Gateway Behaviour Intelligence" : "Control Console"),
+    activeTab,
+  );
   const environment = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "DEV" : "PROD";
 
   const isDark = resolvedTheme === "dark";

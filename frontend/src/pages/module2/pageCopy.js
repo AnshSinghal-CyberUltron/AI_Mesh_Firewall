@@ -4,7 +4,7 @@ export const ANALYST_BRIEF_TITLE = "Page Objective";
 
 export const PAGE_BRIEFS = {
   dashboard:
-    "SOC command view across Chat, RAG, Vector, and MCP enforcement lanes. Scan live gateway pressure and lane totals—then open M2.2 (API keys), M2.3 (Threat Intel), M2.4 (Model & RAG), or M2.5 (MCP) for deep dives.",
+    "SOC command view across Chat, RAG, Vector, and MCP enforcement lanes. Scan live gateway pressure and lane totals-then open API Key & Identity Risk, Threat Intelligence Ops, Model & RAG Health, or MCP & Context Risk for deep dives.",
   ueba:
     "Identity-centric UEBA for API keys. Baseline normal usage, surface anomaly flags, and correlate key activity to vector collections and MCP tools when investigating compromise or data harvesting.",
   modelRag:
@@ -19,7 +19,7 @@ export const PAGE_BRIEFS = {
     "Single-incident forensics: replay the enforcement timeline, inspect event metadata, and validate pipeline-stage actions before escalation or closure.",
 };
 
-/** M2.6 analyst guide — shown in the incident queue info panel. */
+/** Incidents analyst guide - shown in the incident queue info panel. */
 export const INCIDENTS_GUIDE = {
   objective:
     "Triage your organization's security incidents in one place: see what needs attention, understand which enforcement lane raised each case, take action (escalate or resolve), and drill into forensics when you need full context.",
