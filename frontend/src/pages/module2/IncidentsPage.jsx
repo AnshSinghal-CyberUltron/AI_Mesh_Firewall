@@ -635,22 +635,18 @@ function IncidentsPageInner() {
             setGuideOpen(true);
           }}
           aria-label="Open analyst guide"
-          className={`group relative inline-flex items-center gap-2 overflow-hidden rounded-xl border px-3.5 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/70 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${
-            guideAttention
-              ? "border-cyan-300/70 bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-lg shadow-cyan-700/20 hover:from-cyan-500 hover:to-teal-500 motion-safe:animate-pulse motion-reduce:animate-none"
-              : "border-slate-200 bg-white text-slate-700 hover:border-teal-300 hover:text-teal-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-teal-500 dark:hover:text-teal-300"
-          }`}
+          className="group relative inline-flex items-center gap-2.5 overflow-hidden rounded-xl border border-cyan-300/70 bg-gradient-to-r from-cyan-600 via-teal-500 to-emerald-500 bg-[length:200%_100%] px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-cyan-700/30 transition-all duration-300 hover:-translate-y-0.5 hover:from-cyan-500 hover:via-teal-400 hover:to-emerald-400 hover:shadow-xl hover:shadow-cyan-600/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/80 focus-visible:ring-offset-2 motion-safe:animate-[gradient-pan_4s_ease-in-out_infinite] dark:focus-visible:ring-offset-slate-900"
         >
+          <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent motion-safe:animate-[guide-shine_2.6s_ease-in-out_infinite]" />
           {guideAttention && (
-            <span className="absolute inset-0 rounded-xl ring-1 ring-cyan-200/70 ring-offset-1 ring-offset-transparent motion-safe:animate-ping motion-reduce:animate-none" />
+            <span className="absolute inset-0 rounded-xl ring-2 ring-cyan-300/70 ring-offset-1 ring-offset-transparent motion-safe:animate-ping motion-reduce:animate-none" />
           )}
-          <Sparkles className="relative h-3.5 w-3.5" />
-          <span className="relative">Open analyst guide</span>
-          {guideAttention && (
-            <span className="relative rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-              New
-            </span>
-          )}
+          <Sparkles className="relative h-4 w-4 motion-safe:animate-pulse motion-reduce:animate-none" />
+          <span className="relative tracking-wide">Open analyst guide</span>
+          <span className="relative rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-widest shadow-sm">
+            New
+          </span>
+          <ChevronRight className="relative h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
         </button>
       </div>
 

@@ -29,6 +29,7 @@ import {
   resolveEventLane,
 } from "./pageData";
 import { ANALYST_BRIEF_TITLE, PAGE_BRIEFS } from "./pageCopy";
+import { GATEWAY_KPI_SOURCE } from "../../utils/kpiDataSourceCopy";
 
 const TICKER_FEED_LIMIT = 20;
 const TICKER_DISPLAY_LIMIT = 12;
@@ -285,14 +286,15 @@ export function DashboardPage() {
 
   const kpis = data?.kpis || {};
   const kpiItems = [
-    { key: "total-events", label: "Gateway Requests", value: kpis.total_events ?? kpis.requests_inspected ?? 0, helpText: "Distinct gateway requests in the selected window (one count per request, not per pipeline stage)." },
-    { key: "blocked", label: "Blocked", value: kpis.blocked ?? 0, color: "text-red-600", helpText: "Requests hard-stopped by policy (deny / kill-switch)." },
-    { key: "redacted", label: "Redacted", value: kpis.redacted ?? 0, color: "text-amber-600", helpText: "Requests allowed after PII or sensitive fields were masked." },
+    { key: "total-events", label: "Gateway Requests", value: kpis.total_events ?? kpis.requests_inspected ?? 0, dataSource: GATEWAY_KPI_SOURCE, helpText: "Distinct gateway requests in the selected window (one count per request, not per pipeline stage)." },
+    { key: "blocked", label: "Blocked", value: kpis.blocked ?? 0, color: "text-red-600", dataSource: GATEWAY_KPI_SOURCE, helpText: "Requests hard-stopped by policy (deny / kill-switch)." },
+    { key: "redacted", label: "Redacted", value: kpis.redacted ?? 0, color: "text-amber-600", dataSource: GATEWAY_KPI_SOURCE, helpText: "Requests allowed after PII or sensitive fields were masked." },
     {
       key: "monitored",
       label: "Monitored",
       value: kpis.monitored ?? 0,
       color: "text-sky-600",
+      dataSource: GATEWAY_KPI_SOURCE,
       helpText: "Distinct gateway requests with a monitor/flag verdict — allowed through but marked for analyst review in this window.",
     },
     {
@@ -300,9 +302,10 @@ export function DashboardPage() {
       label: "Rerouted",
       value: kpis.rerouted ?? 0,
       color: "text-violet-600",
+      dataSource: GATEWAY_KPI_SOURCE,
       helpText: "Distinct gateway requests where model routing sent traffic to a different model than the caller requested.",
     },
-    { key: "block-rate", label: "Block Rate", value: `${kpis.block_rate ?? 0}%`, helpText: "Block rate across gateway requests in this window." },
+    { key: "block-rate", label: "Block Rate", value: `${kpis.block_rate ?? 0}%`, dataSource: GATEWAY_KPI_SOURCE, helpText: "Block rate across gateway requests in this window." },
   ];
 
   return (

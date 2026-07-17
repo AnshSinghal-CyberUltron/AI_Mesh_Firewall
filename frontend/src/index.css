@@ -498,6 +498,26 @@ code, kbd, samp, pre, .font-mono {
   }
 }
 
+/* Flashy "Open analyst guide" CTA — light sweep across the button */
+@keyframes guide-shine {
+  0% {
+    transform: translateX(-100%);
+  }
+  60%, 100% {
+    transform: translateX(200%);
+  }
+}
+
+/* Flashy "Open analyst guide" CTA — animated gradient background pan */
+@keyframes gradient-pan {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
