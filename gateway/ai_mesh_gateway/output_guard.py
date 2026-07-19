@@ -1054,32 +1054,24 @@ class OutputGuard:
                 matched_values=matched_values,
                 compliance_tags=get_compliance_tags(pattern_keys),
             )
-        # VISIBILITY-ONLY FLAG for already-masked PII (2026-07-17). The scanner
-        # deliberately drops "*_smart_masked" shapes so NO output path can mutate a
-        # value the model already masked (j***@a***.com, ***-**-6789) — there is no
-        # raw data to protect. But silently ALLOWING it left the operator blind to
-        # masked PII flowing through. Emit a NON-MUTATING "flag" verdict instead:
-        # bytes are delivered unchanged (flag performs no redact/rewrite) while the
-        # event stays visible in the pipeline trace + telemetry. Enforcement actions
-        # (block/redact/rewrite) remain reserved for GENUINELY RAW PII, so full
-        # operator control over real leaks is unchanged. Only reachable when the PII
-        # detector is enabled AND its action is not "allow" (see the call site), so an
-        # operator who selected "allow" still gets no event at all.
-        _masked_keys = [
-            k for k in (detect_pii(text) or {}) if str(k).endswith("_smart_masked")
-        ]
-        if _masked_keys:
-            return OutputVerdict(
-                action="flag",
-                threat_type="pii",
-                confidence=0.5,
-                detail=(
-                    "Already-masked PII observed in output — delivered unchanged, "
-                    f"no raw data to protect: {', '.join(_masked_keys)}"
-                ),
-                matched_patterns=_masked_keys,
-                compliance_tags=get_compliance_tags(_masked_keys),
-            )
+        # ── FROZEN CONTRACT — ALREADY-MASKED OUTPUT TRIGGERS **NO** ACTION ──
+        # Do NOT add a flag/redact/rewrite here. This has regressed twice.
+        #
+        # A "*_smart_masked" shape (j***@a***.com, ***-**-6789, ****-****-****-1111)
+        # means the MODEL ITSELF already masked the value: there is NO raw sensitive
+        # data in the output, so there is NOTHING to detect and NOTHING to act on.
+        # "PII" means actual raw data is present. Already-masked output is therefore
+        # not a finding at all, and the guard returns an EMPTY verdict — no block, no
+        # redact, no rewrite, and NO FLAG.
+        #
+        # THE OPERATOR IS THE SOLE OWNER OF THEIR ORGANIZATION'S ACTIONS. The
+        # configured output_pii_action (block/redact/rewrite/flag/allow) applies ONLY
+        # to GENUINELY RAW PII. Emitting any action here — even a "harmless"
+        # visibility flag — imposes behavior the operator did not select (e.g. an org
+        # configured "rewrite" would see "flag" in the trace/telemetry), which is
+        # exactly the dishonesty this subsystem must never reintroduce. A raw email
+        # alongside a masked one still triggers the operator's action, via the
+        # _raw_keys path above.
         return OutputVerdict()
 
     def _check_credential_exposure(self, text: str, action: str = "block") -> OutputVerdict:

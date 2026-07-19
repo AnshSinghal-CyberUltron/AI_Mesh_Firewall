@@ -142,28 +142,41 @@ async def test_explicit_ip_action_disables_fp_reduction():
     assert verdict.action == "redact"
 
 
-# ── 4. already-masked PII: FLAG (visible) but never mutate ──
+# ── 4. FROZEN: already-masked output triggers NO action, under EVERY setting ──
+#
+# The operator is the SOLE owner of their org's actions. Already-masked output
+# (j***@a***.com) contains no raw PII, so it is not a finding and MUST produce no
+# action at all — not block, not redact, not rewrite, and NOT a "harmless"
+# visibility flag. Emitting anything here would show an action the operator never
+# selected (an org configured "rewrite" seeing "flag"), which has regressed twice.
+# The configured action applies ONLY to genuinely raw PII.
 
 
-async def test_already_masked_pii_flags_without_mutating():
-    guard = OutputGuard(
-        scanner=_FakeScanner(""),
-        config={"pii_detection_enabled": True, "output_pii_action": "redact"},
-    )
-    verdict = await guard.inspect(MASKED)
-    assert verdict.action == "flag"
-    assert verdict.matched_patterns == ["email_smart_masked"]
-    out = sanitize_output_for_verdict(MASKED, verdict, redact_pii_fn=patterns.redact_all)
-    assert out == MASKED
-    assert "[PII_REDACTED]" not in out
-    assert "j***@a***.com" in out
+async def test_already_masked_output_never_triggers_any_action():
+    for configured in ("block", "redact", "rewrite", "flag", "allow"):
+        guard = OutputGuard(
+            scanner=_FakeScanner(""),
+            config={"pii_detection_enabled": True, "output_pii_action": configured},
+        )
+        verdict = await guard.inspect(MASKED)
+        # "allow" is the empty/no-finding verdict — i.e. the guard took NO action.
+        assert verdict.action == "allow", (
+            f"operator selected {configured!r}; already-masked output must yield NO "
+            f"action, got {verdict.action!r}"
+        )
+        assert not verdict.matched_patterns, configured
 
 
-async def test_already_masked_pii_stays_silent_when_operator_allows_pii():
-    # Operator set pii="allow" => detector skipped => no event at all.
-    guard = OutputGuard(
-        scanner=_FakeScanner(""), config={"output_pii_action": "allow"}
-    )
-    verdict = await guard.inspect(MASKED)
-    assert verdict.action == "allow"
-    assert not verdict.matched_patterns
+async def test_already_masked_output_is_delivered_byte_identical():
+    for configured in ("block", "redact", "rewrite", "flag", "allow"):
+        guard = OutputGuard(
+            scanner=_FakeScanner(""),
+            config={"pii_detection_enabled": True, "output_pii_action": configured},
+        )
+        verdict = await guard.inspect(MASKED)
+        out = sanitize_output_for_verdict(
+            MASKED, verdict, redact_pii_fn=patterns.redact_all
+        )
+        assert out == MASKED, configured
+        assert "[PII_REDACTED]" not in out, configured
+        assert "j***@a***.com" in out, configured

@@ -80,11 +80,19 @@ def test_output_redact_redaction_possible_smart_mask_noop():
 
 
 @pytest.mark.asyncio
-async def test_output_guard_flags_smart_masked_only_without_mutating():
-    """Already-safe smart masks must FLAG (not REDACT) and leave bytes unchanged.
+async def test_output_guard_takes_no_action_on_smart_masked_only():
+    """Already-safe smart masks are NOT PII: NO action at all, bytes unchanged.
 
-    Regression: neutralize_markdown_split_pii treated j***@a***.com as
+    Regression 1: neutralize_markdown_split_pii treated j***@a***.com as
     markdown-split PII → [PII_REDACTED] under output_pii_action=redact.
+
+    Regression 2 (2026-07-19): this previously asserted action == "flag". That is
+    WRONG — the operator is the sole owner of their org's actions, and emitting a
+    flag here shows an action they never selected (an org configured "rewrite"
+    would see "flag"). Already-masked output contains no raw PII, so it is not a
+    finding: the guard must return the EMPTY verdict and the configured action
+    applies ONLY to genuinely raw PII. See the frozen contract in
+    output_guard._check_pii_secrets and test_output_guard_category_routing.py.
     """
     from output_guard import OutputGuard, sanitize_output_for_verdict
 
@@ -99,8 +107,9 @@ async def test_output_guard_flags_smart_masked_only_without_mutating():
         config={"pii_detection_enabled": True, "output_pii_action": "redact"},
     )
     v = await guard.inspect(text)
-    assert v.action == "flag"
-    assert v.matched_patterns == ["email_smart_masked"]
+    # "allow" is the empty/no-finding verdict — the guard took NO action.
+    assert v.action == "allow"
+    assert not v.matched_patterns
     out = sanitize_output_for_verdict(text, v, redact_pii_fn=patterns.redact_all)
     assert out == text
     assert "[PII_REDACTED]" not in out
