@@ -6,7 +6,12 @@ import { RouteFallback } from "./components/module2/RouteFallback";
 import { resolveActiveTab, routeForTab } from "./utils/resolveActiveTab";
 import { Login } from "./pages/Login";
 import { OAuthCallback } from "./pages/OAuthCallback";
-import { FirewallHome } from "./pages/FirewallHome";
+
+// FirewallHome transitively imports every Module-1 panel + simulator (the heaviest part
+// of the app). Keep it lazy so /login and Module-2 routes don't pay for it up front.
+const FirewallHome = lazy(() =>
+  import("./pages/FirewallHome").then((m) => ({ default: m.FirewallHome }))
+);
 
 const DashboardPage = lazy(() =>
   import("./pages/module2/DashboardPage").then((m) => ({ default: m.DashboardPage }))

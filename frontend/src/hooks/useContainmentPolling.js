@@ -6,7 +6,11 @@ import {
 
 const POLL_MS = 30_000;
 
-/** Refreshes containment KPIs on interval, custom events, and cross-tab storage pings. */
+/**
+ * Refreshes containment KPIs on interval, custom events, and cross-tab storage pings.
+ * Pass `intervalMs: 0` (or any non-positive value) to keep the event listeners but skip
+ * the interval — used when a live WebSocket feed already pushes updates.
+ */
 export function useContainmentPolling(onRefresh, { enabled = true, intervalMs = POLL_MS } = {}) {
   useEffect(() => {
     if (!enabled || !onRefresh) return undefined;
@@ -23,9 +27,9 @@ export function useContainmentPolling(onRefresh, { enabled = true, intervalMs = 
     window.addEventListener(CONTAINMENT_CHANGED_EVENT, onContainmentEvent);
     window.addEventListener("storage", onStorage);
 
-    const id = setInterval(runRefresh, intervalMs);
+    const id = intervalMs > 0 ? setInterval(runRefresh, intervalMs) : null;
     return () => {
-      clearInterval(id);
+      if (id) clearInterval(id);
       window.removeEventListener(CONTAINMENT_CHANGED_EVENT, onContainmentEvent);
       window.removeEventListener("storage", onStorage);
     };

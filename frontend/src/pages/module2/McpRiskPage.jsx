@@ -21,7 +21,7 @@ import {
 } from "../../components/module2/PageStates";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
 import { ANALYST_BRIEF_TITLE, PAGE_BRIEFS } from "./pageCopy";
-import { GATEWAY_KPI_SOURCE } from "../../utils/kpiDataSourceCopy";
+import { MCP_KPI_SOURCE } from "../../utils/kpiDataSourceCopy";
 
 const PERIOD_LABELS = { "1h": "1 hour", "24h": "24 hours", "7d": "7 days", "30d": "30 days" };
 const REFRESH_DEBOUNCE_MS = 300;
@@ -68,7 +68,7 @@ function buildMcpKpiItems(summary = {}) {
       key: "mcp-events",
       label: "MCP Events",
       value: totalEvents,
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: MCP_KPI_SOURCE,
       helpText: "Every MCP tool-call the firewall evaluated in this time window (live calls and policy tests that emit telemetry).",
     },
     {
@@ -76,7 +76,7 @@ function buildMcpKpiItems(summary = {}) {
       label: "Blocked Calls",
       value: blocked,
       color: blocked > 0 ? "text-red-600" : undefined,
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: MCP_KPI_SOURCE,
       helpText: "Tool calls stopped completely — for example dangerous SQL, path traversal, or arguments that break your MCP policy.",
     },
     {
@@ -84,7 +84,7 @@ function buildMcpKpiItems(summary = {}) {
       label: "Redacted Calls",
       value: redacted,
       color: redacted > 0 ? "text-amber-600" : undefined,
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: MCP_KPI_SOURCE,
       helpText: "Calls that were allowed only after sensitive values in tool arguments or responses were masked.",
     },
     {
@@ -92,7 +92,7 @@ function buildMcpKpiItems(summary = {}) {
       label: "Unique Tools",
       value: summary.unique_tools ?? 0,
       color: "text-violet-600",
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: MCP_KPI_SOURCE,
       helpText: "How many different tool names appeared. A sudden jump can mean an agent is reaching for tools you have not reviewed.",
     },
     {
@@ -100,7 +100,7 @@ function buildMcpKpiItems(summary = {}) {
       label: "Policy Hit Rate",
       value: `${violationRate}%`,
       color: violationRate >= 30 ? "text-red-600" : violationRate >= 10 ? "text-amber-600" : "text-emerald-600",
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: MCP_KPI_SOURCE,
       helpText: "Share of MCP events that ended in a block or redaction (blocked + redacted ÷ total events).",
     },
   ];

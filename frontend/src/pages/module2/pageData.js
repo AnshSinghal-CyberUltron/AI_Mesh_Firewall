@@ -2,8 +2,10 @@
 
 import { formatRiskBandLabel } from "../../utils/riskLabels.js";
 import {
-  GATEWAY_KPI_SOURCE,
+  EXPOSURE_KPI_SOURCE,
   INCIDENT_KPI_SOURCE,
+  RAG_KPI_SOURCE,
+  TELEMETRY_KPI_SOURCE,
   UEBA_KPI_SOURCE,
 } from "../../utils/kpiDataSourceCopy.js";
 import { stripModuleNumberPrefix } from "../../utils/module2DisplayNames.js";
@@ -91,7 +93,7 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
       key: "pipeline-events",
       label: "Pipeline Events",
       value: pipelineIngress || totalStageChecks,
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: RAG_KPI_SOURCE,
       helpText: "RAG query requests entering the pipeline (Query stage volume when present). Ingest is tracked separately.",
     },
     {
@@ -99,14 +101,14 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
       label: "Blocked at Gate",
       value: totalBlocked,
       color: totalBlocked > 0 ? "text-red-600" : undefined,
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: RAG_KPI_SOURCE,
       helpText: "Hard blocks recorded at any pipeline stage in this window.",
     },
     {
       key: "collections",
       label: "Collections",
       value: collections.length,
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: RAG_KPI_SOURCE,
       helpText: "Distinct vector DB collections/namespaces touched during retrieval in this window.",
     },
     {
@@ -114,7 +116,7 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
       label: "High-Risk Collections",
       value: hotCollections,
       color: hotCollections > 0 ? "text-amber-600" : undefined,
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: RAG_KPI_SOURCE,
       helpText: "Collections with block rate ≥ 50% — may indicate poisoned chunks or ACL issues.",
     },
     {
@@ -122,7 +124,7 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
       label: "Retriever Pass Rate",
       value: `${passRate}%`,
       color: passRate >= 80 ? "text-emerald-600" : passRate >= 50 ? "text-amber-600" : "text-red-600",
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: RAG_KPI_SOURCE,
       helpText: "Share of Retriever stage checks that were not hard-blocked.",
     },
   ];
@@ -131,7 +133,7 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
       key: "ingest-events",
       label: "Ingest Events",
       value: ingestEvents,
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: RAG_KPI_SOURCE,
       helpText: "Document ingest operations in this window (not counted in Query stage).",
     });
   }
@@ -304,11 +306,11 @@ export function buildContainmentKpiItems({
 
 export function buildExposureKpis(summary = {}) {
   return [
-    { key: "active-models", label: "Active Models", value: summary.active_models ?? 0, dataSource: GATEWAY_KPI_SOURCE, helpText: "Currently enabled Model Connection entries for this organization." },
-    { key: "high-exposure", label: "High Exposure", value: summary.high_exposure_models ?? 0, color: "text-red-600", dataSource: GATEWAY_KPI_SOURCE, helpText: "Models in the high exposure band—prioritize for policy review or routing changes." },
-    { key: "total-requests", label: "Total Requests", value: summary.total_requests ?? 0, dataSource: GATEWAY_KPI_SOURCE, helpText: "Aggregate request volume across all monitored models." },
-    { key: "avg-block-rate", label: "Avg Block Rate", value: `${summary.avg_block_rate_pct ?? 0}%`, dataSource: GATEWAY_KPI_SOURCE, helpText: "Fleet-wide mean block rate; sudden lifts may signal active attack campaigns." },
-    { key: "avg-exposure", label: "Avg Exposure", value: summary.avg_exposure_score ?? 0, dataSource: GATEWAY_KPI_SOURCE, helpText: "Mean composite exposure score (0–1). Higher values indicate elevated enforcement pressure." },
+    { key: "active-models", label: "Active Models", value: summary.active_models ?? 0, dataSource: EXPOSURE_KPI_SOURCE, helpText: "Currently enabled Model Connection entries for this organization." },
+    { key: "high-exposure", label: "High Exposure", value: summary.high_exposure_models ?? 0, color: "text-red-600", dataSource: EXPOSURE_KPI_SOURCE, helpText: "Models in the high exposure band—prioritize for policy review or routing changes." },
+    { key: "total-requests", label: "Total Requests", value: summary.total_requests ?? 0, dataSource: EXPOSURE_KPI_SOURCE, helpText: "Aggregate request volume across all monitored models." },
+    { key: "avg-block-rate", label: "Avg Block Rate", value: `${summary.avg_block_rate_pct ?? 0}%`, dataSource: EXPOSURE_KPI_SOURCE, helpText: "Fleet-wide mean block rate; sudden lifts may signal active attack campaigns." },
+    { key: "avg-exposure", label: "Avg Exposure", value: summary.avg_exposure_score ?? 0, dataSource: EXPOSURE_KPI_SOURCE, helpText: "Mean composite exposure score (0–1). Higher values indicate elevated enforcement pressure." },
   ];
 }
 
@@ -372,7 +374,7 @@ export function buildTelemetryKpis(summary = {}, iocLibrary = {}) {
       key: "total-events",
       label: "Gateway Requests",
       value: summary.requests_inspected ?? summary.total_events ?? 0,
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: TELEMETRY_KPI_SOURCE,
       helpText: "All gateway requests in this window (live enforcement telemetry — one count per request, aligned with gateway request totals).",
     },
     {
@@ -380,7 +382,7 @@ export function buildTelemetryKpis(summary = {}, iocLibrary = {}) {
       label: "Injection & Jailbreak",
       value: summary.injection_attempts ?? 0,
       color: "text-red-600",
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: TELEMETRY_KPI_SOURCE,
       helpText: "All prompt-injection / jailbreak detections in this period (global gateway telemetry, not IOC-only).",
     },
     {
@@ -388,7 +390,7 @@ export function buildTelemetryKpis(summary = {}, iocLibrary = {}) {
       label: "PII Detected",
       value: summary.pii_leaks ?? 0,
       color: "text-amber-600",
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: TELEMETRY_KPI_SOURCE,
       helpText: "All policy redaction detections in this period (global gateway telemetry, not IOC-only).",
     },
     {
@@ -396,7 +398,7 @@ export function buildTelemetryKpis(summary = {}, iocLibrary = {}) {
       label: "API Key Activity",
       value: summary.behavior_scoring_events ?? 0,
       color: "text-sky-600",
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: TELEMETRY_KPI_SOURCE,
       helpText: "All key-attributed gateway events in this period (feeds API Key & Identity Risk; not limited to Threat Intel sync).",
     },
     {
@@ -405,7 +407,7 @@ export function buildTelemetryKpis(summary = {}, iocLibrary = {}) {
       value: summary.threat_intel_matches ?? 0,
       color: "text-violet-600",
       sub: libSub,
-      dataSource: GATEWAY_KPI_SOURCE,
+      dataSource: TELEMETRY_KPI_SOURCE,
       helpText: "Traffic that matched a synced IOC from your library. These blocks use the Threat Intelligence policy path (code: threat_intel_blocked), not generic scanner or Policy Management rules. Library size is shown below — matches rise only after live gateway enforcement.",
     },
   ];

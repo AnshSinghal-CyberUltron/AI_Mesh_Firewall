@@ -14,7 +14,7 @@ import {
 } from "recharts";
 import { AlertTriangle, BookOpen, Loader2, Plus, Radio, RefreshCw, Shield, Trash2 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-import { clearModule2Cache, createModule2Api } from "../../api/module2";
+import { createModule2Api } from "../../api/module2";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
@@ -46,7 +46,9 @@ import {
 
 const PERIOD_LABELS = { "1h": "1 hour", "24h": "24 hours", "7d": "7 days", "30d": "30 days" };
 const REFRESH_DEBOUNCE_MS = 300;
-const TELEMETRY_POLL_MS = 10_000;
+// Fallback poll cadence when the live WebSocket feed is NOT connected. When the
+// socket is live, enforcement events push updates and interval polling is skipped.
+const TELEMETRY_FALLBACK_POLL_MS = 30_000;
 const ATTACK_SIMULATOR_PATH = "/?tab=firewall-1-1";
 const INCIDENTS_THREAT_INTEL_PATH = "/incidents?source=threat_intel";
 
@@ -454,7 +456,8 @@ function ThreatIntelPageInner() {
       setTelemetryRefreshing(true);
     }
     try {
-      clearModule2Cache();
+      // useCache:false already bypasses + cache-busts this request; do NOT clear the
+      // whole module-2 cache here — background polls would evict every other page's data.
       const data = await api.getThreatTelemetry(period, { useCache: false });
       if (seq !== loadSeqRef.current) return;
       setTelemetry(data);
@@ -500,7 +503,13 @@ function ThreatIntelPageInner() {
   const { connected: wsConnected } = useRealtimeNotifications({
     onEnforcementEvent: refreshLive,
   });
-  useContainmentPolling(refreshLive, { enabled: !!(telemetry || entries.length), intervalMs: TELEMETRY_POLL_MS });
+  // Event-driven updates first: while the WebSocket is live, enforcement events already
+  // trigger refreshLive, so skip interval polling entirely (intervalMs: 0 keeps the
+  // containment/storage event listeners). Poll only as a fallback when the feed is down.
+  useContainmentPolling(refreshLive, {
+    enabled: !!(telemetry || entries.length),
+    intervalMs: wsConnected ? 0 : TELEMETRY_FALLBACK_POLL_MS,
+  });
 
   useEffect(() => {
     const onVisible = () => {
@@ -674,8 +683,9 @@ function ThreatIntelPageInner() {
               }}
               className="rounded-lg border border-slate-200 p-2 dark:border-slate-600"
               aria-label="Refresh threat intel data"
+              title={telemetryRefreshing ? "Refreshing in background…" : "Refresh threat intel data"}
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className={`h-4 w-4 ${telemetryRefreshing ? "animate-spin text-teal-600 dark:text-teal-400" : ""}`} />
             </button>
             <button
               type="button"
@@ -768,7 +778,7 @@ function ThreatIntelPageInner() {
         <ThreatIntelTelemetryDashboard
           telemetry={telemetry}
           period={period}
-          kpiLoading={telemetryRefreshing}
+          kpiLoading={loading}
         />
       )}
 

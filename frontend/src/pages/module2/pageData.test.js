@@ -23,6 +23,12 @@ import {
   resolveEventLane,
   sourceBadgeClass,
 } from "./pageData.js";
+import {
+  EXPOSURE_KPI_SOURCE,
+  RAG_KPI_SOURCE,
+  TELEMETRY_KPI_SOURCE,
+  UEBA_KPI_SOURCE,
+} from "../../utils/kpiDataSourceCopy.js";
 
 const EXPOSURE_FIXTURE = {
   summary: {
@@ -259,6 +265,21 @@ test("KPI builders attach analyst helpText to every card", () => {
   }
   for (const kpi of buildContainmentKpiItems({ disabledKeys: 0, activeKillSwitches: 0 })) {
     assert.ok(kpi.helpText && kpi.helpText.length > 10, `missing helpText: ${kpi.key}`);
+  }
+});
+
+test("KPI builders use request-type dataSource labels", () => {
+  for (const kpi of buildRagKpis({ stages: { query: { total: 1 } } }, { collections: [] })) {
+    assert.equal(kpi.dataSource, RAG_KPI_SOURCE, kpi.key);
+  }
+  for (const kpi of buildExposureKpis(EXPOSURE_FIXTURE.summary)) {
+    assert.equal(kpi.dataSource, EXPOSURE_KPI_SOURCE, kpi.key);
+  }
+  for (const kpi of buildTelemetryKpis(TELEMETRY_FIXTURE.summary)) {
+    assert.equal(kpi.dataSource, TELEMETRY_KPI_SOURCE, kpi.key);
+  }
+  for (const kpi of buildContainmentKpiItems({ disabledKeys: 0, activeKillSwitches: 0 })) {
+    assert.equal(kpi.dataSource, UEBA_KPI_SOURCE, kpi.key);
   }
 });
 
