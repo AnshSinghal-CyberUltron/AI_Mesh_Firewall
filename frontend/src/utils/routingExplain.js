@@ -81,13 +81,22 @@ function normalizeSelected(routing) {
   return String(routing.routed_model || routing.selected_model || "").trim();
 }
 
-function buildBecauseClause({ tops, sensitivity, inactiveRemap }) {
+function factorPresent(factors, needle) {
+  return (factors || []).some((f) => String(f).includes(needle));
+}
+
+function buildBecauseClause({ tops, sensitivity, inactiveRemap, sensFallback, scoreTie }) {
   const parts = [];
+  if (sensFallback) {
+    parts.push("no model met the requested sensitivity so the gateway soft-fell back to the best available model");
+  } else if (sensitivity) {
+    parts.push(`it meets ${sensitivity} data-sensitivity requirements`);
+  }
   if (tops.length > 0) {
     parts.push(`it ranked best on ${tops.join(" and ")}`);
   }
-  if (sensitivity) {
-    parts.push(`it meets ${sensitivity} data-sensitivity requirements`);
+  if (scoreTie) {
+    parts.push("top candidates tied on score (list-order / adjudicator broke the tie)");
   }
   if (inactiveRemap) {
     parts.push("your requested model is not in the active router pool");
@@ -112,8 +121,15 @@ export function summarizeRoutingDecision(routing = {}) {
   const parsed = parseDecisionFactors(factors);
   const tops = topDifferentiators(parsed, weights);
   const sensitivity = extractSensitivity(routing.policy_summary, factors);
-  const inactiveRemap = isInactiveModelRemap(rawReason);
-  const because = buildBecauseClause({ tops, sensitivity, inactiveRemap });
+  const inactiveRemap = isInactiveModelRemap(rawReason)
+    || Boolean(routing.remapped_from)
+    || factorPresent(factors, "inactive_model_remapped");
+  const sensFallback = Boolean(routing.sensitivity_fallback)
+    || factorPresent(factors, "sensitivity_unsatisfiable_fallback");
+  const scoreTie = Boolean(routing.score_tie) || factorPresent(factors, "score_tie");
+  const because = buildBecauseClause({
+    tops, sensitivity, inactiveRemap, sensFallback, scoreTie,
+  });
 
   const technical = {
     routing_reason: formatRoutingReason(rawReason, { decisionSource: source }),
@@ -125,6 +141,10 @@ export function summarizeRoutingDecision(routing = {}) {
     guard_reason: routing.guard_reason || "",
     decision_source: source,
     fallback_chain: Array.isArray(routing.fallback_chain) ? routing.fallback_chain : [],
+    sensitivity_fallback: sensFallback,
+    score_tie: scoreTie,
+    remapped_from: routing.remapped_from || "",
+    candidate_scores: Array.isArray(routing.candidate_scores) ? routing.candidate_scores : [],
   };
 
   let summary = "";
@@ -136,11 +156,15 @@ export function summarizeRoutingDecision(routing = {}) {
     const used = selected || requested;
     const modelLabel = used === "auto" ? "the default model" : used;
     summary = `Org routing is off — the gateway used ${modelLabel} directly without running the adjudicator.`;
+  } else if (source === "weighted_fastpath") {
+    summary = `Weighted scoring selected ${selected || "a model"} without calling the adjudicator`;
+    if (count > 0) summary += ` (${count} eligible)`;
+    summary += `${because}.`;
   } else if (source === "weighted_fallback") {
     summary = `The Policy Adjudicator was unavailable, so weighted scoring selected ${selected || "a fallback model"}`;
     if (count > 0) summary += ` from ${count} eligible models`;
-    summary += ".";
-  } else if (source === "policy_adjudicator" || source === "") {
+    summary += `${because}.`;
+  } else if (source === "policy_adjudicator" || source === "weighted" || source === "") {
     if (rerouted) {
       summary = `You asked for ${requested}; the Policy Adjudicator chose ${selected} instead`;
       if (count > 0) summary += ` from ${count} eligible models`;

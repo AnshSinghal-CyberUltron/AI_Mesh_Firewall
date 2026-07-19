@@ -58,6 +58,8 @@ echo "==> Sync deploy / observability scripts and agent config"
 ssh "${SSH_HOST}" "mkdir -p '${REMOTE_DIR}/scripts' '${REMOTE_DIR}/deploy/observability'"
 OBS_SCRIPTS=(
   deploy-ec2.sh
+  ensure_mcp_sandbox_network.sh
+  test_docker_compose_prod.sh
   ec2-generate-origin-ssl.sh
   bootstrap-ec2-observability.sh
   publish-stack-ready-metric.sh

@@ -1,0 +1,59 @@
+# Local-only overrides for production compose — safe beside a running dev stack.
+# Usage:
+#   ECR_REGISTRY=local.ecr.test IMAGE_TAG=local \
+#     docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#                    -f docker-compose.prod.local.yml up -d
+#
+# Or: make build-prod-images-local && make up-prod-local
+#
+# Changes vs prod:
+#   - pull_policy: never (use locally built tags; no ECR login)
+#   - nginx on 18080/18443 (does not steal host :80/:443)
+#   - DB/redis/rabbit/control/gateway/broker on high localhost ports
+#   - project name isolated via `name:` so it won't replace ai_mesh_firewall
+
+name: ai_mesh_firewall_prodlocal
+
+services:
+  postgres:
+    ports: !override ["127.0.0.1:15432:5432"]
+
+  redis:
+    ports: !override ["127.0.0.1:16379:6379"]
+
+  rabbitmq:
+    ports: !override ["127.0.0.1:15672:5672", "127.0.0.1:25672:15672"]
+
+  control:
+    pull_policy: never
+    ports: !override ["127.0.0.1:18100:8000"]
+
+  gateway:
+    pull_policy: never
+    ports: !override ["127.0.0.1:18300:8300"]
+
+  workers:
+    pull_policy: never
+
+  workers-beat:
+    pull_policy: never
+
+  mcp-broker:
+    pull_policy: never
+    ports: !override ["127.0.0.1:18311:8311"]
+
+  mcp-sandbox-image:
+    pull_policy: never
+
+  nginx:
+    pull_policy: never
+    ports: !override ["127.0.0.1:18080:80", "127.0.0.1:18443:443"]
+
+  demo:
+    pull_policy: never
+
+  guardrails:
+    ports: !override ["127.0.0.1:18310:8310"]
+
+  vector-retrieval:
+    ports: !override ["127.0.0.1:18312:8312"]

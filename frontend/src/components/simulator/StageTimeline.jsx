@@ -295,10 +295,16 @@ function StageDetailCard({ stage, onClose, isPinned }) {
   const hasDecisionFactors = Array.isArray(stage.decision_factors) && stage.decision_factors.length > 0;
 
   // Before/after (Input -> Output) detection: render only when both sides are
-  // present AND actually differ. Otherwise fall back to the legacy single block.
+  // present AND actually differ. Policy + operator-masked Before is an exception:
+  // show the pair (and honesty note) even when display-masked strings match.
   const promptIn = typeof stage.prompt_in === "string" ? stage.prompt_in : "";
   const promptOut = typeof stage.prompt_out === "string" ? stage.prompt_out : "";
-  const hasBeforeAfter = promptIn.length > 0 && promptOut.length > 0 && promptIn !== promptOut;
+  const policyOperatorMasked =
+    stage.name === "policy" && Boolean(stage.prompt_in_operator_masked);
+  const hasBeforeAfter =
+    promptIn.length > 0
+    && promptOut.length > 0
+    && (promptIn !== promptOut || policyOperatorMasked);
   const baLabels = BEFORE_AFTER_LABELS[stage.name] || BEFORE_AFTER_LABELS.default;
 
   // Evidence de-duplication. The guard_reason violet block is the canonical
@@ -404,12 +410,27 @@ function StageDetailCard({ stage, onClose, isPinned }) {
           </div>
         )}
         {hasBeforeAfter && (
-          <BeforeAfterBlock
-            beforeLabel={baLabels.before}
-            beforeText={promptIn}
-            afterLabel={baLabels.after}
-            afterText={promptOut}
-          />
+          <div className="col-span-2 space-y-2">
+            {stage.name === "policy" && stage.prompt_in_operator_masked && (
+              <div
+                className="rounded-lg border border-amber-300/80 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+                data-testid="policy-before-operator-masked-note"
+              >
+                {stage.redaction_display_note
+                  || "Before is display-masked for operator safety (raw PII is never shown). Near-identical Before/After means both sides are masked views — not that policy redaction was a no-op."}
+              </div>
+            )}
+            <BeforeAfterBlock
+              beforeLabel={
+                stage.name === "policy" && stage.prompt_in_operator_masked
+                  ? "Before (display-masked)"
+                  : baLabels.before
+              }
+              beforeText={promptIn}
+              afterLabel={baLabels.after}
+              afterText={promptOut}
+            />
+          </div>
         )}
         {showDetail && (
           <div className="col-span-2">

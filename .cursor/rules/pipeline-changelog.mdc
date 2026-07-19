@@ -196,3 +196,7 @@ rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
   pipeline_trace policy hint for pre-masked prompts; liveGateway pinnedModelRoutingPreferences +
   SSE reasoning_content; Attack/Isolation simulators enable_routing:false. +5 tests
   test_pipeline_pre_masked_redact.py. VERIFY: gateway pytest gate.
+- PIPELINE-0031 (2026-07-15) — AUTO-ROUTING BIAS FIX: soft sensitivity fallback (no 403);
+  ROUTING_ADJUDICATOR_ALWAYS=true + weight-extreme deterministic lock; differentiate_routing_catalog
+  + Redis sync; score_tie/sensitivity_fallback/remapped_from transparency; remap prefers
+  highest-scored active. VERIFY: 14 GW routing tests; live suite cost→north-mini risk→gpt-5.2.

@@ -2,6 +2,34 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0031 (2026-07-15)
+
+**Auto-routing bias toward north-mini — preferences now change winners.**
+
+Root Cause:
+- Tied catalog defaults (`cost=0`, `risk=0`, `latency_sla=30000`, `priority=0`) → stable
+  sort always picked the first eligible model (often `cohere/north-mini-code:free`).
+- Non-public `data_sensitivity` hard-filtered then 403'd (`compliance_routing_unsatisfiable`)
+  because org models defaulted to `public`.
+- Bedrock adjudicator skipped on low-risk traffic unless `ROUTING_ADJUDICATOR_ALWAYS`.
+- Inactive LiteLLM remap used `_active_model_names[0]` without honesty fields.
+
+Fix:
+- `llm_router.py`: soft sensitivity fallback (`sensitivity_unsatisfiable_fallback`); default
+  `ROUTING_ADJUDICATOR_ALWAYS=true`; skip only single-candidate or dominant weight ≥0.95;
+  `resolve_runtime_selection` remaps to highest-scored active + `remapped_from`.
+- `main.py`: nested `weights` alias; routing metadata emits `score_tie` /
+  `sensitivity_fallback` / `candidate_scores` / remap fields; streaming zeroshield parity.
+- Control: `routing_catalog.py` + `differentiate_routing_catalog` management command → Redis.
+- FE/demo: routingExplain + RoutingDecisionCard surface tie / fallback / remap honesty.
+- Compose: `ROUTING_ADJUDICATOR_ALWAYS=true`.
+
+Verification:
+- `test_routing_preferences_differentiation.py` + `test_bedrock_routing.py` → 14 passed.
+- `scripts/routing_bias_live_adversarial.py` → ok:true; cost→north-mini, risk→gpt-5.2;
+  sensitivity public→restricted HTTP 200 (soft-fallback, no 403).
+- Gateway rebuild + `differentiate_routing_catalog --org-slug zeroshield`.
+
 ## PIPELINE-0030 (2026-07-06)
 
 **Scan 296170 — output-guard smart-mask noop, simulator routing parity, withheld-output forensics, model label honesty.**

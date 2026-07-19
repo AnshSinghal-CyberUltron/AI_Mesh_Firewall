@@ -50,7 +50,7 @@ fi
 
 _ensure_ecr_repos() {
   local repo
-  for repo in ai-mesh-gateway ai-mesh-control ai-mesh-workers ai-mesh-nginx ai-mesh-demo; do
+  for repo in ai-mesh-gateway ai-mesh-control ai-mesh-workers ai-mesh-nginx ai-mesh-demo ai-mesh-mcp-broker ai-mesh-mcp-sandbox; do
     if aws ecr describe-repositories --repository-names "${repo}" --region "${REGION}" >/dev/null 2>&1; then
       continue
     fi
@@ -95,6 +95,16 @@ docker build --platform "${PLATFORM}" -f deploy/Dockerfile.nginx \
   -t "${ECR}/ai-mesh-nginx:${TAG}" .
 docker push "${ECR}/ai-mesh-nginx:${TAG}"
 
+# MCP broker + per-org sandbox image (required by docker-compose.prod.yml always-on MCP path)
+docker build --platform "${PLATFORM}" -f services/mcp-broker/Dockerfile \
+  -t "${ECR}/ai-mesh-mcp-broker:${TAG}" .
+docker push "${ECR}/ai-mesh-mcp-broker:${TAG}"
+
+docker build --platform "${PLATFORM}" -f services/mcp-broker/sandbox-image/Dockerfile \
+  -t "${ECR}/ai-mesh-mcp-sandbox:${TAG}" \
+  -t "ai-mesh/mcp-sandbox:${TAG}" .
+docker push "${ECR}/ai-mesh-mcp-sandbox:${TAG}"
+
 _update_env_kv "IMAGE_TAG" "${TAG}" "${ROOT}/.env"
 _update_env_kv "ECR_REGISTRY" "${ECR}" "${ROOT}/.env"
 
@@ -104,6 +114,8 @@ echo "  ${ECR}/ai-mesh-control:${TAG}"
 echo "  ${ECR}/ai-mesh-workers:${TAG}"
 echo "  ${ECR}/ai-mesh-nginx:${TAG}"
 echo "  ${ECR}/ai-mesh-demo:${TAG}"
+echo "  ${ECR}/ai-mesh-mcp-broker:${TAG}"
+echo "  ${ECR}/ai-mesh-mcp-sandbox:${TAG}"
 echo ""
 echo "Updated .env (sync-to-ec2 copies this to EC2):"
 echo "  ECR_REGISTRY=${ECR}"

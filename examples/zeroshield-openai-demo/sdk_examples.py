@@ -83,10 +83,48 @@ def scenario_7_observability():
           f"models={[(m['model'], m['status']) for m in o.get('models', [])]}")
 
 
+def scenario_8_mcp_tool_call():
+    """Pattern B/C — invoke a registered MCP tool (not mcp_context chat injection).
+
+    Prefer the demo UI Tool execution section, or run mcp_gateway_client.py for
+    raw JSON-RPC against /gateway/{org}/mcp/{server}.
+    """
+    import httpx
+
+    org = os.environ.get("ZEROSHIELD_ORG_SLUG", "zeroshield")
+    server = os.environ.get("MCP_SERVER_SLUG", "everything-1")
+    host = os.environ.get("GATEWAY_HOST") or client.base_url.rstrip("/").removesuffix("/v1")
+    url = f"{host}/gateway/{org}/mcp/{server}"
+    headers = {
+        "Authorization": f"Bearer {client.api_key}",
+        "Content-Type": "application/json",
+    }
+    nonce = "demo-echo-ok"
+
+    def rpc(method, params=None, id_=1):
+        body = {"jsonrpc": "2.0", "id": id_, "method": method}
+        if params is not None:
+            body["params"] = params
+        return httpx.post(url, headers=headers, json=body, timeout=60.0).json()
+
+    rpc("initialize", {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": {"name": "sdk_examples", "version": "1.0"},
+    })
+    listed = rpc("tools/list", {}, id_=2)
+    tools = ((listed.get("result") or {}).get("tools") or [])
+    names = [t.get("name") for t in tools if isinstance(t, dict)]
+    tool = "echo" if "echo" in names else (names[0] if names else "echo")
+    called = rpc("tools/call", {"name": tool, "arguments": {"message": nonce}}, id_=3)
+    print(f"[8] mcp_tool: server={server} tool={tool} result_keys={list(called.keys())} "
+          f"has_nonce={nonce in json.dumps(called)}")
+
+
 if __name__ == "__main__":
     for fn in (scenario_1_basic_chat, scenario_2_streaming, scenario_3_rag,
                scenario_4_mcp_context, scenario_5_routing, scenario_6_guardrail,
-               scenario_7_observability):
+               scenario_7_observability, scenario_8_mcp_tool_call):
         try:
             fn()
         except Exception as e:  # noqa: BLE001

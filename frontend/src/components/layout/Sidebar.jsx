@@ -11,6 +11,7 @@ import {
   ChevronUp,
   ChevronDown,
   X,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../context/AuthContext";
@@ -356,6 +357,21 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {!isCollapsed && (
+        <div className="px-3 pb-2 border-t border-slate-200 dark:border-slate-700 pt-3">
+          <a
+            href="/demo/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors"
+            data-testid="sidebar-openai-sdk-demo"
+          >
+            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            <span>OpenAI SDK Demo</span>
+          </a>
         </div>
       )}
 

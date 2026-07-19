@@ -221,6 +221,9 @@ _DEFAULT_ROUTING_WEIGHTS = {
 }
 
 
+_SCORE_TIE_EPSILON = 1e-4
+
+
 @dataclass
 class ModelSelection:
     """Result of smart model selection."""
@@ -236,6 +239,12 @@ class ModelSelection:
     policy_summary: str = ""
     decision_factors: list[str] = field(default_factory=list)
     candidate_count: int = 0
+    # Honesty / transparency (routing-bias fix)
+    sensitivity_fallback: bool = False
+    score_tie: bool = False
+    candidate_scores: list[dict] = field(default_factory=list)
+    remapped_from: str = ""
+    runtime_model: str = ""
 
 # B1 (egress = truth): a digit-bearing sensitive run, possibly split by separators
 # (spaces / dots / dashes / parens) — a 5+5 spaced phone ("89295 54991"), a spaced
@@ -426,7 +435,18 @@ class LLMRouter:
             if (entry.get("model_info") or {}).get("base_model_name") or entry.get("model_name")
         ]
 
-    def _resolve_runtime_model(self, requested_model: str) -> str:
+    def _resolve_runtime_model(
+        self,
+        requested_model: str,
+        preferred_active: list[str] | None = None,
+    ) -> str:
+        """Map a selected model name onto a LiteLLM-active deployment.
+
+        When the selected name is not in the live router groups, prefer the
+        highest-scored *active* candidate from ``preferred_active`` (fallback
+        chain order) before the org default / first active group — never silently
+        pretend the inactive selection was served.
+        """
         if is_platform_model_name(requested_model):
             raise ValueError(
                 f"Platform model '{requested_model}' cannot be routed via LiteLLM inference. "
@@ -437,11 +457,43 @@ class LLMRouter:
         if requested_model in self._active_model_names:
             return requested_model
 
+        for name in preferred_active or []:
+            alias = self._normalize_model_alias(str(name or ""))
+            if alias and alias in self._active_model_names:
+                return alias
+
         preferred_default = self._normalize_model_alias(self._config.get("litellm_default_model", "") or "")
         if preferred_default and preferred_default in self._active_model_names:
             return preferred_default
 
         return self._active_model_names[0]
+
+    def resolve_runtime_selection(
+        self,
+        selection: ModelSelection,
+    ) -> ModelSelection:
+        """Attach runtime remap honesty onto an existing ModelSelection."""
+        if not selection or not selection.model_name:
+            return selection
+        preferred = [selection.model_name, *(selection.fallback_chain or [])]
+        runtime = self._resolve_runtime_model(selection.model_name, preferred_active=preferred)
+        selection.runtime_model = runtime
+        if runtime != selection.model_name:
+            selection.remapped_from = selection.model_name
+            factors = list(selection.decision_factors or [])
+            factors.append(f"runtime_remap_from={selection.model_name}")
+            factors.append(f"runtime_remap_to={runtime}")
+            factors.append("inactive_model_remapped")
+            selection.decision_factors = factors
+            selection.reason = (
+                f"{selection.reason} Requested model '{selection.model_name}' is not "
+                f"active in router model groups; remapping to '{runtime}'."
+            ).strip()
+            selection.model_name = runtime
+            # Keep model_id aligned with the runtime name when unknown.
+            if not selection.model_id or selection.model_id == selection.remapped_from:
+                selection.model_id = runtime
+        return selection
 
     def _qualify_like_primary(self, candidate_model: str, primary: str) -> str:
         """Org-qualify a vetted-failover candidate with the SAME org prefix as the
@@ -1744,6 +1796,7 @@ class LLMRouter:
         latency_budget_ms: int = 30000,
         weights: dict[str, float] | None = None,
         allowed_models: list[str] | None = None,
+        apply_sensitivity: bool = True,
     ) -> list[dict]:
         normalized_weights = self._normalize_weights(weights)
         allowed_set = {str(model).lower() for model in (allowed_models or []) if model}
@@ -1765,9 +1818,12 @@ class LLMRouter:
                 model_tags = model.get("compliance_tags") or []
                 if not all(tag in model_tags for tag in required_tags):
                     continue
-            model_sens = _SENSITIVITY_ORDER.get(str(model.get("data_sensitivity_level", "public")).strip().lower(), 0)
-            if model_sens < req_sens_level:
-                continue
+            if apply_sensitivity:
+                model_sens = _SENSITIVITY_ORDER.get(
+                    str(model.get("data_sensitivity_level", "public")).strip().lower(), 0
+                )
+                if model_sens < req_sens_level:
+                    continue
             eligible.append(model)
 
         if not eligible:
@@ -1810,6 +1866,81 @@ class LLMRouter:
         scored.sort(key=lambda item: item["score"], reverse=True)
         return scored
 
+    def _score_with_sensitivity_fallback(
+        self,
+        routing_models: list[dict],
+        request_risk_score: float = 0.0,
+        required_compliance: list[str] | None = None,
+        data_sensitivity: str = "public",
+        estimated_tokens: int = 500,
+        latency_budget_ms: int = 30000,
+        weights: dict[str, float] | None = None,
+        allowed_models: list[str] | None = None,
+    ) -> tuple[list[dict], bool]:
+        """Score candidates; soft-fallback when sensitivity alone empties the pool.
+
+        Compliance tags remain a hard filter (empty → no fallback). Sensitivity
+        unsatisfiable → re-score without the sensitivity floor and return
+        ``sensitivity_fallback=True`` so callers can inform the client honestly.
+        """
+        scored = self._score_routing_models(
+            routing_models=routing_models,
+            request_risk_score=request_risk_score,
+            required_compliance=required_compliance,
+            data_sensitivity=data_sensitivity,
+            estimated_tokens=estimated_tokens,
+            latency_budget_ms=latency_budget_ms,
+            weights=weights,
+            allowed_models=allowed_models,
+            apply_sensitivity=True,
+        )
+        if scored:
+            return scored, False
+
+        required_tags = [tag for tag in (required_compliance or []) if tag]
+        if required_tags:
+            # Compliance unsatisfiable — fail closed (caller may 403).
+            return [], False
+
+        req_sens = _req_sensitivity_level(data_sensitivity)
+        if req_sens <= 0:
+            return [], False
+
+        scored = self._score_routing_models(
+            routing_models=routing_models,
+            request_risk_score=request_risk_score,
+            required_compliance=required_compliance,
+            data_sensitivity=data_sensitivity,
+            estimated_tokens=estimated_tokens,
+            latency_budget_ms=latency_budget_ms,
+            weights=weights,
+            allowed_models=allowed_models,
+            apply_sensitivity=False,
+        )
+        return scored, bool(scored)
+
+    @staticmethod
+    def _candidate_score_preview(scored: list[dict], limit: int = 5) -> list[dict]:
+        out: list[dict] = []
+        for item in scored[:limit]:
+            out.append({
+                "model_name": item.get("model_name"),
+                "score": item.get("score"),
+                "risk_component": item.get("risk_component"),
+                "cost_component": item.get("cost_component"),
+                "latency_component": item.get("latency_component"),
+                "priority_component": item.get("priority_component"),
+            })
+        return out
+
+    @staticmethod
+    def _scores_tied(scored: list[dict]) -> bool:
+        if len(scored) < 2:
+            return False
+        top = float(scored[0].get("score") or 0.0)
+        second = float(scored[1].get("score") or 0.0)
+        return abs(top - second) <= _SCORE_TIE_EPSILON
+
     @staticmethod
     def extract_usage(response: dict) -> dict | None:
         """Extract token usage from a litellm response dict."""
@@ -1836,11 +1967,13 @@ class LLMRouter:
         """
         Multi-dimensional model selection using weighted scoring.
 
-        Hard filters (binary): compliance tags, data sensitivity, is_active.
+        Hard filters: compliance tags, is_active, allowlist.
+        Sensitivity is a soft floor — when unsatisfiable, falls back to the
+        best available model and sets sensitivity_fallback=True.
         Soft scoring (weighted): risk, cost, latency, priority.
         """
         normalized_weights = self._normalize_weights(weights)
-        scored = self._score_routing_models(
+        scored, sens_fallback = self._score_with_sensitivity_fallback(
             routing_models=routing_models,
             request_risk_score=request_risk_score,
             required_compliance=required_compliance,
@@ -1856,15 +1989,49 @@ class LLMRouter:
         best = scored[0]
         best_model = best["model"]
         fallbacks = [item["model_name"] for item in scored[1:4]]
+        score_tie = self._scores_tied(scored)
+        factors = [
+            f"risk_weight={normalized_weights['risk']:.2f}",
+            f"cost_weight={normalized_weights['cost']:.2f}",
+            f"latency_weight={normalized_weights['latency']:.2f}",
+            f"priority_weight={normalized_weights['priority']:.2f}",
+            f"request_risk={request_risk_score:.2f}",
+            f"data_sensitivity={data_sensitivity}",
+        ]
+        reason = (
+            f"Weighted selection (risk={normalized_weights['risk']:.0%}, "
+            f"cost={normalized_weights['cost']:.0%}, "
+            f"latency={normalized_weights['latency']:.0%}, "
+            f"priority={normalized_weights['priority']:.0%})"
+        )
+        policy = "Weighted selection"
+        if sens_fallback:
+            factors.append("sensitivity_unsatisfiable_fallback")
+            factors.append(f"requested_sensitivity={data_sensitivity}")
+            factors.append("fallback_best_available=true")
+            policy = "Sensitivity unsatisfiable — best available"
+            reason = (
+                f"No model meets data_sensitivity={data_sensitivity}; "
+                f"soft-fallback to best available {best_model.get('model_name', '')} "
+                f"(score={best['score']:.3f})."
+            )
+        if score_tie:
+            factors.append("score_tie=true")
+            policy = f"{policy} (score tie)"
 
         return ModelSelection(
             model_name=best_model.get("model_name", ""),
             model_id=best_model.get("model_id", ""),
             score=best["score"],
-            reason=f"Weighted selection (risk={normalized_weights['risk']:.0%}, cost={normalized_weights['cost']:.0%}, latency={normalized_weights['latency']:.0%}, priority={normalized_weights['priority']:.0%})",
+            reason=reason,
             fallback_chain=fallbacks,
             decision_source="weighted",
+            policy_summary=policy,
+            decision_factors=factors,
             candidate_count=len(scored),
+            sensitivity_fallback=sens_fallback,
+            score_tie=score_tie,
+            candidate_scores=self._candidate_score_preview(scored),
         )
 
     async def adjudicate_model_selection(
@@ -1883,7 +2050,7 @@ class LLMRouter:
         adjudicator_model: str | None = None,
     ) -> ModelSelection | None:
         normalized_weights = self._normalize_weights(weights)
-        scored = self._score_routing_models(
+        scored, sens_fallback = self._score_with_sensitivity_fallback(
             routing_models=routing_models,
             request_risk_score=request_risk_score,
             required_compliance=required_compliance,
@@ -1909,31 +2076,53 @@ class LLMRouter:
         if heuristic is None:
             return None
 
-        # ── H5 perf: short-circuit the synchronous Bedrock adjudicator LLM call ──
-        # The deterministic weighted heuristic above already picked a model. The
-        # Bedrock adjudicator (Claude Haiku ~2-3s/request) only adds decision value
-        # when there is a genuine, governance-sensitive choice to make. Skip it when:
-        #   (a) there is at most one candidate — there is NO routing decision; or
-        #   (b) the request is low-risk AND carries no compliance constraints.
-        # This removes the dominant per-request latency (7-12s observed) for the
-        # common trivial path. Operators can force full adjudication with
-        # ROUTING_ADJUDICATOR_ALWAYS=true; the risk floor is tunable.
-        _adj_always = os.getenv("ROUTING_ADJUDICATOR_ALWAYS", "false").lower() in ("1", "true", "yes")
+        # Default ALWAYS-on adjudication when >1 candidates (routing-bias fix).
+        # Skip when:
+        #   (a) at most one candidate — no routing decision; or
+        #   (b) a single preference weight dominates (>=0.95) — honor knobs
+        #       deterministically so cost=1/risk=1/latency=1 diversify winners; or
+        #   (c) ROUTING_ADJUDICATOR_ALWAYS=false and low-risk fastpath applies.
+        _adj_always = os.getenv("ROUTING_ADJUDICATOR_ALWAYS", "true").lower() in ("1", "true", "yes")
         _adj_risk_floor = float(os.getenv("ROUTING_ADJUDICATOR_RISK_FLOOR", "0.30"))
+        _weight_lock = float(os.getenv("ROUTING_WEIGHT_LOCK_THRESHOLD", "0.95"))
         _no_real_choice = len(scored) <= 1
+        _dominant_weight = max(normalized_weights.values()) if normalized_weights else 0.0
+        _weight_extreme = _dominant_weight >= _weight_lock
         _low_risk = (request_risk_score < _adj_risk_floor) and not (required_compliance or [])
-        if not _adj_always and (_no_real_choice or _low_risk):
+        if _no_real_choice or _weight_extreme or (not _adj_always and _low_risk):
             heuristic.decision_source = "weighted_fastpath"
             heuristic.requested_model = preferred_model or "auto"
             heuristic.evaluator_model = "deterministic_weighted"
-            heuristic.policy_summary = (
-                "Single candidate — no routing decision required."
-                if _no_real_choice
-                else "Low-risk request routed by deterministic weighted scoring (adjudicator skipped for latency)."
-            )
-            heuristic.decision_factors = (heuristic.decision_factors or []) + [
-                "adjudicator_skipped_single_candidate" if _no_real_choice else "adjudicator_skipped_low_risk"
-            ]
+            if _no_real_choice:
+                heuristic.policy_summary = "Single candidate — no routing decision required."
+                skip_factor = "adjudicator_skipped_single_candidate"
+            elif _weight_extreme:
+                top_w = max(normalized_weights, key=normalized_weights.get)
+                heuristic.policy_summary = (
+                    f"Dominant {top_w} weight ({_dominant_weight:.0%}) — "
+                    "deterministic weighted selection (adjudicator skipped)."
+                )
+                skip_factor = f"adjudicator_skipped_weight_extreme:{top_w}"
+            else:
+                heuristic.policy_summary = (
+                    "Low-risk request routed by deterministic weighted scoring "
+                    "(adjudicator skipped for latency)."
+                )
+                skip_factor = "adjudicator_skipped_low_risk"
+            if sens_fallback and not heuristic.sensitivity_fallback:
+                heuristic.sensitivity_fallback = True
+                heuristic.decision_factors = (heuristic.decision_factors or []) + [
+                    "sensitivity_unsatisfiable_fallback",
+                    f"requested_sensitivity={data_sensitivity}",
+                    "fallback_best_available=true",
+                ]
+                heuristic.policy_summary = (
+                    f"Sensitivity unsatisfiable — best available ({heuristic.policy_summary})"
+                )
+            heuristic.decision_factors = (heuristic.decision_factors or []) + [skip_factor]
+            if not heuristic.candidate_scores:
+                heuristic.candidate_scores = self._candidate_score_preview(scored)
+            heuristic.score_tie = heuristic.score_tie or self._scores_tied(scored)
             return heuristic
 
         candidate_map = {item["model_name"]: item for item in scored}
@@ -1952,8 +2141,16 @@ class LLMRouter:
                 "content": str(message.get("content", ""))[:400],
             })
 
+        _client_pref = (preferred_model or "").strip()
+        _soft_pref = (
+            heuristic.model_name
+            if (not _client_pref or _client_pref.lower() == "auto")
+            else _client_pref
+        )
         adjudicator_prompt = {
-            "preferred_model": preferred_model or "auto",
+            "preferred_model": _soft_pref or "auto",
+            "client_preferred_model": preferred_model or "auto",
+            "weighted_heuristic_winner": heuristic.model_name,
             "request_risk_score": round(request_risk_score, 4),
             "required_compliance": required_compliance or [],
             "data_sensitivity": data_sensitivity,
@@ -1969,7 +2166,14 @@ class LLMRouter:
                     "latency": f"{normalized_weights.get('latency', 0):.0%} — higher = prefer faster models",
                     "priority": f"{normalized_weights.get('priority', 0):.0%} — higher = prefer higher-priority models",
                 },
-                "sensitivity_requirement": f"Model must support data_sensitivity_level >= '{data_sensitivity}'",
+                "sensitivity_requirement": (
+                    f"Model should support data_sensitivity_level >= '{data_sensitivity}' "
+                    + (
+                        "(soft-fallback: no exact match — pick best available)"
+                        if sens_fallback
+                        else ""
+                    )
+                ),
                 "compliance_requirement": f"Model must have ALL of: {required_compliance or ['none']}",
             },
             "request_preview": request_preview,
@@ -2010,7 +2214,9 @@ class LLMRouter:
             "   b) Weighted scoring: evaluate risk, cost, latency, and priority using the provided weights.\n"
             "   c) Request analysis: consider the request content to pick the best-suited model "
             "(e.g., complex reasoning → high-capability model, simple Q&A → fast/cheap model).\n"
-            "4. An explicit preferred_model is a soft preference, not a hard constraint.\n"
+            "4. preferred_model / weighted_heuristic_winner is the deterministic weighted "
+            "winner — soft preference. When a weight is dominant (>=50%), do NOT override "
+            "that winner unless a hard compliance/sensitivity constraint requires it.\n"
             "5. Return ONLY valid JSON with keys: selected_model, reason, policy_summary, decision_factors.\n"
             "   - selected_model: exact model_name string from candidate_models\n"
             "   - reason: 1-2 sentence explanation of why this model was chosen, explicitly referencing risk, latency budget, and cost/token budget impact\n"
@@ -2053,8 +2259,20 @@ class LLMRouter:
             heuristic.decision_source = "weighted_fallback"
             heuristic.evaluator_model = adjudicator_bedrock_model
             heuristic.requested_model = preferred_model or "auto"
-            heuristic.policy_summary = "Fallback to weighted routing after adjudicator failure."
-            heuristic.decision_factors = ["adjudicator_unavailable"]
+            heuristic.policy_summary = (
+                "Fallback to weighted routing after adjudicator failure."
+                + (
+                    " Sensitivity unsatisfiable — best available."
+                    if heuristic.sensitivity_fallback
+                    else ""
+                )
+            )
+            heuristic.decision_factors = list(heuristic.decision_factors or []) + [
+                "adjudicator_unavailable"
+            ]
+            if not heuristic.candidate_scores:
+                heuristic.candidate_scores = self._candidate_score_preview(scored)
+            heuristic.score_tie = heuristic.score_tie or self._scores_tied(scored)
             return heuristic
 
         parsed = self._parse_json_object(self._extract_response_text(response)) or {}
@@ -2099,7 +2317,12 @@ class LLMRouter:
             heuristic.evaluator_model = adjudicator_bedrock_model
             heuristic.requested_model = preferred_model or "auto"
             heuristic.policy_summary = "Fallback to weighted routing after invalid adjudicator response."
-            heuristic.decision_factors = ["invalid_adjudicator_selection"]
+            heuristic.decision_factors = list(heuristic.decision_factors or []) + [
+                "invalid_adjudicator_selection"
+            ]
+            if not heuristic.candidate_scores:
+                heuristic.candidate_scores = self._candidate_score_preview(scored)
+            heuristic.score_tie = heuristic.score_tie or self._scores_tied(scored)
             return heuristic
 
         selected = candidate_map[resolved_name]
@@ -2130,6 +2353,14 @@ class LLMRouter:
                 f"Risk={selected['model'].get('risk_score',0):.2f}, "
                 f"latency_sla={selected['model'].get('latency_sla_ms',0)}ms."
             )
+        if sens_fallback:
+            bedrock_policy = (
+                f"Sensitivity unsatisfiable — best available. {bedrock_policy}"
+            ).strip()
+            bedrock_reason = (
+                f"No model meets data_sensitivity={data_sensitivity}; "
+                f"adjudicated among best-available candidates. {bedrock_reason}"
+            ).strip()
         if not decision_factors:
             decision_factors = [
                 f"model_score={selected['score']:.4f}",
@@ -2140,14 +2371,24 @@ class LLMRouter:
                 f"candidates_evaluated={len(scored)}",
                 f"data_sensitivity={data_sensitivity}",
             ]
+        if sens_fallback:
+            decision_factors = list(decision_factors) + [
+                "sensitivity_unsatisfiable_fallback",
+                f"requested_sensitivity={data_sensitivity}",
+                "fallback_best_available=true",
+            ]
+        score_tie = self._scores_tied(scored)
+        if score_tie:
+            decision_factors = list(decision_factors) + ["score_tie=true"]
 
         _log.info(
             "ROUTING DECISION: bedrock_adjudicator selected '%s' "
-            "(score=%.4f, %d candidates, fallback=%s)",
+            "(score=%.4f, %d candidates, fallback=%s, sens_fallback=%s)",
             resolved_name,
             selected["score"],
             len(scored),
             fallback_chain,
+            sens_fallback,
         )
 
         return ModelSelection(
@@ -2162,4 +2403,7 @@ class LLMRouter:
             policy_summary=bedrock_policy,
             decision_factors=[str(item) for item in decision_factors if item],
             candidate_count=len(scored),
+            sensitivity_fallback=sens_fallback,
+            score_tie=score_tie,
+            candidate_scores=self._candidate_score_preview(scored),
         )

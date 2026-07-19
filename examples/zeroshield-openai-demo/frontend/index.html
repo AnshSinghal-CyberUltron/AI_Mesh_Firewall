@@ -1,138 +1,226 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ZeroShield · OpenAI-SDK Demo</title>
+  <title>ZeroShield · OpenAI SDK Demo</title>
   <link rel="stylesheet" href="styles.css" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("demo_theme");
+        if (t === "light") document.documentElement.classList.remove("dark");
+        else document.documentElement.classList.add("dark");
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="logo">◆</span> ZeroShield
-      <span class="sub">OpenAI-SDK Reference Demo</span>
+  <div id="login-screen" class="login-screen" data-testid="login-screen">
+    <div class="login-card" role="form" aria-labelledby="login-title">
+      <div class="brand login-brand" id="login-title">
+        <span class="logo" aria-hidden="true">◆</span>
+        <span>ZeroShield</span>
+        <span class="sub">OpenAI SDK Demo</span>
+      </div>
+      <p class="login-hint">
+        Sign in with the same email and password as the console. The demo uses your org’s gateway key,
+        models, and policies via the stock OpenAI SDK only.
+      </p>
+      <label class="field" for="login-email">Email
+        <input id="login-email" type="email" autocomplete="username" data-testid="login-email" placeholder="you@company.com" />
+      </label>
+      <label class="field" for="login-password">Password
+        <input id="login-password" type="password" autocomplete="current-password" data-testid="login-password" />
+      </label>
+      <div class="login-actions">
+        <button type="button" id="login-submit" class="btn-primary" data-testid="login-submit">Sign in</button>
+      </div>
+      <div id="login-error" class="login-error" data-testid="login-error" role="alert" hidden></div>
     </div>
-    <div class="conn" id="conn" data-testid="conn-status">checking gateway…</div>
-  </header>
+  </div>
 
-  <nav class="tabs" id="tabs">
-    <button class="tab active" data-tab="chat" data-testid="tab-chat">Chat</button>
-    <button class="tab" data-tab="rag" data-testid="tab-rag">RAG</button>
-    <button class="tab" data-tab="mcp" data-testid="tab-mcp">MCP Context</button>
-    <button class="tab" data-tab="routing" data-testid="tab-routing">Routing</button>
-    <button class="tab" data-tab="files" data-testid="tab-files">Files</button>
-    <button class="tab" data-tab="validation" data-testid="tab-validation">Output Validation</button>
-  </nav>
-
-  <main class="layout">
-    <section class="panel">
-      <!-- CHAT -->
-      <div class="view active" id="view-chat">
-        <h2>Chat <small>multi-turn · streaming · model routing</small></h2>
-        <div class="row">
-          <select id="chat-model" data-testid="chat-model"></select>
-          <label class="chk"><input type="checkbox" id="chat-stream" /> stream</label>
-          <label class="chk"><input type="checkbox" id="chat-multiturn" checked data-testid="chat-multiturn" /> multi-turn <span class="dim">(off = send only the latest message)</span></label>
-          <button id="chat-clear" class="ghost">clear</button>
-        </div>
-        <div class="thread" id="chat-thread" data-testid="chat-thread"></div>
-        <div class="composer">
-          <input id="chat-input" data-testid="chat-input" placeholder="Ask anything… (multi-turn)" />
-          <button id="chat-send" data-testid="chat-send">Send</button>
-        </div>
+  <div id="app" class="app" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">◆</span>
+        <span>ZeroShield</span>
+        <span class="sub">OpenAI SDK Demo</span>
       </div>
-
-      <!-- RAG -->
-      <div class="view" id="view-rag">
-        <h2>RAG Knowledge Base <small>client retrieval · gateway grounding + poison scan</small></h2>
-        <div class="grid2">
-          <div>
-            <h3>Index a document</h3>
-            <input id="rag-name" data-testid="rag-name" placeholder="Document name" />
-            <textarea id="rag-content" data-testid="rag-content" rows="5" placeholder="Paste document text…"></textarea>
-            <button id="rag-ingest" data-testid="rag-ingest">Index document</button>
-            <div class="docs" id="rag-docs"></div>
-          </div>
-          <div>
-            <h3>Query</h3>
-            <input id="rag-query" data-testid="rag-query" placeholder="Ask about your documents…" />
-            <button id="rag-ask" data-testid="rag-ask">Query</button>
-            <div class="answer" id="rag-answer" data-testid="rag-answer"></div>
-            <div class="sources" id="rag-sources"></div>
-          </div>
-        </div>
+      <div class="top-meta">
+        <span id="org-badge" class="badge badge-org" data-testid="org-badge">org</span>
+        <span id="key-badge" class="badge badge-key" data-testid="key-badge">key</span>
+        <span class="conn" id="conn" data-testid="conn-status" title="">…</span>
+        <button type="button" id="theme-toggle" class="btn-ghost" data-testid="theme-toggle" aria-label="Toggle color theme">Theme</button>
+        <button type="button" id="logout-btn" class="btn-ghost" data-testid="logout-btn">Log out</button>
       </div>
+    </header>
 
-      <!-- MCP -->
-      <div class="view" id="view-mcp">
-        <h2>MCP Context <small>structured context → gateway scan + governance</small></h2>
-        <p class="hint">Inject CRM / customer / ticket context via <code>extra_body={"mcp_context": …}</code>. The gateway scans it for PII/secrets and governs it.</p>
-        <textarea id="mcp-context" data-testid="mcp-context" rows="5">{
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Demo sections">
+      <button type="button" class="tab active" role="tab" aria-selected="true" data-tab="chat" data-testid="tab-chat">Chat</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="rag" data-testid="tab-rag">RAG</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="mcp" data-testid="tab-mcp">MCP</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="routing" data-testid="tab-routing">Routing</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="files" data-testid="tab-files">Files</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="validation" data-testid="tab-validation">Output Validation</button>
+      <button type="button" class="tab" role="tab" aria-selected="false" data-tab="scenarios" data-testid="tab-scenarios">Scenarios</button>
+    </nav>
+
+    <div class="layout">
+      <main class="panel" id="workbench">
+        <section class="view active" id="view-chat" role="tabpanel" aria-labelledby="tab-chat-label">
+          <h2>Chat <span class="sub">multi-turn · streaming · model routing</span></h2>
+          <div class="row">
+            <label class="sr-only" for="chat-model">Model</label>
+            <select id="chat-model" data-testid="chat-model"></select>
+            <label class="chk"><input type="checkbox" id="chat-stream" /> stream</label>
+            <label class="chk"><input type="checkbox" id="chat-multiturn" checked data-testid="chat-multiturn" /> multi-turn</label>
+            <button type="button" id="chat-clear" class="btn-ghost">Clear</button>
+          </div>
+          <div class="thread" id="chat-thread" data-testid="chat-thread" aria-live="polite"></div>
+          <div class="composer">
+            <input id="chat-input" data-testid="chat-input" placeholder="Ask anything…" aria-label="Chat message" />
+            <button type="button" id="chat-send" class="btn-primary" data-testid="chat-send">Send</button>
+          </div>
+        </section>
+
+        <section class="view" id="view-rag" role="tabpanel">
+          <h2>RAG Knowledge Base <span class="sub">gateway /rag/* via OpenAI SDK transport</span></h2>
+          <div class="grid2">
+            <div>
+              <h3>Index a document</h3>
+              <input id="rag-name" data-testid="rag-name" placeholder="Document name" aria-label="Document name" />
+              <textarea id="rag-content" data-testid="rag-content" rows="5" placeholder="Paste document text…" aria-label="Document content"></textarea>
+              <button type="button" id="rag-ingest" class="btn-primary" data-testid="rag-ingest">Index document</button>
+              <div class="docs" id="rag-docs" aria-live="polite"></div>
+            </div>
+            <div>
+              <h3>Query</h3>
+              <input id="rag-query" data-testid="rag-query" placeholder="Ask about your documents…" aria-label="RAG query" />
+              <button type="button" id="rag-ask" class="btn-primary" data-testid="rag-ask">Query</button>
+              <div class="answer" id="rag-answer" data-testid="rag-answer" aria-live="polite"></div>
+              <div class="sources" id="rag-sources"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-mcp" role="tabpanel">
+          <h2>MCP <span class="sub">context injection · tool execution</span></h2>
+
+          <div class="mcp-section" data-testid="mcp-context-section">
+            <h3>Context injection <span class="sub">extra_body.mcp_context</span></h3>
+            <p class="hint">Inject CRM / customer context via <code>extra_body={"mcp_context": …}</code>. The gateway scans it for PII/secrets. This does <strong>not</strong> select an MCP server or tool.</p>
+            <textarea id="mcp-context" data-testid="mcp-context" rows="5" aria-label="MCP context JSON">{
   "customer_id": "C-10293",
   "plan": "Enterprise",
   "open_tickets": 2,
   "sentiment": "frustrated"
 }</textarea>
-        <input id="mcp-input" data-testid="mcp-input" placeholder="Task, e.g. 'Write a customer summary'" value="Write a short customer summary and a recommended next action." />
-        <button id="mcp-run" data-testid="mcp-run">Run with context</button>
-        <div class="answer" id="mcp-answer" data-testid="mcp-answer"></div>
-      </div>
+            <input id="mcp-input" data-testid="mcp-input" value="Write a short customer summary and a recommended next action." aria-label="MCP prompt" />
+            <button type="button" id="mcp-run" class="btn-primary" data-testid="mcp-run">Run with context</button>
+            <div class="answer" id="mcp-answer" data-testid="mcp-answer" aria-live="polite"></div>
+          </div>
 
-      <!-- ROUTING -->
-      <div class="view" id="view-routing">
-        <h2>Multi-Model Routing <small>auto-route · preferences · fallback visibility</small></h2>
-        <input id="route-input" data-testid="route-input" placeholder="Prompt…" value="Write a haiku about secure AI." />
-        <div class="row">
-          <select id="route-model" data-testid="route-model">
-            <option value="auto">auto (let gateway route)</option>
-          </select>
-          <select id="route-sens" data-testid="route-sens">
-            <option value="">sensitivity: public</option>
-            <option value="internal">internal</option>
-            <option value="confidential">confidential</option>
-            <option value="restricted">restricted</option>
-          </select>
+          <hr class="mcp-divider" />
+
+          <div class="mcp-section" data-testid="mcp-tool-section">
+            <h3>Tool execution <span class="sub">server + tool via gateway</span></h3>
+            <p class="hint">Pick a registered org MCP server and tool (same control API as the console Guardrail Simulator). Live invoke runs through the gateway sandbox with scan/redact/block.</p>
+            <div class="row">
+              <label class="field-label">Server
+                <select id="mcp-server" data-testid="mcp-server" aria-label="MCP server"></select>
+              </label>
+              <label class="field-label">Tool
+                <select id="mcp-tool" data-testid="mcp-tool" aria-label="MCP tool"></select>
+              </label>
+              <button type="button" id="mcp-tools-refresh" class="btn-ghost" data-testid="mcp-tools-refresh" title="Reload servers">Refresh</button>
+            </div>
+            <p class="hint tiny" id="mcp-tool-hint" data-testid="mcp-tool-hint"></p>
+            <label class="field-label">Arguments (JSON)
+              <textarea id="mcp-tool-args" data-testid="mcp-tool-args" rows="5" aria-label="Tool arguments JSON">{}</textarea>
+            </label>
+            <button type="button" id="mcp-tool-run" class="btn-primary" data-testid="mcp-tool-run">Invoke tool</button>
+            <div class="answer" id="mcp-tool-answer" data-testid="mcp-tool-answer" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-routing" role="tabpanel">
+          <h2>Multi-Model Routing <span class="sub">routing_preferences</span></h2>
+          <input id="route-input" data-testid="route-input" value="Write a haiku about secure AI." aria-label="Routing prompt" />
+          <div class="row">
+            <select id="route-model" data-testid="route-model" aria-label="Route model">
+              <option value="auto">auto (let gateway route)</option>
+            </select>
+            <select id="route-sens" data-testid="route-sens" aria-label="Data sensitivity">
+              <option value="">sensitivity: public</option>
+              <option value="internal">internal</option>
+              <option value="confidential">confidential</option>
+              <option value="restricted">restricted</option>
+            </select>
+          </div>
+          <div class="row weights">
+            <label>risk <input type="range" id="w-risk" min="0" max="1" step="0.1" value="0.2" /></label>
+            <label>cost <input type="range" id="w-cost" min="0" max="1" step="0.1" value="0.3" /></label>
+            <label>latency <input type="range" id="w-lat" min="0" max="1" step="0.1" value="0.3" /></label>
+          </div>
+          <button type="button" id="route-run" class="btn-primary" data-testid="route-run">Route request</button>
+          <div class="answer" id="route-answer" data-testid="route-answer" aria-live="polite"></div>
+        </section>
+
+        <section class="view" id="view-files" role="tabpanel">
+          <h2>File Upload + Analysis <span class="sub">PDF · DOCX · TXT · CSV</span></h2>
+          <input type="file" id="file-input" data-testid="file-input" accept=".pdf,.docx,.txt,.csv,.md" aria-label="Choose file" />
+          <input id="file-instruction" data-testid="file-instruction" value="Summarize this document and list any sensitive data." aria-label="Analysis instruction" />
+          <button type="button" id="file-run" class="btn-primary" data-testid="file-run">Analyze</button>
+          <div class="answer" id="file-answer" data-testid="file-answer" aria-live="polite"></div>
+        </section>
+
+        <section class="view" id="view-validation" role="tabpanel">
+          <h2>Output Validation <span class="sub">PII · credentials · policy · injection</span></h2>
+          <div class="presets" id="val-presets"></div>
+          <textarea id="val-input" data-testid="val-input" rows="3" placeholder="Enter text to send through the firewall…" aria-label="Validation input"></textarea>
+          <button type="button" id="val-run" class="btn-primary" data-testid="val-run">Send through firewall</button>
+          <div class="answer" id="val-answer" data-testid="val-answer" aria-live="polite"></div>
+        </section>
+
+        <section class="view" id="view-scenarios" role="tabpanel">
+          <h2>SDK Scenarios <span class="sub">one-click reference flows</span></h2>
+          <p class="hint">Each scenario generates the OpenAI SDK code on the right, then runs it through your org’s gateway key.</p>
+          <div class="scenario-grid" id="scenario-grid"></div>
+          <div class="answer" id="scenario-answer" data-testid="scenario-answer" aria-live="polite"></div>
+        </section>
+      </main>
+
+      <aside class="side" aria-label="OpenAI SDK">
+        <div class="sdk-panel" data-testid="sdk-panel">
+          <div class="sdk-head">
+            <h3>OpenAI SDK</h3>
+            <button type="button" id="sdk-copy" class="btn-ghost tiny">Copy</button>
+          </div>
+          <p class="hint sdk-hint">Edit parameters in the form — code updates live. Run executes via the stock OpenAI Python SDK on the demo server (key never leaves the server).</p>
+          <textarea id="sdk-code" class="sdk-code" data-testid="sdk-code" spellcheck="false" readonly aria-label="Generated SDK code"></textarea>
         </div>
-        <div class="row weights">
-          <label>risk <input type="range" id="w-risk" min="0" max="1" step="0.1" value="0.2" /></label>
-          <label>cost <input type="range" id="w-cost" min="0" max="1" step="0.1" value="0.3" /></label>
-          <label>latency <input type="range" id="w-lat" min="0" max="1" step="0.1" value="0.3" /></label>
+      </aside>
+    </div>
+
+    <section class="visualizer pipeline-panel" id="pipeline-panel" data-testid="visualizer" aria-label="Request pipeline">
+      <div class="vz-head">
+        <h3>Request Pipeline</h3>
+      </div>
+      <div id="pipeline-metrics-host"></div>
+      <div data-testid="pipeline-trace-view" id="pipeline-trace-view" class="pipeline-trace-view">
+        <div class="route-card" id="vz-route" data-testid="vz-route">
+          <em>Run a request to see routing + validation.</em>
         </div>
-        <button id="route-run" data-testid="route-run">Route request</button>
-        <div class="answer" id="route-answer" data-testid="route-answer"></div>
+        <div class="stages" id="vz-stages" data-testid="vz-stages"></div>
       </div>
-
-      <!-- FILES -->
-      <div class="view" id="view-files">
-        <h2>File Upload + Analysis <small>PDF · DOCX · TXT · CSV</small></h2>
-        <input type="file" id="file-input" data-testid="file-input" accept=".pdf,.docx,.txt,.csv,.md" />
-        <input id="file-instruction" data-testid="file-instruction" value="Summarize this document and list any sensitive data." />
-        <button id="file-run" data-testid="file-run">Analyze</button>
-        <div class="answer" id="file-answer" data-testid="file-answer"></div>
-      </div>
-
-      <!-- VALIDATION -->
-      <div class="view" id="view-validation">
-        <h2>Output Validation <small>PII · credentials · policy · injection</small></h2>
-        <div class="presets" id="val-presets"></div>
-        <textarea id="val-input" data-testid="val-input" rows="3" placeholder="Enter text to send through the firewall…"></textarea>
-        <button id="val-run" data-testid="val-run">Send through firewall</button>
-        <div class="answer" id="val-answer" data-testid="val-answer"></div>
-      </div>
-    </section>
-
-    <!-- VISUALIZER -->
-    <aside class="visualizer" data-testid="visualizer">
-      <h3>Request Pipeline</h3>
-      <div class="route-card" id="vz-route" data-testid="vz-route">
-        <em>Run a request to see routing + validation.</em>
-      </div>
-      <div class="stages" id="vz-stages" data-testid="vz-stages"></div>
+      <div id="pipeline-io" class="pipeline-io" data-testid="pipeline-io"></div>
+      <div id="pipeline-latency" class="pipeline-latency" data-testid="pipeline-latency"></div>
       <div class="vz-meta" id="vz-meta"></div>
       <div class="vz-obs" id="vz-obs" data-testid="vz-obs"></div>
-    </aside>
-  </main>
+    </section>
+  </div>
 
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

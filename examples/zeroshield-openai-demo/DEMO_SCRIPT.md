@@ -65,12 +65,20 @@ Point at the top bar: **"● gateway … · 2 models"** — live connection.
 
 ---
 
-### 5 · MCP context (60s)
-- **MCP Context** tab → the JSON shows a customer profile.
+### 5a · MCP context injection (45s)
+- **MCP** tab → **Context injection** — JSON shows a customer profile.
 - **Run with context** → a customer summary that uses the injected `customer_id`,
   `plan`, `sentiment`.
 > "Structured context (CRM, tickets, profiles) is injected and **governed** — the
-> gateway scans it for PII/secrets and records MCP telemetry."
+> gateway scans it for PII/secrets. This is *not* picking an MCP server."
+
+### 5b · MCP tool execution (60s)
+- Same tab → **Tool execution** — pick a **connected** server and tool (e.g.
+  `everything-1` / `echo`), edit JSON args, **Invoke tool**.
+- Point at the result and the live SDK / httpx snippet on the right.
+> "Server and tool selection is here — same control API as the console simulator.
+> Production apps can also use the official MCP Client against
+> `/gateway/{org}/mcp/{server}` with the org gateway key."
 
 ---
 

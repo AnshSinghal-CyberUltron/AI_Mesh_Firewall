@@ -71,11 +71,16 @@ bash scripts/publish-stack-ready-metric.sh 0 || true
 # verifies them (docker-compose.yml passes it to control/gateway/workers).
 [[ -n "${POLICY_SIGNING_KEY:-}" ]] || die "set POLICY_SIGNING_KEY in .env (required by control + gateway for policy bundle signing)"
 
-export FRONTEND_ORIGIN="${FRONTEND_ORIGIN:-https://${FRONTEND_HOST:-aimeshfirewall.zeroshield.ai}}"
-export BACKEND_PUBLIC_URL="${BACKEND_PUBLIC_URL:-https://${BACKEND_HOST:-aimeshbackend.zeroshield.ai}}"
-export GATEWAY_PUBLIC_URL="${GATEWAY_PUBLIC_URL:-https://${GATEWAY_HOST:-aimeshgateway.zeroshield.ai}}"
-export GATEWAY_CORS_ORIGINS="${GATEWAY_CORS_ORIGINS:-${FRONTEND_ORIGIN},${BACKEND_PUBLIC_URL}}"
-export ALLOWED_HOSTS="${ALLOWED_HOSTS:-${BACKEND_HOST},${FRONTEND_HOST},${GATEWAY_HOST},localhost,127.0.0.1,control}"
+export FRONTEND_HOST="${FRONTEND_HOST:-aimeshfirewall.zeroshield.ai}"
+export BACKEND_HOST="${BACKEND_HOST:-aimeshbackend.zeroshield.ai}"
+export GATEWAY_HOST="${GATEWAY_HOST:-aimeshgateway.zeroshield.ai}"
+export FRONTEND_ORIGIN="${FRONTEND_ORIGIN:-https://${FRONTEND_HOST}}"
+export BACKEND_PUBLIC_URL="${BACKEND_PUBLIC_URL:-https://${BACKEND_HOST}}"
+export GATEWAY_PUBLIC_URL="${GATEWAY_PUBLIC_URL:-https://${GATEWAY_HOST}}"
+export GATEWAY_CORS_ORIGINS="${GATEWAY_CORS_ORIGINS:-${FRONTEND_ORIGIN},${BACKEND_PUBLIC_URL},${GATEWAY_PUBLIC_URL}}"
+export ASGI_ALLOWED_ORIGINS="${ASGI_ALLOWED_ORIGINS:-${FRONTEND_ORIGIN},${BACKEND_PUBLIC_URL},${GATEWAY_PUBLIC_URL}}"
+export CORS_ALLOWED_ORIGINS="${CORS_ALLOWED_ORIGINS:-${FRONTEND_ORIGIN},${BACKEND_PUBLIC_URL},${GATEWAY_PUBLIC_URL}}"
+export ALLOWED_HOSTS="${ALLOWED_HOSTS:-${BACKEND_HOST},${FRONTEND_HOST},${GATEWAY_HOST},localhost,127.0.0.1,control,gateway}"
 
 # Production guard: Django ALLOWED_HOSTS must be a concrete host list — never
 # empty and never the '*' wildcard (Host-header spoofing / cache poisoning).
@@ -152,8 +157,13 @@ EOF
   sudo sysctl -p /etc/sysctl.d/99-ai-mesh.conf 2>/dev/null || true
 fi
 
+echo "==> Ensure MCP sandbox Docker network exists"
+bash "${ROOT}/scripts/ensure_mcp_sandbox_network.sh" 2>/dev/null \
+  || docker network create mcp_sandbox_bridge 2>/dev/null \
+  || true
+
 echo "==> Pull application images from ECR"
-"${COMPOSE[@]}" pull gateway control workers workers-beat nginx
+"${COMPOSE[@]}" pull gateway control workers workers-beat nginx mcp-broker mcp-sandbox-image
 # Demo is OPTIONAL and isolated: a missing/failed demo image must never abort the
 # platform deploy. Pull tolerantly (it 502s behind nginx if absent — never crashes it).
 "${COMPOSE[@]}" pull demo 2>/dev/null \
@@ -191,8 +201,11 @@ if [[ "${SKIP_PII_SEED:-}" != "1" ]] && [[ -n "${SEED_PII_POLICY_ORG_SLUG:-}" ]]
     ${RESET_PII_SEED:+--reset} || true
 fi
 
-echo "==> Gateway, workers, nginx (restart: unless-stopped)"
-"${COMPOSE[@]}" --profile workers up -d --no-build gateway workers workers-beat nginx
+echo "==> MCP broker + sidecars, gateway, workers, nginx (restart: unless-stopped)"
+# Prod overlay clears the base `workers` / `services` profiles — no --profile needed.
+"${COMPOSE[@]}" up -d --no-build \
+  mcp-sandbox-image mcp-broker guardrails vector-retrieval \
+  gateway workers workers-beat nginx
 
 # Optional demo app (before nginx reload so the /demo/ upstream is resolvable).
 # Tolerant: failure here never blocks the platform deploy.

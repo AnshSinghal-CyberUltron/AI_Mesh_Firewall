@@ -372,6 +372,11 @@ export function resolveRoutingDecision(sources = {}) {
     fallback_chain: Array.isArray(pick("fallback_chain")) ? pick("fallback_chain") : [],
     evaluator_model: pick("evaluator_model") || "",
     guard_reason: stage?.guard_reason || "",
+    sensitivity_fallback: Boolean(pick("sensitivity_fallback")),
+    score_tie: Boolean(pick("score_tie")),
+    remapped_from: pick("remapped_from") || "",
+    runtime_model: pick("runtime_model") || routed,
+    candidate_scores: Array.isArray(pick("candidate_scores")) ? pick("candidate_scores") : [],
   };
 }
 

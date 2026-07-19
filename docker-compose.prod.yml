@@ -1,11 +1,21 @@
-# Production overlay — EC2 + ECR images + zeroshield.ai subdomains.
+# Production overlay — merge with base:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Public hosts (Route53 → EC2 / nginx :80/:443):
+#   frontend  https://aimeshfirewall.zeroshield.ai
+#   backend   https://aimeshbackend.zeroshield.ai
+#   gateway   https://aimeshgateway.zeroshield.ai
+#
 # Sized for c8g.2xlarge (8 vCPU / 16 GiB): gateway-first CPU, cgroup memory sum ~14.4 GiB.
-# Build/push locally: infra/scripts/build-push-images.sh (or make ecr-push TAG=...)
-# EC2 only pulls — no application source on the instance.
-# Usage on EC2:
-#   export ECR_REGISTRY=123456789.dkr.ecr.ap-south-1.amazonaws.com IMAGE_TAG=v1.0.0
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-#   bash scripts/deploy-ec2.sh
+# Build/push: infra/scripts/build-push-images.sh  |  Deploy: scripts/deploy-ec2.sh
+#
+# This overlay covers EVERY service defined in docker-compose.yml:
+#   always-on: postgres, redis, rabbitmq, control, gateway, workers, workers-beat,
+#              mcp-sandbox-image, mcp-broker, guardrails, vector-retrieval, nginx, demo
+#   profile:   chromadb (chroma), mongo (telemetry-pilot), mcp-stub (mcp-stub),
+#              frontend (dev-frontend), transport stubs (transport-stubs)
+# Dev-only services stay profile-gated; prod defaults enable the full product path
+# (MCP sandboxes + Celery + guardrails/vector sidecars) without requiring --profile.
 
 name: ai_mesh_firewall
 
@@ -32,7 +42,18 @@ x-ecr-nginx: &ecr_nginx_image
   pull_policy: always
   build: !reset null
 
+x-ecr-mcp-broker: &ecr_mcp_broker_image
+  image: ${ECR_REGISTRY:?set ECR_REGISTRY}/ai-mesh-mcp-broker:${IMAGE_TAG:-latest}
+  pull_policy: always
+  build: !reset null
+
+x-ecr-mcp-sandbox: &ecr_mcp_sandbox_image
+  image: ${ECR_REGISTRY:?set ECR_REGISTRY}/ai-mesh-mcp-sandbox:${IMAGE_TAG:-latest}
+  pull_policy: always
+  build: !reset null
+
 services:
+  # ── Infrastructure ──────────────────────────────────────────────────────────
   postgres:
     <<: *restart_unless_stopped
     ports: !override ["127.0.0.1:5432:5432"]
@@ -72,37 +93,46 @@ services:
         limits:
           memory: 512M
 
+  chromadb:
+    <<: *restart_unless_stopped
+    # Still behind --profile chroma (BYOK vector is default; local Chroma optional).
+    ports: !override ["127.0.0.1:8001:8000"]
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+
+  mongo:
+    <<: *restart_unless_stopped
+    # Still behind --profile telemetry-pilot.
+    ports: !override ["127.0.0.1:27017:27017"]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ── Control plane ───────────────────────────────────────────────────────────
   control:
     <<: [*restart_unless_stopped, *ecr_control_image]
+    build: !reset null
     ports: !override ["127.0.0.1:8100:8000"]
-    # ECR images built before ASGI switch may still use gunicorn; override until image is rebuilt.
-    command:
-      [
-        "gunicorn",
-        "main_app.asgi:application",
-        "-k",
-        "uvicorn.workers.UvicornWorker",
-        "--workers",
-        "5",
-        "--bind",
-        "0.0.0.0:8000",
-        "--timeout",
-        "120",
-        "--graceful-timeout",
-        "30",
-        "--forwarded-allow-ips",
-        "*",
-      ]
+    # Do NOT override command — image CMD is server-entrypoint.sh (cgroup-aware
+    # worker count). Pin via CONTROL_WEB_CONCURRENCY (4 fits the 4-CPU limit).
     environment:
       DEBUG: ${DEBUG:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CONTROL_WEB_CONCURRENCY: ${CONTROL_WEB_CONCURRENCY:-4}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-aimeshbackend.zeroshield.ai,aimeshfirewall.zeroshield.ai,aimeshgateway.zeroshield.ai,localhost,127.0.0.1,control,gateway}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://aimeshfirewall.zeroshield.ai}
       GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-https://aimeshgateway.zeroshield.ai}
       BACKEND_PUBLIC_URL: ${BACKEND_PUBLIC_URL:-https://aimeshbackend.zeroshield.ai}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://aimeshfirewall.zeroshield.ai,https://aimeshbackend.zeroshield.ai,https://aimeshgateway.zeroshield.ai}
       SIMULATOR_DEFAULTS_ENABLED: ${SIMULATOR_DEFAULTS_ENABLED:-true}
       CHANNEL_LAYERS_REDIS_URL: redis://redis:6379/1
-      ASGI_ALLOWED_ORIGINS: ${ASGI_ALLOWED_ORIGINS:-https://aimeshfirewall.zeroshield.ai,http://aimeshfirewall.zeroshield.ai,https://aimeshbackend.zeroshield.ai}
+      ASGI_ALLOWED_ORIGINS: ${ASGI_ALLOWED_ORIGINS:-https://aimeshfirewall.zeroshield.ai,https://aimeshbackend.zeroshield.ai,https://aimeshgateway.zeroshield.ai}
+      # Internal Docker DNS — nginx terminates TLS; control→gateway stays HTTP.
+      GATEWAY_URL: http://gateway:8300
+      GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
       POSTGRES_CONN_MAX_AGE: ${POSTGRES_CONN_MAX_AGE:-30}
       DJANGO_CACHE_MAX_CONNECTIONS: ${DJANGO_CACHE_MAX_CONNECTIONS:-50}
     deploy:
@@ -111,8 +141,10 @@ services:
           cpus: "4"
           memory: 2560M
 
+  # ── Gateway ─────────────────────────────────────────────────────────────────
   gateway:
     <<: [*restart_unless_stopped, *ecr_gateway_image]
+    build: !reset null
     # Bind 8300 on host for Prometheus scrape (auth: METRICS_SCRAPER_KEY on /metrics)
     ports: !override ["0.0.0.0:8300:8300"]
     environment:
@@ -137,16 +169,21 @@ services:
       GATEWAY_TIER2_EXECUTION_MODE: ${GATEWAY_TIER2_EXECUTION_MODE:-sync_pre_llm}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://aimeshfirewall.zeroshield.ai}
       GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-https://aimeshgateway.zeroshield.ai}
-      GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-https://aimeshfirewall.zeroshield.ai,https://aimeshbackend.zeroshield.ai}
+      # Browser clients may call the dedicated gateway host or the UI/backend origins.
+      GATEWAY_CORS_ORIGINS: ${GATEWAY_CORS_ORIGINS:-https://aimeshfirewall.zeroshield.ai,https://aimeshbackend.zeroshield.ai,https://aimeshgateway.zeroshield.ai}
       GATEWAY_LOG_LEVEL: ${GATEWAY_LOG_LEVEL:-INFO}
       AI_MESH_CONTROL_URL: http://control:8000
       AIGUARDX_BACKEND_URL: http://control:8000
+      # Internal control/LLM URLs are http:// — keep allow flag for Docker DNS only.
+      GATEWAY_ALLOW_HTTP: ${GATEWAY_ALLOW_HTTP:-1}
       GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
       METRICS_SCRAPER_KEY: ${METRICS_SCRAPER_KEY:-}
       METRICS_ALLOW_OPEN: ${METRICS_ALLOW_OPEN:-false}
-    # Phase-3 auto-recovery (BACKSTOP CHG-0027): the prod gateway restarts via the
-    # anchor but had NO healthcheck, so peers could only gate on service_started.
-    # /health is auth-exempt (200 ok / 503 on policy-signing misconfig).
+      GUARDRAILS_SERVICE_URL: http://guardrails:8310
+      VECTOR_SERVICE_URL: http://vector-retrieval:8312
+      MCP_BROKER_URL: http://mcp-broker:8311
+      MCP_BROKER_INTERNAL_KEY: ${MCP_BROKER_INTERNAL_KEY:-}
+      MCP_STDIO_IN_PROCESS: ${MCP_STDIO_IN_PROCESS:-false}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8300/health', timeout=5)"]
       interval: 15s
@@ -159,8 +196,11 @@ services:
           cpus: "6"
           memory: 7168M
 
+  # ── Celery (always-on in prod — clear base `workers` profile) ───────────────
   workers:
     <<: [*restart_unless_stopped, *ecr_workers_image]
+    build: !reset null
+    profiles: !reset null
     command:
       [
         "celery",
@@ -170,7 +210,7 @@ services:
         "-Q",
         "policy.compile,platform.batch,compute.heavy,scan.tier2,vector.index,mcp.audit",
         "--loglevel=info",
-        "--concurrency=2",
+        "--concurrency=${CELERY_WORKER_CONCURRENCY:-2}",
       ]
     deploy:
       resources:
@@ -180,23 +220,85 @@ services:
 
   workers-beat:
     <<: [*restart_unless_stopped, *ecr_workers_image]
+    build: !reset null
+    profiles: !reset null
     deploy:
       resources:
         limits:
           memory: 384M
 
+  # ── MCP sidecars (always-on in prod — clear base `services` profile) ────────
+  guardrails:
+    <<: *restart_unless_stopped
+    profiles: !reset null
+    ports: !override ["127.0.0.1:8310:8310"]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  vector-retrieval:
+    <<: *restart_unless_stopped
+    profiles: !reset null
+    ports: !override ["127.0.0.1:8312:8312"]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  mcp-sandbox-image:
+    <<: [*restart_unless_stopped, *ecr_mcp_sandbox_image]
+    build: !reset null
+    profiles: !reset null
+    # One-shot pull of the sandbox image so the broker can spawn per-org containers.
+    # restart is ignored for command:["true"] from base; keep pull_policy always.
+    restart: "no"
+
+  mcp-broker:
+    <<: [*restart_unless_stopped, *ecr_mcp_broker_image]
+    build: !reset null
+    profiles: !reset null
+    ports: !override ["127.0.0.1:8311:8311"]
+    environment:
+      MCP_BROKER_INTERNAL_KEY: ${MCP_BROKER_INTERNAL_KEY:-}
+      MCP_SANDBOX_IMAGE: ${ECR_REGISTRY:?set ECR_REGISTRY}/ai-mesh-mcp-sandbox:${IMAGE_TAG:-latest}
+      MCP_SANDBOX_NETWORK: mcp_sandbox_bridge
+      MCP_SANDBOX_IDLE_TIMEOUT: ${MCP_SANDBOX_IDLE_TIMEOUT:-3600}
+      MCP_SANDBOX_RUNTIME: ${MCP_SANDBOX_RUNTIME:-runsc}
+      MCP_SANDBOX_RUNTIME_REQUIRED: ${MCP_SANDBOX_RUNTIME_REQUIRED:-false}
+      MCP_SANDBOX_MEMORY_MB: ${MCP_SANDBOX_MEMORY_MB:-2048}
+      MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB: ${MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB:-0}
+      MCP_SANDBOX_NPM_CACHE_SIZE_MB: ${MCP_SANDBOX_NPM_CACHE_SIZE_MB:-1024}
+      MCP_BROKER_CONTAINER_NAME: ai_mesh_mcp_broker
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  # ── Dev / optional (stay profile-gated) ─────────────────────────────────────
   mcp-stub:
     <<: *restart_unless_stopped
     profiles: ["mcp-stub"]
+    ports: !override ["127.0.0.1:9999:9999"]
 
   frontend:
+    # Production UI is baked into nginx (ai-mesh-nginx). Vite only for debugging.
     profiles: ["dev-frontend"]
 
-  # OpenAI-SDK reference demo, reachable only via nginx /demo/ (Basic Auth gated).
-  # Isolated by design: all env interpolation uses ":-" defaults (never ":?") so a
-  # missing DEMO_* var can NEVER abort `compose up` for the whole stack. nginx does
-  # NOT depend_on this service and resolves it lazily, so if demo is absent/down the
-  # platform is unaffected (only /demo/ 502s).
+  http-everything:
+    profiles: ["transport-stubs"]
+
+  sse-everything:
+    profiles: ["transport-stubs"]
+
+  ws-everything:
+    profiles: ["transport-stubs"]
+
+  # ── Edge + demo ─────────────────────────────────────────────────────────────
+  # OpenAI-SDK reference demo at /demo/ (HTTP + HTTPS). In-app login uses the same
+  # control credentials as the console; each session provisions that org's
+  # simulator gateway key. nginx does NOT depend_on demo (lazy DNS) so a missing
+  # demo only 502s /demo/ — console + gateway stay up.
   demo:
     <<: *restart_unless_stopped
     image: ${ECR_REGISTRY:?set ECR_REGISTRY}/ai-mesh-demo:${IMAGE_TAG:-latest}
@@ -204,9 +306,13 @@ services:
     build: !reset null
     expose: ["8770"]
     environment:
-      ZEROSHIELD_API_KEY: ${DEMO_GATEWAY_KEY:-}
+      CONTROL_BASE_URL: ${DEMO_CONTROL_BASE_URL:-http://control:8000}
       ZEROSHIELD_BASE_URL: ${DEMO_GATEWAY_BASE_URL:-http://gateway:8300/v1}
+      # Optional fallback only (unused when users log in):
+      ZEROSHIELD_API_KEY: ${DEMO_GATEWAY_KEY:-}
+      RAG_COLLECTION: ${RAG_COLLECTION:-zeroshield-rag-e2e}
     depends_on:
+      control: { condition: service_started }
       gateway: { condition: service_started }
     deploy:
       resources:
@@ -215,12 +321,14 @@ services:
 
   nginx:
     <<: [*restart_unless_stopped, *ecr_nginx_image]
+    build: !reset null
     ports: ["80:80", "443:443"]
     # nginx config (deploy/nginx.conf + nginx-ssl.conf) is BAKED into the image
     # via deploy/Dockerfile.nginx and rebuilt on every deploy. No bind-mount:
     # a mounted box-file would SHADOW the baked config with a stale copy
     # (sync-to-ec2.sh does not ship deploy/*.conf), silently dropping config
     # changes. The image is the single source of truth.
+    # server_name blocks: aimeshfirewall / aimeshbackend / aimeshgateway .zeroshield.ai
     depends_on:
       control: { condition: service_healthy }
       gateway: { condition: service_started }

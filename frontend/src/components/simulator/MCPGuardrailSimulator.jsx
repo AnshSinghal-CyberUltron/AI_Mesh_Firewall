@@ -57,6 +57,32 @@ function flattenArgs(args) {
   }
 }
 
+/**
+ * Dry-run cannot execute tools, so output-direction rules (field=response)
+ * never match when response="". For echo-like tools, synthesize the tool
+ * result the live path would return so Dry-Run exercises the same rules.
+ */
+export function isEchoLikeTool(toolName, toolDescription) {
+  const name = String(toolName || "").toLowerCase();
+  if (name === "echo" || name.endsWith("_echo") || name.includes("echo")) return true;
+  const desc = String(toolDescription || "").toLowerCase();
+  return desc.includes("echo");
+}
+
+export function simulateEchoToolOutput(args) {
+  const message =
+    args && typeof args === "object" && args.message != null
+      ? String(args.message)
+      : flattenArgs(args);
+  const text = `Echo: ${message}`;
+  return {
+    response: text,
+    output_data: {
+      content: [{ type: "text", text }],
+    },
+  };
+}
+
 function actionTone(action) {
   const a = String(action || "").toLowerCase();
   if (a === "block" || a === "deny") {
@@ -280,21 +306,35 @@ export function MCPGuardrailSimulator() {
     try {
       let res;
       if (mode === MODE_DRYRUN) {
+        const dryBody = {
+          policy_domain: "mcp",
+          // Structured args drive per-key (scope=key) matching server-side.
+          input_args: parsedArgs.value,
+          // Flattened prompt kept for back-compat with entire-scope text
+          // rules and older evaluators.
+          prompt: `tool:${toolName} ${flattenArgs(parsedArgs.value)}`,
+          response: "",
+          metadata: {
+            tool_name: toolName,
+            server_slug: selectedServer.server_slug,
+          },
+        };
+        // Output-direction rules (field=response) need a response body.
+        // Echo-like tools: synthesize the live echo result so Dry-Run matches
+        // the same PKG2 PEM/SSN output rules Live Call would hit.
+        if (isEchoLikeTool(toolName, selectedTool?.description)) {
+          const sim = simulateEchoToolOutput(parsedArgs.value);
+          dryBody.response = sim.response;
+          dryBody.output_data = sim.output_data;
+          dryBody.metadata = {
+            ...dryBody.metadata,
+            dry_run_simulated_output: true,
+            dry_run_simulation: "echo",
+          };
+        }
         res = await fetchWithAuth("/api/policies/test/", {
           method: "POST",
-          body: JSON.stringify({
-            policy_domain: "mcp",
-            // Structured args drive per-key (scope=key) matching server-side.
-            input_args: parsedArgs.value,
-            // Flattened prompt kept for back-compat with entire-scope text
-            // rules and older evaluators.
-            prompt: `tool:${toolName} ${flattenArgs(parsedArgs.value)}`,
-            response: "",
-            metadata: {
-              tool_name: toolName,
-              server_slug: selectedServer.server_slug,
-            },
-          }),
+          body: JSON.stringify(dryBody),
         });
       } else {
         res = await fetchWithAuth("/api/mcp-connector/tools/call/", {
@@ -319,7 +359,7 @@ export function MCPGuardrailSimulator() {
     } finally {
       setSubmitting(false);
     }
-  }, [fetchWithAuth, mode, parsedArgs, selectedServer, toolName]);
+  }, [fetchWithAuth, mode, parsedArgs, selectedServer, selectedTool, toolName]);
 
   const verdict = useMemo(() => {
     if (!result) return null;
@@ -553,12 +593,35 @@ export function MCPGuardrailSimulator() {
             >
               {submitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
+              ) : mode === MODE_DRYRUN ? (
+                <FlaskConical className="h-4 w-4" />
               ) : (
                 <Play className="h-4 w-4" />
               )}
               {mode === MODE_DRYRUN ? "Evaluate Policies" : "Invoke Tool"}
             </button>
           </div>
+          {mode === MODE_DRYRUN && (
+            <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+              Dry-Run evaluates policies without calling the tool.
+              {isEchoLikeTool(toolName, selectedTool?.description) ? (
+                <>
+                  {" "}
+                  For <span className="font-medium text-slate-600 dark:text-slate-300">echo</span>,
+                  it also simulates the tool output so response-direction rules
+                  (PEM, SSN, secrets) can match. Use{" "}
+                  <span className="font-medium text-slate-600 dark:text-slate-300">Live Call</span>{" "}
+                  for the full gateway scan chain.
+                </>
+              ) : (
+                <>
+                  {" "}
+                  Output-only rules need a Live Call (or a tool that echoes
+                  input) to match — Dry-Run sends an empty response by default.
+                </>
+              )}
+            </p>
+          )}
         </div>
 
         {/* RIGHT: Result */}

@@ -184,6 +184,9 @@ services:
       BEDROCK_REGION: ${BEDROCK_REGION:-ap-south-1}
       BEDROCK_MODEL: ${BEDROCK_MODEL:-global.anthropic.claude-haiku-4-5-20251001-v1:0}
       ENABLE_TIER2: ${ENABLE_TIER2:-true}
+      # Always run Bedrock routing adjudicator when >1 candidates (skip only
+      # single-candidate). Set false to restore low-risk weighted_fastpath.
+      ROUTING_ADJUDICATOR_ALWAYS: ${ROUTING_ADJUDICATOR_ALWAYS:-true}
       GUARDRAILS_SERVICE_URL: http://guardrails:8310
       MCP_BROKER_URL: http://mcp-broker:8311
       MCP_BROKER_INTERNAL_KEY: ${MCP_BROKER_INTERNAL_KEY:-dev-mcp-broker-key-change-me}
@@ -358,6 +361,29 @@ services:
           - ws-everything.stub
     restart: unless-stopped
 
+  # OpenAI-SDK reference demo — login with console credentials; AI via openai.OpenAI
+  # to the gateway using the org simulator key. Reachable at http://127.0.0.1:8180/demo/
+  # (Vite proxy) or http://127.0.0.1:8770/ directly.
+  demo:
+    build:
+      context: ./examples/zeroshield-openai-demo
+      dockerfile: Dockerfile
+    ports: ["8770:8770"]
+    environment:
+      CONTROL_BASE_URL: http://control:8000
+      ZEROSHIELD_BASE_URL: http://gateway:8300/v1
+      RAG_COLLECTION: ${RAG_COLLECTION:-zeroshield-rag-e2e}
+    depends_on:
+      control: { condition: service_healthy }
+      gateway: { condition: service_started }
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8770/api/health', timeout=5)"]
+      interval: 20s
+      timeout: 6s
+      retries: 5
+      start_period: 30s
+
   frontend:
     image: node:22-alpine
     working_dir: /app
@@ -367,10 +393,12 @@ services:
     environment:
       VITE_CONTROL_PROXY: http://control:8000
       VITE_GATEWAY_PROXY: http://gateway:8300
+      VITE_DEMO_PROXY: http://demo:8770
       VITE_GATEWAY_BASE_URL: ${VITE_GATEWAY_BASE_URL:-http://127.0.0.1:8180}
       VITE_BACKEND_BASE_URL: ${VITE_BACKEND_BASE_URL:-http://127.0.0.1:8180}
     depends_on:
       control: { condition: service_healthy }
+      demo: { condition: service_started }
 
 volumes:
   postgres_data:

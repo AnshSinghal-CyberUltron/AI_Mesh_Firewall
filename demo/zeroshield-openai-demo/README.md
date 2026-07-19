@@ -1,4 +1,7 @@
-# ZeroShield OpenAI SDK Demo
+# ZeroShield OpenAI SDK Demo (legacy tree)
+
+> **Canonical app:** [`examples/zeroshield-openai-demo/`](../../examples/zeroshield-openai-demo/)
+> (local `:8180/demo/`, ECR `ai-mesh-demo`, prod nginx `/demo/`). Prefer that tree for all work.
 
 Production-quality reference application proving that **all major ZeroShield capabilities**
 are accessible through the **standard OpenAI Python SDK** — customers only change `base_url`

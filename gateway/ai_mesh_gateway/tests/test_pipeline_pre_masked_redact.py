@@ -79,6 +79,34 @@ def test_output_redact_redaction_possible_smart_mask_noop():
     )
 
 
+@pytest.mark.asyncio
+async def test_output_guard_flags_smart_masked_only_without_mutating():
+    """Already-safe smart masks must FLAG (not REDACT) and leave bytes unchanged.
+
+    Regression: neutralize_markdown_split_pii treated j***@a***.com as
+    markdown-split PII → [PII_REDACTED] under output_pii_action=redact.
+    """
+    from output_guard import OutputGuard, sanitize_output_for_verdict
+
+    text = (
+        'Example:\n```json\n{\n  "ssn": "***-**-6789",\n'
+        '  "email": "j***@a***.com",\n'
+        '  "phone": "***-***-5309",\n'
+        '  "credit_card": "****-****-****-1111"\n}\n```\n'
+    )
+    guard = OutputGuard(
+        scanner=_SCANNER,
+        config={"pii_detection_enabled": True, "output_pii_action": "redact"},
+    )
+    v = await guard.inspect(text)
+    assert v.action == "flag"
+    assert v.matched_patterns == ["email_smart_masked"]
+    out = sanitize_output_for_verdict(text, v, redact_pii_fn=patterns.redact_all)
+    assert out == text
+    assert "[PII_REDACTED]" not in out
+    assert "j***@a***.com" in out
+
+
 def test_output_redact_redaction_possible_empty_content_smart_mask_only():
     from main import _output_redact_redaction_possible
 
