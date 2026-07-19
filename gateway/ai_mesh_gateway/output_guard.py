@@ -748,27 +748,47 @@ class OutputGuard:
             the guard model can never impose an action the operator did not choose.
             """
             t = str(threat_type or "").lower()
+            # Whole-word tokens. Routing below matches TOKENS (not bare substrings)
+            # wherever a word is short/ambiguous, so a label can no longer be stolen
+            # by an unrelated category that merely contains those letters
+            # ('uncertain_claim' no longer matches the credential word 'cert';
+            # 'zip_code' no longer matches the infra token 'ip').
+            tokens = {tok for tok in re.split(r"[^a-z0-9]+", t) if tok}
+
             # ALREADY-MASKED IS NOT A LEAK: a guard "masking-detection" finding
             # (e.g. PII_MASKING_DETECTION) means the value is ALREADY masked in the
             # output — no raw data to protect → no action, mirroring the static
-            # *_smart_masked drop in _check_pii_secrets.
-            if "smart_masked" in t or "masking" in t or "already_masked" in t:
+            # *_smart_masked handling in _check_pii_secrets. Guarded by an evasion
+            # check so an ADVERSARIAL label ('masking_bypass', 'unmasking_attempt')
+            # is NOT silently swallowed into "allow".
+            if (tokens & {"masked", "masking"}) and not (
+                tokens & {"bypass", "attempt", "evasion", "evade", "unmask", "unmasking", "circumvent"}
+            ):
                 return "allow"
-            if any(k in t for k in ("pii", "phi", "pci", "ssn", "email", "phone", "address", "personal")):
-                return _action("output_pii_action", "redact") if _enabled("output_pii_enabled", True) else "allow"
-            # Credential/secret aliases — concrete secret shapes the guard model labels
-            # under generic OWASP names (LLM06 sensitive-info / connection strings /
-            # keys) must map to the credential detector, not fall to the policy
-            # catch-all which would override an operator credential="allow".
+
+            # ORDER IS LOAD-BEARING: credential and ip_leakage are matched BEFORE
+            # pii. Generic PII words collide with other categories' labels —
+            # 'personal_access_token' contains 'personal' and 'ip_address' contains
+            # 'address'. Matching pii first routed those findings to the PII
+            # detector; under a legitimate asymmetric config (e.g.
+            # output_pii_action="allow" + output_credential_action="block") the
+            # finding hit the DISABLED pii detector and was dropped, so the
+            # operator's credential="block" was never honored (fail-open).
             if any(k in t for k in (
-                "secret", "credential", "api_key", "apikey", "password", "token",
                 "connection_string", "private_key", "access_key", "secret_key",
-                "bearer", "certificate", "cert", "sensitive_info", "sensitive_information",
-                "information_disclosure", "data_leak", "dataleak", "llm06",
-            )):
+                "sensitive_info", "sensitive_information", "information_disclosure",
+                "data_leak", "dataleak", "llm06", "api_key", "apikey",
+            )) or (tokens & {
+                "secret", "secrets", "credential", "credentials", "password",
+                "token", "tokens", "bearer", "certificate", "cert", "key", "keys",
+            }):
                 return _action("output_credential_action", "redact") if _enabled("output_credential_enabled", True) else "allow"
-            if any(k in t for k in ("ip_leak", "ip_leakage", "infrastructure", "internal_url")):
+            if any(k in t for k in ("ip_leak", "ip_leakage", "infrastructure", "internal_url")) or (
+                tokens & {"ip", "hostname"}
+            ):
                 return _action("output_ip_leakage_action", "redact") if _enabled("output_ip_leakage_enabled", True) else "allow"
+            if tokens & {"pii", "phi", "pci", "ssn", "email", "phone", "address", "personal"}:
+                return _action("output_pii_action", "redact") if _enabled("output_pii_enabled", True) else "allow"
             if "hallucinat" in t:
                 return _action("output_hallucination_action", "flag")
             # policy_violation / compliance / jailbreak / injection / toxic / guard_model / unknown
@@ -957,17 +977,23 @@ class OutputGuard:
         # reduction; opt-in orgs get deterministic blocking tier-2 cannot undo.
         # FULL OPERATOR CONTROL (2026-07-16): the guard-rated-clean FP-reduction for
         # the noisy static ip_leakage heuristic is only applied when the operator has
-        # NOT expressed an explicit protective ip-leakage action. If the operator set
-        # output_ip_leakage_action to anything other than "allow" (or opted into the
-        # legacy hard-block flag), their choice wins and the guard cannot silently
-        # drop the ip_leakage verdict. Operators who want the FP reduction set
-        # output_ip_leakage_action="allow" (disables the detector entirely).
-        _ip_op_action = _action("output_ip_leakage_action", "redact")
-        _ip_hard_block = (
+        # NOT expressed an explicit ip-leakage opinion. An EXPLICIT choice wins and
+        # the guard model cannot silently drop the verdict.
+        #
+        # 2026-07-17 FIX: this gate was `_ip_op_action != "allow"`, which is true for
+        # every action except "allow" — but "allow" skips the detector entirely
+        # above, so no ip_leakage verdict exists to drop. The FP-reduction was
+        # therefore UNREACHABLE (dead), contradicting the comment above it: benign
+        # textbook IPs the tier-2 guard had cleared were redacted instead of
+        # suppressed. Gate on whether the operator EXPLICITLY configured ip-leakage
+        # (key present, or the legacy hard-block opt-in) rather than on the action's
+        # value, which restores "default orgs still get the FP reduction; opt-in
+        # orgs get deterministic blocking tier-2 cannot undo".
+        _ip_explicit = (
             bool(self._config.get("output_block_on_ip_leakage", False))
-            or _ip_op_action != "allow"
+            or "output_ip_leakage_action" in cfg
         )
-        if guard_rated_clean and verdicts and not _ip_hard_block:
+        if guard_rated_clean and verdicts and not _ip_explicit:
             verdicts = [v for v in verdicts if str(getattr(v, "threat_type", "")) != "ip_leakage"]
 
         if not verdicts:
@@ -1027,6 +1053,32 @@ class OutputGuard:
                 matched_patterns=pattern_keys,
                 matched_values=matched_values,
                 compliance_tags=get_compliance_tags(pattern_keys),
+            )
+        # VISIBILITY-ONLY FLAG for already-masked PII (2026-07-17). The scanner
+        # deliberately drops "*_smart_masked" shapes so NO output path can mutate a
+        # value the model already masked (j***@a***.com, ***-**-6789) — there is no
+        # raw data to protect. But silently ALLOWING it left the operator blind to
+        # masked PII flowing through. Emit a NON-MUTATING "flag" verdict instead:
+        # bytes are delivered unchanged (flag performs no redact/rewrite) while the
+        # event stays visible in the pipeline trace + telemetry. Enforcement actions
+        # (block/redact/rewrite) remain reserved for GENUINELY RAW PII, so full
+        # operator control over real leaks is unchanged. Only reachable when the PII
+        # detector is enabled AND its action is not "allow" (see the call site), so an
+        # operator who selected "allow" still gets no event at all.
+        _masked_keys = [
+            k for k in (detect_pii(text) or {}) if str(k).endswith("_smart_masked")
+        ]
+        if _masked_keys:
+            return OutputVerdict(
+                action="flag",
+                threat_type="pii",
+                confidence=0.5,
+                detail=(
+                    "Already-masked PII observed in output — delivered unchanged, "
+                    f"no raw data to protect: {', '.join(_masked_keys)}"
+                ),
+                matched_patterns=_masked_keys,
+                compliance_tags=get_compliance_tags(_masked_keys),
             )
         return OutputVerdict()
 
