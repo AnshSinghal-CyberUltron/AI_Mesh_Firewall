@@ -138,6 +138,8 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
   const handleMenuItemClick = (id, route) => {
     if (route) {
       navigate(route);
+      // Keep shell tab state in sync (Module 2 paths resolve via routeForTab).
+      onTabChange?.(id);
     } else if (id === "firewall") {
       navigate("/");
       onTabChange?.(id);
