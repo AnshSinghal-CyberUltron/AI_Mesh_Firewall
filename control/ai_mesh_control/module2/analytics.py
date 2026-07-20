@@ -309,8 +309,11 @@ def build_model_exposure_payload(events: list[dict], llm_map: dict[str, str], pe
             stats[model]["blocked"] += 1
         if item.action == "redact":
             stats[model]["redacted"] += 1
-        if meta.get("latency_ms"):
-            stats[model]["latencies"].append(float(meta["latency_ms"]))
+        if meta.get("latency_ms") is not None:
+            try:
+                stats[model]["latencies"].append(float(meta["latency_ms"]))
+            except (TypeError, ValueError):
+                pass
         prefix = key_prefix_from_meta(meta)
         if prefix:
             stats[model]["keys"].add(prefix)
@@ -523,7 +526,10 @@ def build_rag_pipeline_kpis(events) -> dict:
         if blocked_stage in stage_entries:
             _record_stage(blocked_stage, req_id, action, latency, escalation_level)
         elif action == ACTION_BLOCK:
-            _record_stage("retriever", req_id, action, latency, escalation_level)
+            # Blocked-before-stages / unknown stage: attribute to query (not
+            # retriever). Prompt-injection blocks at query were previously
+            # mis-counted under retriever, so Module 2 RAG health never moved.
+            _record_stage("query", req_id, action, latency, escalation_level)
         else:
             _record_stage("query", req_id, action, latency, escalation_level)
             try:

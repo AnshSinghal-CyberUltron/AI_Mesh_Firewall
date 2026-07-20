@@ -147,6 +147,18 @@ class LaneHelperUnitTests(SimpleTestCase):
         self.assertEqual(stages["retriever"]["total"], 2)
         self.assertEqual(kpis["ingest_events"], 1)
 
+    def test_build_rag_pipeline_kpis_query_block_without_stage_goes_to_query(self):
+        """Prompt-injection blocks with unknown/missing stage must count under query."""
+        qs = FakeQS([
+            _row(ACTION_BLOCK, event_type="rag_query", collection="default"),
+            _row(ACTION_BLOCK, event_type="rag_query", blocked_at_stage="unknown", collection="default"),
+        ])
+        kpis = build_rag_pipeline_kpis(qs)
+        stages = kpis["stages"]
+        self.assertEqual(stages["query"]["blocked"], 2)
+        self.assertEqual(stages["query"]["total"], 2)
+        self.assertEqual(stages["retriever"]["total"], 0)
+
     def test_build_rag_pipeline_kpis_prefers_rag_pipeline_over_rag_query(self):
         qs = FakeQS([
             _row("allow", event_type="rag_pipeline", pipeline_stage="query", request_id="req-12345678"),
