@@ -794,12 +794,25 @@ class OutputGuard:
             # policy_violation / compliance / jailbreak / injection / toxic / guard_model / unknown
             return _action("output_policy_action", "block") if _enabled("output_policy_enabled", True) else "allow"
 
-        if _enabled("output_pii_enabled", True):
-            pii_action = _action("output_pii_action", "redact")
-            if pii_action != "allow":
-                pii_verdict = await self._check_pii_secrets(text, pii_action)
-                if pii_verdict.action != "allow":
-                    verdicts.append(pii_verdict)
+        # PII + CREDENTIAL share ONE scan of the output, but each class is governed by
+        # its OWN operator-selected action (see _check_pii_secrets). This gate is
+        # deliberately (pii OR credential) — NOT nested under output_pii_enabled.
+        # Previously the scan ran only when the PII detector was enabled AND not
+        # "allow", so an operator who set PII=allow (or disabled PII) while setting
+        # Credential=block never had the output scanned at all and raw API keys
+        # EGRESSED despite an explicit block. Each class below is still independently
+        # gated, so nothing is enforced that the operator did not select.
+        _pii_on = _enabled("output_pii_enabled", True)
+        _cred_on = _enabled("output_credential_enabled", True)
+        if _pii_on or _cred_on:
+            _pii_act = _action("output_pii_action", "redact") if _pii_on else "allow"
+            _cred_act = _action("output_credential_action", "redact") if _cred_on else "allow"
+            if _pii_act != "allow" or _cred_act != "allow":
+                for _v in await self._check_pii_secrets(
+                    text, _pii_act, credential_action=_cred_act
+                ):
+                    if _v.action != "allow":
+                        verdicts.append(_v)
 
         if _enabled("output_credential_enabled", True):
             # 1.7 policy "redact the response": output secrets/credentials are
@@ -1012,9 +1025,46 @@ class OutputGuard:
         # so orgs with no explicit opinion are unchanged.
         return selected
 
-    async def _check_pii_secrets(self, text: str, action: str = "redact") -> OutputVerdict:
-        """Delegate PII/secret detection to the existing scanner."""
+    async def _check_pii_secrets(
+        self,
+        text: str,
+        action: str = "redact",
+        *,
+        credential_action: str | None = None,
+    ) -> list[OutputVerdict]:
+        """Detect raw PII/credential leakage and govern each CLASS by its OWN action.
+
+        Returns a LIST of verdicts (0, 1 or 2): at most one PII-class verdict governed
+        by the operator's ``output_pii_action`` and at most one CREDENTIAL-class verdict
+        governed by ``output_credential_action``.
+
+        WHY THE SPLIT (2026-07-20). ``PII_PATTERNS`` contains credential keys
+        (api_key_openai, aws_access_key, aws_secret_access_key, github_token,
+        private_key_header), so ``scan_output`` reported an API key as
+        ``threat_type='pii'`` and the guard governed it with ``output_pii_action``. The
+        operator's "Credential Exposure" action was therefore POWERLESS for API keys.
+        Measured before this fix:
+            PII=block, CRED=off   -> block   (PII action governed the API key)
+            PII=off,   CRED=block -> allow   (credential action did nothing)
+            PII=allow, CRED=block -> allow   (★ operator chose BLOCK; keys EGRESSED)
+        The same mis-governance applied to the whole ``threat_type='secret'`` family
+        (password_assignment, anthropic_key, gitlab_pat, api_key_assignment, ...).
+
+        PARTITION BY COMPLIANCE TAG, NOT A HARDCODED KEY LIST: a matched key is
+        CREDENTIAL-class iff its ``COMPLIANCE_TAG_MAP`` tags contain "SECRET". That map
+        is the authoritative classification already used for compliance reporting, so a
+        future SECRET-tagged pattern is routed correctly with no code change (a literal
+        key set would silently fail open as patterns are added).
+
+        ``action`` governs the PII class; ``credential_action`` governs the credential
+        class. Passing ``None``/"allow" for either DISABLES that class entirely (the
+        operator selected allow, or turned the detector off) — the other class is still
+        enforced, which is the whole point of independent per-detector control.
+        """
+        pii_action = action
+        cred_action = credential_action
         verdict = await self._scanner.scan_output(text)
+        out: list[OutputVerdict] = []
         if verdict.threat_type in ("pii", "secret") and verdict.matched_patterns:
             pattern_keys = list(verdict.matched_patterns)
             matched_values = dict(getattr(verdict, "matched_values", None) or {})
@@ -1029,31 +1079,55 @@ class OutputGuard:
             # no verdict (delivered unchanged, NO action). This is a DETECTION
             # correction, not an action override — full operator control is preserved for
             # real leaks (a raw email alongside a masked one still triggers the action).
+            # ORDER IS LOAD-BEARING: drop already-masked shapes BEFORE partitioning.
+            # Partitioning the pre-filter key set would let an all-masked output produce
+            # a spurious credential/PII verdict, breaking the frozen no-action contract.
             _raw_keys = [k for k in pattern_keys if not str(k).endswith("_smart_masked")]
             if not _raw_keys:
-                return OutputVerdict()
+                return []
             pattern_keys = _raw_keys
             matched_values = {
                 k: v for k, v in matched_values.items() if not str(k).endswith("_smart_masked")
             }
-            effective_action = action
-            value_detail = ""
-            if matched_values:
-                # detail is client-facing: embed MASKED values only.
-                # matched_values keeps the raw values for operator telemetry.
-                value_detail = " — " + ", ".join(
-                    f"{k}={_mask_value_for_detail(v)}"
-                    for k, v in matched_values.items()
+
+            def _is_credential(key: str) -> bool:
+                # Authoritative classification via COMPLIANCE_TAG_MAP (see docstring).
+                return "SECRET" in (get_compliance_tags([key]) or [])
+
+            _cred_keys = [k for k in pattern_keys if _is_credential(k)]
+            _pii_keys = [k for k in pattern_keys if not _is_credential(k)]
+
+            def _build(keys: list[str], act: str, threat: str) -> OutputVerdict:
+                # Per-class metadata: patterns/values/detail/compliance tags are derived
+                # from THIS class's keys only, so a credential incident is never tagged
+                # GDPR/PII and a PII incident is never tagged SECRET (attribution).
+                vals = {k: v for k, v in matched_values.items() if k in set(keys)}
+                detail_vals = ""
+                if vals:
+                    # detail is client-facing: embed MASKED values only.
+                    # matched_values keeps the raw values for operator telemetry.
+                    detail_vals = " — " + ", ".join(
+                        f"{k}={_mask_value_for_detail(v)}" for k, v in vals.items()
+                    )
+                label = "Credential" if threat == "credential" else "PII"
+                return OutputVerdict(
+                    action=act,
+                    threat_type=threat,
+                    confidence=verdict.confidence,
+                    detail=f"{label} detected in output: {', '.join(keys)}{detail_vals}",
+                    matched_patterns=list(keys),
+                    matched_values=vals,
+                    compliance_tags=get_compliance_tags(list(keys)),
                 )
-            return OutputVerdict(
-                action=effective_action,
-                threat_type=verdict.threat_type,
-                confidence=verdict.confidence,
-                detail=f"PII/secret detected in output: {', '.join(pattern_keys)}{value_detail}",
-                matched_patterns=pattern_keys,
-                matched_values=matched_values,
-                compliance_tags=get_compliance_tags(pattern_keys),
-            )
+
+            # Each class is enforced ONLY by its own operator-selected action. A class
+            # whose action is None/"allow" (detector disabled or set to allow) yields NO
+            # verdict, while the other class is still enforced independently.
+            if _pii_keys and pii_action and pii_action != "allow":
+                out.append(_build(_pii_keys, pii_action, "pii"))
+            if _cred_keys and cred_action and cred_action != "allow":
+                out.append(_build(_cred_keys, cred_action, "credential"))
+            return out
         # ── FROZEN CONTRACT — ALREADY-MASKED OUTPUT TRIGGERS **NO** ACTION ──
         # Do NOT add a flag/redact/rewrite here. This has regressed twice.
         #
@@ -1072,7 +1146,7 @@ class OutputGuard:
         # exactly the dishonesty this subsystem must never reintroduce. A raw email
         # alongside a masked one still triggers the operator's action, via the
         # _raw_keys path above.
-        return OutputVerdict()
+        return []
 
     def _check_credential_exposure(self, text: str, action: str = "block") -> OutputVerdict:
         """Check for exposed credentials (bearer tokens, connection strings, etc.)."""

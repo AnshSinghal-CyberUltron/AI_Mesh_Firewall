@@ -1,7 +1,9 @@
-"""Output-guard regressions (2026-07-17): tier-2 category routing, the
-guard-rated-clean ip_leakage FP-reduction, and the already-masked visibility flag.
+"""Output-guard regressions: tier-2 category routing, the guard-rated-clean
+ip_leakage FP-reduction, the frozen already-masked no-action contract, and
+per-class (PII vs credential) action governance.
 
-Three defects found by the pre-push adversarial audit:
+Defects found by the pre-push adversarial audit + the 30-cell operator-action
+matrix (5 detectors x {block, redact, rewrite, flag, allow, detect-off}):
 
 1. ROUTING FAIL-OPEN. ``_operator_action_for_category`` mapped a tier-2 guard-model
    finding to a per-detector action using order-dependent substring ``in`` checks with
@@ -16,9 +18,17 @@ Three defects found by the pre-push adversarial audit:
    so the suppression was unreachable — benign textbook IPs the tier-2 guard had
    cleared were redacted anyway, contradicting the in-file comment.
 
-3. ALREADY-MASKED WAS INVISIBLE. Output the model had already masked
-   (j***@a***.com) produced NO verdict at all, leaving operators blind to masked
-   PII passing through. It must FLAG (visible) while leaving bytes untouched.
+3. ALREADY-MASKED MUST TRIGGER NO ACTION (frozen). Output the model already masked
+   (j***@a***.com) contains no raw PII, so it is not a finding: the guard emits NO
+   action — not block/redact/rewrite and NOT a "visibility flag". Emitting anything
+   shows an action the operator never selected (an org set to "rewrite" seeing
+   "flag"). This has regressed twice; see section 4.
+
+4. CREDENTIAL ACTION WAS POWERLESS. PII_PATTERNS contains credential keys, so
+   scan_output labelled API keys threat_type='pii' and governed them with
+   output_pii_action. Measured: PII=allow + CRED=block -> the keys EGRESSED despite
+   an explicit block. Classes are now partitioned by the SECRET compliance tag and
+   each is governed by its own operator-selected action; see section 5.
 """
 
 from __future__ import annotations
@@ -180,3 +190,111 @@ async def test_already_masked_output_is_delivered_byte_identical():
         assert out == MASKED, configured
         assert "[PII_REDACTED]" not in out, configured
         assert "j***@a***.com" in out, configured
+
+
+# ── 5. PER-CLASS GOVERNANCE: credential keys obey output_credential_action ──
+#
+# PII_PATTERNS contains credential keys (api_key_openai, aws_access_key,
+# aws_secret_access_key, github_token, private_key_header), so scan_output reported
+# an API key as threat_type='pii' and the guard governed it with output_pii_action.
+# The operator's "Credential Exposure" action was POWERLESS. Measured before the fix:
+#   PII=allow, CRED=block -> allow   (operator chose BLOCK; the keys EGRESSED)
+# Classification is by COMPLIANCE_TAG_MAP ("SECRET" tag), not a hardcoded key list,
+# so future SECRET-tagged patterns route correctly with no code change.
+
+CRED_TEXT = (
+    "Use key sk-proj-AbCdEf0123456789AbCdEf0123456789 and "
+    "AWS_SECRET_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE"
+)
+SECRET_TEXT = (
+    "The database password=SuperSecret123! and anthropic key "
+    "sk-ant-AbCdEf0123456789AbCdEfGh"
+)
+MIXED_TEXT = (
+    "Contact john.smith@acme.com with key sk-proj-AbCdEf0123456789AbCdEf0123456789"
+)
+
+
+def _pc_cfg(pii_enabled, pii_action, cred_enabled, cred_action):
+    return {
+        "output_tier2_enabled": False,
+        "output_pii_enabled": pii_enabled, "output_pii_action": pii_action,
+        "output_credential_enabled": cred_enabled, "output_credential_action": cred_action,
+        "output_ip_leakage_enabled": False, "output_ip_leakage_action": "allow",
+        "output_policy_enabled": False, "output_policy_action": "allow",
+        "hallucination_flag_enabled": False, "factuality_check_enabled": False,
+        "output_hallucination_action": "allow",
+    }
+
+
+async def _pc_inspect(text, cfg):
+    from scanner import InputScanner
+    guard = OutputGuard(scanner=_RealStatic(InputScanner()), config=cfg)
+    return await guard.inspect(text)
+
+
+class _RealStatic:
+    """Real static scanner (so credential patterns actually match); tier-2 clean."""
+
+    def __init__(self, real):
+        self._real = real
+
+    async def scan_output(self, text):
+        return await self._real.scan_output(text)
+
+    async def scan_output_with_tier2(self, text, org_tier2_override=None, org_slug=None):
+        return OutputVerdict(action="allow", threat_type="")
+
+
+async def test_credential_blocked_even_when_pii_is_allow():
+    # THE HEADLINE BUG: operator set Credential=block, PII=allow. Keys must NOT egress.
+    v = await _pc_inspect(CRED_TEXT, _pc_cfg(True, "allow", True, "block"))
+    assert v.action == "block"
+    assert v.threat_type == "credential"
+
+
+async def test_credential_blocked_when_pii_detector_disabled():
+    v = await _pc_inspect(CRED_TEXT, _pc_cfg(False, "allow", True, "block"))
+    assert v.action == "block"
+    assert v.threat_type == "credential"
+
+
+async def test_credential_honors_each_action_independently_of_pii():
+    for act in ("block", "redact", "rewrite", "flag"):
+        v = await _pc_inspect(CRED_TEXT, _pc_cfg(True, "allow", True, act))
+        assert v.action == act, act
+        assert v.threat_type == "credential", act
+
+
+async def test_operator_may_allow_credentials_even_when_pii_blocks():
+    # Sole-ownership: CRED=allow / disabled means NO action, whatever PII says.
+    for cred_enabled, cred_action in ((True, "allow"), (False, "allow")):
+        v = await _pc_inspect(CRED_TEXT, _pc_cfg(True, "block", cred_enabled, cred_action))
+        assert v.action == "allow", (cred_enabled, cred_action)
+
+
+async def test_secret_family_is_credential_governed():
+    # threat_type=='secret' keys (password_assignment, anthropic_key, ...) are
+    # SECRET-tagged => governed by output_credential_action, not output_pii_action.
+    v = await _pc_inspect(SECRET_TEXT, _pc_cfg(True, "allow", True, "block"))
+    assert v.action == "block"
+    v = await _pc_inspect(SECRET_TEXT, _pc_cfg(True, "block", True, "allow"))
+    assert v.action == "allow"
+
+
+async def test_mixed_pii_and_credential_both_masked_on_redact():
+    v = await _pc_inspect(MIXED_TEXT, _pc_cfg(True, "redact", True, "redact"))
+    out = sanitize_output_for_verdict(MIXED_TEXT, v, redact_pii_fn=patterns.redact_all)
+    assert "john.smith@acme.com" not in out
+    assert "sk-proj-AbCdEf0123456789AbCdEf0123456789" not in out
+
+
+async def test_masked_output_no_action_across_all_pii_cred_combos():
+    # FROZEN contract must survive the partition, under every (pii, cred) pairing.
+    for p in ("block", "redact", "rewrite", "flag", "allow"):
+        for c in ("block", "redact", "rewrite", "flag", "allow"):
+            v = await _pc_inspect(MASKED, _pc_cfg(True, p, True, c))
+            assert v.action == "allow", (p, c)
+            assert not v.matched_patterns, (p, c)
+            out = sanitize_output_for_verdict(MASKED, v, redact_pii_fn=patterns.redact_all)
+            assert out == MASKED, (p, c)

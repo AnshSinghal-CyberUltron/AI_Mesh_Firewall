@@ -146,12 +146,19 @@ async def test_secret_echo_detail_masks_raw_value() -> None:
     matched = detect_secrets(secret_echo)
     assert "password_assignment" in matched
     scanner = _StubScanner(matched=matched, threat_type="secret")
-    # Disable the credential-exposure detector (it also fires on password
-    # assignments and its block action would win) to isolate the secrets path.
-    og = OutputGuard(scanner=scanner, config={"output_credential_enabled": False})
+    # password_assignment is SECRET-tagged => CREDENTIAL-class, so it is governed by
+    # output_credential_action (not output_pii_action). Previously this test disabled
+    # the credential detector and still expected the password to be redacted — i.e. the
+    # operator turned Credential Exposure OFF yet credentials were still acted on via
+    # the PII action. That was the mis-governance bug; disabling the detector now
+    # correctly yields NO action. Configure the credential detector explicitly instead.
+    og = OutputGuard(
+        scanner=scanner,
+        config={"output_credential_enabled": True, "output_credential_action": "redact"},
+    )
     verdict = await og.inspect(secret_echo, context_chunks=[])
     assert verdict.action == "redact"
-    assert verdict.threat_type == "secret"
+    assert verdict.threat_type == "credential"
     # Raw secret stays in matched_values (operator telemetry)...
     assert "hunter2secret" in verdict.matched_values.get("password_assignment", "")
     # ...but never in the client-facing detail string.
