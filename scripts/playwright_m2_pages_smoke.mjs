@@ -18,11 +18,18 @@ function step(name, pass, detail = "") {
 }
 
 async function login(page) {
-  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 120000 });
-  await page.fill('input[type="email"], input[name="email"]', EMAIL);
-  await page.fill('input[type="password"]', PASS);
+  await page.goto(`${BASE}/login`, { waitUntil: "commit", timeout: 120000 });
+  await page.waitForSelector("#email, input[type=\"email\"]", { timeout: 120000 });
+  // Prefer stable ids — password may toggle type text/password via show/hide.
+  const email = page.locator("#email, input[type=\"email\"]").first();
+  const password = page.locator("#password, input[name=\"password\"]").first();
+  await email.fill(EMAIL);
+  await password.fill(PASS, { timeout: 60000 });
   await page.click('button[type="submit"]');
-  await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 120000 });
+  await page.waitForURL((url) => !url.pathname.includes("/login"), {
+    timeout: 120000,
+    waitUntil: "commit",
+  });
 }
 
 async function assertNoRenderError(page, label) {
@@ -43,13 +50,18 @@ async function main() {
     await login(page);
     step("login", true);
 
-    await page.goto(`${BASE}/ueba/api-keys`, { waitUntil: "domcontentloaded", timeout: 120000 });
-    await page.waitForTimeout(5000);
+    await page.goto(`${BASE}/ueba/api-keys`, { waitUntil: "commit", timeout: 120000 });
+    // Condition-based wait: Vite may still be compiling the Module-2 graph after
+    // Docker Desktop FSWatcher flaps; do not treat "Loading module…" as success.
+    await page.getByRole("heading", { name: /API Key Behavior Analytics/i }).waitFor({
+      state: "visible",
+      timeout: 120000,
+    });
     await assertNoRenderError(page, "M2.2");
     const m22Heading = page.getByRole("heading", { name: /API Key Behavior Analytics/i });
     step("M2.2: page heading visible", await m22Heading.count() > 0);
 
-    await page.goto(`${BASE}/models/exposure`, { waitUntil: "domcontentloaded", timeout: 120000 });
+    await page.goto(`${BASE}/models/exposure`, { waitUntil: "commit", timeout: 120000 });
     await page.waitForTimeout(2000);
     await assertNoRenderError(page, "M2.4");
     const guide24 = page.getByRole("button", { name: /^Guide$/i });
@@ -61,7 +73,7 @@ async function main() {
     const guide24Body = await guide24Modal.innerText();
     step("M2.4: Guide explains purpose", /Model|RAG|objective|exposure/i.test(guide24Body));
 
-    await page.goto(`${BASE}/incidents`, { waitUntil: "domcontentloaded", timeout: 120000 });
+    await page.goto(`${BASE}/incidents`, { waitUntil: "commit", timeout: 120000 });
     await page.waitForTimeout(3000);
     await assertNoRenderError(page, "Incidents");
     const guide26 = page.getByRole("button", { name: /Open analyst guide/i });
