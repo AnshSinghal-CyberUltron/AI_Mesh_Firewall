@@ -91,7 +91,7 @@ services:
     build:
       context: .
       dockerfile: control/Dockerfile
-# Image WORKDIR is /app/control; manage.py lives there. Django code (main_app/)
+    # Image WORKDIR is /app/control; manage.py lives there. Django code (main_app/)
     # is under ai_mesh_control/ and is on PYTHONPATH (set in control/Dockerfile).
     working_dir: /app/control
     ports: ["8100:8000"]
