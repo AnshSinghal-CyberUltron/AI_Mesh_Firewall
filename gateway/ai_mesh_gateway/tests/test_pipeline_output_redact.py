@@ -1,7 +1,10 @@
 """
-PIPELINE-0014: Output guard redacts maskable PII (not block); byte-verified.
+PIPELINE-0014: Output guard masks maskable PII byte-for-byte; actions are the
+operator's exactly.
 
-- enforce_output downgrades maskable block → redact
+- enforce_output honors the operator's action EXACTLY: block stays block (the old
+  maskable block → redact floor was removed in 268f0f92 because it silently
+  downgraded an explicitly-selected action)
 - noop scrub → fail-closed block via redaction_possible=False
 - _apply_output_guard_nonstream delivers masked completion bytes
 - sanitize_output_for_verdict changes bytes for SSN/email
@@ -31,19 +34,30 @@ RAW_OUTPUT = f"Contact {EMAIL} with SSN {SSN} for verification."
 
 
 class EnforceOutputRedactTests(unittest.TestCase):
-    def test_pii_block_verdict_becomes_redact(self):
+    def test_pii_block_verdict_stays_block(self):
+        """FULL OPERATOR CONTROL: block means BLOCK, even for maskable PII.
+
+        This previously asserted block -> redact, the §1.7 "surgically redact, never
+        whole-block" floor. That floor was REMOVED (commit 268f0f92): it silently
+        downgraded an action the operator explicitly selected, making "block"
+        indistinguishable from "redact" in the UI and pipeline trace. The operator is
+        the sole owner of their org's actions — selecting block whole-response-blocks
+        (403); selecting redact masks in place.
+        """
         d = enforce_output(verdict_action="block", verdict_threat_type="pii")
-        self.assertEqual(d.action, "redact")
-        self.assertFalse(d.is_terminal_block)
+        self.assertEqual(d.action, "block")
+        self.assertTrue(d.is_terminal_block)
+        self.assertEqual(d.blocked_by, "output_guard")
 
     def test_pii_block_stays_block_under_strict_org_block_mode(self):
-        """Org enforcement_mode=block + flag coercion is separate; block+PII → redact."""
+        """Same contract with an explicit org enforcement_mode=block."""
         d = enforce_output(
             verdict_action="block",
             verdict_threat_type="pii",
             enforcement_mode="block",
         )
-        self.assertEqual(d.action, "redact")
+        self.assertEqual(d.action, "block")
+        self.assertTrue(d.is_terminal_block)
 
     def test_redact_noop_escalates_to_block(self):
         d = enforce_output(

@@ -15,6 +15,20 @@ import main  # ensure the gateway main module is in sys.modules for the helper's
 import vector_routes
 
 
+def _resolved_main():
+    """Patch the SAME module object vector_routes will resolve at runtime.
+
+    The gateway file is importable under TWO identities (``main`` and
+    ``ai_mesh_gateway.main``) and ``vector_routes._gateway_main_module()`` prefers
+    ``sys.modules["ai_mesh_gateway.main"]``. Patching the bare ``main`` module works
+    only while that identity is absent, so any earlier test importing
+    ``ai_mesh_gateway.main`` (e.g. test_pipeline_output_redact) silently made these
+    patches invisible and this file failed ONLY when run after it. Resolve the same
+    way the code under test does.
+    """
+    return vector_routes._gateway_main_module() or main
+
+
 class _V:
     def __init__(self, action, threat_type=""):
         self.action = action
@@ -33,7 +47,7 @@ class _BlockGuard:
 
 @pytest.mark.parametrize("threat_type", ["scan_budget_exceeded", "indirect_injection", "credential"])
 async def test_upsert_drops_any_blocked_doc(monkeypatch, threat_type):
-    monkeypatch.setattr(main, "CONTEXT_GUARD", _BlockGuard(threat_type), raising=False)
+    monkeypatch.setattr(_resolved_main(), "CONTEXT_GUARD", _BlockGuard(threat_type), raising=False)
 
     kept_ids, kept_texts, kept_metas, scan_results, all_blocked = (
         await vector_routes._scan_redact_upsert_documents(
@@ -50,10 +64,10 @@ async def test_upsert_keeps_allowed_doc(monkeypatch):
         async def scan_single_document(self, text):
             return _V("allow")
 
-    monkeypatch.setattr(main, "CONTEXT_GUARD", _AllowGuard(), raising=False)
+    monkeypatch.setattr(_resolved_main(), "CONTEXT_GUARD", _AllowGuard(), raising=False)
     # Neutralize redaction helpers so the allowed doc passes through unchanged.
-    monkeypatch.setattr(main, "_scan_redact_embedding_inputs", None, raising=False)
-    monkeypatch.setattr(main, "_scan_redact_metadata", None, raising=False)
+    monkeypatch.setattr(_resolved_main(), "_scan_redact_embedding_inputs", None, raising=False)
+    monkeypatch.setattr(_resolved_main(), "_scan_redact_metadata", None, raising=False)
 
     kept_ids, kept_texts, kept_metas, scan_results, all_blocked = (
         await vector_routes._scan_redact_upsert_documents(
