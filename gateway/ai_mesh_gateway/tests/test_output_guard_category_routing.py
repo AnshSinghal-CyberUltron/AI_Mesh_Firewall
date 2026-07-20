@@ -492,3 +492,43 @@ async def test_flag_never_mutates_for_every_detector():
         out = sanitize_output_for_verdict(text, v, redact_pii_fn=patterns.redact_all)
         assert v.action == "flag", name
         assert out == text, name
+
+
+# ── 8. VERDICT COLLAPSE must not leave a protected class unenforced ──
+#
+# inspect() returns ONE verdict via _select_highest_severity, and ACTION_PRIORITY
+# ranks redact(3) above rewrite(2). With PII=redact + Credential=rewrite the PII
+# verdict won, the credential verdict was DISCARDED, and redact_classes (built only
+# from classes set to "redact") excluded credential — so the API key EGRESSED RAW
+# despite the operator asking for it to be rewritten away. Symmetric the other way.
+# Any class the operator required to be REMOVED (redact OR rewrite) must be scrubbed
+# by whichever verdict wins delivery. flag/allow/off classes are never included.
+
+async def test_credential_rewrite_not_leaked_when_pii_redact_wins():
+    v, out = await _deliver_mixed(_cfg3("redact", "rewrite", "allow"))
+    assert _KEY not in out, "credential set to rewrite egressed raw"
+
+
+async def test_pii_rewrite_not_leaked_when_credential_redact_wins():
+    v, out = await _deliver_mixed(_cfg3("rewrite", "redact", "allow"))
+    assert _EMAIL not in out, "pii set to rewrite egressed raw"
+
+
+async def test_ip_rewrite_not_leaked_when_pii_redact_wins():
+    v, out = await _deliver_mixed(_cfg3("redact", "allow", "rewrite"))
+    assert _IP not in out, "ip set to rewrite egressed raw"
+
+
+async def test_flag_and_allow_classes_still_never_masked_when_redact_wins():
+    # The widened set must NOT pull in flag/allow classes.
+    v, out = await _deliver_mixed(_cfg3("redact", "flag", "allow"))
+    assert _EMAIL not in out          # pii=redact -> masked
+    assert _KEY in out                # cred=flag  -> untouched
+    assert _IP in out                 # ip=allow   -> untouched
+
+
+async def _deliver_mixed(cfg):
+    from scanner import InputScanner
+    guard = OutputGuard(scanner=_RealStatic(InputScanner()), config=cfg)
+    v = await guard.inspect(MIXED3)
+    return v, sanitize_output_for_verdict(MIXED3, v, redact_pii_fn=patterns.redact_all)

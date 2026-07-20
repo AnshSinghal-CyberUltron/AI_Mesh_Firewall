@@ -205,3 +205,37 @@ class PipelineTraceOutputRedactTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PiiDetectionToggleDoesNotNullifyRedactTests(unittest.TestCase):
+    """An unrelated org toggle must not nullify one of the five selectable actions.
+
+    `pii_detection_enabled=False` used to downgrade a §1.7 PII **redact** to
+    "allow", so raw SSNs/emails egressed with no enforcement event — while the same
+    toggle left PII block/rewrite/flag fully honoured. The §1.7 detector owns its own
+    enable flag (output_pii_enabled), checked in OutputGuard.inspect.
+    """
+
+    def test_redact_survives_pii_detection_disabled(self):
+        d = enforce_output(
+            verdict_action="redact", verdict_threat_type="pii",
+            pii_detection_enabled=False,
+        )
+        self.assertEqual(d.action, "redact")
+
+    def test_other_actions_unchanged_by_toggle(self):
+        for action in ("block", "rewrite", "flag"):
+            with self.subTest(action=action):
+                d = enforce_output(
+                    verdict_action=action, verdict_threat_type="pii",
+                    pii_detection_enabled=False,
+                )
+                self.assertEqual(d.action, action)
+
+    def test_unmaskable_redact_still_fails_closed_to_block(self):
+        # Deliberate fail-closed: cannot mask => must not deliver raw.
+        d = enforce_output(
+            verdict_action="redact", verdict_threat_type="pii",
+            redaction_possible=False,
+        )
+        self.assertEqual(d.action, "block")

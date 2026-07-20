@@ -416,14 +416,20 @@ def enforce_output(
         # rewrite is honored at SecureStreamingResponse DONE flush.
 
         if act == "redact" and not redaction_possible:
+            # FAIL-CLOSED (deliberate): the operator chose redact, but the bytes
+            # cannot be masked, so delivering would leak. Escalating to block is the
+            # only way to honour "do not deliver this raw".
             act = "block"
-        elif (
-            act == "redact"
-            and threat in _REDACTABLE_PII_THREAT_TYPES
-            and threat != "secret"
-            and not pii_detection_enabled
-        ):
-            act = "allow"
+
+        # REMOVED (2026-07-20): an `elif act == "redact" and ... not
+        # pii_detection_enabled: act = "allow"` clause used to silently downgrade a
+        # §1.7 PII **redact** to allow, so raw SSNs/emails EGRESSED with no
+        # enforcement event — while the SAME org toggle left PII block/rewrite/flag
+        # fully honoured. One unrelated module switch nullified exactly one of the
+        # five selectable actions. The §1.7 detector owns its own enable flag
+        # (`output_pii_enabled`, checked in OutputGuard.inspect): when the operator
+        # disables the output PII detector no verdict is produced at all, so this
+        # second, hidden gate could only ever contradict the operator's selection.
 
         blocked_by = "output_guard" if act == "block" else None
 

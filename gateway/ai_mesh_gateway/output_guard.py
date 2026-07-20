@@ -1029,15 +1029,26 @@ class OutputGuard:
         # sanitizer. Without this, one class set to "redact" caused the blanket
         # redact_all() to mask EVERY class, so a class set to flag/allow was
         # mutated anyway (measured: PII=flag + Credential=redact masked the email).
+        # A class qualifies when the operator required its data to be REMOVED from the
+        # delivered bytes — that is "redact" OR "rewrite". Restricting this to
+        # "redact" alone LEAKED: ACTION_PRIORITY ranks redact(3) above rewrite(2), so
+        # with PII=redact + Credential=rewrite the PII verdict won,
+        # _select_highest_severity discarded the credential verdict, and the API key
+        # EGRESSED RAW even though the operator had asked for it to be rewritten
+        # away (symmetrically, PII=rewrite + Credential=redact leaked the email).
+        # Whichever verdict wins delivery, every class the operator chose to protect
+        # must still be scrubbed. Classes set to flag/allow/off are NEVER included,
+        # so this cannot mutate a class the operator left untouched.
+        _PROTECTIVE_MUTATIONS = ("redact", "rewrite")
         _redactable_classes: list[str] = []
-        if _enabled("output_pii_enabled", True) and _action("output_pii_action", "redact") == "redact":
+        if _enabled("output_pii_enabled", True) and _action("output_pii_action", "redact") in _PROTECTIVE_MUTATIONS:
             _redactable_classes.append("pii")
-        if _enabled("output_credential_enabled", True) and _action("output_credential_action", "redact") == "redact":
+        if _enabled("output_credential_enabled", True) and _action("output_credential_action", "redact") in _PROTECTIVE_MUTATIONS:
             _redactable_classes.append("credential")
         if _enabled("output_ip_leakage_enabled", True) and _action(
             "output_ip_leakage_action",
             "block" if self._config.get("output_block_on_ip_leakage", False) else "redact",
-        ) == "redact":
+        ) in _PROTECTIVE_MUTATIONS:
             _redactable_classes.append("ip_leakage")
         selected.redact_classes = _redactable_classes
         # FULL OPERATOR CONTROL (2026-07-16): the configured action is honoured
