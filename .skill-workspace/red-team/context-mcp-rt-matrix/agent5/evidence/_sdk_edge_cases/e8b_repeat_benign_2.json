@@ -1,0 +1,25 @@
+{
+  "server_slug": "_sdk_edge_cases",
+  "label": "e8b_repeat_benign_2",
+  "captured_at_utc": "2026-07-07T10:57:54Z",
+  "request": {
+    "sdk": "openai.OpenAI.chat.completions.create",
+    "base_url": "http://127.0.0.1:8300/v1",
+    "model": "openrouter/free",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Say exactly: PING-RT-LIVE-sdk-edge-5e13fb1b7c"
+      }
+    ],
+    "max_tokens": 20
+  },
+  "response": {
+    "status": "ok",
+    "id": "chatcmpl-1783421873-CSY4Wvx3Nf9nUgJ0NUW8",
+    "content": "User wants exact output: \"PING-RT-LIVE-sdk-edge-5e13fb",
+    "model": "openrouter/free",
+    "raw_pii_in_output": []
+  },
+  "notes": ""
+}

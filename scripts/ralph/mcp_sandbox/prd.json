@@ -1,0 +1,26 @@
+{
+  "project": "MCP Sandbox Isolation — rigorous parallel adversarial testing",
+  "branch": "ralph/mcp-sandbox-isolation",
+  "broker": "http://127.0.0.1:8312 (ai_mesh_mcp_broker_2, dedicated; orgs epsilon/zeta)",
+  "invariant": "2 parallel org agents per iteration, each 6 stdio MCP servers in its OWN sandbox, actively trying to break out / read the sibling org. A story passes ONLY when its gate is green against REAL broker egress — a host-saturation crash (fetch failed/ECONNREFUSED) is NOT a pass and NOT an isolation failure; restart broker#2 and re-run.",
+  "userStories": [
+    { "id": "M1", "title": "Dedicated broker + iso gate green (bootstrap + 2 parallel workers + cross-org leak hammer)", "priority": 1, "dependencies": [], "passes": false,
+      "gate": "MCP_BROKER_URL=http://127.0.0.1:8312 node scripts/ralph/mcp_sandbox/run_iso_orgs.mjs -> runs/iso_gate.json ok==true" },
+    { "id": "M2", "title": "Cross-org marker isolation: epsilon never sees marker-adv-org-zeta and vice-versa under hammer", "priority": 2, "dependencies": ["M1"], "passes": false,
+      "gate": "iso gate cross-org-leak-clean for >=12 hammer rounds; independent re-probe both directions" },
+    { "id": "M3", "title": "Secret denylist: get_env on GATEWAY_INTERNAL_API_KEY/MCP_BROKER_INTERNAL_KEY/DATABASE_URL/AWS_SECRET_ACCESS_KEY/DJANGO_SECRET_KEY returns empty from inside any sandbox", "priority": 2, "dependencies": ["M1"], "passes": false,
+      "gate": "iso gate secret probes all empty; add new secret-name variants each rigorous round" },
+    { "id": "M4", "title": "Filesystem isolation: a sandbox cannot read the sibling org's /data, the host, or escape via ../ path traversal in server args", "priority": 3, "dependencies": ["M1"], "passes": false,
+      "gate": "new adversarial probe (own file under tests/e2e/mcp_sandbox_adversarial/) proves no cross-org/host file read; breach -> ruflo handoff (no services/mcp-broker edit)" },
+    { "id": "M5", "title": "Network isolation: a sandbox cannot reach the broker docker.sock, the sibling sandbox IP, or the public internet", "priority": 3, "dependencies": ["M1"], "passes": false,
+      "gate": "new probe proves egress blocked / per-org net isolation; breach -> handoff" },
+    { "id": "M6", "title": "Container breakout blocked: /var/run/docker.sock is NOT reachable from inside a sandbox", "priority": 3, "dependencies": ["M1"], "passes": false,
+      "gate": "new probe proves no docker.sock access; breach is CRITICAL -> handoff" },
+    { "id": "M7", "title": "Resource isolation: a fork/mem bomb in one org does not kill or starve the sibling org's sandbox", "priority": 4, "dependencies": ["M1"], "passes": false,
+      "gate": "new probe: stress epsilon, assert zeta echo still responds; respect host 8GB cap (bounded stress)" },
+    { "id": "M8", "title": "Injection-resistant RPC: command/args/server_slug injection and a foreign {org} in the rpc path cannot cross sandboxes or run host commands", "priority": 4, "dependencies": ["M1"], "passes": false,
+      "gate": "new probe sends crafted command/args/foreign-org-path; assert rejected/contained; breach -> handoff" },
+    { "id": "M9", "title": "Frontend parallel orgs: MCPConnectorPanel stdio presets register+sync+tools/call for 2 orgs on :8312, no cross-org leak in the UI", "priority": 5, "dependencies": ["M1"], "passes": false,
+      "gate": "NODE_PATH=tests/e2e/node_modules BASE_URL=http://127.0.0.1:8180 node tests/e2e/mcp_sandbox_adversarial/frontend_parallel_orgs.mjs (run only when host load is low)" }
+  ]
+}

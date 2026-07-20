@@ -809,6 +809,45 @@
       "createdAt": "2026-06-26T05:04:51.750Z",
       "model": "haiku",
       "modelRoutedBy": "router"
+    },
+    "og-architect": {
+      "agentId": "og-architect",
+      "agentType": "architect",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "sonnet"
+      },
+      "createdAt": "2026-07-10T05:32:00.822Z",
+      "model": "sonnet",
+      "modelRoutedBy": "explicit"
+    },
+    "og-security-auditor": {
+      "agentId": "og-security-auditor",
+      "agentType": "security-auditor",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "sonnet"
+      },
+      "createdAt": "2026-07-10T05:32:01.675Z",
+      "model": "sonnet",
+      "modelRoutedBy": "explicit"
+    },
+    "og-tester": {
+      "agentId": "og-tester",
+      "agentType": "tester",
+      "status": "idle",
+      "health": 1,
+      "taskCount": 0,
+      "config": {
+        "model": "sonnet"
+      },
+      "createdAt": "2026-07-10T05:32:02.949Z",
+      "model": "sonnet",
+      "modelRoutedBy": "explicit"
     }
   },
   "version": "3.0.0"

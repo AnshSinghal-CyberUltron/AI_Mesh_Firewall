@@ -1,0 +1,10 @@
+agent: cursor-ralph-iter19
+story: P8.26
+files:
+  - scripts/mcp_multi_org_harness.py
+  - mcp-parallel/findings/p8-26/**
+  - docs/mcp/PARALLEL_CLAIMS.md
+  - .cursor/ralph/scratchpad.md
+  - scripts/ralph/mcp_progress.md
+since: 2026-07-02T09:27:00Z
+status: released

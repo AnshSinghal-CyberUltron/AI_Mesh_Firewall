@@ -54,6 +54,7 @@ def seed_policy_package(organization, *, reset: bool = False) -> dict:
         "policies_created": 0,
         "policies_existing": 0,
         "rules_added": 0,
+        "rules_updated": 0,
         "vector_created": 0,
         "vector_updated": 0,
     }
@@ -98,15 +99,38 @@ def seed_policy_package(organization, *, reset: bool = False) -> dict:
         if reset:
             policy.rules.all().delete()
 
-        existing_keys = {
-            (r.condition or {}).get("rule_key")
+        existing_by_key = {
+            (r.condition or {}).get("rule_key"): r
             for r in policy.rules.all()
             if (r.condition or {}).get("rule_key")
         }
 
         new_rules: list[Rule] = []
         for rd in build_rule_dicts(spec):
-            if rd["_rule_key"] in existing_keys:
+            existing = existing_by_key.get(rd["_rule_key"])
+            if existing is not None:
+                # Keep package rules in sync (e.g. PEM block→redact) without
+                # requiring --reset. Operator-added rules without rule_key
+                # are left untouched.
+                changed_fields: list[str] = []
+                if existing.name != rd["name"]:
+                    existing.name = rd["name"]
+                    changed_fields.append("name")
+                if existing.action != rd["action"]:
+                    existing.action = rd["action"]
+                    changed_fields.append("action")
+                if (existing.redaction_config or {}) != (rd["redaction_config"] or {}):
+                    existing.redaction_config = rd["redaction_config"]
+                    changed_fields.append("redaction_config")
+                if (existing.condition or {}) != (rd["condition"] or {}):
+                    existing.condition = rd["condition"]
+                    changed_fields.append("condition")
+                if existing.description != rd["description"]:
+                    existing.description = rd["description"]
+                    changed_fields.append("description")
+                if changed_fields:
+                    existing.save(update_fields=[*changed_fields, "updated_at"])
+                    summary["rules_updated"] += 1
                 continue
             new_rules.append(
                 Rule(

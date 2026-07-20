@@ -1,0 +1,47 @@
+{
+  "run_id": "e733a9e2",
+  "server_slug": "everything-4",
+  "label": "trigger-long-running-operation__clean",
+  "captured_at_utc": "2026-07-07T10:54:48Z",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-4",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 28,
+      "method": "tools/call",
+      "params": {
+        "name": "trigger-long-running-operation",
+        "arguments": {
+          "duration": 1,
+          "steps": 1
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "elapsed_s": 1.062,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Long running operation completed. Duration: 1 seconds, Steps: 1."
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 28
+    },
+    "classified_action": "ALLOW",
+    "compliance_tags_found": [],
+    "raw_markers_in_response": [],
+    "canary_present_in_response": false,
+    "possible_leak": false
+  },
+  "notes": "tool=trigger-long-running-operation variant=clean"
+}

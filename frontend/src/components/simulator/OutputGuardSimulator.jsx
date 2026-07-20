@@ -50,33 +50,21 @@ export function OutputGuardSimulator() {
   const [selected, setSelected] = useState(null);
   const [result, setResult] = useState(null);
   const [customText, setCustomText] = useState("");
-
-  const hallucinationMetricStyle = {
-    red: {
-      text: "text-red-700 dark:text-red-300",
-      bar: "bg-red-500",
-    },
-    amber: {
-      text: "text-amber-700 dark:text-amber-300",
-      bar: "bg-amber-500",
-    },
-    blue: {
-      text: "text-blue-700 dark:text-blue-300",
-      bar: "bg-blue-500",
-    },
-    purple: {
-      text: "text-purple-700 dark:text-purple-300",
-      bar: "bg-purple-500",
-    },
-  };
+  // handleExecute streams via engine.gatewayFetchStream, which never flips the
+  // hook's engine.executing — track a local flag so the Execute button disables
+  // in-flight (prevents overlapping streams racing on setResult).
+  const [executing, setExecuting] = useState(false);
 
   const handleExecute = async () => {
+    if (executing) return;
     const text = selected?.text || customText;
     if (!text.trim()) return;
     if (!gatewayModels.selectedModel) {
       setResult({ error: "Connect at least one model with an API key under Model Connection.", success: false });
       return;
     }
+    setExecuting(true);
+    try {
 
     const body = outputGuardChatBody(text, selected?.context_chunks || [], gatewayModels.selectedModel);
     body.stream = true;
@@ -123,6 +111,9 @@ export function OutputGuardSimulator() {
         ? normalizeOutputGuardResult(res.data, res.status)
         : { error: res.data?.message || res.data?.error || "Request failed", success: false },
     );
+    } finally {
+      setExecuting(false);
+    }
   };
 
   return (
@@ -137,7 +128,7 @@ export function OutputGuardSimulator() {
       selectedScenario={selected}
       onSelectScenario={setSelected}
       onExecute={handleExecute}
-      executing={engine.executing}
+      executing={engine.executing || executing}
       result={result}
       customInput={
         <div className="space-y-3">
@@ -207,48 +198,27 @@ export function OutputGuardSimulator() {
             )}
           </div>
 
-          {/* Hallucination meter */}
-          {result.hallucination && (
-            <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
-              <h4 className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-3">Hallucination Analysis</h4>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: "Overall Risk", value: result.hallucination.risk_score, color: "red" },
-                  { label: "Pattern Score", value: result.hallucination.pattern_score, color: "amber" },
-                  { label: "Grounding", value: result.hallucination.grounding_score, color: "blue" },
-                  { label: "Contradiction", value: result.hallucination.contradiction_score, color: "purple" },
-                ].map(({ label, value, color }) => (
-                  <div key={label}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] text-slate-600 dark:text-slate-400">{label}</span>
-                      <span className={`text-[10px] font-bold ${hallucinationMetricStyle[color].text}`}>
-                        {((value || 0) * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <div className="h-2 bg-slate-200 dark:bg-slate-900 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${hallucinationMetricStyle[color].bar} transition-all`}
-                        style={{ width: `${(value || 0) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
+          {/* Factuality — the gateway returns a single factuality_warning flag,
+              not granular grounding/pattern/contradiction sub-scores, so show the
+              honest signal instead of fabricated per-metric meters. */}
+          <div className="p-3 rounded-lg bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+            <h4 className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Factuality Check</h4>
+            {result.factuality_warning ? (
+              <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>Factuality warning raised — the model output may contain ungrounded or unverifiable claims against the provided context.</span>
               </div>
-              {result.hallucination.matched_markers?.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {result.hallucination.matched_markers.map((m, i) => (
-                    <span key={i} className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                      {m}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+            ) : (
+              <div className="flex items-start gap-2 text-xs text-emerald-700 dark:text-emerald-300">
+                <Shield className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>No factuality warning raised for this response.</span>
+              </div>
+            )}
+          </div>
 
           {/* Raw vs Safe text comparison */}
           {result.safe_text && result.raw_text !== result.safe_text && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <h4 className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Raw Output</h4>
                 <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-[11px] text-slate-700 dark:text-slate-300 max-h-48 overflow-auto whitespace-pre-wrap">
@@ -262,23 +232,6 @@ export function OutputGuardSimulator() {
                 <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-950 border border-emerald-500/30 text-[11px] text-slate-700 dark:text-slate-300 max-h-48 overflow-auto whitespace-pre-wrap">
                   {result.safe_text}
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Redacted tokens */}
-          {result.redacted_tokens?.length > 0 && (
-            <div>
-              <h4 className="text-xs font-medium text-amber-700 dark:text-amber-300 mb-2">Redacted Tokens ({result.redacted_tokens.length})</h4>
-              <div className="space-y-1">
-                {result.redacted_tokens.map((t, i) => (
-                  <div key={i} className="flex items-center gap-2 p-1.5 bg-amber-500/10 rounded text-[11px]">
-                    <span className="text-slate-600 dark:text-slate-400 line-through font-mono">{t.original}</span>
-                    <span className="text-slate-500 dark:text-slate-500">→</span>
-                    <span className="text-amber-700 dark:text-amber-300 font-mono">{t.replacement}</span>
-                    <span className="text-slate-500 dark:text-slate-500 text-[10px] ml-auto">pos {t.start}–{t.end}</span>
-                  </div>
-                ))}
               </div>
             </div>
           )}
@@ -310,6 +263,14 @@ export function OutputGuardSimulator() {
               <span className="font-semibold">Escalation Required</span> — High-confidence threat detected, requires human review
             </div>
           )}
+        </div>
+      )}
+      {result?.error && (
+        <div className="px-4 py-3">
+          <div className="flex items-start gap-2 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-700 dark:text-red-300">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span className="break-words">{result.error}</span>
+          </div>
         </div>
       )}
     </SimulatorShell>

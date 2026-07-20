@@ -1,0 +1,12 @@
+{
+  "agent": "cursor-ralph-iter11",
+  "story": "P4.11",
+  "scope": [
+    "services/mcp-broker/sandbox-image/agent/tests/**",
+    "docs/mcp/gateway-integration-checklist.md",
+    "docs/mcp/SANDBOX_TRANSPORT_CONTRACT.md",
+    ".cursor/ralph/scratchpad.md"
+  ],
+  "since": "2026-07-02T16:00:00Z",
+  "status": "released"
+}

@@ -39,10 +39,25 @@ async def reap_idle_sandboxes(
     cfg = config or ReaperConfig.from_env()
     stopped: list[str] = []
     for entry in registry.idle_entries(cfg.idle_timeout, now=now):
-        LOG.info("Reaping idle sandbox for org=%s", entry.org_slug)
-        docker_manager.stop(entry.org_slug)
-        registry.remove(entry.org_slug)
-        stopped.append(entry.org_slug)
+        # Per-entry guard: a transient Docker error stopping one sandbox must not
+        # abort the whole sweep (or kill the reaper) — item #24. Keep the entry so
+        # the next sweep retries it.
+        try:
+            # CHG-0127: RE-CHECK idleness right before stopping. idle_entries snapshots
+            # the set once; each per-entry stop below awaits, so a request that arrives
+            # mid-sweep and touch()es this sandbox would otherwise be killed on a stale
+            # snapshot (dropping its in-flight call). Skip any sandbox reactivated since.
+            if not registry.is_idle(entry.org_slug, cfg.idle_timeout, now=now):
+                LOG.info(
+                    "Reaper skip: org=%s reactivated since sweep snapshot", entry.org_slug
+                )
+                continue
+            LOG.info("Reaping idle sandbox for org=%s", entry.org_slug)
+            await asyncio.to_thread(docker_manager.stop, entry.org_slug)
+            registry.remove(entry.org_slug)
+            stopped.append(entry.org_slug)
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("Reaper failed to stop sandbox org=%s (will retry): %s", entry.org_slug, exc)
     return stopped
 
 
@@ -53,7 +68,15 @@ async def _reaper_loop(
 ) -> None:
     while True:
         await asyncio.sleep(config.interval_seconds)
-        await reap_idle_sandboxes(registry, docker_manager, config=config)
+        # item #24: reconcile restart-orphaned containers into the registry, then
+        # reap idle ones. Wrap the whole sweep so ANY error (Docker APIError, etc.)
+        # is logged and the reaper CONTINUES next interval instead of dying
+        # permanently for the process lifetime.
+        try:
+            await asyncio.to_thread(docker_manager.reconcile_registry)
+            await reap_idle_sandboxes(registry, docker_manager, config=config)
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("Reaper sweep error (continuing next interval): %s", exc)
 
 
 def start_reaper(

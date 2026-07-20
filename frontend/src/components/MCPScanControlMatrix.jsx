@@ -349,7 +349,7 @@ const TIER2_OPTIONS = [
   { value: "disabled", label: "Disabled", payload: false },
 ];
 
-export function MCPScanControlMatrix({ fetchWithAuth, servers = [] }) {
+export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsChanged }) {
   const { toast } = useToast();
 
   const [controls, setControls] = useState([]);
@@ -372,13 +372,17 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [] }) {
       const res = await fetchWithAuth("/api/mcp-connector/scan-controls/");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setControls(Array.isArray(data) ? data : []);
+      const rows = Array.isArray(data) ? data : (data.results ?? []);
+      setControls(rows);
+      if (typeof onControlsChanged === "function") {
+        onControlsChanged(rows.length > 0);
+      }
     } catch (e) {
       setError(e.message || "Failed to load scan controls");
     } finally {
       setLoading(false);
     }
-  }, [fetchWithAuth]);
+  }, [fetchWithAuth, onControlsChanged]);
 
   const loadFirewall = useCallback(async () => {
     try {
@@ -518,17 +522,32 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [] }) {
     setTier2Saving(true);
     setError(null);
     try {
-      const nextConfig = { ...(firewallConfig || {}), mcp_tier2_enabled: value };
+      // CP28: PUT ONLY the changed field (the endpoint is a documented partial
+      // update). Re-sending the whole firewallConfig re-validated unrelated
+      // siblings (e.g. a stale `allowed_models` referencing a now-disconnected
+      // model), which 400'd the Tier-2 toggle for reasons that have nothing to do
+      // with Tier-2. value: null=Inherit, true=Enabled, false=Disabled.
       const res = await fetchWithAuth("/api/firewall/config/", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nextConfig),
+        body: JSON.stringify({ mcp_tier2_enabled: value }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const updated = await res.json().catch(() => nextConfig);
-      setFirewallConfig(updated);
-      setMcpTier2(updated.mcp_tier2_enabled);
-      toast("Org Tier-2 setting saved", { tone: "success" });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const err = await res.json();
+          detail = err?.mcp_tier2_enabled?.[0] || err?.detail || detail;
+        } catch { /* keep status */ }
+        throw new Error(detail);
+      }
+      const updated = await res.json().catch(() => ({ mcp_tier2_enabled: value }));
+      setFirewallConfig((prev) => ({ ...(prev || {}), ...updated }));
+      setMcpTier2(updated.mcp_tier2_enabled ?? value);
+      toast(
+        value === null ? "Tier-2 set to Inherit (org default)"
+          : value ? "Tier-2 enabled for this org" : "Tier-2 disabled for this org",
+        { tone: "success" },
+      );
     } catch (e) {
       setError(e.message);
       toast(e.message || "Failed to save Tier-2 setting", { tone: "error" });
@@ -682,7 +701,7 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [] }) {
               <EmptyState
                 icon={Shield}
                 title="No scan controls yet"
-                description="Defaults apply: the Tier-1 static gate is on and Tier-2 is off. Add a control to customize scanning per org, server, or tool."
+                description="Scanning is off while there are zero controls — no Tier-1, no Tier-2, no compliance tagging. Add a control to turn on scanning per org, server, or tool."
                 action={
                   <Button onClick={openCreate}>
                     <Plus className="h-4 w-4" />

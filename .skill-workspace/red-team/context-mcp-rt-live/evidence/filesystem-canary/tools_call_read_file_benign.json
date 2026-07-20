@@ -1,0 +1,47 @@
+{
+  "server_slug": "filesystem-canary",
+  "label": "tools_call_read_file_benign",
+  "captured_at_utc": "2026-07-07T10:46:01Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/filesystem-canary",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "read_file",
+        "arguments": {
+          "input": "benign RT-LIVE-filesystem-canary-ed59600d42"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:46:00 GMT",
+      "server": "uvicorn",
+      "content-length": "320",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Error: Invalid arguments for read_file: [\n  {\n    \"expected\": \"string\",\n    \"code\": \"invalid_type\",\n    \"path\": [\n      \"path\"\n    ],\n    \"message\": \"Invalid input: expected string, received undefined\"\n  }\n]"
+          }
+        ],
+        "isError": true
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    }
+  },
+  "notes": ""
+}

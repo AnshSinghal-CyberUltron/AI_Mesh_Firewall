@@ -1,0 +1,46 @@
+{
+  "server_slug": "cp09-ens8do",
+  "label": "tools_call_get-env_benign",
+  "captured_at_utc": "2026-07-07T10:55:40Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/cp09-ens8do",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "get-env",
+        "arguments": {}
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:40 GMT",
+      "server": "uvicorn",
+      "content-length": "153",
+      "content-type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Response from 'get-env' matched compliance tags: INFRA."
+          }
+        ],
+        "isError": true
+      }
+    },
+    "_latency_ms": 56.3
+  },
+  "notes": ""
+}

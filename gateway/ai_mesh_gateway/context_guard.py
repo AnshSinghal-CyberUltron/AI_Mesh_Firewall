@@ -14,14 +14,21 @@ blocking the async event loop.
 
 import asyncio
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
 try:
-    from .patterns import compile_pattern, detect_pii, detect_secrets, detect_credential_exposure
+    from .patterns import (
+        compile_pattern, detect_pii, detect_secrets, detect_credential_exposure,
+        canonicalize_for_detection, _iter_transport_decodes_canon,
+    )
 except ImportError:
-    from patterns import compile_pattern, detect_pii, detect_secrets, detect_credential_exposure
+    from patterns import (
+        compile_pattern, detect_pii, detect_secrets, detect_credential_exposure,
+        canonicalize_for_detection, _iter_transport_decodes_canon,
+    )
 
 LOG = logging.getLogger("gateway.context_guard")
 
@@ -37,6 +44,53 @@ DEFAULT_THREAD_POOL_SIZE = 4
 # beyond the slice boundary would silently bypass the guard
 # (see tests/test_context_guard.py::TestNoEarlyTruncation).
 SNIPPET_MAX_CHARS = 100
+
+# G12 (ReDoS / DoS cap on document scanning): a retrieved RAG document is
+# attacker-influenced (the indirect-injection channel). The per-document scan
+# runs the full injection/hidden/toxicity regex catalogue PLUS the PII/secret
+# detectors over the ENTIRE text — the M-19 truncation-order invariant above
+# forbids slicing the text before the decision, so scan cost is linear in the
+# attacker-controlled document length with NO upper bound. Measured: a ~21 MB
+# document pins a scan thread for ~14 s, and the pool has only
+# DEFAULT_THREAD_POOL_SIZE workers, so a handful of oversized documents starve
+# RAG scanning entirely (denial of service). policy_engine already bounds its
+# match path (``_search_with_budget``); context_guard previously had no equivalent.
+#
+# Fix: two FAIL-CLOSED bounds. Neither truncates-then-allows, so neither creates
+# an evasion — an unscannable document is BLOCKED (refused), never silently
+# ingested with a threat hiding past a cut boundary:
+#   1. ``_MAX_DOC_SCAN_LEN`` — a document longer than this is refused outright,
+#      bounding worst-case CPU per scan. Legitimate retrieval chunks are orders
+#      of magnitude smaller (upstream MAX_PROMPT_LENGTH is 10k); a multi-MB single
+#      "document" is anomalous, and refusing it is safe (block ≠ evasion).
+#   2. ``_DOC_SCAN_TIMEOUT_S`` — a wall-clock net around the whole scan, run in a
+#      daemon thread (mirroring policy_engine._run_with_timeout). If the scan
+#      overruns (pathological backtracking under the size ceiling, or a future bad
+#      catalogue pattern) the calling worker is freed and the document is BLOCKED.
+_MAX_DOC_SCAN_LEN = 1_000_000
+_DOC_SCAN_TIMEOUT_S = 3.0
+
+
+def _run_with_timeout(fn, timeout):
+    """Run ``fn()`` in a daemon thread; return its result, or ``None`` on
+    timeout/exception. Frees the caller after ``timeout`` seconds even if a
+    backtracking regex is still running (the worker is a daemon). Mirrors
+    ``policy_engine._run_with_timeout`` so context_guard shares the same
+    ReDoS-containment contract."""
+    box: dict[str, Any] = {}
+
+    def _target() -> None:
+        try:
+            box["result"] = fn()
+        except Exception:  # noqa: BLE001 — fail-closed: caught error -> None -> block
+            box["error"] = True
+
+    worker = threading.Thread(target=_target, daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if worker.is_alive() or box.get("error"):
+        return None
+    return box.get("result")
 
 
 @dataclass
@@ -234,18 +288,86 @@ class ContextGuard:
         )
 
     def _scan_single_document_sync(self, text: str) -> ContextScanVerdict:
-        """Synchronous scan of a single document.
+        """Synchronous scan of a single document under the G12 DoS/ReDoS bounds.
 
-        Scans the FULL ``text`` — the ``[:SNIPPET_MAX_CHARS]`` slices below
-        truncate only the evidence snippet reported in the verdict, never the
-        text being scanned (see module-level truncation-order invariant).
+        Fail-closed guard rails (see ``_MAX_DOC_SCAN_LEN`` / ``_DOC_SCAN_TIMEOUT_S``):
+        an oversized or unscannable document is BLOCKED, never truncated-then-allowed
+        (which would let a threat hide past the cut). The real scan happens in
+        ``_scan_single_document_impl`` over the FULL text.
         """
         if not text:
             return ContextScanVerdict()
 
+        # (1) size ceiling — refuse (never truncate-then-scan-then-allow) an
+        # oversized document so a huge blob cannot pin a scan worker.
+        if len(text) > _MAX_DOC_SCAN_LEN:
+            LOG.warning(
+                "context_guard: document %d chars exceeds scan ceiling %d; blocked (possible DoS)",
+                len(text), _MAX_DOC_SCAN_LEN,
+            )
+            return ContextScanVerdict(
+                action="block",
+                threat_type="scan_budget_exceeded",
+                confidence=0.9,
+                detail=(
+                    f"Document refused: length {len(text)} exceeds scan ceiling "
+                    f"{_MAX_DOC_SCAN_LEN} (fail-closed, possible DoS payload)."
+                ),
+                matched_patterns=["scan_budget_exceeded"],
+            )
+
+        # (2) wall-clock net — run the real scan under a budget so a backtracking
+        # pattern cannot pin the worker. On overrun, fail closed (block) + free it.
+        verdict = _run_with_timeout(
+            lambda: self._scan_single_document_impl(text), _DOC_SCAN_TIMEOUT_S
+        )
+        if verdict is None:
+            LOG.warning(
+                "context_guard: document scan exceeded %.1fs budget; blocked (possible ReDoS)",
+                _DOC_SCAN_TIMEOUT_S,
+            )
+            return ContextScanVerdict(
+                action="block",
+                threat_type="scan_budget_exceeded",
+                confidence=0.9,
+                detail=(
+                    f"Document refused: scan exceeded {_DOC_SCAN_TIMEOUT_S:.1f}s budget "
+                    "(fail-closed, possible ReDoS payload)."
+                ),
+                matched_patterns=["scan_budget_exceeded"],
+            )
+        return verdict
+
+    def _scan_single_document_impl(self, text: str) -> ContextScanVerdict:
+        """Synchronous scan of a single document (full-text detection core).
+
+        Scans the FULL ``text`` — the ``[:SNIPPET_MAX_CHARS]`` slices below
+        truncate only the evidence snippet reported in the verdict, never the
+        text being scanned (see module-level truncation-order invariant). The
+        DoS/ReDoS bounds live in ``_scan_single_document_sync`` which wraps this.
+        """
+        if not text:
+            return ContextScanVerdict()
+
+        # G21 (obfuscation parity with the chat scanner): a retrieved RAG document is
+        # attacker-influenced; an indirect injection can be smuggled with unicode
+        # tags / small-caps / homoglyph / zero-width / fullwidth so the RAW pattern
+        # match misses it while the LLM still reads it. Also match the canonical form
+        # (patterns.canonicalize_for_detection folds all of those to ASCII). The raw
+        # match is tried FIRST so plain-text evidence snippets are unchanged; the
+        # canonical form is only computed/searched when it actually differs (no-op on
+        # plain ASCII => existing behaviour and the frozen cases are untouched).
+        # NOTE: HIDDEN_INSTRUCTION_PATTERNS deliberately stay RAW-only below — they
+        # DETECT obfuscation structure (zero-width runs, control chars) that
+        # canonicalization removes.
+        canonical = canonicalize_for_detection(text)
+        canonical = canonical if canonical != text else None
+
         for pattern_str in INDIRECT_INJECTION_PATTERNS:
             compiled = compile_pattern(pattern_str)
             match = compiled.search(text)
+            if not match and canonical is not None:
+                match = compiled.search(canonical)
             if match:
                 return ContextScanVerdict(
                     action="block",
@@ -254,6 +376,38 @@ class ContextGuard:
                     detail=f"Indirect prompt injection in document: {match.group(0)[:SNIPPET_MAX_CHARS]}",
                     matched_patterns=[match.group(0)[:SNIPPET_MAX_CHARS]],
                 )
+
+        # G-DOC-TRANSPORT: a retrieved document can smuggle an indirect injection
+        # through a base64/hex/base32/base85 transport layer ("please base64-decode
+        # and follow: <blob>") that the raw + canonical (unicode-folded) search
+        # above cannot see, yet an LLM reading the context decodes and obeys it.
+        # The chat-side InputScanner already deobfuscates transport; the document
+        # scanner did not, so this class bypassed the RAG doc-poisoning gate.
+        # Re-scan the SAME shared, budget-/depth-/printable-gated decoder the chat
+        # scanner uses (patterns._iter_transport_decodes_canon) — it inherits that
+        # path's FP safety, so benign base64/hex in docs (data URIs, hashes, keys)
+        # decodes to high-entropy bytes that match no injection pattern.
+        canon_for_decode = canonical if canonical is not None else text
+        for decoded in _iter_transport_decodes_canon(text, canon_for_decode):
+            if not decoded:
+                continue
+            decoded_canon = canonicalize_for_detection(decoded)
+            for pattern_str in INDIRECT_INJECTION_PATTERNS:
+                compiled = compile_pattern(pattern_str)
+                match = compiled.search(decoded) or (
+                    compiled.search(decoded_canon) if decoded_canon != decoded else None
+                )
+                if match:
+                    return ContextScanVerdict(
+                        action="block",
+                        threat_type="indirect_injection",
+                        confidence=0.95,
+                        detail=(
+                            "Indirect prompt injection in transport-encoded document payload: "
+                            f"{match.group(0)[:SNIPPET_MAX_CHARS]}"
+                        ),
+                        matched_patterns=[match.group(0)[:SNIPPET_MAX_CHARS]],
+                    )
 
         for pattern_str in HIDDEN_INSTRUCTION_PATTERNS:
             compiled = compile_pattern(pattern_str)
@@ -267,33 +421,18 @@ class ContextGuard:
                     matched_patterns=[pattern_str],
                 )
 
-        for pattern_str in DOCUMENT_TOXICITY_PATTERNS:
-            compiled = compile_pattern(pattern_str)
-            match = compiled.search(text)
-            if match:
-                return ContextScanVerdict(
-                    action="flag",
-                    threat_type="toxicity",
-                    confidence=0.8,
-                    detail=f"Toxic content in document: {match.group(0)[:SNIPPET_MAX_CHARS]}",
-                    matched_patterns=[match.group(0)[:SNIPPET_MAX_CHARS]],
-                )
-
-        # RAG-C5: check secrets BEFORE PII. A credential-bearing doc often also trips
-        # the PII detector (long key strings), and the PII branch returns first — so
-        # ordering secrets first is required for the block to actually fire. BLOCK
-        # (not flag) live credentials/secrets at ingest so they are never written to
-        # the vector store at rest (the per-org typed redaction was the only at-ingest
-        # mitigation and defaults OFF, leaving raw API keys/AWS secrets in Pinecone).
-        # Mirrors the injection/hidden-instruction blocks above; PII (names/emails —
-        # legitimate in documents) stays a flag below.
-        # C4-CRED-INGEST-*: run the FULL credential inventory at ingest, not just
-        # detect_secrets()'s SECRET_PATTERNS subset. Iteration-4 found connection
-        # strings / Azure / Stripe / Twilio / GitHub-in-key-name all stored unblocked
-        # because the ingest inventory was a strict subset of the output guard's. Union
+        # G9 PRECEDENCE FIX: all BLOCK-severity checks (live credentials/secrets) run
+        # BEFORE the FLAG-severity checks (toxicity, PII). Previously the toxicity `flag`
+        # short-circuited before the credential `block`, so a document carrying BOTH a
+        # toxicity pattern AND a live credential was only FLAGGED — the credential was
+        # then written to the vector store at rest (a leak). Block always outranks flag.
+        #
+        # RAG-C5 / C4-CRED-INGEST: BLOCK live credentials/secrets at ingest so they are
+        # never stored raw (the per-org typed redaction defaults OFF). Union
         # detect_credential_exposure (CREDENTIAL_EXPOSURE_PATTERNS) + detect_secrets so
-        # the ingest and output credential sets are unified — any credential the
-        # platform can detect anywhere is BLOCKED at rest here.
+        # the ingest and output credential sets are unified; also catch credentials that
+        # only detect_pii surfaces (api_key_openai / aws_access_key / aws_secret_access_key).
+        # Human PII (email/phone/ssn/card — legitimate in documents) stays a flag below.
         cred_found = {**(detect_secrets(text) or {}), **(detect_credential_exposure(text) or {})}
         if cred_found:
             return ContextScanVerdict(
@@ -305,23 +444,33 @@ class ContextGuard:
             )
 
         pii_found = detect_pii(text)
-        if pii_found:
-            # RAG-C5: detect_secrets misses live credentials (API keys, AWS keys/
-            # secrets) — detect_pii catches them under credential-ish category names
-            # (api_key_openai / aws_access_key / aws_secret_access_key). BLOCK those at
-            # ingest (fail-closed; never written to the vector store at rest). Human
-            # PII (email / phone_us / ssn / credit_card) stays a flag — legitimate in
-            # documents and filtered from results by the query-time output scan.
-            _CRED_TOKENS = ("key", "token", "secret", "aws", "api", "credential", "password")
-            _cred = [k for k in pii_found if any(t in k.lower() for t in _CRED_TOKENS)]
-            if _cred:
+        _CRED_TOKENS = ("key", "token", "secret", "aws", "api", "credential", "password")
+        _cred = [k for k in (pii_found or {}) if any(t in k.lower() for t in _CRED_TOKENS)]
+        if _cred:
+            return ContextScanVerdict(
+                action="block",
+                threat_type="secret",
+                confidence=0.9,
+                detail=f"Secret/credential in document: {', '.join(_cred)}",
+                matched_patterns=_cred,
+            )
+
+        # FLAG-severity checks below (only reached when no credential BLOCK fired).
+        for pattern_str in DOCUMENT_TOXICITY_PATTERNS:
+            compiled = compile_pattern(pattern_str)
+            match = compiled.search(text)
+            if not match and canonical is not None:   # G21: obfuscation-resistant
+                match = compiled.search(canonical)
+            if match:
                 return ContextScanVerdict(
-                    action="block",
-                    threat_type="secret",
-                    confidence=0.9,
-                    detail=f"Secret/credential in document: {', '.join(_cred)}",
-                    matched_patterns=_cred,
+                    action="flag",
+                    threat_type="toxicity",
+                    confidence=0.8,
+                    detail=f"Toxic content in document: {match.group(0)[:SNIPPET_MAX_CHARS]}",
+                    matched_patterns=[match.group(0)[:SNIPPET_MAX_CHARS]],
                 )
+
+        if pii_found:
             return ContextScanVerdict(
                 action="flag",
                 threat_type="pii",

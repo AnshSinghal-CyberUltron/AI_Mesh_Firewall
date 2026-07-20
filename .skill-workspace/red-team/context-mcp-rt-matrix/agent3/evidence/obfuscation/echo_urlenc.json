@@ -1,0 +1,42 @@
+{
+  "server": "everything-mcp",
+  "tool": "echo",
+  "note": "url-encoded email+key",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 8,
+      "method": "tools/call",
+      "params": {
+        "name": "echo",
+        "arguments": {
+          "message": "q=?leak=redteam3.output%40corp.example&k=AKIAIOSFODNN7EXAMPLE RT3-3960c6b95f"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 8,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: SECRET."
+          }
+        ],
+        "isError": true
+      }
+    }
+  },
+  "elapsed_s": 0.07,
+  "_pii_scan": {},
+  "_raw_substring_hits": {}
+}

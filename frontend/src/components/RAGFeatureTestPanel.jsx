@@ -74,12 +74,12 @@ const COLOR_MAP = {
 function TestResultBadge({ status }) {
   if (!status) return null;
   const config = {
-    allow: { icon: CheckCircle, text: "ALLOWED", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-    block: { icon: XCircle, text: "BLOCKED", cls: "bg-red-500/10 text-red-400 border-red-500/30" },
-    rewrite: { icon: RefreshCw, text: "REWRITTEN", cls: "bg-blue-500/10 text-blue-400 border-blue-500/30" },
-    flag: { icon: AlertTriangle, text: "FLAGGED", cls: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
-    redact: { icon: Shield, text: "REDACTED", cls: "bg-purple-500/10 text-purple-400 border-purple-500/30" },
-    error: { icon: XCircle, text: "ERROR", cls: "bg-red-500/10 text-red-400 border-red-500/30" },
+    allow: { icon: CheckCircle, text: "ALLOWED", cls: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" },
+    block: { icon: XCircle, text: "BLOCKED", cls: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30" },
+    rewrite: { icon: RefreshCw, text: "REWRITTEN", cls: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30" },
+    flag: { icon: AlertTriangle, text: "FLAGGED", cls: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" },
+    redact: { icon: Shield, text: "REDACTED", cls: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30" },
+    error: { icon: XCircle, text: "ERROR", cls: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30" },
   };
   const c = config[status] || config.error;
   const Icon = c.icon;
@@ -130,7 +130,11 @@ export function RAGFeatureTestPanel() {
 
       const audit = body?.pipeline_audit;
       const stages = audit?.stages || [];
-      const finalAction = audit?.final_action || (res.status >= 400 ? "block" : "allow");
+      // A verdict is a real guardrail decision ONLY when pipeline_audit is present.
+      // Without it (HTTP error OR a malformed 2xx), show an honest "error" — never
+      // fabricate an allow/block, which would misread an infra failure as a
+      // guardrail action (e.g. a 500 must not display a red "BLOCKED" verdict).
+      const finalAction = audit?.final_action || "error";
 
       setTestResults((prev) => ({
         ...prev,
@@ -143,7 +147,7 @@ export function RAGFeatureTestPanel() {
           totalLatency: audit?.total_latency_ms,
           docsReturned: body?.documents?.length ?? 0,
           rewrittenQuery: stages.find((s) => s.rewritten_text)?.rewritten_text || null,
-          detail: body?.error || audit?.final_action || "OK",
+          detail: audit?.final_action ? (body?.error || "OK") : (body?.error || `No guardrail audit returned (HTTP ${res.status})`),
         },
       }));
     } catch (err) {
@@ -200,23 +204,23 @@ export function RAGFeatureTestPanel() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">{feature.name}</span>
                     {passedCount > 0 && (
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">{passedCount}/{featureTestCount} tested</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{passedCount}/{featureTestCount} tested</span>
                     )}
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{feature.description}</p>
                 </div>
-                <ArrowRight size={14} className={`text-slate-400 dark:text-slate-500 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                <ArrowRight size={14} className={`text-slate-500 dark:text-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
               </button>
 
               {/* Expanded test list */}
               {isExpanded && (
                 <div className="px-4 pb-4 space-y-2">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-slate-400 dark:text-slate-500">Test Scenarios</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">Test Scenarios</span>
                     <button
                       onClick={() => runAllTestsForFeature(feature)}
                       disabled={running != null}
-                      className="text-xs text-teal-400 hover:text-teal-300 transition-colors disabled:opacity-40"
+                      className="text-xs text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors disabled:opacity-40"
                     >
                       Run All
                     </button>
@@ -231,13 +235,13 @@ export function RAGFeatureTestPanel() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{tq.label}</span>
-                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">Expected: {tq.expected}</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">Expected: {tq.expected}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             {result && <TestResultBadge status={result.status} />}
                             <button
                               onClick={() => runTest(feature.id, idx, tq.query, tq.namespace ? { namespace: tq.namespace } : {})}
-                              disabled={isRunning}
+                              disabled={running != null}
                               className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white transition-all disabled:opacity-40"
                             >
                               {isRunning ? <RefreshCw size={10} className="animate-spin" /> : <Play size={10} />}
@@ -245,40 +249,40 @@ export function RAGFeatureTestPanel() {
                             </button>
                           </div>
                         </div>
-                        <p className="text-[11px] text-slate-400 dark:text-slate-500 font-mono truncate">{tq.query.length > 120 ? tq.query.slice(0, 120) + "..." : tq.query}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono truncate">{tq.query.length > 120 ? tq.query.slice(0, 120) + "..." : tq.query}</p>
 
                         {/* Result details */}
                         {result && result.status !== "error" && (
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1">
                             <div className="text-center p-1.5 bg-slate-100 dark:bg-slate-800 rounded">
-                              <div className="text-[10px] text-slate-400 dark:text-slate-500">HTTP</div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400">HTTP</div>
                               <div className="text-xs font-mono text-slate-900 dark:text-slate-100">{result.httpStatus}</div>
                             </div>
                             <div className="text-center p-1.5 bg-slate-100 dark:bg-slate-800 rounded">
-                              <div className="text-[10px] text-slate-400 dark:text-slate-500">Latency</div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400">Latency</div>
                               <div className="text-xs font-mono text-slate-900 dark:text-slate-100">{result.elapsed}ms</div>
                             </div>
                             <div className="text-center p-1.5 bg-slate-100 dark:bg-slate-800 rounded">
-                              <div className="text-[10px] text-slate-400 dark:text-slate-500">Escalation</div>
-                              <div className={`text-xs font-mono ${result.escalationLevel > 0 ? "text-amber-400" : "text-slate-900 dark:text-slate-100"}`}>L{result.escalationLevel}</div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400">Escalation</div>
+                              <div className={`text-xs font-mono ${result.escalationLevel > 0 ? "text-amber-600 dark:text-amber-400" : "text-slate-900 dark:text-slate-100"}`}>L{result.escalationLevel}</div>
                             </div>
                             <div className="text-center p-1.5 bg-slate-100 dark:bg-slate-800 rounded">
-                              <div className="text-[10px] text-slate-400 dark:text-slate-500">Docs</div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400">Docs</div>
                               <div className="text-xs font-mono text-slate-900 dark:text-slate-100">{result.docsReturned}</div>
                             </div>
                           </div>
                         )}
                         {result && result.rewrittenQuery && (
                           <div className="text-xs bg-blue-500/5 border border-blue-500/20 rounded p-2 mt-1">
-                            <span className="text-blue-400">Rewritten:</span>
+                            <span className="text-blue-600 dark:text-blue-400">Rewritten:</span>
                             <span className="text-slate-700 dark:text-slate-300 ml-1 font-mono">{result.rewrittenQuery}</span>
                           </div>
                         )}
                         {result && result.status === "error" && (
-                          <div className="text-xs text-red-400 mt-1">{result.detail}</div>
+                          <div className="text-xs text-red-600 dark:text-red-400 mt-1">{result.detail}</div>
                         )}
                         {result && result.stages && result.stages.length > 0 && (
-                          <div className="flex items-center gap-1 mt-1">
+                          <div className="flex items-center gap-1 mt-1 overflow-x-auto">
                             {result.stages.map((s, si) => {
                               const stageAction = s.action || "allow";
                               const stageColor = stageAction === "allow" ? "bg-emerald-500" : stageAction === "block" ? "bg-red-500" : stageAction === "rewrite" ? "bg-blue-500" : "bg-amber-500";
@@ -288,7 +292,7 @@ export function RAGFeatureTestPanel() {
                                     <div className={`w-6 h-6 rounded-full ${stageColor} flex items-center justify-center`}>
                                       <span className="text-[10px] text-white font-bold">{(s.name || "").charAt(0).toUpperCase()}</span>
                                     </div>
-                                    <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{s.name}</div>
+                                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{s.name}</div>
                                   </div>
                                   {si < result.stages.length - 1 && <ArrowRight size={8} className="text-slate-500 dark:text-slate-500 mx-0.5" />}
                                 </div>

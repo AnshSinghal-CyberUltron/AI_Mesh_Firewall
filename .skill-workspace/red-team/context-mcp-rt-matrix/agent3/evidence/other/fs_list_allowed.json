@@ -1,0 +1,39 @@
+{
+  "server": "filesystem-canary",
+  "tool": "list_allowed_directories",
+  "note": "list allowed dirs (info disclosure check)",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/filesystem-canary",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 15,
+      "method": "tools/call",
+      "params": {
+        "name": "list_allowed_directories",
+        "arguments": {}
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Allowed directories:\n/tmp"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 15
+    }
+  },
+  "elapsed_s": 0.041,
+  "_pii_scan": {},
+  "_raw_substring_hits": {}
+}

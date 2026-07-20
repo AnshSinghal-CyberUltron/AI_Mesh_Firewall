@@ -71,11 +71,16 @@ bash scripts/publish-stack-ready-metric.sh 0 || true
 # verifies them (docker-compose.yml passes it to control/gateway/workers).
 [[ -n "${POLICY_SIGNING_KEY:-}" ]] || die "set POLICY_SIGNING_KEY in .env (required by control + gateway for policy bundle signing)"
 
-export FRONTEND_ORIGIN="${FRONTEND_ORIGIN:-https://${FRONTEND_HOST:-aimeshfirewall.zeroshield.ai}}"
-export BACKEND_PUBLIC_URL="${BACKEND_PUBLIC_URL:-https://${BACKEND_HOST:-aimeshbackend.zeroshield.ai}}"
-export GATEWAY_PUBLIC_URL="${GATEWAY_PUBLIC_URL:-https://${GATEWAY_HOST:-aimeshgateway.zeroshield.ai}}"
-export GATEWAY_CORS_ORIGINS="${GATEWAY_CORS_ORIGINS:-${FRONTEND_ORIGIN},${BACKEND_PUBLIC_URL}}"
-export ALLOWED_HOSTS="${ALLOWED_HOSTS:-${BACKEND_HOST},${FRONTEND_HOST},${GATEWAY_HOST},localhost,127.0.0.1,control}"
+export FRONTEND_HOST="${FRONTEND_HOST:-aimeshfirewall.zeroshield.ai}"
+export BACKEND_HOST="${BACKEND_HOST:-aimeshbackend.zeroshield.ai}"
+export GATEWAY_HOST="${GATEWAY_HOST:-aimeshgateway.zeroshield.ai}"
+export FRONTEND_ORIGIN="${FRONTEND_ORIGIN:-https://${FRONTEND_HOST}}"
+export BACKEND_PUBLIC_URL="${BACKEND_PUBLIC_URL:-https://${BACKEND_HOST}}"
+export GATEWAY_PUBLIC_URL="${GATEWAY_PUBLIC_URL:-https://${GATEWAY_HOST}}"
+export GATEWAY_CORS_ORIGINS="${GATEWAY_CORS_ORIGINS:-${FRONTEND_ORIGIN},${BACKEND_PUBLIC_URL},${GATEWAY_PUBLIC_URL}}"
+export ASGI_ALLOWED_ORIGINS="${ASGI_ALLOWED_ORIGINS:-${FRONTEND_ORIGIN},${BACKEND_PUBLIC_URL},${GATEWAY_PUBLIC_URL}}"
+export CORS_ALLOWED_ORIGINS="${CORS_ALLOWED_ORIGINS:-${FRONTEND_ORIGIN},${BACKEND_PUBLIC_URL},${GATEWAY_PUBLIC_URL}}"
+export ALLOWED_HOSTS="${ALLOWED_HOSTS:-${BACKEND_HOST},${FRONTEND_HOST},${GATEWAY_HOST},localhost,127.0.0.1,control,gateway}"
 
 # Production guard: Django ALLOWED_HOSTS must be a concrete host list — never
 # empty and never the '*' wildcard (Host-header spoofing / cache poisoning).
@@ -152,8 +157,13 @@ EOF
   sudo sysctl -p /etc/sysctl.d/99-ai-mesh.conf 2>/dev/null || true
 fi
 
+echo "==> Ensure MCP sandbox Docker network exists"
+bash "${ROOT}/scripts/ensure_mcp_sandbox_network.sh" 2>/dev/null \
+  || docker network create mcp_sandbox_bridge 2>/dev/null \
+  || true
+
 echo "==> Pull application images from ECR"
-"${COMPOSE[@]}" pull gateway control workers workers-beat nginx
+"${COMPOSE[@]}" pull gateway control workers workers-beat nginx mcp-broker mcp-sandbox-image
 # Demo is OPTIONAL and isolated: a missing/failed demo image must never abort the
 # platform deploy. Pull tolerantly (it 502s behind nginx if absent — never crashes it).
 "${COMPOSE[@]}" pull demo 2>/dev/null \
@@ -167,37 +177,38 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 
+CONTROL_MANAGE_PY="/app/control/manage.py"
+
 echo "==> Control + migrations"
 "${COMPOSE[@]}" up -d --no-build control
-for _ in $(seq 1 60); do
+for _ in $(seq 1 45); do
   curl -sf "http://127.0.0.1:8100/api/health/" >/dev/null 2>&1 && break
   sleep 2
 done
-# Entrypoint already runs migrate + ensure_zeroshield_admin; keep explicit migrate for older images.
-# Use 'sh -c cd ...' so this works regardless of the compose working_dir setting (which may be
-# /app/control/ai_mesh_control in the merged dev+prod config) — manage.py lives in /app/control.
-"${COMPOSE[@]}" exec -T control sh -c 'cd /app/control && python manage.py migrate --noinput'
+curl -sf "http://127.0.0.1:8100/api/health/" >/dev/null 2>&1 \
+  || die "control not healthy on :8100 — check: ${COMPOSE[*]} logs control --tail=80"
+"${COMPOSE[@]}" exec -T control python "${CONTROL_MANAGE_PY}" migrate --noinput
 
 if [[ "${SKIP_ADMIN:-}" != "1" ]]; then
-  if [[ -z "${ZEROSHIELD_ADMIN_PASSWORD:-}" ]]; then
-    echo "WARNING: ZEROSHIELD_ADMIN_PASSWORD unset — admin may use dev default on first create only."
-  fi
-  "${COMPOSE[@]}" exec -T control sh -c "cd /app/control && python manage.py ensure_zeroshield_admin ${ZEROSHIELD_ADMIN_PASSWORD:+--password '$ZEROSHIELD_ADMIN_PASSWORD'}" || true
+  "${COMPOSE[@]}" exec -T control python "${CONTROL_MANAGE_PY}" ensure_zeroshield_admin \
+    ${ZEROSHIELD_ADMIN_PASSWORD:+--password "$ZEROSHIELD_ADMIN_PASSWORD"} || true
 fi
 
 if [[ "${SKIP_PII_SEED:-}" != "1" ]] && [[ -n "${SEED_PII_POLICY_ORG_SLUG:-}" ]]; then
   echo "==> PII policy package (org slug=${SEED_PII_POLICY_ORG_SLUG})"
-  "${COMPOSE[@]}" exec -T control sh -c "cd /app/control && python manage.py seed_pii_policy_package --org-slug '${SEED_PII_POLICY_ORG_SLUG}' ${RESET_PII_SEED:+--reset}" || true
+  "${COMPOSE[@]}" exec -T control python "${CONTROL_MANAGE_PY}" seed_pii_policy_package \
+    --org-slug "${SEED_PII_POLICY_ORG_SLUG}" \
+    ${RESET_PII_SEED:+--reset} || true
 fi
 
-echo "==> Gateway, workers, nginx (restart: unless-stopped)"
-"${COMPOSE[@]}" --profile workers up -d --no-build gateway workers workers-beat nginx
+echo "==> MCP broker + sidecars, gateway, workers, nginx (restart: unless-stopped)"
+# Prod overlay clears the base `workers` / `services` profiles — no --profile needed.
+"${COMPOSE[@]}" up -d --no-build \
+  mcp-sandbox-image mcp-broker guardrails vector-retrieval \
+  gateway workers workers-beat nginx
 
 # Optional demo app (before nginx reload so the /demo/ upstream is resolvable).
 # Tolerant: failure here never blocks the platform deploy.
-if [[ -z "${DEMO_GATEWAY_KEY:-}" ]]; then
-  echo "WARNING: DEMO_GATEWAY_KEY is empty — /demo/ will start but AI calls will fail until a gateway key is set."
-fi
 "${COMPOSE[@]}" up -d --no-build demo 2>/dev/null \
   || echo "    (demo service not started — /demo/ unavailable; platform unaffected)"
 
@@ -240,30 +251,11 @@ if curl -sfk -o /dev/null "https://127.0.0.1/gw-health" 2>/dev/null; then
   _check_v1_proxy https 443 -k
 fi
 
-# Optional /demo smoke (Basic Auth + demo health). Non-fatal: platform deploy still succeeds.
-_demo_user="${DEMO_AUTH_USER:-superuser}"
-_demo_pass="${DEMO_AUTH_PASSWORD:-}"
-if [[ -n "${_demo_pass}" ]]; then
-  if curl -sf -u "${_demo_user}:${_demo_pass}" -H "Host: ${FH}" "http://127.0.0.1/demo/api/health" >/dev/null 2>&1; then
-    echo "    /demo/api/health OK (HTTP)"
-  else
-    echo "WARNING: /demo/api/health failed on HTTP (demo may be down or misconfigured)"
-  fi
-  if curl -sfk -u "${_demo_user}:${_demo_pass}" -H "Host: ${FH}" "https://127.0.0.1/demo/api/health" >/dev/null 2>&1; then
-    echo "    /demo/api/health OK (HTTPS)"
-  else
-    echo "WARNING: /demo/api/health failed on HTTPS (check nginx-ssl /demo block or demo container)"
-  fi
-else
-  echo "WARNING: DEMO_AUTH_PASSWORD unset — skipping /demo smoke check"
-fi
-
 cat <<EOF
 
 Stack is up (ECR ${IMAGE_TAG}).
 
   UI       : https://${FH}  (nginx :443)
-  Demo     : https://${FH}/demo/  (HTTP Basic Auth + superuser login)
   Control  : https://${BH}/api/
   Gateway  : https://${GH}/v1/
 

@@ -1,0 +1,47 @@
+{
+  "server_slug": "playwright-mcp",
+  "label": "tools_call_browser_snapshot_pii",
+  "captured_at_utc": "2026-07-07T10:45:57Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/playwright-mcp",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "browser_snapshot",
+        "arguments": {
+          "target": "SSN=123-45-6789 email=redteam.live@corp.example key=AKIAIOSFODNN7EXAMPLE RT-LIVE-playwright-mcp-fab7db1824"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:45:56 GMT",
+      "server": "uvicorn",
+      "content-length": "182",
+      "content-type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Tool 'browser_snapshot' arguments matched compliance tags: GDPR, HIPAA, PII, SECRET."
+          }
+        ],
+        "isError": true
+      }
+    }
+  },
+  "notes": ""
+}

@@ -49,6 +49,22 @@ from ai_mesh_gateway.platform_models import DEFAULT_HAIKU_45, is_platform_model_
 
 
 class BedrockRoutingAdjudicationTests(unittest.TestCase):
+    def setUp(self):
+        # These tests exercise the Bedrock ADJUDICATOR path specifically. The H5
+        # perf fastpath (llm_router.py:1807) short-circuits the adjudicator for a
+        # single-candidate / low-risk request, so without forcing adjudication
+        # these would silently take the deterministic ``weighted_fastpath`` and the
+        # adjudicator assertions (converse called, decision_source) would never be
+        # exercised. Force the documented operator override so the adjudicator runs.
+        self._prev_adj_always = os.environ.get("ROUTING_ADJUDICATOR_ALWAYS")
+        os.environ["ROUTING_ADJUDICATOR_ALWAYS"] = "true"
+
+    def tearDown(self):
+        if self._prev_adj_always is None:
+            os.environ.pop("ROUTING_ADJUDICATOR_ALWAYS", None)
+        else:
+            os.environ["ROUTING_ADJUDICATOR_ALWAYS"] = self._prev_adj_always
+
     def _mock_bedrock_converse(self, selected_model: str):
         mock_client = MagicMock()
         mock_client.converse.return_value = {
@@ -86,7 +102,7 @@ class BedrockRoutingAdjudicationTests(unittest.TestCase):
         router.acompletion = forbidden_acompletion
         mock_client = self._mock_bedrock_converse("org-haiku")
 
-        with patch.dict(os.environ, {"BEDROCK_ADJUDICATOR_MODEL": DEFAULT_HAIKU_45}, clear=False):
+        with patch.dict(os.environ, {"BEDROCK_ADJUDICATOR_MODEL": DEFAULT_HAIKU_45, "ROUTING_ADJUDICATOR_ALWAYS": "true"}, clear=False):
             with patch("ai_mesh_gateway.bedrock_client.default_bedrock_client", return_value=mock_client):
                 selection = asyncio.run(
                     router.adjudicate_model_selection(
@@ -101,6 +117,17 @@ class BedrockRoutingAdjudicationTests(unittest.TestCase):
                                 "latency_sla_ms": 900,
                                 "cost_per_1k_input_tokens": 0.0008,
                                 "risk_score": 0.05,
+                            },
+                            {
+                                "model_name": "org-haiku-alt",
+                                "model_id": "anthropic/claude-haiku-alt",
+                                "is_active": True,
+                                "compliance_tags": ["HIPAA", "GDPR"],
+                                "data_sensitivity_level": "restricted",
+                                "routing_priority": 70,
+                                "latency_sla_ms": 1100,
+                                "cost_per_1k_input_tokens": 0.0010,
+                                "risk_score": 0.08,
                             },
                             {
                                 "model_name": "gpt-5.2",
@@ -136,9 +163,10 @@ class BedrockRoutingAdjudicationTests(unittest.TestCase):
         router = LLMRouter({"org_only_inference": True})
         mock_client = self._mock_bedrock_converse("bedrock-gpt-oss-120b")
 
-        with patch("ai_mesh_gateway.bedrock_client.default_bedrock_client", return_value=mock_client):
-            selection = asyncio.run(
-                router.adjudicate_model_selection(
+        with patch.dict(os.environ, {"ROUTING_ADJUDICATOR_ALWAYS": "true"}, clear=False):
+            with patch("ai_mesh_gateway.bedrock_client.default_bedrock_client", return_value=mock_client):
+                selection = asyncio.run(
+                    router.adjudicate_model_selection(
                     routing_models=[
                         {
                             "model_name": "bedrock-gpt-oss-120b",
@@ -150,6 +178,17 @@ class BedrockRoutingAdjudicationTests(unittest.TestCase):
                             "latency_sla_ms": 900,
                             "cost_per_1k_input_tokens": 0.0008,
                             "risk_score": 0.05,
+                        },
+                        {
+                            "model_name": "bedrock-haiku-hipaa",
+                            "model_id": "bedrock/anthropic.claude-haiku",
+                            "is_active": True,
+                            "compliance_tags": ["HIPAA", "GDPR"],
+                            "data_sensitivity_level": "restricted",
+                            "routing_priority": 60,
+                            "latency_sla_ms": 700,
+                            "cost_per_1k_input_tokens": 0.0005,
+                            "risk_score": 0.1,
                         },
                         {
                             "model_name": "bedrock-llama-3.1-70b",
@@ -200,9 +239,10 @@ class BedrockRoutingAdjudicationTests(unittest.TestCase):
             },
         }
 
-        with patch("ai_mesh_gateway.bedrock_client.default_bedrock_client", return_value=mock_client):
-            selection = asyncio.run(
-                router.adjudicate_model_selection(
+        with patch.dict(os.environ, {"ROUTING_ADJUDICATOR_ALWAYS": "true"}, clear=False):
+            with patch("ai_mesh_gateway.bedrock_client.default_bedrock_client", return_value=mock_client):
+                selection = asyncio.run(
+                    router.adjudicate_model_selection(
                     routing_models=[
                         {
                             "model_name": "bedrock-gpt-oss-120b",
@@ -214,7 +254,18 @@ class BedrockRoutingAdjudicationTests(unittest.TestCase):
                             "latency_sla_ms": 850,
                             "cost_per_1k_input_tokens": 0.0008,
                             "risk_score": 0.1,
-                        }
+                        },
+                        {
+                            "model_name": "bedrock-llama-alt",
+                            "model_id": "bedrock/meta.llama-alt",
+                            "is_active": True,
+                            "compliance_tags": ["SOC2"],
+                            "data_sensitivity_level": "internal",
+                            "routing_priority": 40,
+                            "latency_sla_ms": 1200,
+                            "cost_per_1k_input_tokens": 0.0004,
+                            "risk_score": 0.2,
+                        },
                     ],
                     request_messages=[{"role": "user", "content": "Hello"}],
                     preferred_model="auto",

@@ -17,9 +17,17 @@ const DB_TYPE_LABELS = {
 };
 
 const ACTION_CONFIG = {
-  allow: { bg: "bg-emerald-100 dark:bg-emerald-800/30", text: "text-emerald-700" },
-  deny: { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700" },
-  monitor: { bg: "bg-blue-100 dark:bg-blue-800/30", text: "text-blue-700" },
+  allow: { bg: "bg-emerald-100 dark:bg-emerald-800/30", text: "text-emerald-700 dark:text-emerald-300" },
+  deny: { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700 dark:text-red-300" },
+  monitor: { bg: "bg-blue-100 dark:bg-blue-800/30", text: "text-blue-700 dark:text-blue-300" },
+};
+
+// Enabled/disabled policy-status badge styles — kept as whole strings so the
+// text/bg colours never co-occur across states (emerald-on-emerald when active,
+// slate-on-slate when disabled).
+const POLICY_STATUS_STYLES = {
+  active: "bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700 dark:text-emerald-300",
+  disabled: "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400",
 };
 
 const EMPTY_FORM = {
@@ -112,7 +120,7 @@ function VectorPolicyModal({ title, form, setForm, onSubmit, onClose, submitting
           </button>
         </div>
         {error && (
-          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700">
+          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-700 dark:text-red-300">
             {error}
           </div>
         )}
@@ -617,7 +625,7 @@ export function VectorPolicyPanel({
       </div>
 
       {compileStatus && (
-        <div className={`mb-4 p-3 rounded-lg text-xs flex items-start gap-2 ${compileStatus.success ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700" : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700"}`}>
+        <div className={`mb-4 p-3 rounded-lg text-xs flex items-start gap-2 ${compileStatus.success ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300" : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300"}`}>
           {compileStatus.success ? <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />}
           <div>
             {compileStatus.success ? "Vector policies compiled and pushed to gateway." : `Compilation failed: ${compileStatus.error}`}
@@ -629,7 +637,7 @@ export function VectorPolicyPanel({
       )}
 
       {loadError ? (
-        <div className="mb-4 p-3 rounded-lg text-xs flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700">
+        <div className="mb-4 p-3 rounded-lg text-xs flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300">
           <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <span>{loadError}</span>
         </div>
@@ -666,7 +674,7 @@ export function VectorPolicyPanel({
                   <td className="px-3 py-2.5 text-xs font-medium text-slate-800 dark:text-slate-200">{p.name}</td>
                   <td className="px-3 py-2.5">
                     <div className="text-xs font-mono text-slate-600 dark:text-slate-400">{p.collection_name}</div>
-                    {p.namespace && <div className="text-[10px] text-slate-400">{p.namespace}</div>}
+                    {p.namespace && <div className="text-[10px] text-slate-500 dark:text-slate-400">{p.namespace}</div>}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-slate-600 dark:text-slate-400">
                     {DB_TYPE_LABELS[p.vector_db_type] || p.vector_db_type}
@@ -697,7 +705,7 @@ export function VectorPolicyPanel({
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${p.enabled ? "bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700" : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"}`}>
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium ${p.enabled ? POLICY_STATUS_STYLES.active : POLICY_STATUS_STYLES.disabled}`}>
                       {p.enabled ? "Active" : "Disabled"}
                     </span>
                   </td>

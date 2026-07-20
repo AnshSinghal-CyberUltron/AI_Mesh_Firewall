@@ -42,6 +42,51 @@ _SECRET_CHARSET = frozenset(
 # unbounded API key/JWT body truncated mid-token) arms the anchor.
 _SECRET_ANCHOR_MIN = 32
 
+# G40: cap on how long the buffer will HOLD an unclosed markdown media/link opener
+# (``![alt](url…`` / ``[text](url…`` whose closing ``)`` has not arrived) so the
+# COMPLETED beacon is scanned + defanged whole instead of having its prefix released
+# early on a BUFFER_LIMIT flush. An unclosed opener cannot render; it only becomes a
+# (possibly zero-click) exfil beacon once its ``)`` arrives — but a base64/hex exfil
+# payload contains no SENTENCE_BOUNDARIES char, so a >buffer_max_bytes payload forces
+# a mid-URL flush and the clean-release path would ship the beacon prefix before the
+# ``)`` is seen. Holding to this cap keeps the opener buffered until it closes (then
+# the G13/G36 redact path neutralizes it) or, at the cap, we fail closed and defang
+# in place. Sized well above any real inline-image URL yet bounded so a never-closing
+# opener cannot grow the buffer without limit.
+MAX_OPEN_MEDIA_HOLDBACK = 8192
+
+
+def _open_media_opener_start(text: str) -> int | None:
+    """Return the char index of the start of an UNCLOSED markdown media/link opener
+    that abuts the buffer edge (``![alt](url…`` or ``[text](url…`` whose ``)`` has
+    not yet arrived), else ``None``.
+
+    Cheap + linear (no backtracking regex): only the rightmost ``](`` can be the
+    open tail. If a ``)`` follows it the construct is already closed (no open tail);
+    otherwise the opener starts at the ``[`` that pairs with that ``](`` (extended
+    left one char to include a leading ``!`` so the zero-click IMAGE form is held as
+    one unit)."""
+    j = text.rfind("](")
+    if j == -1:
+        return None
+    if text.find(")", j + 2) != -1:  # a ')' after '(' => construct already closed
+        return None
+    lb = text.rfind("[", 0, j)       # the '[' paired with this '](' ']'
+    if lb == -1:
+        return None
+    return lb - 1 if lb > 0 and text[lb - 1] == "!" else lb
+
+
+def _defang_open_media(text: str) -> str:
+    """Fail-closed neutralization for an unclosed media opener that has grown past
+    ``MAX_OPEN_MEDIA_HOLDBACK``: drop the opener + its in-progress URL so no
+    (zero-click or one-click) beacon can reassemble client-side. The trailing URL
+    bytes that arrive in later deltas carry no opener and render as inert text."""
+    start = _open_media_opener_start(text)
+    if start is None:
+        return text
+    return text[:start] + "[exfil-redacted]"
+
 
 def _trailing_secret_run(text: str) -> str:
     """Return the trailing contiguous ``_SECRET_CHARSET`` run of ``text`` (after
@@ -117,6 +162,11 @@ class SecureStreamingResponse:
         request: object | None = None,
     ) -> None:
         self._inner = inner_generator
+        # Latch: a WHOLE-RESPONSE replacement (hallucination / class-less policy
+        # redact) yields a FIXED string. _flush_buffer runs once per buffered
+        # segment, so without this latch that constant was re-emitted on every
+        # flush and the client received it 2-3 times concatenated.
+        self._response_replaced = False
         self._scanner = scanner
         self._redaction_enabled = redaction_enabled
         self._buffer_max_bytes = buffer_max_bytes
@@ -276,6 +326,21 @@ class SecureStreamingResponse:
         self._last_flush_reason = reason
 
         full_text = "".join(self._content_buffer)
+        try:
+            from output_guard import normalize_output_scan_text
+        except ImportError:
+            from .output_guard import normalize_output_scan_text
+        full_text = normalize_output_scan_text(full_text)
+        if not full_text and self._output_guard is not None:
+            # L7: whitespace-only / empty model output — release without guard scan.
+            if reason == FlushReason.DONE:
+                for original_sse, _ in self._chunk_queue:
+                    yield original_sse
+                self._clear_buffers()
+            else:
+                for original_sse in self._release_with_lookahead_tail():
+                    yield original_sse
+            return
 
         # E14 long-secret split fix (fix_hint option 2): if the PREVIOUS flush
         # redacted a secret that ran to the buffer edge, a "secret-in-progress"
@@ -323,16 +388,51 @@ class SecureStreamingResponse:
                 self._emit_degraded_telemetry(verdict, flush_reason=reason)
 
             effective_action = verdict.action
-            if verdict.action == "flag" and self._enforcement_mode == "block":
-                effective_action = "block"
-            # F2: 'rewrite' has no mid-stream analog — the non-stream path re-infers
-            # AFTER the full response exists, which streaming cannot do. Without this,
-            # a rewrite verdict matched none of the block/redact/flag handlers and
-            # fell through to the clean-release path, streaming the ORIGINAL unsafe
-            # content. Coerce rewrite -> block so the original is never delivered
-            # (the non-stream rewrite intent is "do not deliver the original").
-            if verdict.action == "rewrite":
-                effective_action = "block"
+            # F-003: §1.7 Flag means deliver + flag telemetry. Do NOT escalate
+            # flag→block when org enforcement_mode is "block" — that made the UI
+            # dishonest (Flag looked like Block at runtime).
+            # F-002: rewrite is honored at DONE (hold mid-stream; rewrite then).
+            # Never coerce rewrite→block (that withheld a rewritten completion).
+
+            if effective_action == "rewrite":
+                if reason != FlushReason.DONE:
+                    # Hold the original — do not release unsafe bytes. Keep
+                    # buffers so the final DONE flush sees the full response.
+                    LOG.info(
+                        "Output guard rewrite pending until stream end "
+                        "(type=%s, flush=%s, request_id=%s)",
+                        verdict.threat_type,
+                        reason.value,
+                        self._request_id,
+                    )
+                    return
+                try:
+                    from output_guard import rewrite_output_response_text
+                except ImportError:
+                    from .output_guard import rewrite_output_response_text
+                rewritten = rewrite_output_response_text(
+                    verdict.threat_type or "",
+                    getattr(verdict, "detail", None),
+                    original_text=full_text,
+                )
+                # Deterministic safety net: never let a residual PII/secret slip
+                # through a static/LLM rewrite on the stream path.
+                if self._scanner is not None and hasattr(self._scanner, "redact_pii"):
+                    rewritten = self._scanner.redact_pii(rewritten)
+                LOG.info(
+                    "Output guard rewrote streaming content (type=%s, flush=%s)",
+                    verdict.threat_type,
+                    reason.value,
+                )
+                self._record_output(rewritten)
+                self._record_guard_metrics("rewrite", verdict)
+                self._emit_guard_telemetry(verdict, action="rewrite", flush_reason=reason)
+                self._audit_output_guard(verdict, action="rewrite")
+                self._record_metric("rewrite")
+                for rewritten_chunk in self._yield_redacted(rewritten):
+                    yield rewritten_chunk
+                self._clear_buffers()
+                return
 
             if effective_action == "block":
                 LOG.warning(
@@ -357,7 +457,62 @@ class SecureStreamingResponse:
                 return
 
             if verdict.action == "redact":
-                redacted_text = self._scanner.redact_pii(full_text)
+                # G36: mirror the non-stream sanitize_output_for_verdict defense-in-
+                # depth on the streamed egress — neutralize output-side data-exfil
+                # channels (G13 markdown-image/link beacons) and encoded-PII runs
+                # (G35 HTML-entity/percent that decode to PII) BEFORE the PII
+                # redactor, so the beacon/encoded payload is seen unmasked and can be
+                # defanged. Streaming previously used redact_pii ALONE, so a streamed
+                # exfil beacon or encoded-PII rode out un-neutralized while the non-
+                # stream path defanged it. Lazy import avoids a circular dependency;
+                # only runs on redact verdicts (not the clean-release hot path).
+                # STREAM/NON-STREAM PARITY (2026-07-20): delegate to the SAME
+                # sanitizer the non-stream path uses. It already performs the
+                # neutralize passes (exfil beacons / encoded PII / markdown-split),
+                # the G10 semantic-span masking, the hallucination branch and the
+                # class-less whole-response replacement — and, critically, it honours
+                # verdict.redact_classes.
+                #
+                # The previous inline implementation called self._scanner.redact_pii()
+                # (a BLANKET redact_all) and so masked EVERY detector class on any
+                # redact verdict. Measured over the 27 delivered pii x cred x ip
+                # combinations: 14 STRICT VIOLATIONS and 14 stream/non-stream parity
+                # breaks — e.g. PII=flag + Credential=redact + IP=allow masked the
+                # email and the internal IP too, while non-stream masked only the
+                # key. For a class-less Policy=redact it masked three allow-classes
+                # AND still streamed the jailbreak text verbatim, because the
+                # class-less replacement branch lived only in the non-stream core.
+                from output_guard import (  # noqa: PLC0415
+                    sanitize_output_for_verdict as _sanitize_for_verdict,
+                )
+                redacted_text = _sanitize_for_verdict(
+                    full_text, verdict, redact_pii_fn=self._scanner.redact_pii
+                )
+                # Threat classes with no spans of their own (hallucination, and the
+                # class-less policy/jailbreak/toxic family) are sanitized by a
+                # WHOLE-RESPONSE replacement rather than an in-place mask. That
+                # constant must reach the client exactly once, no matter how many
+                # buffer segments the stream flushes.
+                from output_guard import (  # noqa: PLC0415
+                    _REDACTABLE_OUTPUT_CATEGORIES as _REDACTABLE_CATS,
+                )
+                _whole_response = (
+                    verdict.threat_type == "hallucination"
+                    or (
+                        verdict.threat_type not in _REDACTABLE_CATS
+                        and verdict.threat_type != "ip_leakage"
+                    )
+                )
+                if _whole_response:
+                    if self._response_replaced:
+                        # Already delivered the replacement on an earlier flush —
+                        # drop this segment instead of repeating it.
+                        self._clear_buffers()
+                        return
+                    self._response_replaced = True
+                # G46 semantic-span masking (redaction_spans + matched_values) is now
+                # performed inside _sanitize_output_core, so it is no longer repeated
+                # here — doing it twice could double-mask an already-masked span.
                 # Telemetry honesty (mirror of non-stream main.py:1566 / 7289):
                 # only claim action="redact" when the bytes actually changed. A
                 # tier-2 (semantic) verdict can target content the deterministic
@@ -413,8 +568,23 @@ class SecureStreamingResponse:
 
         verdict = await self._scanner.scan_output(full_text)
 
+        # G40 defense-in-depth: the no-OutputGuard fallback lacks the guard's
+        # exfil-channel + encoded-PII neutralization (G13/G35), so a streamed
+        # markdown-image/link beacon or encoded-PII run would ride out here
+        # un-neutralized even when the G40 buffer retention held it whole. Apply
+        # the same sanitizers before release. Strict no-op on benign text
+        # (neutralize_* early-return without a URL / encoded run), so the clean
+        # hot path and the "clean stream delivered intact" invariant are preserved.
+        from output_guard import (  # noqa: PLC0415
+            neutralize_encoded_pii,
+            neutralize_exfil_channels,
+            neutralize_markdown_split_pii,
+        )
+        neutralized = neutralize_encoded_pii(neutralize_exfil_channels(full_text))
+        neutralized = neutralize_markdown_split_pii(neutralized)  # G45: streaming parity
+
         if verdict.threat_type in ("pii", "secret") and verdict.matched_patterns:
-            redacted_text = self._scanner.redact_pii(full_text)
+            redacted_text = self._scanner.redact_pii(neutralized)
             # Telemetry honesty (mirror of non-stream main.py:1566 / 7289): a
             # matched-pattern verdict whose redactor leaves the bytes verbatim is
             # a "flag", not a redaction — never claim "redact" on a verbatim
@@ -438,6 +608,16 @@ class SecureStreamingResponse:
                 self._secret_anchor = _trailing_secret_run(full_text)
             for redacted_chunk in self._yield_redacted(redacted_text):
                 yield redacted_chunk
+            self._clear_buffers()
+        elif neutralized != full_text:
+            # G40: an exfil beacon / encoded-PII run was defanged though the
+            # scanner returned no PII/secret verdict (arbitrary-data beacon). Emit
+            # the neutralized text (single rebuilt chunk) so no auto-render / raw
+            # payload reaches the client on the fallback path.
+            self._record_output(neutralized)
+            self._record_metric("redact")
+            for chunk in self._yield_redacted(neutralized):
+                yield chunk
             self._clear_buffers()
         elif reason == FlushReason.DONE:
             self._record_output(full_text)
@@ -691,13 +871,38 @@ class SecureStreamingResponse:
         a later scan does detect the (now complete) PII, the block/redact paths
         operate on the FULL buffer (tail included) and the tail is dropped/redacted
         rather than streamed raw. A short buffer (< lookahead) retains everything
-        and releases nothing this flush (it is released at the DONE flush)."""
+        and releases nothing this flush (it is released at the DONE flush).
+
+        G40: the same "never release a partial that could complete into something
+        dangerous" rule applies to an UNCLOSED markdown media/link opener at the
+        buffer tail. A base64/hex exfil payload has no SENTENCE_BOUNDARIES char, so
+        a >buffer_max_bytes beacon forces a mid-URL BUFFER_LIMIT flush; the unclosed
+        ``![alt](url…`` matches no exfil pattern (clean verdict), so absent this
+        guard its prefix would be released and the client would reassemble the full
+        auto-render beacon. We extend the retained window to cover the whole open
+        opener so the completed beacon is scanned + defanged whole. If it grows past
+        MAX_OPEN_MEDIA_HOLDBACK (a never-closing opener), we fail closed: defang the
+        opener in place and flush the neutralized buffer."""
+        min_retain = STREAM_LOOKAHEAD_BYTES
+        full_text = "".join(c for _, c in self._chunk_queue)
+        open_start = _open_media_opener_start(full_text)
+        if open_start is not None:
+            open_tail_bytes = len(full_text[open_start:].encode("utf-8"))
+            if open_tail_bytes > MAX_OPEN_MEDIA_HOLDBACK:
+                # Pathological never-closing opener: neutralize + flush, then clear.
+                neutralized = _defang_open_media(full_text)
+                for chunk in self._yield_redacted(neutralized):
+                    yield chunk
+                self._clear_buffers()
+                return
+            # Hold the whole open opener so the completed beacon is scanned whole.
+            min_retain = max(min_retain, open_tail_bytes)
         acc = 0
         keep_from = 0
         for i in range(len(self._chunk_queue) - 1, -1, -1):
             acc += len(self._chunk_queue[i][1].encode("utf-8"))
             keep_from = i
-            if acc >= STREAM_LOOKAHEAD_BYTES:
+            if acc >= min_retain:
                 break
         release = self._chunk_queue[:keep_from]
         retain = self._chunk_queue[keep_from:]
@@ -730,19 +935,32 @@ class SecureStreamingResponse:
                 continue
 
             # FIX-C: content may be a list of content-part dicts; coerce to text.
+            # G62: a bare DICT content (non-conforming) — fold its str `text` value too
+            # (stream parity with the non-stream _content_to_text) so it isn't skipped.
             content = delta.get("content")
             if isinstance(content, list):
                 content = "".join(
                     p.get("text") or "" for p in content if isinstance(p, dict)
                 )
+            elif isinstance(content, dict):
+                _ct = content.get("text")
+                content = _ct if isinstance(_ct, str) else ""
             elif not isinstance(content, str):
                 content = ""
             parts.append(content)
 
             # FIX-A: reasoning_content streams raw to the client too — scan it.
+            # G61: coerce a non-str (structured list/dict) reasoning channel to JSON so
+            # PII in a structured reasoning block is scanned (stream parity with the
+            # non-stream _tool_arg_to_text coercion).
             reasoning = delta.get("reasoning_content")
             if isinstance(reasoning, str):
                 parts.append(reasoning)
+            elif reasoning is not None:
+                try:
+                    parts.append(json.dumps(reasoning))
+                except (TypeError, ValueError):
+                    pass
 
             # FIX-B: tool-call function name + arguments stream raw — scan them.
             tool_calls = delta.get("tool_calls")
@@ -756,9 +974,17 @@ class SecureStreamingResponse:
                     name = fn.get("name")
                     if isinstance(name, str):
                         parts.append(name)
+                    # G58: coerce a non-str (dict) arguments to JSON text (a
+                    # non-conforming provider may stream parsed args) — stream parity
+                    # with the non-stream _tool_arg_to_text coercion.
                     arguments = fn.get("arguments")
                     if isinstance(arguments, str):
                         parts.append(arguments)
+                    elif arguments is not None:
+                        try:
+                            parts.append(json.dumps(arguments))
+                        except (TypeError, ValueError):
+                            pass
 
             # R12 (#13): legacy `function_call` delta channel (pre-tool_calls API
             # shape) streams raw too — scan name + arguments (non-stream I5 parity).
@@ -768,11 +994,22 @@ class SecureStreamingResponse:
                     _v = fc.get(_k)
                     if isinstance(_v, str):
                         parts.append(_v)
+                    elif _v is not None:
+                        try:
+                            parts.append(json.dumps(_v))
+                        except (TypeError, ValueError):
+                            pass
 
             # R12 (#15): refusal channel streams raw — scan it.
+            # G61: coerce a non-str (structured) refusal to JSON too.
             refusal = delta.get("refusal")
             if isinstance(refusal, str):
                 parts.append(refusal)
+            elif refusal is not None:
+                try:
+                    parts.append(json.dumps(refusal))
+                except (TypeError, ValueError):
+                    pass
 
             # R13 (#16 stream parity): audio-output transcript streams raw too.
             _au = delta.get("audio")
@@ -793,21 +1030,25 @@ class SecureStreamingResponse:
         frame stays well-formed."""
         if not isinstance(delta, dict):
             return
-        if isinstance(delta.get("reasoning_content"), str):
+        # G61: blank a TRUTHY reasoning of ANY type (structured list/dict too).
+        if delta.get("reasoning_content"):
             delta["reasoning_content"] = ""
         for call in (delta.get("tool_calls") or []):
             if isinstance(call, dict) and isinstance(call.get("function"), dict):
                 fn = call["function"]
-                if isinstance(fn.get("arguments"), str):
+                # G58: blank a TRUTHY value of ANY type — a dict-shaped ``arguments``
+                # (parsed JSON from a non-conforming provider) was left verbatim by
+                # the str-only check, streaming its secret after a redact rebuild.
+                if fn.get("arguments"):
                     fn["arguments"] = ""
-                if isinstance(fn.get("name"), str):
+                if fn.get("name"):
                     fn["name"] = ""
         fc = delta.get("function_call")
         if isinstance(fc, dict):
             for _k in ("name", "arguments"):
-                if isinstance(fc.get(_k), str):
+                if fc.get(_k):
                     fc[_k] = ""
-        if isinstance(delta.get("refusal"), str):
+        if delta.get("refusal"):  # G61: blank any-type refusal
             delta["refusal"] = ""
         # R14: blank audio.transcript AND audio.data — the base64 audio bytes
         # carry the spoken content, so redacting only the transcript still ships

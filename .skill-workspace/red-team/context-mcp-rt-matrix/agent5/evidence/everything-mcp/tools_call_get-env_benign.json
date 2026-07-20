@@ -1,0 +1,45 @@
+{
+  "server_slug": "everything-mcp",
+  "label": "tools_call_get-env_benign",
+  "captured_at_utc": "2026-07-07T10:56:20Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "get-env",
+        "arguments": {}
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:56:19 GMT",
+      "server": "uvicorn",
+      "content-length": "657",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"NODE_OPTIONS\": \"--max-old-space-size=1536\",\n  \"UV_CACHE_DIR\": \"/var/cache/uv\",\n  \"HOME\": \"/var/cache/home\",\n  \"NPM_CONFIG_CACHE\": \"/var/npm-cache\",\n  \"UV_TOOL_BIN_DIR\": \"/var/cache/uv/bin\",\n  \"UV_TOOL_DIR\": \"/var/cache/uv/tools\",\n  \"XDG_CACHE_HOME\": \"/var/cache\",\n  \"LANG\": \"C.UTF-8\",\n  \"PATH\": \"/var/cache/uv/bin:/var/npm-cache/global/bin:/opt/agent/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n  \"npm_config_ignore_scripts\": \"true\",\n  \"MCP_REMOTE_CONFIG_DIR\": \"/data/mcp-auth\"\n}"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    },
+    "_latency_ms": 44.9
+  },
+  "notes": ""
+}

@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "blocked": {
+    "id": "296116",
+    "traceHasInputText": false,
+    "uiHasInput": true,
+    "uiHasWithheld": true,
+    "pass": true
+  },
+  "redact": {
+    "id": "296107",
+    "uiHasBeforeAfter": true,
+    "uiHasOutput": true,
+    "pass": true
+  },
+  "consoleErrors": [],
+  "feedCounts": {
+    "total": 500,
+    "block": 132,
+    "redact": 47
+  }
+}

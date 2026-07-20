@@ -1,0 +1,5 @@
+PROFILE 6c/16g (--cpus=6 --memory=16g) — item 22
+detector: gateway 6 workers / control 6 workers (cpu_budget=6, asgi_threads=12, cpu_bound=true)
+gateway6: rps=5117 p99=104ms err=0/76934 cores=6.07/6 mem=1.24GiB
+control6: rps=2039 p99=145ms err=0/34216 cores=6.31/6 mem=0.83GiB
+RAM: combined ~2GiB of 16 (< 12GiB headroom budget); OOMKilled=false both; status=running

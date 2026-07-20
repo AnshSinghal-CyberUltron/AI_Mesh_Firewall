@@ -1,0 +1,15 @@
+{
+  "id": "session-1783757653861",
+  "startedAt": "2026-07-11T08:14:13.861Z",
+  "cwd": "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway",
+  "context": {},
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "restoredAt": "2026-07-11T08:15:22.624Z",
+  "endedAt": "2026-07-11T08:18:39.714Z",
+  "duration": 265853
+}

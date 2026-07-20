@@ -1,0 +1,49 @@
+{
+  "agent": "agent1",
+  "scope": "context-assembly|least-privilege|context-minimization|cross-mcp-leakage",
+  "server_slug": "everything-5",
+  "label": "tools_call_get-structured-content_clean_plus_foreign_canary",
+  "captured_at_utc": "2026-07-07T10:55:48Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-5",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "get-structured-content",
+        "arguments": {
+          "location": "benign agent1-context-probe RT-A1-everything-5-76d4b8b379 RT-A1-filesystem-canary-45b4aa264e"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:48 GMT",
+      "server": "uvicorn",
+      "content-length": "472",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "MCP error -32602: Input validation error: Invalid arguments for tool get-structured-content: [\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"New York\",\n      \"Chicago\",\n      \"Los Angeles\"\n    ],\n    \"path\": [\n      \"location\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"New York\\\"|\\\"Chicago\\\"|\\\"Los Angeles\\\"\"\n  }\n]"
+          }
+        ],
+        "isError": true
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    }
+  },
+  "notes": ""
+}

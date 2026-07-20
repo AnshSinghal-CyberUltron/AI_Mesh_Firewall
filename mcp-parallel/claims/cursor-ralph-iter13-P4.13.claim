@@ -1,0 +1,6 @@
+agent: cursor-ralph-iter13
+story: P4.13
+scope: mcp-parallel/findings/p4-13/**, docs/mcp/PARALLEL_CLAIMS.md, .cursor/ralph/scratchpad.md
+since: 2026-07-02T15:00:00Z
+status: released
+note: Blocked on gateway wiring; findings only, no code change

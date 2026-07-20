@@ -151,6 +151,34 @@ export function resolveBrowserGatewayBaseUrl() {
 }
 
 /**
+ * Base URL for building "/gateway/{org}/mcp/{slug}/..." endpoints — used for MCP
+ * OAuth start, "Copy MCP Config", server-card URLs, and doc examples. These paths
+ * are only ever served by the real gateway process itself (proxied 1:1, never
+ * rewritten), so — unlike resolveBrowserGatewayBaseUrl() which prefers same-origin
+ * purely to dodge CORS on plain /v1 fetch() calls — this always targets the actual
+ * gateway host, which keeps the URL valid to paste into an external tool
+ * (VS Code / Cursor mcp.json) or call directly:
+ *   - LOCAL/dev browser → local gateway port (ignores any prod VITE_GATEWAY_BASE_URL
+ *     baked into the shared .env — same override as resolveBrowserGatewayBaseUrl()).
+ *   - Otherwise → the explicit dedicated gateway host (VITE_GATEWAY_BASE_URL),
+ *     preserving production behavior exactly.
+ */
+export function resolveMcpGatewayBaseUrl() {
+  if (isLocalBrowserHost()) {
+    const protocol = getBrowserProtocol();
+    const host = getBrowserHost();
+    const port = toInt(import.meta.env?.VITE_GATEWAY_PORT, 8300);
+    const local = trimTrailingSlash(buildBaseUrl({ protocol, host, port }));
+    if (isBrowserReachableUrl(local)) return local;
+  }
+
+  const explicit = trimTrailingSlash(import.meta.env?.VITE_GATEWAY_BASE_URL || "");
+  if (explicit) return explicit;
+
+  return resolveGatewayBaseUrl();
+}
+
+/**
  * Dedicated gateway host baked at build time (cross-origin fallback when same-origin /v1 proxy is broken).
  */
 export function getDedicatedGatewayFallbackUrl() {
@@ -283,7 +311,7 @@ export function toAbsoluteGatewayUrl(pathOrUrl) {
   if (!value) return "";
   if (isAbsoluteHttpUrl(value)) return value;
 
-  const base = resolveGatewayBaseUrl();
+  const base = resolveMcpGatewayBaseUrl();
   if (!base) return value;
   const normalizedPath = value.startsWith("/") ? value : `/${value}`;
   return `${base}${normalizedPath}`;
@@ -291,7 +319,7 @@ export function toAbsoluteGatewayUrl(pathOrUrl) {
 
 export function buildMcpGatewayEndpoint(gatewaySlug, orgSlug = "zeroshield") {
   if (!gatewaySlug) return "";
-  const base = resolveGatewayBaseUrl();
+  const base = resolveMcpGatewayBaseUrl();
   return `${base}/gateway/${orgSlug}/mcp/${gatewaySlug}`;
 }
 

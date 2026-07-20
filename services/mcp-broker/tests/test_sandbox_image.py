@@ -38,6 +38,27 @@ def test_dockerfile_exists_and_declares_port():
     assert "EXPOSE 9320" in text
     assert "uvicorn" in text
     assert "agent.main:app" in text
+    assert "docker-entrypoint.sh" in text
+    assert "MCP_SANDBOX_DNS" in Path(REPO_ROOT / "services/mcp-broker/src/sandbox/docker_manager.py").read_text()
+
+
+def test_dockerfile_bakes_global_npmrc_ignore_scripts():
+    """CHG-0142: the image must bake a GLOBAL npmrc that force-disables npm/npx install
+    lifecycle scripts, as defense-in-depth behind the runtime env pin (CHG-0044). Guards
+    against a regression that drops the image-level supply-chain control (item 8:
+    "no unknown npm on the host")."""
+    text = DOCKERFILE.read_text()
+    # Written to npm's global-config path for the /usr/local prefix, readable by any user.
+    assert "/usr/local/etc/npmrc" in text
+    assert "ignore-scripts=true" in text
+    # The npmrc content must be REDIRECTED into the global config file (baked), not merely
+    # mentioned in a comment. Collapse continuations so the `printf ... > /usr/local/etc/npmrc`
+    # RUN reads as one logical line.
+    flattened = text.replace("\\\n", " ")
+    assert any(
+        "ignore-scripts=true" in ln and "> /usr/local/etc/npmrc" in ln
+        for ln in flattened.splitlines()
+    ), "ignore-scripts=true must be baked (redirected) into the global /usr/local/etc/npmrc"
 
 
 def test_agent_health(agent_client):

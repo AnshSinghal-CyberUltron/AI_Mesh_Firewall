@@ -1,0 +1,8 @@
+[
+  {
+    "note": "httpbin_pii_echo",
+    "isError": true,
+    "blocked_tag": true,
+    "has_blob": false
+  }
+]

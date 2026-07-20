@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Mapping
+from urllib.parse import urlsplit, urlunsplit
 
 LOG = logging.getLogger("ai_mesh_shared.mcp_stdio_common")
 
@@ -19,6 +20,7 @@ LOG = logging.getLogger("ai_mesh_shared.mcp_stdio_common")
 _SECRET_ENV_DENYLIST = {
     "GATEWAY_INTERNAL_API_KEY",
     "MCP_BROKER_INTERNAL_KEY",
+    "MCP_AGENT_INTERNAL_KEY",  # CHG-0136: broker→agent key; must never reach a spawned server
     "MCP_BROKER_URL",
     "AGENT_API_KEY",
     "BACKEND_URL",
@@ -94,8 +96,48 @@ _SAFE_ENV_PASSTHROUGH = {
     "NPM_CONFIG_PREFIX",
     "UV_CACHE_DIR",
     "UV_PYTHON_INSTALL_DIR",
+    # uvx installs tools to UV_TOOL_DIR + links bins into UV_TOOL_BIN_DIR; both
+    # default to the read-only rootfs (~/.local/...), so uvx/Python MCP servers
+    # (Fetch, semgrep-mcp) failed to start until the container points them at a
+    # writable tmpfs AND they are passed through to the spawned child. (CP36)
+    "UV_TOOL_DIR",
+    "UV_TOOL_BIN_DIR",
     "XDG_CACHE_HOME",
+    # The container sets NODE_OPTIONS=--max-old-space-size (the per-org graceful-OOM
+    # heap cap, CP20). Since this child env is rebuilt FRESH (not inherited), it must
+    # be passed through or the actual Node MCP server runs WITHOUT the heap cap. (CP36)
+    "NODE_OPTIONS",
 }
+
+# Writable install targets for MCP_HOST_TOOLS (uv tool / npm -g). Image/broker set
+# these on the container env; augment PATH so a freshly installed CLI resolves.
+_DEFAULT_TOOL_BIN_DIRS = ("/var/cache/uv/bin", "/var/npm-cache/global/bin")
+
+
+def augment_path_for_host_tools(child: dict[str, str]) -> None:
+    """Prepend host-tool install dirs to PATH when they exist (in-place)."""
+    path = child.get("PATH", os.environ.get("PATH", ""))
+    prefixes: list[str] = []
+    uv_bin = (child.get("UV_TOOL_BIN_DIR") or os.environ.get("UV_TOOL_BIN_DIR") or "").strip()
+    if uv_bin:
+        prefixes.append(uv_bin)
+    npm_prefix = (child.get("NPM_CONFIG_PREFIX") or os.environ.get("npm_config_prefix")
+                  or os.environ.get("NPM_CONFIG_PREFIX") or "").strip()
+    if npm_prefix:
+        prefixes.append(os.path.join(npm_prefix, "bin"))
+    for default in _DEFAULT_TOOL_BIN_DIRS:
+        if os.path.isdir(default):
+            prefixes.append(default)
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for p in prefixes:
+        if p and p not in seen:
+            seen.add(p)
+            ordered.append(p)
+    if not ordered:
+        return
+    parts = [p for p in path.split(os.pathsep) if p]
+    child["PATH"] = os.pathsep.join(ordered + [p for p in parts if p not in seen])
 
 
 def _args_have_oauth_header(args: list[str]) -> bool:
@@ -104,6 +146,92 @@ def _args_have_oauth_header(args: list[str]) -> bool:
             if args[idx + 1].lower().startswith("authorization:"):
                 return True
     return False
+
+
+# CHG-0053 / CHG-0107: stdio server args are logged for debuggability, but a
+# configured credential must NOT land in operator logs in plaintext. Two vectors:
+#   (1) a secret-looking FLAG value  (``--token XYZ`` / ``--api-key=XYZ``)
+#   (2) a credential embedded in a URL passed as a STANDALONE arg
+#       (``postgres://u:pw@h/db`` · ``https://x:ghp_..@github`` · ``?api_key=..``)
+# CHG-0053 (sandbox agent only) masked (1); (2) still egressed raw, and the gateway
+# adapter masked NEITHER. This shared helper covers both, for both consumers.
+# (The normal secret location is ``env``, which is never logged; tool-call
+# results/params are never logged either — this hardens the arg edge case.)
+_SECRET_ARG_HINTS = (
+    "token", "key", "secret", "password", "passwd", "auth", "credential", "apikey",
+)
+
+
+def _redact_url_creds(s: str) -> str:
+    """Mask credentials embedded in a URL arg. Non-URL args return unchanged.
+
+    Masks (a) the WHOLE userinfo (``scheme://user:pass@host`` → ``scheme://***@host``
+    — the whole userinfo because a token can sit in the user OR password position,
+    e.g. ``https://ghp_x@h`` or ``https://x-access-token:ghp_x@h``) and (b) the
+    values of any query param whose name matches a secret hint
+    (``?api_key=v&token=v&page=2`` → ``?api_key=***&token=***&page=2``). Never
+    raises — on any parse hiccup it returns the string unchanged (fail-safe;
+    logging must not crash the spawn path).
+    """
+    if "://" not in s:
+        return s
+    try:
+        parts = urlsplit(s)
+    except Exception:
+        return s
+    if not parts.scheme or not parts.netloc:
+        return s
+    changed = False
+    netloc = parts.netloc
+    if "@" in netloc:
+        netloc = "***@" + netloc.rsplit("@", 1)[1]
+        changed = True
+    query = parts.query
+    if query:
+        pairs = []
+        for kv in query.split("&"):
+            k, sep, v = kv.partition("=")
+            if sep and v and any(h in k.lower() for h in _SECRET_ARG_HINTS):
+                pairs.append(k + "=***")
+                changed = True
+            else:
+                pairs.append(kv)
+        query = "&".join(pairs)
+    if not changed:
+        return s
+    return urlunsplit((parts.scheme, netloc, parts.path, query, parts.fragment))
+
+
+def _safe_args_for_log(args: list[str]) -> list[str]:
+    """Redact secrets from stdio spawn args before logging (see notes above).
+
+    Masks secret-looking flag values AND URL-embedded credentials in every arg
+    (standalone URLs and non-secret ``--flag=URL`` inline values). Benign
+    package specs / flags / plain URLs pass through unchanged.
+    """
+    out: list[str] = []
+    mask_next = False
+    for a in args:
+        s = str(a)
+        if mask_next:
+            out.append("***")
+            mask_next = False
+            continue
+        low = s.lower()
+        if s.startswith("-") and any(h in low for h in _SECRET_ARG_HINTS):
+            if "=" in s:
+                out.append(s.split("=", 1)[0] + "=***")
+            else:
+                out.append(s)       # keep the flag name itself
+                mask_next = True     # ...but mask the following value
+        elif s.startswith("-") and "=" in s:
+            # A non-secret flag with an inline value (``--dsn=postgres://u:pw@h``):
+            # the value may still be a URL carrying credentials — redact just it.
+            k, _, v = s.partition("=")
+            out.append(k + "=" + _redact_url_creds(v))
+        else:
+            out.append(_redact_url_creds(s))
+    return out
 
 
 def _looks_like_oauth_prompt(text: str, *, oauth_header_injected: bool = False) -> bool:
@@ -141,7 +269,19 @@ def _build_child_env(
         child.pop(dangerous, None)
     for secret in _SECRET_ENV_DENYLIST:
         child.pop(secret, None)
+    # BACKSTOP CHG-0044 (item 8, supply-chain RCE): FORCE npm/npx install lifecycle
+    # scripts OFF for every spawned stdio child — unconditionally and LAST, so a
+    # malicious server-spec `env` cannot re-enable them. The container sets
+    # ``npm_config_ignore_scripts=true`` (docker_manager), but this child env is
+    # rebuilt FRESH from ``_SAFE_ENV_PASSTHROUGH`` (which omits it) and REPLACES the
+    # process environment (``create_subprocess_exec(env=...)`` does not inherit the
+    # parent) — so without this the ``npx`` child ran with ignore-scripts defaulting
+    # to FALSE and an untrusted package's preinstall/install/postinstall executed on
+    # fetch (the exact supply-chain vector the container-level flag claims to kill).
+    # Pinned here == pinned for the child that actually fetches untrusted packages.
+    child["npm_config_ignore_scripts"] = "true"
     child["MCP_REMOTE_CONFIG_DIR"] = (
         remote_config_dir or f"/tmp/mcp-orgs/{org_slug}/mcp-auth"
     )
+    augment_path_for_host_tools(child)
     return child

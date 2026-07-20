@@ -1,0 +1,9 @@
+agent: cursor-ralph-iter31
+story: P4.13/P6.18 iter31 — deploy §3 rebuild + transport verify
+since: 2026-07-02T12:10:00Z
+status: released
+files:
+  - mcp-parallel/findings/p4-13/RECHECK_ITER31.md
+  - docs/mcp/PARALLEL_CLAIMS.md
+  - .cursor/ralph/scratchpad.md
+  - scripts/ralph/mcp_progress.md

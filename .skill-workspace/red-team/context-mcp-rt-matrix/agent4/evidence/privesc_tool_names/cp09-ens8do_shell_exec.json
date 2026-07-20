@@ -1,0 +1,51 @@
+{
+  "phase": "privesc_unauthorized_tool_name",
+  "server": "cp09-ens8do",
+  "attempted_tool": "shell_exec",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/cp09-ens8do",
+    "headers": {
+      "Authorization": "Bearer XlI7...I1I2",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "shell_exec",
+        "arguments": {
+          "cmd": "id",
+          "message": "RT-A4-privesc-probe"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "MCP error -32602: Tool shell_exec not found"
+          }
+        ],
+        "isError": true
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    },
+    "duration_s": 0.041
+  },
+  "analysis": {
+    "http_status": 200,
+    "blocked": false,
+    "is_error_result": true,
+    "canary_present": false,
+    "secret_marker_leak_raw": false,
+    "exfil_url_undefanged": false,
+    "compliance_tags": [],
+    "jsonrpc_error": null
+  }
+}

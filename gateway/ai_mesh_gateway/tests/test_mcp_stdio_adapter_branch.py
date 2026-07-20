@@ -41,6 +41,47 @@ def _in_process_default(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("MCP_STDIO_IN_PROCESS", "true")
 
 
+@pytest.fixture(autouse=True)
+def _reset_warm_and_mock_ensure(monkeypatch: pytest.MonkeyPatch):
+    """B3 item#19: reset the per-process warmed-orgs memo between tests and mock
+    the eager ensure_sandbox so the broker branch never makes a real HTTP call
+    in unit tests. Returns the mock for assertions."""
+    import mcp_stdio_adapter as adapter
+
+    adapter._WARMED_ORGS.clear()
+    ensure_mock = AsyncMock(return_value={"status": "running", "agent_ready": True})
+    monkeypatch.setattr(
+        "ai_mesh_gateway.mcp_sandbox_client.ensure_sandbox", ensure_mock
+    )
+    yield ensure_mock
+    adapter._WARMED_ORGS.clear()
+
+
+@pytest.mark.asyncio
+async def test_broker_branch_eager_warms_once_per_org(
+    monkeypatch: pytest.MonkeyPatch, _reset_warm_and_mock_ensure
+):
+    """B3 item#19: the broker branch eagerly warms the per-org sandbox on the
+    FIRST stdio op, then reuses it (memoized) — ensure_sandbox is called once
+    per org, and every RPC is still delegated to broker_send_jsonrpc."""
+    monkeypatch.setenv("MCP_STDIO_IN_PROCESS", "false")
+    ensure_mock = _reset_warm_and_mock_ensure
+    with patch(
+        "ai_mesh_gateway.mcp_sandbox_client.broker_send_jsonrpc",
+        new=AsyncMock(return_value={"jsonrpc": "2.0", "id": 1, "result": {}}),
+    ) as send_mock:
+        await send_jsonrpc(
+            ORG, SERVER, COMMAND, ARGS, ENV, "tools/list", None, 1,
+            server_config=SERVER_CONFIG,
+        )
+        await send_jsonrpc(
+            ORG, SERVER, COMMAND, ARGS, ENV, "tools/list", None, 2,
+            server_config=SERVER_CONFIG,
+        )
+    assert ensure_mock.await_count == 1  # warmed once per org (memoized)
+    assert send_mock.await_count == 2    # both RPCs delegated to the broker
+
+
 @pytest.mark.asyncio
 async def test_send_jsonrpc_broker_branch_delegates(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("MCP_STDIO_IN_PROCESS", "false")
@@ -167,3 +208,45 @@ async def test_send_jsonrpc_in_process_initialize_cached():
 
     assert result["id"] == 3
     assert result["result"]["protocolVersion"] == "2024-11-05"
+
+
+# CHG-0107: the gateway adapter's spawn-log previously logged args RAW (no
+# masking at all — worse than the sandbox agent's flag-only masking). It now
+# uses the SHARED _safe_args_for_log, which masks secret-flag values AND
+# URL-embedded credentials. Lock the wiring so it can't regress to raw logging.
+def test_adapter_uses_shared_safe_args_for_log():
+    from mcp_stdio_adapter import _safe_args_for_log
+
+    # secret flag value
+    assert _safe_args_for_log(["--token", "s3cr3t"]) == ["--token", "***"]
+    # URL userinfo (whole userinfo masked)
+    out = _safe_args_for_log(["-y", "mcp-remote",
+                              "postgres://admin:S3cr3tPass@db.internal:5432/prod"])
+    assert "S3cr3tPass" not in " ".join(out)
+    assert out[-1] == "postgres://***@db.internal:5432/prod"
+    # secret query params masked, non-secret preserved
+    assert _safe_args_for_log(
+        ["https://api.example.com/mcp?api_key=AKIAIOSFODNN7EXAMPLE&token=abc&page=2"]
+    ) == ["https://api.example.com/mcp?api_key=***&token=***&page=2"]
+    # benign spawn args unchanged
+    assert _safe_args_for_log(["-y", "@playwright/mcp@latest"]) == \
+        ["-y", "@playwright/mcp@latest"]
+
+
+@pytest.mark.asyncio
+async def test_stdio_default_is_sandbox_secure(monkeypatch: pytest.MonkeyPatch):
+    # CHG-0141: SECURE BY DEFAULT — with MCP_STDIO_IN_PROCESS unset, stdio routes through
+    # the per-org sandbox (no unknown npm on the gateway host), NOT the legacy in-gateway
+    # spawn. Guards against a regression back to the fail-open (host-spawn) default.
+    import mcp_stdio_adapter as adapter
+    monkeypatch.delenv("MCP_STDIO_IN_PROCESS", raising=False)
+    assert adapter._STDIO_IN_PROCESS_DEFAULT == "false"
+    assert adapter._stdio_in_process() is False  # unset -> sandbox, not in-process
+
+
+@pytest.mark.asyncio
+async def test_stdio_in_process_still_opt_in(monkeypatch: pytest.MonkeyPatch):
+    # The in-gateway spawn is still available when explicitly opted in (dev/single-tenant).
+    import mcp_stdio_adapter as adapter
+    monkeypatch.setenv("MCP_STDIO_IN_PROCESS", "true")
+    assert adapter._stdio_in_process() is True

@@ -1,0 +1,50 @@
+{
+  "server_slug": "filesystem-canary",
+  "label": "tools_call_read_multiple_files_pii",
+  "captured_at_utc": "2026-07-07T10:56:18Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/filesystem-canary",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "read_multiple_files",
+        "arguments": {
+          "paths": [
+            "/tmp/rt-matrix-probe.txt",
+            "/tmp/rt-matrix-probe2.txt"
+          ]
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:56:17 GMT",
+      "server": "uvicorn",
+      "content-length": "282",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "/tmp/rt-matrix-probe.txt: Error - ENOENT: no such file or directory, open '/tmp/rt-matrix-probe.txt'\n---\n/tmp/rt-matrix-probe2.txt: Error - ENOENT: no such file or directory, open '/tmp/rt-matrix-probe2.txt'"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    },
+    "_latency_ms": 37.8
+  },
+  "notes": ""
+}

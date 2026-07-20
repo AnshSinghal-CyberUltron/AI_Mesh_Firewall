@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import {
   consumeSSEStream,
   extractRoutingFromHeaders,
-  isGatewayAuthForbidden,
   normalizeChatPipelineResult,
+  pinnedModelRoutingPreferences,
+  simulatorRoutingPreferences,
 } from "./liveGateway.js";
-import { isRoutingReroute } from "../constants/zeroshieldBrand.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -213,52 +213,41 @@ test("extractRoutingFromHeaders handles null/missing headers gracefully", () => 
   assert.equal(sparse.rerouted, false);
 });
 
-test("isGatewayAuthForbidden detects disabled key with error=forbidden body", () => {
-  const data = { error: "forbidden", message: "API key is disabled." };
-  assert.equal(isGatewayAuthForbidden(data, 403), true);
-});
-
-test("normalizeChatPipelineResult maps kill_switch_active 503 to kill_switch stage", () => {
-  const normalized = normalizeChatPipelineResult(
+test("output_guardrail latency uses output_guardrail_ms from stage metrics", () => {
+  const result = normalizeChatPipelineResult(
     {
-      error: "service_unavailable",
-      code: "kill_switch_active",
-      message: "This model is currently disabled by an operator kill-switch.",
+      stage_metrics_ms: { output_guardrail_ms: 42.3 },
+      choices: [{ message: { content: "hello" } }],
     },
-    503,
-    { prompt: "test", requestedModel: "gpt-4o" },
+    200,
+    {},
   );
-  assert.equal(normalized.final_action, "block");
-  assert.equal(normalized.blocked_by, "kill_switch");
-  const ks = normalized.stages.find((s) => s.name === "kill_switch");
-  assert.equal(ks?.action, "block");
+  const og = result.stages.find((s) => s.name === "output_guardrail");
+  assert.ok(og);
+  assert.equal(og.latency_ms, 42.3);
 });
 
-test("normalizeChatPipelineResult maps disabled API key to auth stage", () => {
-  const normalized = normalizeChatPipelineResult(
-    { error: "forbidden", message: "API key is disabled." },
-    403,
-    { prompt: "test", requestedModel: "gpt-4o" },
+test("500 after output guard ran does not show Output guard not evaluated", () => {
+  const result = normalizeChatPipelineResult(
+    { stage_metrics_ms: { output_guardrail_ms: 12.5 } },
+    500,
+    {},
   );
-  assert.equal(normalized.final_action, "block");
-  assert.equal(normalized.blocked_by, "auth");
-  const auth = normalized.stages.find((s) => s.name === "auth");
-  assert.equal(auth?.action, "block");
+  const og = result.stages.find((s) => s.name === "output_guardrail");
+  assert.ok(og);
+  assert.equal(og.action, "error");
+  assert.match(og.detail, /after output guard ran/i);
+  assert.notEqual(og.detail, "Output guard not evaluated");
 });
 
-test("isRoutingReroute ignores auto model resolution", () => {
-  assert.equal(
-    isRoutingReroute("auto", "global.anthropic.claude-haiku", { rerouted: true }),
-    false,
+test("simulatorRoutingPreferences honours org routing_enabled (PIPELINE-0030)", () => {
+  assert.deepEqual(
+    simulatorRoutingPreferences("nvidia/nemotron-3-super-120b-a12b:free", { orgRoutingEnabled: true }),
+    { enable_routing: true, preferred_model: "nvidia/nemotron-3-super-120b-a12b:free" },
   );
-});
-
-test("isRoutingReroute ignores routine policy adjudicator selection", () => {
-  assert.equal(
-    isRoutingReroute("gpt-4o", "claude-haiku", {
-      rerouted: true,
-      decision_source: "policy_adjudicator",
-    }),
-    false,
+  assert.deepEqual(
+    simulatorRoutingPreferences("nvidia/nemotron-3-super-120b-a12b:free", { orgRoutingEnabled: false }),
+    pinnedModelRoutingPreferences("nvidia/nemotron-3-super-120b-a12b:free"),
   );
+  assert.equal(simulatorRoutingPreferences("auto", { orgRoutingEnabled: true }), null);
 });

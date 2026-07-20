@@ -90,18 +90,20 @@ export function Firewall11Page({ onViewResults, onViewLogDetail, children }) {
 
   return (
     <FirewallModuleErrorBoundary title="AI Gateway & Traffic Ingress">
-      <FirewallModulePage
-        moduleId="1.1"
-        title="AI Gateway & Traffic Ingress"
-        description="The network entry point for every model request. This page now centers ingress pressure, gateway controls, and live evidence instead of the shared generic telemetry frame."
-        icon={Zap}
-        flowNodes={flowNodes}
-        onViewResults={onViewResults}
-        onViewLogDetail={onViewLogDetail}
-        controlPanels={[<GatewayKeyPanel key="gateway-keys" />]}
-        simulatorPanels={[<AttackSimulatorPanel key="attack-sim" />]}
-        inspectionPanels={children ? [children] : []}
-      />
+      <FirewallConfigProvider>
+        <FirewallModulePage
+          moduleId="1.1"
+          title="AI Gateway & Traffic Ingress"
+          description="The network entry point for every model request. This page now centers ingress pressure, gateway controls, and live evidence instead of the shared generic telemetry frame."
+          icon={Zap}
+          flowNodes={flowNodes}
+          onViewResults={onViewResults}
+          onViewLogDetail={onViewLogDetail}
+          controlPanels={[<GatewayKeyPanel key="gateway-keys" />]}
+          simulatorPanels={[<AttackSimulatorPanel key="attack-sim" />]}
+          inspectionPanels={children ? [children] : []}
+        />
+      </FirewallConfigProvider>
     </FirewallModuleErrorBoundary>
   );
 }
@@ -278,23 +280,25 @@ export function Firewall16Page({ onViewResults, onViewLogDetail, children }) {
 
   return (
     <FirewallModuleErrorBoundary title="Inline Model Isolation & Kill-Switch">
-      <FirewallModulePage
-        moduleId="1.6"
-        title="Inline Model Isolation & Kill-Switch"
-        description="An incident-style workspace for model containment, threshold breaches, circuit-breaker state, and emergency isolation controls."
-        icon={AlertTriangle}
-        flowNodes={flowNodes}
-        onViewResults={onViewResults}
-        onViewLogDetail={onViewLogDetail}
-        controlPanels={[
-          <OrgIsolationBanner key="org-isolation-banner" />,
-          <GatewayKeyPanel key="gateway-keys-isolation" />,
-          <ModelStatePanel key="model-state" />,
-          <KillSwitchPanel key="kill-switch" />,
-        ]}
-        simulatorPanels={[<IsolationOpsSimulator key="isolation-ops" />]}
-        inspectionPanels={children ? [children] : []}
-      />
+      <FirewallConfigProvider>
+        <FirewallModulePage
+          moduleId="1.6"
+          title="Inline Model Isolation & Kill-Switch"
+          description="An incident-style workspace for model containment, threshold breaches, circuit-breaker state, and emergency isolation controls."
+          icon={AlertTriangle}
+          flowNodes={flowNodes}
+          onViewResults={onViewResults}
+          onViewLogDetail={onViewLogDetail}
+          controlPanels={[
+            <OrgIsolationBanner key="org-isolation-banner" />,
+            <GatewayKeyPanel key="gateway-keys-isolation" />,
+            <ModelStatePanel key="model-state" />,
+            <KillSwitchPanel key="kill-switch" />,
+          ]}
+          simulatorPanels={[<IsolationOpsSimulator key="isolation-ops" />]}
+          inspectionPanels={children ? [children] : []}
+        />
+      </FirewallConfigProvider>
     </FirewallModuleErrorBoundary>
   );
 }

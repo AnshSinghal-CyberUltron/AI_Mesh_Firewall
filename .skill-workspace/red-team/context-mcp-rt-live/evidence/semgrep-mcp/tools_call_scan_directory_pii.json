@@ -1,0 +1,47 @@
+{
+  "server_slug": "semgrep-mcp",
+  "label": "tools_call_scan_directory_pii",
+  "captured_at_utc": "2026-07-07T10:45:55Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/semgrep-mcp",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "scan_directory",
+        "arguments": {
+          "path": "SSN=123-45-6789 email=redteam.live@corp.example key=AKIAIOSFODNN7EXAMPLE RT-LIVE-semgrep-mcp-85db60106c"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:45:55 GMT",
+      "server": "uvicorn",
+      "content-length": "180",
+      "content-type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Tool 'scan_directory' arguments matched compliance tags: GDPR, HIPAA, PII, SECRET."
+          }
+        ],
+        "isError": true
+      }
+    }
+  },
+  "notes": ""
+}

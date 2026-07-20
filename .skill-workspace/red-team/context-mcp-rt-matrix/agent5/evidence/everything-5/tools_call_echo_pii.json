@@ -1,0 +1,48 @@
+{
+  "server_slug": "everything-5",
+  "label": "tools_call_echo_pii",
+  "captured_at_utc": "2026-07-07T10:55:54Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-5",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "echo",
+        "arguments": {
+          "message": "SSN=123-45-6789 email=redteam.live@corp.example key=AKIAIOSFODNN7EXAMPLE RT-LIVE-everything-5-8538b704f8"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:53 GMT",
+      "server": "uvicorn",
+      "content-length": "170",
+      "content-type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: GDPR, HIPAA, PII, SECRET."
+          }
+        ],
+        "isError": true
+      }
+    },
+    "_latency_ms": 2.9
+  },
+  "notes": ""
+}

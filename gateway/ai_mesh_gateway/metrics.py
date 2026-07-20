@@ -104,6 +104,45 @@ if _PROM_AVAILABLE:
         ["model", "action"],
         registry=REGISTRY,
     )
+    # CHG-0087: MCP tool-call scan decisions were AUDITED (MCPEvent) but not METERED,
+    # so the 1.4 guardrails (block/redact for tool-poisoning / credentials / PII / IP)
+    # were invisible to Prometheus dashboards + alerting. Low-cardinality: decision is
+    # block/redact/allow/monitor; tag is the bounded compliance set (SECRET/PII/INFRA/
+    # HIPAA/PCI-DSS/SOC2/GDPR...).
+    mcp_scan_decisions_total = Counter(
+        "amf_gateway_mcp_scan_decisions_total",
+        "MCP tool-call scan/enforcement decisions per org "
+        "(block/redact/allow/monitor/scan_skipped/rate_limited/error).",
+        ["org", "decision"],
+        registry=REGISTRY,
+    )
+    mcp_compliance_tags_total = Counter(
+        "amf_gateway_mcp_compliance_tags_total",
+        "MCP scan compliance-tag hits per org (PII/SECRET/INFRA/HIPAA/PCI-DSS/...).",
+        ["org", "tag"],
+        registry=REGISTRY,
+    )
+    # CHG-0088: MCP tool-call end-to-end latency (the audit already carries latency_ms
+    # but it was never exposed as a metric) — lets dashboards see MCP p50/p95/p99 under
+    # load (item 20 "1.4 under peak load" monitoring).
+    mcp_call_seconds = Histogram(
+        "amf_gateway_mcp_call_seconds",
+        "MCP tool-call end-to-end latency in seconds, labeled by org and decision.",
+        ["org", "decision"],
+        buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+        registry=REGISTRY,
+    )
+    # CHG-0094: MCP audit records DROPPED under backpressure (inflight >= cap), labeled
+    # by priority (high = block/redact/rate_limited/error security decisions; normal =
+    # allow/monitor/clean) and decision. A non-zero high-priority count means a security
+    # decision was made but its audit record was lost — the ...->tag->AUDIT chain broke
+    # under load; alert on it (item 13/20 audit-completeness under peak load).
+    mcp_audit_dropped_total = Counter(
+        "amf_gateway_mcp_audit_dropped_total",
+        "MCP audit records dropped under backpressure, by priority and decision.",
+        ["priority", "decision"],
+        registry=REGISTRY,
+    )
     bedrock_embed_total = Counter(
         "amf_gateway_bedrock_embed_total",
         "Bedrock Titan embedding calls, labeled by result.",
@@ -236,6 +275,56 @@ def record_bedrock_embed(result: str) -> None:
     if not _PROM_AVAILABLE:
         return
     bedrock_embed_total.labels(result=_safe_label(result, "unknown")).inc()
+
+
+def record_mcp_scan_decision(org_slug: str, decision: str, compliance_tags=None,
+                             latency_ms=None) -> None:
+    """CHG-0087/0088: meter an MCP tool-call scan/enforcement decision, its compliance
+    tags, and (CHG-0088) its end-to-end latency.
+
+    Best-effort / fail-safe (no-op when prometheus_client is absent). Called from the
+    MCP audit sink (``mcp_proxy._record_gateway_event``) so every block/redact/allow/
+    monitor decision the 1.4 chain makes is visible to Prometheus, not just the MCPEvent
+    audit trail. Cardinality is bounded
+    (org × {block,redact,allow,monitor,scan_skipped,rate_limited,error}; org × the
+    fixed compliance-tag set). ``scan_skipped`` = zero scan-control rows
+    (no Tier-1/Tier-2 ran) — distinct from ``allow`` (scanned and clean)."""
+    if not _PROM_AVAILABLE:
+        return
+    org = _safe_label(org_slug, "anonymous")
+    dec = _safe_label(decision, "unknown")
+    try:
+        mcp_scan_decisions_total.labels(org=org, decision=dec).inc()
+    except Exception:  # pragma: no cover - metrics must never break the request path
+        return
+    for _tag in (compliance_tags or []):
+        try:
+            mcp_compliance_tags_total.labels(org=org, tag=_safe_label(str(_tag), "unknown")).inc()
+        except Exception:  # pragma: no cover
+            pass
+    # CHG-0088: observe only a REAL measured latency (skip 0/None so paths that don't
+    # time the call — e.g. the tools/list metadata-scan audit — don't skew the low bucket).
+    if latency_ms:
+        try:
+            mcp_call_seconds.labels(org=org, decision=dec).observe(float(latency_ms) / 1000.0)
+        except (TypeError, ValueError):  # pragma: no cover
+            pass
+
+
+def record_mcp_audit_dropped(priority: str, decision: str) -> None:
+    """CHG-0094: meter an MCP audit record dropped under backpressure. Best-effort /
+    fail-safe (no-op when prometheus_client is absent). ``priority`` is high|normal;
+    ``decision`` is the dropped record's decision. A non-zero high-priority series is a
+    lost SECURITY-decision audit — the ...->tag->AUDIT chain broke under load."""
+    if not _PROM_AVAILABLE:
+        return
+    try:
+        mcp_audit_dropped_total.labels(
+            priority=_safe_label(priority, "normal"),
+            decision=_safe_label(decision, "unknown"),
+        ).inc()
+    except Exception:  # pragma: no cover - metrics must never break the request path
+        return
 
 
 def record_stream_complete(

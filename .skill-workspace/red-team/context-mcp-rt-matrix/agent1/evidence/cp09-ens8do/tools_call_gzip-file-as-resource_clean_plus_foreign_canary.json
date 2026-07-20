@@ -1,0 +1,50 @@
+{
+  "agent": "agent1",
+  "scope": "context-assembly|least-privilege|context-minimization|cross-mcp-leakage",
+  "server_slug": "cp09-ens8do",
+  "label": "tools_call_gzip-file-as-resource_clean_plus_foreign_canary",
+  "captured_at_utc": "2026-07-07T10:55:35Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/cp09-ens8do",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "gzip-file-as-resource",
+        "arguments": {
+          "name": "benign agent1-context-probe RT-A1-cp09-ens8do-54724b3c5b RT-A1-cp09-verify-4650740322"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:33 GMT",
+      "server": "uvicorn",
+      "content-length": "315",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "name": "benign agent1-context-probe RT-A1-cp09-ens8do-54724b3c5b RT-A1-cp09-verify-4650740322",
+            "uri": "demo://resource/session/benign agent1-context-probe RT-A1-cp09-ens8do-54724b3c5b RT-A1-cp09-verify-4650740322",
+            "mimeType": "application/gzip",
+            "type": "resource_link"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    }
+  },
+  "notes": ""
+}

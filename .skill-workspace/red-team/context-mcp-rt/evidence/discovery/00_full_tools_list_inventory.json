@@ -1,0 +1,279 @@
+{
+  "semgrep-mcp": {
+    "transport": "stdio",
+    "status_code": 200,
+    "tool_names": [
+      "scan_directory",
+      "list_rules",
+      "analyze_results",
+      "create_rule",
+      "filter_results",
+      "export_results",
+      "compare_results"
+    ],
+    "connection_status": "connected"
+  },
+  "playwright-mcp": {
+    "transport": "stdio",
+    "status_code": 200,
+    "tool_names": [
+      "browser_close",
+      "browser_resize",
+      "browser_console_messages",
+      "browser_handle_dialog",
+      "browser_evaluate",
+      "browser_file_upload",
+      "browser_drop",
+      "browser_fill_form",
+      "browser_press_key",
+      "browser_type",
+      "browser_navigate",
+      "browser_navigate_back",
+      "browser_network_requests",
+      "browser_network_request",
+      "browser_run_code_unsafe",
+      "browser_take_screenshot",
+      "browser_snapshot",
+      "browser_click",
+      "browser_drag",
+      "browser_hover",
+      "browser_select_option",
+      "browser_tabs",
+      "browser_wait_for"
+    ],
+    "connection_status": "connected"
+  },
+  "cp09-ens8do": {
+    "transport": "stdio",
+    "status_code": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "connection_status": "connected"
+  },
+  "cp09-verify": {
+    "transport": "stdio",
+    "status_code": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "connection_status": "connected"
+  },
+  "playwright": {
+    "transport": "stdio",
+    "status_code": 200,
+    "tool_names": [
+      "browser_close",
+      "browser_resize",
+      "browser_console_messages",
+      "browser_handle_dialog",
+      "browser_evaluate",
+      "browser_file_upload",
+      "browser_drop",
+      "browser_fill_form",
+      "browser_press_key",
+      "browser_type",
+      "browser_navigate",
+      "browser_navigate_back",
+      "browser_network_requests",
+      "browser_network_request",
+      "browser_run_code_unsafe",
+      "browser_take_screenshot",
+      "browser_snapshot",
+      "browser_click",
+      "browser_drag",
+      "browser_hover",
+      "browser_select_option",
+      "browser_tabs",
+      "browser_wait_for"
+    ],
+    "connection_status": "connected"
+  },
+  "ws-everything-stub": {
+    "transport": "websocket",
+    "status_code": 200,
+    "tool_names": null,
+    "connection_status": "connected"
+  },
+  "sse-everything-stub": {
+    "transport": "sse",
+    "status_code": 200,
+    "tool_names": null,
+    "connection_status": "connected"
+  },
+  "http-everything-stub": {
+    "transport": "streamable-http",
+    "status_code": 200,
+    "tool_names": null,
+    "connection_status": "connected"
+  },
+  "linear-manual-oauth": {
+    "transport": "streamable-http",
+    "status_code": 200,
+    "tool_names": null,
+    "connection_status": "connected"
+  },
+  "everything-5": {
+    "transport": "stdio",
+    "status_code": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "connection_status": "connected"
+  },
+  "everything-4": {
+    "transport": "stdio",
+    "status_code": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "connection_status": "connected"
+  },
+  "everything-3": {
+    "transport": "stdio",
+    "status_code": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "connection_status": "connected"
+  },
+  "everything-2": {
+    "transport": "stdio",
+    "status_code": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "connection_status": "connected"
+  },
+  "everything-1": {
+    "transport": "stdio",
+    "status_code": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "connection_status": "connected"
+  },
+  "filesystem-canary": {
+    "transport": "stdio",
+    "status_code": 200,
+    "tool_names": [
+      "read_file",
+      "read_multiple_files",
+      "write_file",
+      "edit_file",
+      "create_directory",
+      "list_directory",
+      "directory_tree",
+      "move_file",
+      "search_files",
+      "get_file_info",
+      "list_allowed_directories"
+    ],
+    "connection_status": "connected"
+  },
+  "everything-mcp": {
+    "transport": "stdio",
+    "status_code": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "connection_status": "connected"
+  },
+  "_captured_at": "2026-07-07T09:30:41.836202+00:00"
+}

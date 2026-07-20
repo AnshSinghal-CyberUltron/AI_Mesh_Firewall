@@ -1,0 +1,26 @@
+{
+  "server": "linear-manual-oauth",
+  "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/linear-manual-oauth",
+  "request_headers": {
+    "Authorization": "Bearer XlI7...I1I2",
+    "Content-Type": "application/json"
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "error": {
+        "code": -32001,
+        "message": "upstream returned 401; re-authenticate"
+      },
+      "_meta": {
+        "transport": "streamable-http",
+        "needs_reauth": true,
+        "upstream_status": 0,
+        "session_id": null,
+        "duration_ms": 0
+      }
+    }
+  }
+}

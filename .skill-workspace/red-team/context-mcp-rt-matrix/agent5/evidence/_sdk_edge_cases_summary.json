@@ -1,0 +1,60 @@
+{
+  "canary": "RT-LIVE-sdk-edge-5e13fb1b7c",
+  "results": [
+    {
+      "label": "e1_empty_message",
+      "status": "error",
+      "status_code": 400
+    },
+    {
+      "label": "e2_invalid_model",
+      "status": "error",
+      "status_code": 404
+    },
+    {
+      "label": "e3_malformed_mcp_context_string",
+      "status": "ok",
+      "status_code": null
+    },
+    {
+      "label": "e4_malformed_mcp_context_array",
+      "status": "ok",
+      "status_code": null
+    },
+    {
+      "label": "e5_oversized_payload_with_pii",
+      "status": "error",
+      "status_code": 400
+    },
+    {
+      "label": "e6_unicode_obfuscated_pii",
+      "status": "error",
+      "status_code": 400
+    },
+    {
+      "label": "e7_negative_max_tokens",
+      "status": "error",
+      "status_code": 400
+    },
+    {
+      "label": "e8a_repeat_benign_1",
+      "status": "ok",
+      "status_code": null
+    },
+    {
+      "label": "e8b_repeat_benign_2",
+      "status": "ok",
+      "status_code": null
+    },
+    {
+      "label": "e9_empty_messages_array",
+      "status": "error",
+      "status_code": 400
+    },
+    {
+      "label": "e10_system_role_injection",
+      "status": "error",
+      "status_code": 400
+    }
+  ]
+}

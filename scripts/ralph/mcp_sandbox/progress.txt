@@ -1,0 +1,123 @@
+# MCP Sandbox Isolation — Ralph loop progress / cross-context memory
+
+This loop rigorously tests whether the MCP sandbox broker keeps per-org stdio MCP
+servers ISOLATED (no cross-org leakage, no secret exfil, no sandbox breakout), using
+2 parallel adversarial org agents per iteration, each driving 6 stdio MCP servers in
+its OWN sandbox and actively trying to break out / read the sibling org's data.
+
+## Codebase Patterns (read first, every iteration)
+
+### Dedicated isolated broker (NEVER touch the :8311 broker)
+- A SECOND mcp-broker runs ONLY for this loop: container `ai_mesh_mcp_broker_2`,
+  host port **:8312** (-> container 8311), base net `mcp_sandbox_bridge_2`,
+  env MCP_BROKER_CONTAINER_NAME=ai_mesh_mcp_broker_2, image ai_mesh_firewall-mcp-broker.
+- Key: `dev-mcp-broker-key-change-me` (header `X-MCP-Broker-Key`).
+- MY ORGS = `adv-org-epsilon`, `adv-org-zeta` ONLY. Per-org nets `mcp_sandbox_net_adv-org-{epsilon,zeta}`.
+- The PARALLEL SESSION owns :8311 (`ai_mesh_mcp_broker`) + orgs alpha/beta/gamma/delta +
+  `main`. It restarts that broker constantly and commits every ~10 min. DO NOT use :8311,
+  alpha, beta, gamma, delta. DO NOT edit `services/mcp-broker/**` (handoff backend holes).
+
+### Broker API contract (verified)
+- GET  /health                         -> {status, docker_ok}  (needs key)
+- POST /v1/sandbox/{org}/ensure        body {warm:true} -> {container_id, status}
+- POST /v1/sandbox/{org}/stdio/rpc     body {server_slug,command,args,env,method,params,jsonrpc_id}
+- GET  /v1/sandbox/{org}/status        -> {status}   ; DELETE /v1/sandbox/{org} (teardown)
+- Sandbox agent listens on :9320 INSIDE the sandbox (waitForAgent probes /health there).
+- Stub MCP server exposes only tools: `echo`, `get_env`.
+
+### Bootstrap (REQUIRED before any stdio rpc — the stub is NOT in the image)
+  ensure(org) -> wait sandbox-agent(:9320) healthy -> `docker cp
+  services/mcp-broker/tests/fixtures/stdio_mcp_stub.py {cid}:/data/mcp-auth/stdio_mcp_stub.py`
+  A fresh sandbox with no stub returns an EMPTY tools/list (looks like a bug but isn't).
+
+### The gate (this loop's per-iteration quality gate)
+  MCP_BROKER_URL=http://127.0.0.1:8312 node scripts/ralph/mcp_sandbox/run_iso_orgs.mjs
+  -> bootstrap both orgs, 2 parallel org_worker.mjs (6 servers + env-exfil probes),
+     cross-org leak hammer (markers + secret denylist). Writes runs/iso_gate.json.
+  Exit 0 == isolation holds. Any non-empty foreign marker / secret == ISOLATION BREACH.
+
+### Isolation assertions (what "no leak" means)
+- epsilon must NEVER see `marker-adv-org-zeta` (and vice-versa); each sees only its own.
+- get_env on GATEWAY_INTERNAL_API_KEY / MCP_BROKER_INTERNAL_KEY / DATABASE_URL /
+  AWS_SECRET_ACCESS_KEY / DJANGO_SECRET_KEY must return EMPTY from inside any sandbox.
+- Reaper is org-scoped + per-broker registry (registry.remove(org_slug)); idle 3600s.
+
+## CRITICAL: host is resource-constrained
+- Docker VM = 8 GB only; with the parallel session active, load avg ~25-29 / 11 containers.
+- broker#2 has been OOM-killed (Exit 137) under combined load. EVERY iteration MUST:
+  1. ensure broker#2 is up + `/health`==200 BEFORE running the gate (restart + wait if down);
+  2. keep the footprint MINIMAL (LEAK_PROBE_HAMMER_ROUNDS=4, do not spin extra sandboxes);
+  3. if the gate fails with `fetch failed` / ECONNREFUSED, that is broker#2 down (host
+     saturation) — NOT an isolation bug. Restart broker#2, wait health, re-run. Never record
+     a host-saturation crash as a sandbox-isolation failure (no fake-red).
+
+## Adversarial breakout backlog (escalate one new vector per rigorous iteration)
+- [ ] cross-org marker read (baseline — in gate)        - [ ] secret denylist (baseline — in gate)
+- [ ] filesystem escape: read other org's /data, host paths, ../ path traversal
+- [ ] network egress: sandbox -> broker docker.sock, -> sibling sandbox IP, -> internet
+- [ ] container breakout: reach /var/run/docker.sock from inside a sandbox
+- [ ] resource exhaustion: fork/mem bomb in one org must not kill the sibling org
+- [ ] injection: command/args injection via server_slug/command/args; foreign {org} in rpc path
+- [ ] frontend path (when host has headroom): MCPConnectorPanel stdio presets, 2 orgs, on :8312
+
+## Fix policy
+- Harness / test / frontend gaps -> fix on this branch (additive files only).
+- Real broker/gateway isolation hole -> root-cause it, write a HANDOFF to ruflo memory
+  (namespace gateway, key mcp-sandbox-handoff-<date>) + a findings note; DO NOT edit
+  services/mcp-broker (parallel session owns it on main). Surface as evidence.
+
+## Log
+(iterations append dated notes below)
+
+## 2026-06-30T21:47Z — iter (M1): HOST-SATURATION BLOCKED (no fake-green, no fake-red)
+- Target story: M1 (iso gate green). Outcome: NOT run to completion — host saturated.
+- Host state this iteration: load avg oscillated 30 → 48 → 61 (loop's safe LOAD_MAX=16; progress
+  notes say broker#2 OOM-flaps at load 25-29 — we were 2-4x over that the whole window).
+- broker#2 was found "unhealthy" then its PID went ZOMBIE (docker daemon could not reap it under
+  load: "PID 56540 is zombie and can not be killed"); after the failed restart it exited, then was
+  REMOVED entirely ("no such object"). `docker start` cannot recover a removed container.
+- 3 gate attempts (LEAK_PROBE_HAMMER_ROUNDS=4 each): ALL died on the FIRST broker call with
+  "fetch failed" / health HTTP 000. runs/iso_gate.json showed `steps: []` every time → ZERO
+  isolation logic executed. The broker container was destroyed mid-gate (saturation/OOM/removal),
+  NOT an isolation breach. Recorded as neither pass nor fail per the loop playbook.
+- ROOT-CAUSE HARNESS FIX (additive, this branch): ralph_mcp.sh `ensure_broker()` previously only
+  ran `docker start` — which CANNOT bring back a *removed* container, so the loop was permanently
+  bricked once broker#2 was rm'd under load. Added `recreate_broker()` (replicates the :8311
+  broker config onto broker#2: own net mcp_sandbox_bridge_2, port 8312, docker.sock, own
+  CONTAINER_NAME env) and made ensure_broker `docker inspect`-gate: start if present, recreate if
+  gone. NEVER touches :8311 / alpha-delta / services/mcp-broker.
+- Left broker#2 recreated and running with `--restart unless-stopped` (Docker auto-revives on
+  OOM-exit). Derived the recreate config by READ-ONLY inspect of the live :8311 broker template.
+- DECISION: M1 stays passes:false. Next fresh iteration retries when host has headroom (parallel
+  session's :8311 load was the saturation source; nothing isolation-related to fix here).
+
+## COMPLETE ISOLATION CONTRACT (playwright + docker + everything — user requires full isolation from parallel sessions)
+- Docker: broker :8312 (ai_mesh_mcp_broker_2), base net mcp_sandbox_bridge_2, orgs epsilon/zeta,
+  per-org nets, org-scoped reaper. NEVER :8311 / alpha-beta-gamma-delta / mcp_sandbox_bridge.
+- Playwright: use the DEDICATED profile `scripts/ralph/mcp_sandbox/.pw-profile` (launchPersistentContext)
+  + a UNIQUE CDP/debug port + headless, launched by THIS loop only. Never reuse the default profile —
+  parallel sessions' playwright holds it ("Browser is already in use"). Every frontend probe sets:
+  PW_USER_DATA_DIR=scripts/ralph/mcp_sandbox/.pw-profile, PW_CDP_PORT=<unique e.g. 9555>.
+- Output: own runs/iso_*.json + own logs. Git: ADDITIVE paths only; commit with index.lock retry.
+- Ports: broker :8312 only. Do NOT bind :8311/:8180/:8300/:8100 (shared with the stack/parallel).
+
+## REAL MCP SERVERS + OAuth (user provides tokens/OAuth in-browser; e.g. Linear) — beyond the stdio stub
+- Each org must exercise >=5 REAL MCP servers, not only the echo/get_env stub. Two classes:
+  1. stdio npx MCP servers inside the sandbox: @modelcontextprotocol/server-everything / -memory /
+     -filesystem, playwright-mcp, semgrep-mcp (MCPConnectorPanel stdio presets). Registered via broker
+     stdio rpc (command "npx", args ["-y","<pkg>"]). Needs npx in ai-mesh/mcp-sandbox image — verify;
+     if absent, that is a sandbox-image gap -> ruflo handoff (don't edit services/mcp-broker).
+  2. remote OAuth MCP (Linear/GitHub/etc.): connected via the frontend MCPConnectorPanel OAuth flow.
+     The USER does the browser OAuth (loop prints the connect URL and PAUSES for it, per user: "i will
+     do on browser the oauth"). Token stored per-org; loop then drives tools/list + tools/call and
+     asserts org epsilon CANNOT reach zeta's OAuth-connected server (the real-server isolation test).
+- Tokens/OAuth are FRONTEND-only / per-org — NEVER commit them (env/DB/file/code).
+- Requires FULL stack up: frontend :8180 + control :8100 + gateway :8300 + broker :8312. If down,
+  frontend/real-MCP stories are BLOCKED — record + retry when up. (stack was DOWN as of 2026-07-01T03:57Z.)
+
+## HOST CAPACITY IS THE HARD BLOCKER (not isolation)
+- 8-core / 8 GB Docker VM shared by MANY parallel claude sessions. Observed load 26-61; at ~46+ the
+  Docker DAEMON itself returns HTTP 500 on /containers/json + /networks (overloaded), and broker#2 gets
+  removed. No isolation trick adds CPU/RAM. Loop is load-gated (LOAD_MAX=16) and PARKS until headroom.
+  To actually RUN: (a) raise Docker Desktop resources (mem+CPU), and/or (b) reduce concurrent sessions,
+  and/or (c) give this loop a dedicated window. Then the parked loop auto-proceeds.

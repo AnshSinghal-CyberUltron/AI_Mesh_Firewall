@@ -1,0 +1,553 @@
+
+ZeroShield
+AI Security Platform
+
+
+Product
+
+AI Mesh Firewall
+
+AI Gateway & Traffic Ingress
+
+Policy Management
+
+RAG & Vector DB Firewall
+
+Context Assembly & MCP
+
+Multi-Model Governance
+
+Model Isolation & Kill-Switch
+
+Output Guardrails
+
+Inputs
+System Status
+Backend unreachable
+
+Offline
+
+admin@zeroshield.io
+
+admin@zeroshield.io
+
+Context Assembly & MCP Guardrails
+DEV
+Offline
+Search models, policies, threats, or infrastructure...
+
+Scan Model
+
+
+
+
+admin@zeroshield.io
+
+admin@zeroshield.io
+
+Submodule 1.4 · Context assembly lane
+Context Assembly & MCP Guardrails
+The control surface for context minimization, MCP tool scope, data-access guardrails, and field-level redaction before generation.
+
+Operators can review tool scope, redaction pressure, and device context without leaving the MCP control surface.
+
+Context events
+4,000
+MCP and context assembly decisions in the current lens
+Redactions applied
+0
+Context fields or tool outputs sanitized before assembly
+Tools invoked
+2
+Distinct MCP tools observed in recent activity
+Data scopes
+6
+Unique data scopes or assets referenced during context assembly
+Operator lens
+Choose the time horizon
+1h
+6h
+24h
+7d
+30d
+Most-invoked tool
+Echo
+Tool creating the most recent MCP pressure
+Average risk
+11%
+Risk score across recent context assembly events
+Latest source
+mcp_scan
+Most recent MCP or context source observed in the lens
+Operator priorities
+What should dominate this page
+Lead with least-privilege context assembly and tool scope.
+Keep scanner output, device state, and MCP simulations visible together.
+Make redaction pressure legible by surfacing tools invoked and data scopes accessed in the evidence table.
+Open detailed results
+
+Getting Started
+Operate MCP Guardrails & Audit
+For teams using AI agents with tool use (MCP servers)
+View guide
+Workflow
+Context minimization and MCP guardrails
+Operators can review tool scope, redaction pressure, and device context without leaving the MCP control surface.
+
+Context controls
+MCP Guardrails
+Register, govern, and observe Model Context Protocol servers through the ZeroShield control plane.
+
+
+Register Server
+3/22
+
+Servers connected
+
+37
+
+Tools discovered
+
+On
+
+Tier-2 MCP scan
+
+106180
+
+Allowed
+
+142
+
+Blocked
+
+244
+
+Redact / Monitor
+
+244 redact · 0 monitor
+
+MCP Servers
+22
+Tool Discovery
+Tool Execution
+Scan Controls
+MCP Security Policies
+Observability
+MCP servers managed by the ZeroShield MCP control plane. Organizations can connect their own or public MCP servers here.
+
+GitHub MCP
+(auth)
+Linear MCP
+Context7 MCP
+Playwright MCP
+Semgrep MCP
+Memory MCP
+Filesystem MCP
+Fetch MCP
+Everything MCP
+Vibe Check MCP
+Gateway API Key Active
+
+q9ZRfppC••••••••••••••••
+cp09-ens8do
+Failed
+0 tools
+Synced 02/07/2026, 21:44:46
+Upstream MCP error: Stdio MCP server 'zeroshield/cp09-ens8do' failed to start: the MCP server process exited with code -6 (check the command and its host dependencies). See sandbox-agent logs for details.
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/cp09-ens8do
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+
+
+
+cp09-verify
+Failed
+0 tools
+Synced 02/07/2026, 21:33:58
+Upstream MCP error: Stdio MCP server 'zeroshield/cp09-verify' failed to start: the MCP server process exited with code -6 (check the command and its host dependencies). See sandbox-agent logs for details.
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/cp09-verify
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+
+
+
+cp08-verify
+Failed
+https://example.org/mcp
+
+0 tools
+Synced 02/07/2026, 21:31:32
+Upstream MCP error: upstream HTTP 405: <!doctype html><html lang="en"><head><title>Example Domain</title><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{background:#eee;width:60vw;margin:15vh auto;font-family:system-ui,sans-serif}h1{font-size:1.5em}div{opacity:0.8}a:link,a:visited{color:#348}</style><body><div><h1>Example Domain</h1><p>This domain is for use in documentation examples without needing permission. Avoid use in operations.<p><a href="https://iana.org/domains/example">Learn more</a></div></
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/cp08-verify
+
+Copy MCP Config (key placeholder)
+streamable-http
+Sandboxed
+
+Scan: tag
+
+
+
+ruflo
+Failed
+0 tools
+Synced 02/07/2026, 20:33:14
+Upstream MCP error: Stdio MCP server 'zeroshield/ruflo' failed to start: the MCP server process exited with code -9 (check the command and its host dependencies). See sandbox-agent logs for details.
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/ruflo
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+
+
+
+Playwright
+Connected
+23 tools
+Synced 02/07/2026, 20:26:41
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/playwright
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+
+
+
+WS Everything stub
+Connected
+ws://ws-everything.stub:3003/mcp
+
+P4.13 four-transport verify
+
+1 tools
+Synced 02/07/2026, 19:47:01
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/ws-everything-stub
+
+Copy MCP Config (key placeholder)
+websocket
+Sandboxed
+
+Scan: tag
+
+
+
+SSE Everything stub
+Failed
+http://sse-everything.stub:3002/sse
+
+P4.13 four-transport verify
+
+0 tools
+Synced 02/07/2026, 17:40:37
+Upstream MCP error: Upstream discovery failed: [Errno -2] Name or service not known
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/sse-everything-stub
+
+Copy MCP Config (key placeholder)
+sse
+Sandboxed
+
+Scan: tag
+
+
+
+HTTP Everything stub
+Failed
+http://http-everything.stub:3001/mcp
+
+P4.13 four-transport verify
+
+0 tools
+Synced 02/07/2026, 17:40:37
+Upstream MCP error: Upstream discovery failed: [Errno -2] Name or service not known
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/http-everything-stub
+
+Copy MCP Config (key placeholder)
+streamable-http
+Sandboxed
+
+Scan: tag
+
+
+
+probe-example.com/
+Unknown
+https://example.com/mcp
+
+0 tools
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/probe-examplecom
+
+Copy MCP Config (key placeholder)
+streamable-http
+Sandboxed
+
+Scan: tag
+
+
+
+Linear (manual OAuth)
+Failed
+needs re-auth
+https://mcp.linear.app/mcp
+
+Manual-OAuth B2 candidate (item #16)
+
+0 tools
+Synced 02/07/2026, 19:36:30
+Upstream MCP error: upstream returned 401; re-authenticate
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/linear-manual-oauth
+
+Copy MCP Config (key placeholder)
+streamable-http
+Sandboxed
+
+Scan: tag
+Re-authorize
+
+
+
+Everything 5
+Unknown
+P8/P9 scale test
+
+0 tools
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/everything-5
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+
+
+
+Everything 4
+Unknown
+P8/P9 scale test
+
+0 tools
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/everything-4
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+
+
+
+Everything 3
+Unknown
+P8/P9 scale test
+
+0 tools
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/everything-3
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+
+
+
+Everything 2
+Unknown
+P8/P9 scale test
+
+0 tools
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/everything-2
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+
+
+
+Everything 1
+Unknown
+P8/P9 scale test
+
+0 tools
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/everything-1
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+
+
+
+Stub OAuth
+Pending authorization
+https://example.com/mcp
+
+Stub HTTP server with OAuth — pending-auth state test (manual OAuth required)
+
+Authorize to load tools
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/stub-oauth
+
+Copy MCP Config (key placeholder)
+streamable-http
+Sandboxed
+
+Scan: tag
+Authorize
+
+
+
+Stub Bearer
+Unknown
+https://example.com/mcp
+
+Stub HTTP server with bearer auth — harness transport test
+
+0 tools
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/stub-bearer
+
+Copy MCP Config (key placeholder)
+streamable-http
+Sandboxed
+
+Scan: tag
+
+
+
+Linear Remote
+Unknown
+Linear MCP via mcp-remote (stdio wraps streamable-http) — manual OAuth
+
+0 tools
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/linear-remote
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+
+
+
+Filesystem Canary
+Unknown
+Filesystem MCP scoped to /tmp — cross-tenant canary for P9.30
+
+0 tools
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/filesystem-canary
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+
+
+
+Everything MCP
+Connected
+Official MCP reference/test server (tools echo, add, etc.)
+
+13 tools
+Synced 02/07/2026, 14:49:06
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/everything-mcp
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+
+
+
+Linear MCP
+Pending authorization
+Linear project management via mcp-remote (OAuth handled automatically)
+
+Authorize to load tools
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/linear-mcp
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+Authorize
+
+
+
+linear-mcp-p1-repro
+Pending authorization
+Linear stdio repro
+
+Authorize to load tools
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/linear-mcp-p1-repro
+
+Copy MCP Config (key placeholder)
+stdio
+Sandboxed
+
+Scan: tag
+Authorize
+
+
+
+Guardrail exercises
+MCP Policy Simulator
+Pick a registered MCP server and tool, edit arguments, then run a dry-run policy evaluation or a real gateway call. The decision, matched policies, and matched rules are shown live.
+
+Refresh
+MCP Server
+
+cp09-ens8do (cp09-ens8do) · stdio · active
+https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/cp09-ens8do
+
+Tool
+
+No tools discovered for this server
+Arguments (JSON)
+{}
+Dry-Run
+Live Call
+Evaluate Policies
+Pick a server, choose a tool, edit arguments, then run
+Dry-Run
+or
+Live Call
+.
+Traffic path
+Context Fields
+4,000 assembled
+PII Redaction
+0 sanitized
+Size Check
+19 denied
+Final Context
+3,981 approved
+Evidence
+Recent MCP and context evidence
+Tool invocations, data-access hints, and redaction pressure from recent context assembly flows.
+
+View full results
+Time	Threat	Tools	Data Scope	Action	Risk	Inspect
+2026-07-03 05:55:07	MCP Tool Call	echo	everything-5	monitor	10	Open
+2026-07-03 05:55:07	MCP Tool Call	echo	everything-3	monitor	10	Open
+2026-07-03 05:55:07	MCP Tool Call	echo	everything-4	monitor	10	Open
+2026-07-03 05:55:07	MCP Tool Call	echo	everything-5	monitor	10	Open
+2026-07-03 05:55:07	MCP Tool Call	echo	everything-5	monitor	10	Open
+2026-07-03 05:54:46	MCP Tool Call	get-sum	everything-3	monitor	10	Open
+2026-07-03 05:54:46	MCP Tool Call	echo	everything-4	monitor	10	Open
+2026-07-03 05:54:46	MCP Tool Call	echo	everything-2	monitor	10	Open

@@ -270,6 +270,37 @@ export function buildModulePageData(moduleId, threatFeed = [], extras = {}) {
       };
     }
   }
+  // Module 1.4 = Context Assembly & MCP Guardrails. Its flow-node stages (Context
+  // Fields assembled / PII Redaction sanitized / Size Check denied / Final Context
+  // approved) must reflect REAL, uncapped counts over ALL events — not the
+  // limit=500 results page. Use the server's total `count` + the per-action
+  // aggregate (CP31). monitor+allow = passed/approved; block = denied; redact =
+  // sanitized. Without a change this pinned at "500 assembled / 0 / 0 / 0".
+  if (moduleId === "1.4" && extras.threatFeedActionCounts && typeof extras.threatFeedCount === "number") {
+    const ac = extras.threatFeedActionCounts;
+    const num = (k) => Number(ac[k]) || 0;
+    summary = {
+      ...summary,
+      total: extras.threatFeedCount,
+      blocked: num("block"),
+      redacted: num("redact"),
+      monitor: num("monitor"),
+      flagged: num("flag"),
+      allowed: num("monitor") + num("allow") + num("monitored") + num("pass"),
+    };
+  }
+  // Module 1.5 = Model Routing lane. filterEventsForModule("1.5") matches on an OR
+  // that includes source==="routing"; the feed is fetched source=routing, so ALL
+  // fetched rows already match and "Routing decisions" is just the routing-source
+  // total. But summarizeEvents counts the limit=500 results page, pinning the
+  // headline at exactly 500 whenever routing traffic exceeds 500 (live: 500 shown vs
+  // ~529 real). Use the server's uncapped `count` for the total — same fix as 1.4.
+  // The failover / model-cardinality cards stay sample-scoped: they need per-event
+  // requested-vs-routed comparison the aggregate can't provide, and their copy
+  // already reads "recent evidence / current routing stream".
+  if (moduleId === "1.5" && typeof extras.threatFeedCount === "number") {
+    summary = { ...summary, total: extras.threatFeedCount };
+  }
   const rows = buildRows(config.columns, events);
 
   return {

@@ -250,6 +250,114 @@ async def test_chat_egress_redacts_pii_in_tool_description(capture_chat):
     assert sent_tools[0]["function"]["parameters"]["properties"]["msg"]["type"] == "string"
 
 
+# ── TOOL CALLS: a conversation-history assistant turn's tool_calls[].function.
+#    arguments are folded into the G7 input scan, but _apply_redaction historically
+#    masked only message content + tool DEFINITIONS — forwarding the tool-CALL
+#    arguments RAW on a redact-and-forward path (G59, same silent-leak class). ──
+
+
+@pytest.mark.asyncio
+async def test_chat_egress_redacts_pii_in_tool_call_arguments(capture_chat):
+    router = _router()
+    body = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "user", "content": "look up my record"},
+            {"role": "assistant", "content": "calling tool",
+             "tool_calls": [{
+                 "id": "call_1", "type": "function",
+                 "function": {"name": "lookup_customer",
+                              "arguments": json.dumps({"phone": _PHONE, "email": _EMAIL})},
+             }]},
+        ],
+    }
+    redacted_display = "look up my record"
+    status, _ = await router.acompletion(body, redacted_content=redacted_display)
+    assert status == 200
+    wire = _wire(capture_chat["kwargs"])
+    assert _PHONE not in wire, f"tool-call arg phone reached the wire: {wire!r}"
+    assert _EMAIL not in wire, f"tool-call arg email reached the wire: {wire!r}"
+    # Structural identifiers preserved so function-calling still resolves.
+    sent = capture_chat["kwargs"]["messages"][1]["tool_calls"][0]["function"]
+    assert sent["name"] == "lookup_customer"
+
+
+@pytest.mark.asyncio
+async def test_chat_egress_redacts_pii_in_dict_tool_call_arguments(capture_chat):
+    """A non-conforming DICT-shaped arguments (parsed JSON from a proxy) must also be
+    redacted on the wire — the coercion mirrors the output-side G58 handling."""
+    router = _router()
+    body = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "user", "content": "go"},
+            {"role": "assistant", "content": "x",
+             "tool_calls": [{"id": "c", "type": "function",
+                             "function": {"name": "f", "arguments": {"email": _EMAIL}}}]},
+        ],
+    }
+    status, _ = await router.acompletion(body, redacted_content="go")
+    assert status == 200
+    assert _EMAIL not in _wire(capture_chat["kwargs"])
+
+
+@pytest.mark.asyncio
+async def test_chat_egress_tool_calls_untouched_without_redaction_signal(capture_chat):
+    """No redaction signal → tool_calls are forwarded verbatim (no over-redaction)."""
+    router = _router()
+    args = json.dumps({"query": "weather in NYC"})
+    body = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "x",
+             "tool_calls": [{"id": "c", "type": "function",
+                             "function": {"name": "search", "arguments": args}}]},
+        ],
+    }
+    status, _ = await router.acompletion(body, redacted_content=None)
+    assert status == 200
+    sent = capture_chat["kwargs"]["messages"][1]["tool_calls"][0]["function"]
+    assert sent["arguments"] == args and sent["name"] == "search"
+
+
+# ── PARTICIPANT NAME: a message `name` reaches the model and can carry digit-PII
+#    (SSN/phone/CC fit the OpenAI name charset [a-zA-Z0-9_-]). It was NOT folded into
+#    the scan NOR redacted, so PII there bypassed the firewall entirely (G60). ──
+
+
+@pytest.mark.asyncio
+async def test_chat_egress_drops_pii_bearing_participant_name(capture_chat):
+    from main import _extract_prompt_from_messages
+    _ssn = "123-45-6789"
+    # detection: the name is now folded into the scanned prompt.
+    assert _ssn in _extract_prompt_from_messages([{"role": "user", "name": _ssn, "content": "hi"}])
+    router = _router()
+    body = {"model": "gpt-4o-mini",
+            "messages": [{"role": "user", "name": _ssn, "content": "look me up"}]}
+    status, _ = await router.acompletion(body, redacted_content="look me up")
+    assert status == 200
+    wire = _wire(capture_chat["kwargs"])
+    assert _ssn not in wire, f"PII participant name reached the wire: {wire!r}"
+    assert "name" not in capture_chat["kwargs"]["messages"][0], "PII name not dropped"
+
+
+@pytest.mark.asyncio
+async def test_chat_egress_preserves_benign_participant_name(capture_chat):
+    """A benign identifier name (even with a digit run) is PRESERVED even when the
+    request redacts PII elsewhere — the drop is detector-precise, not digit-greedy."""
+    router = _router()
+    body = {"model": "gpt-4o-mini", "messages": [
+        {"role": "user", "name": "session-2024-001", "content": f"call {_PHONE}"},
+    ]}
+    status, _ = await router.acompletion(body, redacted_content=f"call ***-***-4991")
+    assert status == 200
+    assert capture_chat["kwargs"]["messages"][0].get("name") == "session-2024-001", (
+        "benign digit-name was wrongly dropped (over-redaction)"
+    )
+    assert _PHONE not in _wire(capture_chat["kwargs"]), "content phone still leaked"
+
+
 @pytest.mark.asyncio
 async def test_chat_egress_tools_untouched_without_redaction_signal(capture_chat):
     """No redaction signal → tools are forwarded verbatim (no over-redaction)."""

@@ -1,0 +1,25 @@
+program: claude-mcp-page-cleanup
+scratchpad: scripts/ralph/mcp_page_cleanup_scratchpad.md
+opened: 2026-07-03T06:30:00Z
+status: active
+
+CLAIM — the MCP page (?tab=firewall-1-4 / Context Assembly & MCP Guardrails) + the MCP
+error/state backend paths. Any other MCP-frontend session: please stand down on these files.
+
+frontend (MCP-page-specific only; Cursor's broader frontend/** is otherwise respected):
+  frontend/src/components/MCPConnectorPanel.jsx
+  frontend/src/components/MCPScanControlMatrix.jsx
+  frontend/src/components/PolicyManagementPanel.jsx
+  frontend/src/hooks/useFirewallData.js            (module-1.4 slices only)
+  frontend/src/components/firewall-module-utils.js (module-1.4 override only)
+  frontend/src/components/firewall-submodules.jsx  (1.4 flow nodes only)
+
+backend (MCP error taxonomy + connect/sync state):
+  gateway/ai_mesh_gateway/mcp_proxy.py             (discovery + transport error paths)
+  gateway/ai_mesh_gateway/mcp_stdio_adapter.py     (stdio-start error path)
+  control/ai_mesh_control/mcp_connector/views.py   (sync-error classifier / diagnostics)
+
+goal: clean non-revealing errors at every leak site; no server stuck at "Unknown";
+context-assembly redactions count; correct System-Status banner; aligned + responsive
+1.4 page (impeccable). Distinct changelog trail: docs/mcp/MCP_PAGE_CHANGELOG.md +
+.cursor/rules/mcp-page-changelog.mdc + Ruflo namespace mcp-page.

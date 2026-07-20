@@ -1,0 +1,19 @@
+{
+  "_comment": "Surfaces audited by audit.mjs. auth=true seeds a JWT into localStorage.auth_access before load. path is relative to VISUAL_BASE_URL. migratedChart=true asserts 0 recharts SVGs (chart migration regression guard, item 1/9-15).",
+  "widths": [1440, 1024, 768, 375],
+  "themes": ["light", "dark"],
+  "surfaces": [
+    { "id": "overview",        "path": "/",                        "auth": true,  "expectText": "AI Mesh Firewall" },
+    { "id": "module-1-1",      "path": "/?tab=firewall-1-1",       "auth": true,  "expectText": "Gateway" },
+    { "id": "module-1-2",      "path": "/?tab=firewall-1-2",       "auth": true,  "expectText": "Policy" },
+    { "id": "module-1-3",      "path": "/?tab=firewall-1-3",       "auth": true,  "expectText": "RAG", "migratedChart": true },
+    { "id": "module-1-4",      "path": "/?tab=firewall-1-4",       "auth": true,  "expectText": "Context", "_note": "MCPConnectorPanel server-card overflow FIXED (flex-wrap top row + action bar, grid-cols-1 container) — now gated like every other surface; realOver=0 at all 4 widths both themes with 22 servers rendered." },
+    { "id": "module-1-5",      "path": "/?tab=firewall-1-5",       "auth": true,  "expectText": "Model" },
+    { "id": "module-1-6",      "path": "/?tab=firewall-1-6",       "auth": true,  "expectText": "Isolation" },
+    { "id": "module-1-7",      "path": "/?tab=firewall-1-7",       "auth": true,  "expectText": "Output", "migratedChart": true },
+    { "id": "firewall-config", "path": "/?tab=firewall-config",    "auth": true,  "expectText": "Config" },
+    { "id": "profile",         "path": "/?tab=profile",            "auth": true },
+    { "id": "settings",        "path": "/?tab=settings",           "auth": true },
+    { "id": "login",           "path": "/login",                   "auth": false, "expectText": "" }
+  ]
+}

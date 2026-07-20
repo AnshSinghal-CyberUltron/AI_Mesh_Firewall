@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "control": "http://127.0.0.1:8100",
+  "gateway": "http://127.0.0.1:8300",
+  "steps": [
+    {
+      "label": "login",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "label": "simulator-default key",
+      "ok": true,
+      "detail": "prefix=ZRlDoRa7..."
+    },
+    {
+      "label": "detect model",
+      "ok": true,
+      "detail": "gemma-free"
+    },
+    {
+      "label": "chat allow",
+      "ok": true,
+      "detail": "Hello!"
+    },
+    {
+      "label": "content block 400",
+      "ok": true,
+      "detail": "code=content_filter request_id=zs-67e2a5545\u2026"
+    },
+    {
+      "label": "model forbidden 403",
+      "ok": true,
+      "detail": "status=404 code=model_not_configured request_id=zs-5f0c9b91e\u2026"
+    }
+  ],
+  "error": null
+}

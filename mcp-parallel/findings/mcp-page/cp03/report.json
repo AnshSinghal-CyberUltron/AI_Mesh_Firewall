@@ -1,0 +1,88 @@
+{
+  "checkpoint": "03",
+  "probe": "a,b,c x,y",
+  "fields": {
+    "name": {
+      "present": true,
+      "expected": "a,b,c x,y",
+      "got": "a,b,c x,y",
+      "valueCorrect": true,
+      "commas": "3/3",
+      "commaDrop": false,
+      "focusKept": true,
+      "focusLostAt": null
+    },
+    "url": {
+      "present": true,
+      "expected": "a,b,c x,y",
+      "got": "a,b,c x,y",
+      "valueCorrect": true,
+      "commas": "3/3",
+      "commaDrop": false,
+      "focusKept": true,
+      "focusLostAt": null
+    },
+    "description": {
+      "present": true,
+      "expected": "a,b,c x,y",
+      "got": "a,b,c x,y",
+      "valueCorrect": true,
+      "commas": "3/3",
+      "commaDrop": false,
+      "focusKept": true,
+      "focusLostAt": null
+    },
+    "command": {
+      "present": true,
+      "expected": "a,b,c x,y",
+      "got": "a,b,c x,y",
+      "valueCorrect": true,
+      "commas": "3/3",
+      "commaDrop": false,
+      "focusKept": true,
+      "focusLostAt": null
+    },
+    "args": {
+      "present": true,
+      "expected": "a,b,c x,y",
+      "got": "a,b,c x,y",
+      "valueCorrect": true,
+      "commas": "3/3",
+      "commaDrop": false,
+      "focusKept": true,
+      "focusLostAt": null
+    },
+    "env": {
+      "present": true,
+      "expected": "K=a,b\nJ=c d",
+      "got": "K=a,b\nJ=c d",
+      "valueCorrect": true,
+      "commas": "1/1",
+      "commaDrop": false,
+      "focusKept": true,
+      "focusLostAt": null
+    },
+    "bearer": {
+      "present": true,
+      "expected": "a,b,c x,y",
+      "got": "a,b,c x,y",
+      "valueCorrect": true,
+      "commas": "3/3",
+      "commaDrop": false,
+      "focusKept": true,
+      "focusLostAt": null
+    }
+  },
+  "ok": true,
+  "error": null,
+  "record": {
+    "name": "clean",
+    "url": "clean",
+    "description": "clean",
+    "command": "clean",
+    "args": "clean",
+    "env": "clean",
+    "bearer": "clean"
+  },
+  "buggyFields": []
+}

@@ -1,0 +1,113 @@
+{
+  "finding": "F-009",
+  "title": "gateway /health reports config_sync_loaded=false \u2014 do \u00a71.7 FirewallConfig changes reach gateway runtime?",
+  "timestamp_utc": "2026-07-10T05:36:38.987883+00:00",
+  "verdict": "SYNC_WORKS",
+  "summary": "Control-plane FirewallConfig changes for org zeroshield DO reach the gateway runtime via Redis key firewall:config:zeroshield + Pub/Sub config_updates reload. config_sync_loaded=false on /health is a misleading health flag: is_loaded only becomes True when the legacy global key firewall:config is applied via _apply(); that global key is absent on this stack, while per-org keys load into _config_by_org at startup and hot-reload on PUT.",
+  "evidence": {
+    "step1_login": {
+      "url": "POST http://127.0.0.1:8100/api/auth/token/",
+      "user": "admin@zeroshield.io",
+      "ok": true,
+      "access_token_len": 231
+    },
+    "step2_api_config_before": {
+      "url": "GET /api/firewall/config/",
+      "output_pii_action": "redact",
+      "response_filtering_enabled": true,
+      "output_incident_logging_enabled": true,
+      "hallucination_grounding_threshold": 0.2,
+      "enforcement_mode": "block",
+      "organization": 2,
+      "field_count": 63
+    },
+    "step3_redis_keys": {
+      "pattern": "firewall:config*",
+      "keys_present": [
+        "firewall:config:zeroshield",
+        "firewall:config:default",
+        "firewall:config:org-a",
+        "firewall:config:org-b"
+      ],
+      "legacy_global_firewall_config": {
+        "key": "firewall:config",
+        "exists": false,
+        "note": "Absence explains config_sync_loaded=false; org keys are the live path."
+      },
+      "zeroshield_payload": {
+        "key": "firewall:config:zeroshield",
+        "exists": true,
+        "n_keys": 59,
+        "has_output_pii_action": true,
+        "output_pii_action": "redact",
+        "hallucination_grounding_threshold_before": 0.2,
+        "response_filtering_enabled_in_redis": null,
+        "note": "response_filtering_enabled is API/DB field; not present in Redis gateway payload (pre-existing)."
+      },
+      "code_refs": {
+        "gateway_REDIS_KEY": "gateway/ai_mesh_gateway/config_sync.py REDIS_KEY='firewall:config'",
+        "gateway_REDIS_KEY_PREFIX": "gateway/ai_mesh_gateway/config_sync.py REDIS_KEY_PREFIX='firewall:config:'",
+        "control_push": "control/.../models.py + signals.py \u2192 firewall:config:{org_slug} + publish config_updates"
+      }
+    },
+    "step3b_gateway_health_before": {
+      "url": "GET http://127.0.0.1:8300/health",
+      "status": "ok",
+      "config_sync_loaded": false,
+      "firewall_enabled": true,
+      "enforcement_mode": "block"
+    },
+    "step3c_startup_org_load": {
+      "observed": true,
+      "log_excerpt": "Loaded org config for 'zeroshield' (59 keys)",
+      "config_sync_started": "ConfigSync started (loaded=False, firewall_enabled=N/A, enforcement_mode=N/A)",
+      "interpretation": "Org configs loaded into _config_by_org without setting _config_sync_loaded (only _apply on global key sets the flag)."
+    },
+    "step4_temporary_put": {
+      "method": "PUT /api/firewall/config/",
+      "pattern": "OutputGuardrailControls MANAGED_KEYS partial body",
+      "field_changed": "hallucination_grounding_threshold",
+      "before": 0.2,
+      "after": 0.21,
+      "http_ok": true,
+      "note": "Did not flip output_incident_logging_enabled \u2014 compliance floor rejects disable.",
+      "api_after_put": {
+        "hallucination_grounding_threshold": 0.21,
+        "output_pii_action": "redact"
+      }
+    },
+    "step5_after_put": {
+      "redis_zeroshield_threshold": 0.21,
+      "redis_output_pii_action": "redact",
+      "gateway_health_config_sync_loaded": false,
+      "control_log": "FirewallConfig synced to Redis (firewall:config:zeroshield) and published to config_updates",
+      "gateway_pubsub": "Config update notification received on 'config_updates': {\"action\": \"reload\", \"org_slug\": \"zeroshield\"}",
+      "gateway_hot_reload": "Firewall config hot-reloaded from Redis (firewall:config:zeroshield, 59 keys, firewall_enabled=True, enforcement_mode=block)",
+      "workers_observed_reload": 6
+    },
+    "step6_restore": {
+      "restored": true,
+      "api_threshold": 0.2,
+      "api_critical_field_mismatches_vs_before": [],
+      "redis_mismatches_vs_before": 0,
+      "redis_threshold": 0.2,
+      "config_left_dirty": false
+    },
+    "step7_final_health": {
+      "config_sync_loaded": false,
+      "status": "ok"
+    }
+  },
+  "root_cause_of_health_flag": {
+    "mechanism": "ConfigSync.is_loaded reads self._config['_config_sync_loaded'], set only in _apply(). _load_initial applies the legacy GET firewall:config into global CONFIG via _apply; per-org keys only populate _config_by_org. Live stack has no firewall:config key, so is_loaded stays False even though zeroshield org config is loaded and hot-reloads.",
+    "impact_on_f009": "config_sync_loaded=false is NOT evidence that \u00a71.7 config fails to reach the gateway. Runtime path get_config(org_slug) uses _config_by_org which is populated and refreshed."
+  },
+  "verdict_rationale": [
+    "API PUT changed hallucination_grounding_threshold 0.2\u21920.21",
+    "Redis firewall:config:zeroshield updated to 0.21 and contains output_pii_action",
+    "Control published config_updates reload for org_slug=zeroshield",
+    "All gateway workers logged Firewall config hot-reloaded from Redis (firewall:config:zeroshield)",
+    "Original config restored byte-equal on API critical fields and Redis payload",
+    "config_sync_loaded remains false solely due to missing legacy global key \u2014 health semantics gap, not sync break"
+  ]
+}

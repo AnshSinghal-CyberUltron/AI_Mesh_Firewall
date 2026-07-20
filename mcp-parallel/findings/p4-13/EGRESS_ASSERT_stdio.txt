@@ -1,0 +1,26 @@
+egress assert: gateway=ai_mesh_firewall-gateway-1, 15 MCPs, burst=6/target
+  baseline: 6 conns (4 external/infra)
+    INFRA(baseline) 104.18.2.115:443
+    INFRA(baseline) 13.207.123.44:443
+    INFRA(baseline) 13.207.127.37:443
+    INFRA(baseline) 3.7.138.218:443
+  during burst: +17 new conns (17 internal, 0 external)
+    internal(new) 172.18.0.1:42586
+    internal(new) 172.18.0.1:42592
+    internal(new) 172.18.0.1:42604
+    internal(new) 172.18.0.1:42614
+    internal(new) 172.18.0.1:42630
+    internal(new) 172.18.0.1:42644
+    internal(new) 172.18.0.1:42648
+    internal(new) 172.18.0.1:42650
+    internal(new) 172.18.0.1:42664
+    internal(new) 172.18.0.1:42676
+    internal(new) 172.18.0.1:42682
+    internal(new) 172.18.0.1:42692
+    internal(new) 172.18.0.1:42696
+    internal(new) 172.18.0.1:42702
+    internal(new) 172.18.0.1:42706
+    internal(new) 172.18.0.6:8000
+    internal(new) 172.18.0.9:8311
+  broker(:8311) connection observed: True
+EGRESS ASSERT: PASS (no direct gateway→upstream dial; MCP egress via sandbox)

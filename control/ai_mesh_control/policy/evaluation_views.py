@@ -980,25 +980,53 @@ class PolicyTestView(APIView):
         if org is None:
             return Response({"detail": "Organization scope is required."}, status=status.HTTP_403_FORBIDDEN)
 
-        try:
-            policy_domain = validate_policy_domain(body.get("policy_domain") or metadata.get("policy_domain") or "pipeline")
-        except Exception as exc:
-            detail = getattr(exc, "detail", exc)
-            return Response(detail, status=status.HTTP_400_BAD_REQUEST)
+        explicit_domain = body.get("policy_domain") or metadata.get("policy_domain")
+        policy_id = body.get("policy_id")
 
         if policy_id is not None:
+            # F-013: when testing a specific policy, inherit its domain unless the
+            # caller explicitly passes policy_domain (must match).
+            policy_row = (
+                Policy.objects.filter(pk=policy_id, enabled=True, organization=org)
+                .prefetch_related("rules")
+                .first()
+            )
+            if policy_row is None:
+                return Response({"detail": "Policy not found or disabled."}, status=status.HTTP_404_NOT_FOUND)
+            if explicit_domain:
+                try:
+                    policy_domain = validate_policy_domain(explicit_domain)
+                except Exception as exc:
+                    detail = getattr(exc, "detail", exc)
+                    return Response(detail, status=status.HTTP_400_BAD_REQUEST)
+                if policy_domain != policy_row.policy_domain:
+                    return Response(
+                        {
+                            "detail": (
+                                f"policy_domain mismatch: request={policy_domain} "
+                                f"policy={policy_row.policy_domain}"
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            else:
+                policy_domain = policy_row.policy_domain
+            policies_qs = Policy.objects.filter(pk=policy_id).prefetch_related("rules")
+        else:
+            try:
+                policy_domain = validate_policy_domain(explicit_domain or "pipeline")
+            except Exception as exc:
+                detail = getattr(exc, "detail", exc)
+                return Response(detail, status=status.HTTP_400_BAD_REQUEST)
             policies_qs = (
                 Policy.objects.filter(
-                    pk=policy_id,
-                    enabled=True,
                     organization=org,
+                    enabled=True,
                     policy_domain=policy_domain,
-                ).order_by("-priority").prefetch_related("rules")
+                )
+                .order_by("-priority")
+                .prefetch_related("rules")
             )
-            if not policies_qs.exists():
-                return Response({"detail": "Policy not found or disabled."}, status=status.HTTP_404_NOT_FOUND)
-        else:
-            policies_qs = Policy.objects.filter(organization=org, enabled=True).order_by("-priority").prefetch_related("rules")
 
         result = evaluate(context, policies_qs=policies_qs, domain=policy_domain)
 

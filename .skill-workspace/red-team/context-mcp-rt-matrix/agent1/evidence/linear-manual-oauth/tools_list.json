@@ -1,0 +1,46 @@
+{
+  "agent": "agent1",
+  "scope": "context-assembly|least-privilege|context-minimization|cross-mcp-leakage",
+  "server_slug": "linear-manual-oauth",
+  "label": "tools_list",
+  "captured_at_utc": "2026-07-07T10:55:40Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/linear-manual-oauth",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {}
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:39 GMT",
+      "server": "uvicorn",
+      "content-length": "213",
+      "content-type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "error": {
+        "code": -32001,
+        "message": "upstream returned 401; re-authenticate"
+      },
+      "_meta": {
+        "transport": "streamable-http",
+        "needs_reauth": true,
+        "upstream_status": 0,
+        "session_id": null,
+        "duration_ms": 0
+      }
+    }
+  },
+  "notes": ""
+}

@@ -1,0 +1,34 @@
+agent: claude-ralph-stress
+program: chat-pipeline-adversarial-stress
+story: R0 coordination + key-safety
+files:
+  # chat modules (gateway backend — Claude Code owned per PARALLEL_CLAIMS.md)
+  - gateway/ai_mesh_gateway/policy_engine.py
+  - gateway/ai_mesh_gateway/output_guard.py
+  - gateway/ai_mesh_gateway/bedrock_scanner.py
+  - gateway/ai_mesh_gateway/scanner.py
+  - gateway/ai_mesh_gateway/patterns.py
+  - gateway/ai_mesh_gateway/typed_placeholder_redactor.py
+  - gateway/ai_mesh_gateway/context_guard.py
+  # golden suite (to be created — harness)
+  - gateway/tests/golden/**
+  # narrow frontend carve-out from Cursor's broad frontend/** (named files only)
+  - frontend/src/components/ModelConnectionPanel.jsx
+  - frontend/src/components/OutputPipelineTimeline.jsx
+  # this program's own artifacts
+  - scripts/ralph/stress_scratchpad.md
+  - scripts/ralph/precommit-secret-scan.sh
+  - docs/stress/**
+never_edit:
+  - frontend/src/components/MCPConnectorPanel.jsx
+  - gateway/ai_mesh_gateway/mcp_*.py
+  - services/mcp-broker/**
+since: 2026-07-02T09:30:43Z
+status: active
+session: Claude Code Ralph — chat-stress program (distinct from Cursor MCP session)
+notes: >
+  Narrow frontend carve-out: only ModelConnectionPanel.jsx and
+  OutputPipelineTimeline.jsx are owned here; Cursor's broad frontend/** ownership
+  is otherwise respected. All prior Cursor claims are status:released, so no live
+  conflict. Pre-commit secret-scan guard installed (fingerprint + generic token
+  detection) to prevent the runtime OpenRouter key from ever being committed.

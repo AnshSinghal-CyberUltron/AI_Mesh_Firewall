@@ -1,0 +1,5 @@
+{
+  "ok": false,
+  "error": "NotFoundError: Error code: 404 - {'error': {'message': 'Not Found', 'type': 'invalid_request_error', 'param': None, 'code': None}, 'request_id': 'zs-9fdaa2bcf807'}",
+  "_captured_at": "2026-07-07T09:29:53.120542+00:00"
+}

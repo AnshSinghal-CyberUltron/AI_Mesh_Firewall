@@ -448,9 +448,6 @@ class ChangePasswordView(APIView):
         if not request.user.check_password(old_password):
             return Response({"detail": "Current password is incorrect."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if len(new_password) < 8:
-            return Response({"detail": "New password must be at least 8 characters."}, status=status.HTTP_400_BAD_REQUEST)
-
         if new_password != confirm_password:
             return Response({"detail": "Passwords do not match."}, status=status.HTTP_400_BAD_REQUEST)
 

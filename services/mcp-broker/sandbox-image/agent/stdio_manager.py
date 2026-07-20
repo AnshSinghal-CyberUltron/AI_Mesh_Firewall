@@ -8,17 +8,32 @@ stdin/stdout, and reuses processes across RPC calls.
 from __future__ import annotations
 
 import asyncio
+import glob
 import json
 import logging
 import os
+import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 
+from ai_mesh_shared.mcp_host_tools import (
+    HOST_CLI_TOOLS_INSTALLED_MARKER,
+    MCP_HOST_TOOLS_ENV_KEY,
+    MCP_PROTOCOL_HANDSHAKE_FAILED_MARKER,
+    parse_host_tools_spec,
+)
+from ai_mesh_shared.mcp_host_tools_runtime import (
+    ensure_host_tools as _ensure_host_tools,
+    install_host_tool as _install_host_tool,
+    reset_host_tool_install_cache,
+)
 from ai_mesh_shared.mcp_stdio_common import (
     _args_have_oauth_header,
     _build_child_env,
     _looks_like_oauth_prompt,
+    _safe_args_for_log,
 )
 
 LOG = logging.getLogger("sandbox_agent.stdio")
@@ -31,7 +46,7 @@ _MAX_LINE_BYTES = int(os.environ.get("MCP_STDIO_MAX_LINE_BYTES", str(8 * 1024 * 
 _INIT_TIMEOUT = float(os.environ.get("MCP_STDIO_INIT_TIMEOUT", "120"))
 _METHOD_TIMEOUT = float(os.environ.get("MCP_STDIO_METHOD_TIMEOUT", "60"))
 _HUNG_INIT_TIMEOUT = float(os.environ.get("MCP_STDIO_HUNG_INIT_TIMEOUT", "180"))
-_MAX_PROCESSES_PER_ORG = int(os.environ.get("MCP_STDIO_MAX_PROCESSES_PER_ORG", "8"))
+_MAX_PROCESSES_PER_ORG = int(os.environ.get("MCP_STDIO_MAX_PROCESSES_PER_ORG", "16"))
 _MAX_CONCURRENT_INITS = int(os.environ.get("MCP_STDIO_MAX_CONCURRENT_INITS", "4"))
 
 _ALLOWED_COMMANDS = {
@@ -42,14 +57,214 @@ _ALLOWED_COMMANDS = {
     if c.strip()
 }
 
+# Optional comma-separated allowlist of npm/PyPI package names permitted for
+# on-demand fetch (e.g. "semgrep-mcp,mcp-remote"). Empty = allow any package
+# (the sandbox already constrains which servers are registered per-org).
+# Mirrors gateway mcp_stdio_adapter._PACKAGE_ALLOWLIST for parity.
+_PACKAGE_ALLOWLIST = {
+    p.strip().lower()
+    for p in os.environ.get("MCP_STDIO_PACKAGE_ALLOWLIST", "").split(",")
+    if p.strip()
+}
+
+# When true, reject unpinned (@latest / bare) package specs so every fetch is
+# reproducible and the supply-chain attack window is eliminated.
+# Mirrors gateway mcp_stdio_adapter._REQUIRE_PINNED_PACKAGES for parity.
+_REQUIRE_PINNED_PACKAGES = os.environ.get(
+    "MCP_STDIO_REQUIRE_PINNED_PACKAGES", "false"
+).lower() in ("1", "true", "yes")
+
 _init_semaphore: asyncio.Semaphore | None = None
 _processes: dict[str, StdioProcess] = {}
 _registry_lock = asyncio.Lock()
 _reaper_task: asyncio.Task | None = None
 
 
+# CHG-0053 / CHG-0107: ``_safe_args_for_log`` (masks secret-flag values AND
+# URL-embedded credentials before logging) now lives in the SHARED module so the
+# gateway adapter and this sandbox agent redact identically. Imported above.
+
+
 def _command_basename(command: str) -> str:
     return os.path.basename(command).lower()
+
+
+_PKG_FLAGS = ("--from", "--with", "--package", "-p")
+
+
+def _extract_package_specs(command: str, args: list[str]) -> list[str]:
+    """ALL package specs an npx/uvx invocation would FETCH.
+
+    npx  ["-y", "mcp-remote", "https://.."]        -> ["mcp-remote"]
+    npx  ["-y", "ruflo@latest", "mcp"]              -> ["ruflo@latest"]
+    npx  ["--package=evil", "safe-cmd"]             -> ["evil"]         (=-form)
+    npx  ["-p", "a", "-p", "evil", "cmd"]           -> ["a", "evil"]    (multiple)
+    uvx  ["--from", "semgrep-mcp==1.0", "semgrep"]  -> ["semgrep-mcp==1.0"]
+    Returns [] for runtimes that don't fetch packages (node/python).
+
+    CHG-0126: this covers the ``--flag=value`` form and MULTIPLE package flags,
+    which the old single-spec extractor missed — an attacker could smuggle an
+    unlisted/unpinned package past the allowlist via ``--package=evil`` (skipped as
+    a flag, so the check ran against the wrong token) or a 2nd ``-p``. Enforcement
+    checks EVERY returned spec. When a package flag is present the bare positional
+    is the COMMAND to run (not a package), so it is only taken as a package when NO
+    package flag supplied one (``npx <pkg>`` / ``uvx <tool>``)."""
+    if _command_basename(command) not in ("npx", "uvx", "uv"):
+        return []
+    skip = {"-y", "--yes", "-q", "--quiet", "tool", "run"}
+    specs: list[str] = []
+    saw_pkg_flag = False
+    positional_taken = False
+    it = iter(args)
+    for tok in it:
+        matched = False
+        for fn in _PKG_FLAGS:
+            if tok == fn:                       # "--package", "evil"
+                val = next(it, None)
+                if val:
+                    specs.append(val)
+                    saw_pkg_flag = True
+                matched = True
+                break
+            if tok.startswith(fn + "="):        # "--package=evil"
+                val = tok[len(fn) + 1:]
+                if val:
+                    specs.append(val)
+                    saw_pkg_flag = True
+                matched = True
+                break
+        if matched:
+            continue
+        if tok.startswith("-") or tok in skip:
+            continue
+        # A bare positional is the fetched package ONLY when no package flag gave
+        # one (else it is the command npx/uvx runs from the flagged package).
+        if not saw_pkg_flag and not positional_taken:
+            specs.append(tok)
+            positional_taken = True
+    return specs
+
+
+def _extract_package_spec(command: str, args: list[str]) -> str | None:
+    """Back-compat single-spec helper — the FIRST fetched spec (or None)."""
+    specs = _extract_package_specs(command, args)
+    return specs[0] if specs else None
+
+
+def _package_name(spec: str) -> str:
+    """Strip version/url from a package spec to get the bare name (lowercase)."""
+    if spec.startswith("@"):  # scoped npm pkg @scope/name@version
+        at = spec.rfind("@")
+        return (spec[:at] if at > 0 else spec).lower()
+    for sep in ("==", ">=", "<=", "~=", "@", ">", "<"):
+        if sep in spec:
+            return spec.split(sep, 1)[0].lower()
+    return spec.lower()
+
+
+def _is_pinned(spec: str) -> bool:
+    """True if the spec carries an explicit (non-@latest) version."""
+    if spec.startswith("@"):
+        at = spec.rfind("@")
+        ver = spec[at + 1:] if at > 0 else ""
+        return bool(ver) and ver != "latest"
+    for sep in ("==", "@"):
+        if sep in spec:
+            ver = spec.split(sep, 1)[1]
+            return bool(ver) and ver != "latest"
+    return False
+
+
+_NPX_CACHE_ROOT = "/var/npm-cache/_npx"
+_PKG_DIR_RE = re.compile(r"^(@[^/]+/[^@]+|[^@/]+)(?:@.+)?$")
+
+
+def _package_dir_name(spec: str) -> str:
+    """npm package directory name (strip a trailing @version, keep @scope/pkg)."""
+    m = _PKG_DIR_RE.match(spec.strip())
+    return m.group(1) if m else spec.strip()
+
+
+def _package_json_entrypoint(pkg_root: str) -> str | None:
+    pj = Path(pkg_root) / "package.json"
+    if not pj.is_file():
+        return None
+    data = json.loads(pj.read_text(encoding="utf-8"))
+    root = pj.parent
+    bin_field = data.get("bin")
+    if isinstance(bin_field, str):
+        return str((root / bin_field).resolve())
+    if isinstance(bin_field, dict) and bin_field:
+        return str((root / next(iter(bin_field.values()))).resolve())
+    main = data.get("main")
+    if main:
+        return str((root / main).resolve())
+    return None
+
+
+def _find_npx_package_entry(package_spec: str) -> str | None:
+    dir_name = _package_dir_name(package_spec)
+    pattern = os.path.join(_NPX_CACHE_ROOT, "*", "node_modules", dir_name, "package.json")
+    hits = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
+    if not hits:
+        return None
+    return _package_json_entrypoint(str(Path(hits[0]).parent))
+
+
+async def _warm_npx_package(package_spec: str) -> None:
+    """Populate the npx content-addressed cache without invoking the package bin."""
+    proc = await asyncio.create_subprocess_exec(
+        "npm",
+        "exec",
+        "--yes",
+        f"--package={package_spec}",
+        "--",
+        "node",
+        "--version",
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc.wait()
+
+
+def _should_resolve_npx_to_node(command: str, args: list[str]) -> str | None:
+    """Return the fetched package when ``npx -y <pkg>`` has no URL operand."""
+    if _command_basename(command) != "npx":
+        return None
+    if len(args) < 2 or args[0] not in ("-y", "--yes"):
+        return None
+    pkg = args[1]
+    if pkg.startswith("-"):
+        return None
+    for extra in args[2:]:
+        if extra.startswith("-"):
+            continue
+        if "://" in extra or extra.startswith("/"):
+            return None
+    return pkg
+
+
+async def _resolve_npx_spawn(command: str, args: list[str]) -> tuple[str, list[str]]:
+    """Rewrite ``npx -y <pkg>`` to ``node <pkg-main.js>`` when needed.
+
+    Some MCP npm packages (e.g. mcp-server-semgrep) gate startup on an
+    ``isEntrypoint`` check comparing ``process.argv[1]`` to ``__filename``.
+    npx's wrapper leaves argv[1] mismatched, so the server exits immediately
+    with code 0 and no JSON-RPC output. Spawning ``node`` on the resolved
+    package entrypoint is the general fix; ``npx -y mcp-remote <url>`` is
+    left untouched (extra URL operand).
+    """
+    pkg = _should_resolve_npx_to_node(command, args)
+    if not pkg:
+        return command, args
+    entry = _find_npx_package_entry(pkg)
+    if not entry:
+        await _warm_npx_package(pkg)
+        entry = _find_npx_package_entry(pkg)
+    if entry and os.path.isfile(entry):
+        LOG.info("Resolved npx -y %s to node %s (isEntrypoint-safe)", pkg, entry)
+        return "node", [entry]
+    return command, args
 
 
 def _get_init_semaphore() -> asyncio.Semaphore:
@@ -77,6 +292,7 @@ class StdioProcess:
     _reader_task: asyncio.Task | None = None
     stderr_tail: deque = field(default_factory=lambda: deque(maxlen=50))
     oauth_header_injected: bool = False
+    host_tools_ready: bool = False
 
     def next_id(self) -> int:
         self._msg_id_counter += 1
@@ -102,6 +318,70 @@ def _flag_needs_reauth(proc: StdioProcess, evidence: str) -> None:
             fut.set_exception(RuntimeError(msg))
     proc._pending.clear()
     asyncio.create_task(_kill_process(proc.key))
+
+
+def _classify_exit_reason(
+    rc,
+    stderr_tail: str,
+    *,
+    oversized_line: bool,
+    host_tools_ready: bool = False,
+) -> str:
+    """Human-readable reason a spawned stdio MCP server terminated.
+
+    Pure + unit-testable. OOM (CP20) is detected FIRST from the stderr signature
+    (a V8 heap-limit abort prints "JavaScript heap out of memory" but exits 134,
+    which would otherwise read as a generic crash) OR from a kernel OOM-kill exit
+    code (-9 / 137). The word "out of memory" / "exit code -9" is kept in the text
+    so the control-plane classifier maps it to MCP_OUT_OF_MEMORY. (CP20)
+    """
+    low_err = (stderr_tail or "").lower()
+    oom_in_stderr = any(
+        s in low_err
+        for s in ("heap out of memory", "out of memory", "fatal error: reached heap limit")
+    )
+    # A heavy server whose install overflows the RAM-backed npm-cache tmpfs fails
+    # with ENOSPC — a STORAGE limit, not a bad command. (CP21)
+    disk_full = any(s in low_err for s in ("enospc", "no space left on device"))
+    if oversized_line:
+        return (
+            f"the MCP server sent a response larger than the {_MAX_LINE_BYTES}-byte "
+            "line buffer (raise MCP_STDIO_MAX_LINE_BYTES for very large tool catalogs)"
+        )
+    if disk_full:
+        return (
+            "the MCP server's install exceeded the sandbox storage limit (no space "
+            "left on device). Raise MCP_SANDBOX_NPM_CACHE_SIZE_MB (and usually "
+            "MCP_SANDBOX_MEMORY_MB) for heavy servers with large dependency trees"
+        )
+    if oom_in_stderr or rc in (-9, 137):
+        return (
+            f"the MCP server ran out of memory (exit code {rc}; exceeded the per-org "
+            "sandbox memory limit). Raise MCP_SANDBOX_MEMORY_MB for heavy servers or "
+            "reduce its footprint"
+        )
+    if rc is None:
+        return "stdout stream closed unexpectedly"
+    if rc == 0:
+        if host_tools_ready:
+            return (
+                f"{MCP_PROTOCOL_HANDSHAKE_FAILED_MARKER}: "
+                f"the MCP server exited immediately without speaking MCP JSON-RPC "
+                f"({HOST_CLI_TOOLS_INSTALLED_MARKER})"
+            )
+        return (
+            "the MCP server exited immediately without responding "
+            "(likely a missing host dependency or wrong package name)"
+        )
+    if rc in (-6, 134):
+        return (
+            f"the MCP server crashed on startup (exit code {rc} / SIGABRT). "
+            "Verify the command and package are compatible"
+        )
+    return (
+        f"the MCP server process exited with code {rc} "
+        "(check the command and its host dependencies)"
+    )
 
 
 async def _exit_code(proc: StdioProcess) -> int | None:
@@ -164,23 +444,12 @@ async def _start_reader(proc: StdioProcess):
         stderr_tail = "\n".join(str(line) for line in proc.stderr_tail).strip()
         if stderr_tail:
             LOG.warning("Stdio %s stderr tail (rc=%s):\n%s", proc.key, rc, stderr_tail[-2000:])
-        if proc.oversized_line:
-            reason = (
-                f"the MCP server sent a response larger than the {_MAX_LINE_BYTES}-byte "
-                "line buffer (raise MCP_STDIO_MAX_LINE_BYTES for very large tool catalogs)"
-            )
-        elif rc is None:
-            reason = "stdout stream closed unexpectedly"
-        elif rc == 0:
-            reason = (
-                "the MCP server exited immediately without responding "
-                "(likely a missing host dependency or wrong package name)"
-            )
-        else:
-            reason = (
-                f"the MCP server process exited with code {rc} "
-                "(check the command and its host dependencies)"
-            )
+        reason = _classify_exit_reason(
+            rc,
+            stderr_tail,
+            oversized_line=proc.oversized_line,
+            host_tools_ready=proc.host_tools_ready,
+        )
         safe_msg = (
             f"Stdio MCP server '{proc.key}' failed to start: {reason}. "
             "See sandbox-agent logs for details."
@@ -189,6 +458,12 @@ async def _start_reader(proc: StdioProcess):
             if not fut.done():
                 fut.set_exception(RuntimeError(safe_msg))
         proc._pending.clear()
+
+
+# Re-export install cache helpers for agent tests (see test_stdio_host_tools.py).
+_host_tools_installed = __import__(
+    "ai_mesh_shared.mcp_host_tools_runtime", fromlist=["_installed"]
+)._installed
 
 
 async def _ensure_process(
@@ -211,6 +486,25 @@ async def _ensure_process(
             f"Allowed commands: {', '.join(sorted(_ALLOWED_COMMANDS))}."
         )
 
+    # Package allowlist + pinned-version enforcement (N3 + N2).
+    # Mirrors the same checks in gateway mcp_stdio_adapter so both paths have
+    # identical supply-chain hardening regardless of MCP_STDIO_IN_PROCESS.
+    # CHG-0126: check EVERY fetched spec (multiple -p/--package/--with flags and the
+    # --flag=value form), not just the first — else an unlisted/unpinned package could
+    # ride in past a benign first spec.
+    for spec in _extract_package_specs(command, args):
+        name = _package_name(spec)
+        if _PACKAGE_ALLOWLIST and name not in _PACKAGE_ALLOWLIST:
+            raise RuntimeError(
+                f"Package '{name}' is not in the on-demand allowlist. "
+                f"Allowed: {', '.join(sorted(_PACKAGE_ALLOWLIST))}."
+            )
+        if _REQUIRE_PINNED_PACKAGES and not _is_pinned(spec):
+            raise RuntimeError(
+                f"Package '{spec}' must be version-pinned (e.g. 'pkg@1.2.3'); "
+                "unpinned/@latest specs are disabled by policy."
+            )
+
     async with _registry_lock:
         if key in _processes:
             proc = _processes[key]
@@ -232,13 +526,30 @@ async def _ensure_process(
             oldest_key = min(_processes, key=lambda k: _processes[k].last_used)
             await _kill_process(oldest_key)
 
-        org_count = sum(1 for k in _processes if k.startswith(f"{ORG_SLUG}/"))
-        if org_count >= _MAX_PROCESSES_PER_ORG:
-            raise RuntimeError(
-                f"Org '{ORG_SLUG}' reached its concurrent stdio MCP server "
-                f"limit ({_MAX_PROCESSES_PER_ORG}). Close an existing server "
-                "connection and retry."
+        org_keys = [k for k in _processes if k.startswith(f"{ORG_SLUG}/")]
+        while len(org_keys) >= _MAX_PROCESSES_PER_ORG:
+            oldest = min(org_keys, key=lambda k: _processes[k].last_used)
+            LOG.info(
+                "Evicting LRU stdio process %s (org %s at limit %s)",
+                oldest,
+                ORG_SLUG,
+                _MAX_PROCESSES_PER_ORG,
             )
+            await _kill_process(oldest)
+            org_keys = [k for k in _processes if k.startswith(f"{ORG_SLUG}/")]
+
+        # Install any operator-declared host CLI tools (MCP_HOST_TOOLS) before the
+        # server launches, so a server that shells out to a binary the base image
+        # doesn't ship (e.g. semgrep) finds it on PATH. A failure here surfaces as a
+        # clean start error rather than the server exiting immediately with an
+        # opaque "missing host dependency".
+        host_tools_declared = bool(
+            parse_host_tools_spec(requested_env.get(MCP_HOST_TOOLS_ENV_KEY) or "")
+        )
+        await _ensure_host_tools(requested_env)
+        host_tools_ready = host_tools_declared
+
+        spawn_command, spawn_args = await _resolve_npx_spawn(command, args)
 
         proc_env = _build_child_env(
             requested_env,
@@ -247,11 +558,14 @@ async def _ensure_process(
             log=LOG,
         )
 
-        LOG.info("Starting stdio MCP process: %s %s (key=%s)", command, args, key)
+        LOG.info(
+            "Starting stdio MCP process: %s %s (key=%s)",
+            spawn_command, _safe_args_for_log(spawn_args), key,
+        )
         try:
             process = await asyncio.create_subprocess_exec(
-                command,
-                *args,
+                spawn_command,
+                *spawn_args,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -268,6 +582,7 @@ async def _ensure_process(
             command=command,
             args=args,
             env=requested_env,
+            host_tools_ready=host_tools_ready,
             process=process,
             oauth_header_injected=_args_have_oauth_header(args),
         )
@@ -279,9 +594,24 @@ async def _ensure_process(
 
 async def _log_stderr(proc: StdioProcess):
     assert proc.process and proc.process.stderr
+    stderr = proc.process.stderr
     try:
         while True:
-            line = await proc.process.stderr.readline()
+            try:
+                line = await stderr.readline()
+            except (asyncio.LimitOverrunError, ValueError):
+                # CHG-0152: an untrusted stdio server can flood stderr with a huge
+                # UNTERMINATED line. readline() raises once the line exceeds the stream
+                # limit (LimitOverrunError on py3.14, ValueError on py3.12) AND consumes the
+                # buffered bytes on BOTH runtimes (verified on python:3.12-slim + py3.14). The
+                # old catch-all `except Exception` sat OUTSIDE the loop, so it EXITED on that
+                # raise — stderr was then never drained again, the OS pipe buffer filled, and
+                # the child BLOCKED on write(2) to stderr (a self-hang of that org's server).
+                # SKIP the oversized line and KEEP DRAINING (a huge line drains in
+                # limit-sized chunks across successive raises; bounded by the sandbox
+                # cpu/mem limits; the reader survives).
+                LOG.warning("Stdio %s: skipped an oversized stderr line", proc.key)
+                continue
             if not line:
                 break
             decoded = line.decode(errors="replace").strip()
@@ -449,7 +779,9 @@ async def send_jsonrpc(
     if params is not None:
         message["params"] = params
 
-    resp = await _send_message(proc, message, timeout=method_to)
+    # Stdio MCP is line-oriented on a single stdin/stdout pair — serialize per process.
+    async with proc.lock:
+        resp = await _send_message(proc, message, timeout=method_to)
     if msg_id is not None:
         resp["id"] = msg_id
     return resp

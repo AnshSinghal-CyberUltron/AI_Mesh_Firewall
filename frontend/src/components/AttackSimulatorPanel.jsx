@@ -7,14 +7,15 @@ import { copyToClipboard } from "../lib/clipboard";
 import { InfoTooltip } from "./InfoTooltip";
 import { useSimulatorEngine } from "../hooks/useSimulatorEngine";
 import { useSimulatorGatewayModels } from "../hooks/useSimulatorGatewayModels";
+import { useFirewallConfig } from "../hooks/useFirewallConfig";
 import { SimulatorModelSelector } from "./simulator/SimulatorModelSelector";
 import { StageTimeline } from "./simulator/StageTimeline";
 import {
   chatCompletionBody,
+  simulatorRoutingPreferences,
   normalizeChatPipelineResult,
   normalizeStreamChatPipelineResult,
 } from "../utils/liveGateway";
-import { notifyTelemetryActivity } from "../utils/telemetryEvents";
 import { formatZeroshieldScanSummary, formatRoutingReason, ZEROSHIELD_GUARD_MODEL_LABEL } from "../constants/zeroshieldBrand";
 
 // Upstream provider/model literals that must never reach the operator UI.
@@ -40,6 +41,24 @@ function sanitizeGuardText(text) {
     .replace(new RegExp(`(?:${ZEROSHIELD_GUARD_MODEL_LABEL}[\\s]*){2,}`, "g"), `${ZEROSHIELD_GUARD_MODEL_LABEL} `)
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+/** Deep-clone a result object and neutralize any upstream provider/model
+ *  literals in EVERY string value, so the "Raw Response JSON" dump/copy honors
+ *  the same no-topology invariant as the rendered guard text. */
+function sanitizeResultForDump(value) {
+  if (typeof value === "string") {
+    let out = value;
+    for (const pattern of PROVIDER_LITERAL_PATTERNS) out = out.replace(pattern, ZEROSHIELD_GUARD_MODEL_LABEL);
+    return out;
+  }
+  if (Array.isArray(value)) return value.map(sanitizeResultForDump);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = sanitizeResultForDump(v);
+    return out;
+  }
+  return value;
 }
 
 const ATTACK_SCENARIOS = [
@@ -135,14 +154,7 @@ const ATTACK_SCENARIOS = [
   },
 ];
 
-function isThreatIntelBlock(result = {}) {
-  const code = String(result?.code || result?.zeroshield?.code || "").toLowerCase();
-  const blockedBy = String(result?.blocked_by || "").toLowerCase();
-  const tier = String(result?.zeroshield?.detection_tier || "").toLowerCase();
-  return code === "threat_intel_blocked" || blockedBy === "threat_intel" || tier === "threat_intel";
-}
-
-function getStatusConfig(httpStatus, action, result = null) {
+function getStatusConfig(httpStatus, action) {
   if (action === "needs_model") {
     return {
       color: "violet",
@@ -153,31 +165,26 @@ function getStatusConfig(httpStatus, action, result = null) {
       text: "text-violet-700 dark:text-violet-300",
     };
   }
+  // A firewall verdict (block/redact/flag) must win over the generic 4xx->ERROR
+  // mapping: an OpenAI content_filter block returns HTTP 400 but is a real BLOCK,
+  // not a system error. Only treat a 4xx as ERROR when no verdict claims it.
   if (
     action === "error"
     || (httpStatus >= 400 && httpStatus !== 403 && httpStatus !== 429 && httpStatus !== 422
         && !["block", "redact", "flag"].includes(action))
   ) {
-    return { color: "amber", label: "ERROR", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700" };
+    return { color: "amber", label: "ERROR", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" };
   }
-  if (httpStatus === 403 || httpStatus === 503 || action === "block") {
-    const threatIntel = result && isThreatIntelBlock(result);
-    return {
-      color: "red",
-      label: threatIntel ? "THREAT INTEL POLICY BLOCK" : "BLOCKED",
-      icon: AlertTriangle,
-      bg: threatIntel ? "bg-violet-50 dark:bg-violet-900/20" : "bg-red-50 dark:bg-red-900/20",
-      border: threatIntel ? "border-violet-200 dark:border-violet-800" : "border-red-200 dark:border-red-800",
-      text: threatIntel ? "text-violet-700 dark:text-violet-300" : "text-red-700",
-    };
+  if (httpStatus === 403 || action === "block") {
+    return { color: "red", label: "BLOCKED", icon: AlertTriangle, bg: "bg-red-50 dark:bg-red-900/20", border: "border-red-200 dark:border-red-800", text: "text-red-700 dark:text-red-300" };
   }
   if (action === "redact") {
-    return { color: "blue", label: "REDACTED", icon: Shield, bg: "bg-blue-50 dark:bg-blue-900/20", border: "border-blue-200 dark:border-blue-800", text: "text-blue-700" };
+    return { color: "blue", label: "REDACTED", icon: Shield, bg: "bg-blue-50 dark:bg-blue-900/20", border: "border-blue-200 dark:border-blue-800", text: "text-blue-700 dark:text-blue-300" };
   }
   if (action === "flag") {
-    return { color: "amber", label: "FLAGGED", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700" };
+    return { color: "amber", label: "FLAGGED", icon: AlertTriangle, bg: "bg-amber-50 dark:bg-amber-900/20", border: "border-amber-200 dark:border-amber-800", text: "text-amber-700 dark:text-amber-300" };
   }
-  return { color: "green", label: "ALLOWED", icon: CheckCircle, bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800", text: "text-emerald-700" };
+  return { color: "green", label: "ALLOWED", icon: CheckCircle, bg: "bg-emerald-50 dark:bg-emerald-900/20", border: "border-emerald-200 dark:border-emerald-800", text: "text-emerald-700 dark:text-emerald-300" };
 }
 
 function getSignalBadges(zeroshield = {}) {
@@ -207,6 +214,8 @@ export function AttackSimulatorPanel() {
     gatewayFetch, gatewayFetchStream, executing: engineExecuting,
   } = useSimulatorEngine();
   const gatewayModels = useSimulatorGatewayModels();
+  const { config: firewallConfig } = useFirewallConfig();
+  const orgRoutingEnabled = firewallConfig?.routing_enabled ?? true;
 
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [promptText, setPromptText] = useState("");
@@ -250,6 +259,7 @@ export function AttackSimulatorPanel() {
         model: gatewayModels.selectedModel,
         runInference: true,
         stream: useStreamMode,
+        routingPreferences: simulatorRoutingPreferences(gatewayModels.selectedModel, { orgRoutingEnabled }),
       });
 
       const res = useStreamMode
@@ -290,6 +300,7 @@ export function AttackSimulatorPanel() {
                 prompt: activePrompt,
                 model: gatewayModels.selectedModel,
                 runInference: false,
+                routingPreferences: simulatorRoutingPreferences(gatewayModels.selectedModel, { orgRoutingEnabled }),
               }),
             ),
           });
@@ -416,10 +427,6 @@ export function AttackSimulatorPanel() {
           action: normalized.final_action || (res.status === 403 ? "block" : res.status >= 400 ? "error" : "allow"),
         });
       }
-      notifyTelemetryActivity("attack-simulator", {
-        mode: useStreamMode ? "stream" : "single",
-        http_status: res.status,
-      });
     } catch (err) {
       setError(
         err.message === "Failed to fetch"
@@ -474,6 +481,7 @@ export function AttackSimulatorPanel() {
               prompt: burstPrompt,
               model: gatewayModels.selectedModel,
               runInference: false,
+              routingPreferences: simulatorRoutingPreferences(gatewayModels.selectedModel, { orgRoutingEnabled }),
             }),
             estimated_tokens: estimatedTokens,
           }),
@@ -531,13 +539,6 @@ export function AttackSimulatorPanel() {
       rate_limited: normalized.filter((r) => r.rate_limited).length,
       allowed: normalized.filter((r) => r.action === "allow").length,
     });
-    notifyTelemetryActivity("attack-simulator", {
-      mode: "burst",
-      request_count: requestCount,
-      blocked: normalized.filter((r) => r.action === "block").length,
-      redacted: normalized.filter((r) => r.action === "redact").length,
-      rate_limited: normalized.filter((r) => r.rate_limited).length,
-    });
     setBurstRunning(false);
     // gatewayModels added so the burst captures the CURRENTLY-selected model,
     // not a stale closure value (M-32). State setters are stable; no loop.
@@ -554,14 +555,14 @@ export function AttackSimulatorPanel() {
 
   const handleCopyResult = () => {
     if (result) {
-      copyToClipboard(JSON.stringify(result, null, 2));
+      copyToClipboard(JSON.stringify(sanitizeResultForDump(result), null, 2));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
   const statusCfg = result
-    ? getStatusConfig(result.httpStatus, result.final_action || result.action, result)
+    ? getStatusConfig(result.httpStatus, result.final_action || result.action)
     : null;
   const StatusIcon = statusCfg?.icon;
 
@@ -715,7 +716,7 @@ export function AttackSimulatorPanel() {
               className="flex items-center gap-2 rounded-2xl bg-orange-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-orange-700 disabled:bg-orange-400"
             >
               {burstRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-              {burstRunning ? "Bursting..." : `Burst Test (×${Math.max(1, Number(burstCount) || 10)})`}
+              {burstRunning ? "Bursting..." : `Burst Test (×${Math.min(100, Math.max(1, Number(burstCount) || 10))})`}
             </button>
             <InfoTooltip title="Burst Test">
               Sends concurrent /v1/chat/completions requests using the current prompt to stress authentication and rate limiting.
@@ -725,7 +726,7 @@ export function AttackSimulatorPanel() {
           </div>
         </div>
         {selectedScenario && (
-          <span className="text-[10px] text-slate-400">
+          <span className="text-[10px] text-slate-500 dark:text-slate-400">
             Scenario: {ATTACK_SCENARIOS.find((s) => s.id === selectedScenario)?.description}
           </span>
         )}
@@ -809,17 +810,9 @@ export function AttackSimulatorPanel() {
             </span>
           )}
           {result.blocked_by && (
-            <span className={isThreatIntelBlock(result) ? "text-violet-700 dark:text-violet-300" : "text-red-600 dark:text-red-400"}>
+            <span className="text-red-600 dark:text-red-400">
               {" "}
-              {isThreatIntelBlock(result) ? (
-                <>
-                  Blocked by <span className="font-medium">Threat Intelligence policy</span> (IOC match).
-                </>
-              ) : (
-                <>
-                  Stopped at <span className="font-medium">{result.blocked_by.replace(/_/g, " ")}</span>.
-                </>
-              )}
+              Stopped at <span className="font-medium">{result.blocked_by.replace(/_/g, " ")}</span>.
             </span>
           )}
         </p>
@@ -841,7 +834,12 @@ export function AttackSimulatorPanel() {
                 <StatusIcon className={`w-5 h-5 ${statusCfg.text}`} />
                 <span className={`text-sm font-bold ${statusCfg.text}`}>{statusCfg.label}</span>
                 <span className="text-xs text-slate-500 dark:text-slate-400">HTTP {result.httpStatus}</span>
-                <span className="text-[10px] text-slate-400">{result.total_latency_ms ?? result.elapsed}ms</span>
+                <span className="text-[10px] text-slate-400">
+                  {result.total_latency_ms ?? result.elapsed}ms total
+                  {result.stream && result.ttft_ms != null && (
+                    <span className="text-slate-500 dark:text-slate-400"> · TTFT {result.ttft_ms}ms</span>
+                  )}
+                </span>
                 {result.request_id && (
                   <span className="text-[10px] text-slate-500 font-mono ml-2">{result.request_id}</span>
                 )}
@@ -858,7 +856,7 @@ export function AttackSimulatorPanel() {
             {(result.guard_summary?.guard_reason || result.zeroshield?.guard_reason) && (
               <div className="mb-3 rounded-xl border border-violet-200 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-950/40">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300 mb-1">
-                  {sanitizeGuardText(result.guard_summary?.guard_model || result.zeroshield?.guard_model) || "ZeroShield Guard Model"}
+                  {sanitizeGuardText(result.guard_summary?.guard_model || result.zeroshield?.guard_model) || ZEROSHIELD_GUARD_MODEL_LABEL}
                 </div>
                 <pre className="whitespace-pre-wrap text-xs leading-relaxed text-slate-800 dark:text-slate-100 font-sans">
                   {sanitizeGuardText(result.guard_summary?.guard_reason || result.zeroshield?.guard_reason)}
@@ -892,8 +890,8 @@ export function AttackSimulatorPanel() {
                     }`}>
                       {stage.action.toUpperCase()}
                     </div>
-                    <div className="text-[10px] text-slate-400">
-                      {Number.isFinite(Number(stage.latency_ms)) ? `${stage.latency_ms}ms` : "0.1ms"}
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                      {Number.isFinite(Number(stage.latency_ms)) ? `${stage.latency_ms}ms` : "—"}
                     </div>
                   </div>
                 ))}
@@ -913,11 +911,8 @@ export function AttackSimulatorPanel() {
                 ? (result.final_action?.toUpperCase() || "BLOCK")
                 : (scan.action || result.final_action?.toUpperCase() || "ALLOW");
               const isClean = blocked ? false : scan.clean;
-              const threatIntelBlocked = isThreatIntelBlock(result);
               const threatLabel =
-                threatIntelBlocked
-                  ? "Threat Intel policy block (IOC match)"
-                  : blocked && scan.clean
+                blocked && scan.clean
                   ? (result.blocked_by
                       ? `Blocked (${humanize(result.blocked_by)})`
                       : humanize(result.category) || "Policy violation")
@@ -1050,7 +1045,7 @@ export function AttackSimulatorPanel() {
             {showRawJson && (
               <div className="px-3 pb-3">
                 <pre className="bg-slate-900 text-slate-100 rounded-lg p-3 text-[10px] font-mono overflow-x-auto max-h-64 overflow-y-auto">
-                  {JSON.stringify(result, null, 2)}
+                  {JSON.stringify(sanitizeResultForDump(result), null, 2)}
                 </pre>
               </div>
             )}
@@ -1141,17 +1136,17 @@ export function AttackSimulatorPanel() {
             </div>
             <div className="space-y-1">
               {burstResults.results.map((r) => (
-                <div key={r.index} className="flex items-center gap-2 text-[11px]">
+                <div key={r.index} className="flex flex-wrap items-center gap-2 text-[11px]">
                   <span className="text-slate-500 w-4 text-right">#{r.index}</span>
                   <span className={`w-16 font-semibold ${
-                    r.action === "block" ? "text-red-600" :
-                    r.action === "redact" ? "text-blue-600" :
-                    r.action === "error" ? "text-red-400" : "text-emerald-600"
+                    r.action === "block" ? "text-red-600 dark:text-red-400" :
+                    r.action === "redact" ? "text-blue-600 dark:text-blue-400" :
+                    r.action === "error" ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
                   }`}>
                     {r.action.toUpperCase()}
                   </span>
-                  <span className="text-slate-400">{r.latency}ms</span>
-                  {r.rate_limited && <span className="text-amber-500 text-[10px]">RATE LIMITED</span>}
+                  <span className="text-slate-500 dark:text-slate-400">{r.latency}ms</span>
+                  {r.rate_limited && <span className="text-amber-600 dark:text-amber-400 text-[10px]">RATE LIMITED</span>}
                   {r.request_id && <span className="text-slate-500 font-mono text-[10px] ml-auto">{r.request_id}</span>}
                 </div>
               ))}

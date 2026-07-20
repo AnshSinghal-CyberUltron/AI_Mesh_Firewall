@@ -12,7 +12,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, Awaitable, Callable, Callable, TYPE_CHECKING
+from typing import Any, AsyncGenerator, Awaitable, Callable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from stream_orchestration import StreamRunMetrics
@@ -21,18 +21,12 @@ import litellm
 from litellm import Router as LiteLLMRouter
 
 from ai_mesh_shared.llm_model_crypto import decrypt_api_key
-from ai_mesh_shared.litellm_byok import (
-    apply_bedrock_byok_credentials,
-    apply_bedrock_env_credentials,
-    normalize_litellm_params,
-    resolve_bedrock_model_id,
-)
+from ai_mesh_shared.litellm_byok import normalize_litellm_params
 
 from ai_mesh_gateway.platform_models import (
     is_platform_model_name,
     resolve_platform_bedrock_model,
 )
-from ai_mesh_gateway.routing_isolation import compliance_tags_satisfied
 
 from litellm.exceptions import (
     APIConnectionError,
@@ -236,6 +230,9 @@ _DEFAULT_ROUTING_WEIGHTS = {
 }
 
 
+_SCORE_TIE_EPSILON = 1e-4
+
+
 @dataclass
 class ModelSelection:
     """Result of smart model selection."""
@@ -251,6 +248,12 @@ class ModelSelection:
     policy_summary: str = ""
     decision_factors: list[str] = field(default_factory=list)
     candidate_count: int = 0
+    # Honesty / transparency (routing-bias fix)
+    sensitivity_fallback: bool = False
+    score_tie: bool = False
+    candidate_scores: list[dict] = field(default_factory=list)
+    remapped_from: str = ""
+    runtime_model: str = ""
 
 # B1 (egress = truth): a digit-bearing sensitive run, possibly split by separators
 # (spaces / dots / dashes / parens) — a 5+5 spaced phone ("89295 54991"), a spaced
@@ -319,6 +322,88 @@ def _redact_tool_descriptions(obj, redactor):
     return obj
 
 
+def _redact_fn_call_arguments(fn, redactor):
+    """G59: redact the ``arguments`` of a tool_call.function / legacy function_call dict
+    before it reaches the model. A conversation-history assistant turn's
+    ``tool_calls[].function.arguments`` is FOLDED into the scanned prompt (G7), so PII/
+    secrets there trigger the redact verdict — but ``_apply_redaction`` only masked message
+    ``content`` + tool DEFINITIONS, forwarding the tool-CALL arguments RAW (the detect-but-
+    don't-enforce class this method's siblings close for content/tools). ``arguments`` is a
+    JSON string per spec (a non-conforming parsed DICT is coerced to JSON first); structural
+    fields (name, id, type) are left intact so the function-calling contract still resolves."""
+    if not isinstance(fn, dict):
+        return fn
+    args = fn.get("arguments")
+    if isinstance(args, str) and args:
+        return {**fn, "arguments": redactor(args)}
+    if args is not None and not isinstance(args, str):
+        try:
+            return {**fn, "arguments": redactor(json.dumps(args))}
+        except (TypeError, ValueError):
+            return fn
+    return fn
+
+
+def _name_carries_pii(name: str) -> bool:
+    """G60: True if a participant ``name`` carries real PII/secret/credential (an SSN/phone/
+    CC fits the OpenAI name charset). Uses the DETECTORS (obfuscation-aware) rather than the
+    digit-backstop redactor, so a benign identifier with a digit run ("session-2024-001") is
+    NOT flagged while a name that IS an SSN/token is. Detector-import is lazy (package-safe)."""
+    try:
+        from patterns import detect_pii, detect_secrets, detect_credential_exposure
+    except ImportError:  # pragma: no cover - packaging fallback
+        from .patterns import detect_pii, detect_secrets, detect_credential_exposure
+    return bool(detect_pii(name) or detect_secrets(name) or detect_credential_exposure(name))
+
+
+def _redact_message_tool_calls(m, redactor):
+    """Return ``m`` with every ``tool_calls[].function.arguments`` and a legacy
+    ``function_call.arguments`` redacted (G59). No-op when the message carries neither."""
+    out = m
+    tcs = m.get("tool_calls")
+    if isinstance(tcs, list) and tcs:
+        out = {**out, "tool_calls": [
+            ({**tc, "function": _redact_fn_call_arguments(tc["function"], redactor)}
+             if isinstance(tc, dict) and isinstance(tc.get("function"), dict) else tc)
+            for tc in tcs
+        ]}
+    fc = m.get("function_call")
+    if isinstance(fc, dict):
+        out = {**out, "function_call": _redact_fn_call_arguments(fc, redactor)}
+    return out
+
+
+def _redact_responses_input_list(items, redactor):
+    """G48: redact free-text in a STRUCTURED Responses ``input`` list (the modern
+    ``[{"role":..,"content":[{"type":"input_text","text":..}]}]`` shape). ``aresponses``
+    only replaced a plain-STRING ``input``, so a list-form input rode to the model RAW
+    despite a redact verdict (the exact silent-leak class ``_apply_redaction`` closed for
+    chat ``messages``). Each item's ``content`` may be a str or a list of parts with a
+    ``text`` field; both are masked. Role==system items are left untouched for parity
+    with the chat path's trusted-instructions decision. Structural fields are preserved."""
+    if not isinstance(items, list):
+        return items
+    out = []
+    for it in items:
+        if not isinstance(it, dict) or it.get("role") == "system":
+            out.append(it)
+            continue
+        c = it.get("content")
+        if isinstance(c, str) and c:
+            out.append({**it, "content": redactor(c)})
+        elif isinstance(c, list):
+            parts = [
+                ({**p, "text": redactor(p["text"])}
+                 if isinstance(p, dict) and isinstance(p.get("text"), str) and p["text"]
+                 else p)
+                for p in c
+            ]
+            out.append({**it, "content": parts})
+        else:
+            out.append(it)
+    return out
+
+
 class LLMRouter:
     """Async LLM router backed by LiteLLM."""
 
@@ -328,7 +413,6 @@ class LLMRouter:
         self._active_model_names: list[str] = []
         self._qualified_model_names: set[str] = set()  # H7: org::model routing keys
         self._deployment_params: dict[str, dict] = {}   # Responses API: name -> resolved litellm_params (BYOK)
-        self._remap_telemetry_hook: Callable[..., None] | None = None
 
         #global litellm settings
         litellm.drop_params = config.get("litellm_drop_params", True)
@@ -353,14 +437,6 @@ class LLMRouter:
                 "router starts empty until Redis model reload."
             )
 
-    def set_remap_telemetry_hook(self, hook: Callable[..., None] | None) -> None:
-        """Optional callback invoked when a requested model is remapped at runtime."""
-        self._remap_telemetry_hook = hook
-
-    def get_active_model_names(self) -> list[str]:
-        """Bare model names currently loaded in the LiteLLM router model groups."""
-        return list(self._active_model_names)
-
     def _set_active_model_names(self, model_list: list[dict]) -> None:
         # H7: use the BARE name (model_info.base_model_name) — clients send bare
         # model names, so validation/active-name matching must stay un-qualified
@@ -371,7 +447,18 @@ class LLMRouter:
             if (entry.get("model_info") or {}).get("base_model_name") or entry.get("model_name")
         ]
 
-    def _resolve_runtime_model(self, requested_model: str) -> str:
+    def _resolve_runtime_model(
+        self,
+        requested_model: str,
+        preferred_active: list[str] | None = None,
+    ) -> str:
+        """Map a selected model name onto a LiteLLM-active deployment.
+
+        When the selected name is not in the live router groups, prefer the
+        highest-scored *active* candidate from ``preferred_active`` (fallback
+        chain order) before the org default / first active group — never silently
+        pretend the inactive selection was served.
+        """
         if is_platform_model_name(requested_model):
             raise ValueError(
                 f"Platform model '{requested_model}' cannot be routed via LiteLLM inference. "
@@ -382,11 +469,43 @@ class LLMRouter:
         if requested_model in self._active_model_names:
             return requested_model
 
+        for name in preferred_active or []:
+            alias = self._normalize_model_alias(str(name or ""))
+            if alias and alias in self._active_model_names:
+                return alias
+
         preferred_default = self._normalize_model_alias(self._config.get("litellm_default_model", "") or "")
         if preferred_default and preferred_default in self._active_model_names:
             return preferred_default
 
         return self._active_model_names[0]
+
+    def resolve_runtime_selection(
+        self,
+        selection: ModelSelection,
+    ) -> ModelSelection:
+        """Attach runtime remap honesty onto an existing ModelSelection."""
+        if not selection or not selection.model_name:
+            return selection
+        preferred = [selection.model_name, *(selection.fallback_chain or [])]
+        runtime = self._resolve_runtime_model(selection.model_name, preferred_active=preferred)
+        selection.runtime_model = runtime
+        if runtime != selection.model_name:
+            selection.remapped_from = selection.model_name
+            factors = list(selection.decision_factors or [])
+            factors.append(f"runtime_remap_from={selection.model_name}")
+            factors.append(f"runtime_remap_to={runtime}")
+            factors.append("inactive_model_remapped")
+            selection.decision_factors = factors
+            selection.reason = (
+                f"{selection.reason} Requested model '{selection.model_name}' is not "
+                f"active in router model groups; remapping to '{runtime}'."
+            ).strip()
+            selection.model_name = runtime
+            # Keep model_id aligned with the runtime name when unknown.
+            if not selection.model_id or selection.model_id == selection.remapped_from:
+                selection.model_id = runtime
+        return selection
 
     def _qualify_like_primary(self, candidate_model: str, primary: str) -> str:
         """Org-qualify a vetted-failover candidate with the SAME org prefix as the
@@ -519,12 +638,6 @@ class LLMRouter:
         if not isinstance(entry, dict):
             return entry
         params = dict(entry.get("litellm_params") or {})
-        provider = str(entry.get("provider") or params.get("provider") or "")
-        bedrock_region = (
-            str(params.get("aws_region_name") or "").strip()
-            or os.environ.get("BEDROCK_REGION", "")
-            or os.environ.get("AWS_DEFAULT_REGION", "")
-        )
         encrypted = params.pop("api_key_encrypted", None)
         if encrypted and not params.get("api_key"):
             fallback_secret = os.environ.get("DJANGO_SECRET_KEY", "") or os.environ.get(
@@ -535,28 +648,7 @@ class LLMRouter:
                 fallback_secret=fallback_secret,
             )
             if decrypted:
-                if provider.lower() == "aws_bedrock":
-                    params = apply_bedrock_byok_credentials(
-                        params,
-                        decrypted,
-                        env_access_key=os.environ.get("AWS_ACCESS_KEY_ID", ""),
-                        env_secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
-                        default_region=bedrock_region,
-                    )
-                else:
-                    params["api_key"] = decrypted
-        elif provider.lower() == "aws_bedrock":
-            params = apply_bedrock_env_credentials(
-                params,
-                env_access_key=os.environ.get("AWS_ACCESS_KEY_ID", ""),
-                env_secret_key=os.environ.get("AWS_SECRET_ACCESS_KEY", ""),
-                default_region=bedrock_region,
-            )
-        if provider.lower() == "aws_bedrock" and params.get("model"):
-            params["model"] = resolve_bedrock_model_id(
-                str(params.get("model") or ""),
-                region=bedrock_region,
-            )
+                params["api_key"] = decrypted
         provider = str(entry.get("provider") or params.pop("provider", "") or "")
         params = normalize_litellm_params(params, provider=provider)
         return {**entry, "litellm_params": params}
@@ -634,8 +726,16 @@ class LLMRouter:
         decrypted BYOK api_key/api_base (the byok_embedder pattern) — preserving
         per-tenant key isolation. ``redacted_content`` (when input is a plain
         string) replaces the input so the upstream model never sees raw PII."""
-        if redacted_content is not None and isinstance(body.get("input"), str):
-            body = {**body, "input": redacted_content}
+        if redacted_content is not None:
+            _inp = body.get("input")
+            if isinstance(_inp, str):
+                body = {**body, "input": redacted_content}
+            elif isinstance(_inp, list):
+                # G48: a structured list-form input previously rode to the model RAW —
+                # redact each turn's text with the same deterministic redactor.
+                body = {**body, "input": _redact_responses_input_list(
+                    _inp, lambda s: _redact_text_with_backstop(s, redacted_content)
+                )}
         route_model, params = self._resolve_responses_deployment(body)
         if params is None:
             return 404, {"error": {
@@ -677,7 +777,12 @@ class LLMRouter:
             LOG.exception("Unexpected responses error")
             return 502, {"error": {"message": _sanitize_exception_message(exc, 502), "type": "internal_error"}}
 
-    def _apply_redaction(self, body: dict, redacted_content: str | None) -> dict:
+    def _apply_redaction(
+        self,
+        body: dict,
+        redacted_content: str | None,
+        redaction_hints: list | None = None,
+    ) -> dict:
         """Redact PII/secrets in EVERY conversation message before the upstream call.
 
         Previously this overwrote ONLY the last user message with the whole
@@ -691,14 +796,48 @@ class LLMRouter:
         redactor the input scanner uses (patterns.redact_all), covering str and
         multimodal text parts. System messages (instructions) are left untouched.
         """
-        if redacted_content is None or not body.get("messages"):
+        if (redacted_content is None and not redaction_hints) or not body.get("messages"):
             return body
+
+        # I-04: apply the POLICY engine's own redact rules per message.
+        #
+        # ``redacted_content`` is deliberately only a SIGNAL (see above) and the
+        # re-derivation uses patterns.redact_all + a DIGIT-run backstop. Both are
+        # blind to operator-authored ``redaction_config`` rules that target
+        # non-numeric text: a codename or customer name matched by a policy regex
+        # was masked in ``redacted_prompt`` (what the trace/telemetry reported) but
+        # NEVER on the wire — a phantom redaction that attested success while the
+        # raw value reached the provider. There was no channel for a policy mask to
+        # reach the wire at all; ``redaction_hints`` is that channel.
+        #
+        # policy_engine.apply_redaction is reused verbatim so the wire mask is
+        # byte-identical to the mask the trace reports, and it is already
+        # ReDoS-budgeted (_compile_regex shape rejection + _run_with_timeout per
+        # substitution), so an operator regex cannot pin the worker here either.
+        _policy_redact = None
+        if redaction_hints:
+            try:
+                try:
+                    from policy_engine import apply_redaction as _pol_apply
+                except ImportError:
+                    from .policy_engine import apply_redaction as _pol_apply
+                _policy_redact = _pol_apply
+            except Exception:  # noqa: BLE001 - never break inference on an import slip
+                _policy_redact = None
 
         def _redact_msg_text(text: str) -> str:
             # Shared chat/Responses redactor: redact_all + a fail-closed digit backstop
             # keyed off ``redacted_content`` (the firewall's "what must never reach the
             # model"). See _redact_text_with_backstop for the full rationale.
-            return _redact_text_with_backstop(text, redacted_content)
+            out = text
+            if _policy_redact is not None:
+                try:
+                    out = _policy_redact(out, redaction_hints)
+                except Exception:  # noqa: BLE001 - a bad rule must not drop the mask
+                    LOG.warning("policy redaction hint failed; falling back to redact_all")
+            if redacted_content is None:
+                return out
+            return _redact_text_with_backstop(out, redacted_content)
 
         new_messages = []
         for m in body["messages"]:
@@ -707,7 +846,7 @@ class LLMRouter:
                 continue
             c = m.get("content")
             if isinstance(c, str) and c:
-                new_messages.append({**m, "content": _redact_msg_text(c)})
+                nm = {**m, "content": _redact_msg_text(c)}
             elif isinstance(c, list):
                 parts = [
                     ({**p, "text": _redact_msg_text(p["text"])}
@@ -715,9 +854,24 @@ class LLMRouter:
                      else p)
                     for p in c
                 ]
-                new_messages.append({**m, "content": parts})
+                nm = {**m, "content": parts}
             else:
-                new_messages.append(m)
+                nm = m
+            # G59: also redact tool_calls[].function.arguments (+ legacy function_call) —
+            # a conversation-history turn's tool-call arguments are folded into the scanned
+            # prompt (G7) so PII there triggers the verdict, but were forwarded RAW.
+            nm = _redact_message_tool_calls(nm, _redact_msg_text)
+            # G60: a participant `name` can carry digit-PII (SSN/phone/CC fit the OpenAI
+            # name charset). DROP a name that carries REAL PII/secret/credential: a redacted
+            # name ("[SSN_REDACTED]"/"***-**-…") is charset-INVALID (provider 400), and
+            # `name` is optional so dropping removes the channel without breaking the call.
+            # Decide with the DETECTORS (not the digit-backstop redactor, which over-fires on
+            # any 7+ digit run) so a benign identifier like "session-2024-001" is preserved
+            # even on a request that redacts PII elsewhere (no over-redaction).
+            _nm_name = nm.get("name")
+            if isinstance(_nm_name, str) and _nm_name and _name_carries_pii(_nm_name):
+                nm = {k: v for k, v in nm.items() if k != "name"}
+            new_messages.append(nm)
         result = {**body, "messages": new_messages}
 
         # Tool-definition free text reaches the upstream LLM too. ``_extract_tool_definitions_text``
@@ -775,15 +929,6 @@ class LLMRouter:
                 requested_model,
                 model,
             )
-            if self._remap_telemetry_hook is not None:
-                try:
-                    self._remap_telemetry_hook(
-                        requested_model=requested_model,
-                        resolved_model=model,
-                        body=body,
-                    )
-                except Exception:  # pragma: no cover - telemetry must never break routing
-                    LOG.debug("model_remap telemetry hook failed", exc_info=True)
         messages = body.get("messages") or body.get("input") or []
         # H7: org-qualify the routing key so litellm selects THIS org's deployment
         # (and its BYOK key), never a same-named peer from another tenant. The
@@ -823,9 +968,15 @@ class LLMRouter:
             self,
             body: dict,
             redacted_content: str | None = None,
+            *,
+            redaction_hints: list | None = None,
     ) -> tuple[int, dict]:
-        """Non-streaming completion. Returns (http_status, response_dict)."""
-        body = self._apply_redaction(body, redacted_content)
+        """Non-streaming completion. Returns (http_status, response_dict).
+
+        ``redaction_hints`` (I-04) are the policy engine's compiled redact rules
+        ({regex|keywords, replacement}); see ``_apply_redaction``.
+        """
+        body = self._apply_redaction(body, redacted_content, redaction_hints)
         allowlist = self._pop_inference_allowlist(body)
         compliant_chain = self._pop_compliant_fallback_chain(body)
         kwargs = self._build_kwargs(body, stream=False, inference_allowlist=allowlist)
@@ -849,7 +1000,7 @@ class LLMRouter:
         try:
             response = await self._execute_completion(kwargs)
             return 200, response.model_dump()
-        except (BadRequestError, NotFoundError, APIConnectionError) as exc:
+        except (BadRequestError, NotFoundError) as exc:
             if allowlist and compliant_chain:
                 primary = kwargs.get("model")
                 for candidate in compliant_chain:
@@ -872,16 +1023,9 @@ class LLMRouter:
                             resolve_exc,
                         )
                         continue
-                    except (BadRequestError, NotFoundError, APIConnectionError):
+                    except (BadRequestError, NotFoundError):
                         continue
                     except tuple(_EXCEPTION_STATUS_MAP.keys()):
-                        continue
-                    except Exception as retry_exc:
-                        LOG.warning(
-                            "Compliant fallback candidate '%s' failed (%s); trying next",
-                            candidate,
-                            type(retry_exc).__name__,
-                        )
                         continue
             if allowlist:
                 status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
@@ -1110,6 +1254,7 @@ class LLMRouter:
             metrics: "StreamRunMetrics | None" = None,
             echo_model: str | None = None,
             state_check: "Callable[[], Awaitable[bool]] | None" = None,
+            redaction_hints: list | None = None,
     ) -> AsyncGenerator[str, None]:
         """Streaming completion. Yields SSE-formatted chunks.
 
@@ -1132,7 +1277,7 @@ class LLMRouter:
         local_metrics = metrics if metrics is not None else StreamRunMetrics()
         local_metrics.provider_start_ts = time.perf_counter()
 
-        body = self._apply_redaction(body, redacted_content)
+        body = self._apply_redaction(body, redacted_content, redaction_hints)
         allowlist = self._pop_inference_allowlist(body)
         compliant_chain = self._pop_compliant_fallback_chain(body)
         kwargs = self._build_kwargs(body, stream=True, inference_allowlist=allowlist)
@@ -1235,13 +1380,6 @@ class LLMRouter:
                     except (BadRequestError, NotFoundError):
                         continue
                     except tuple(_EXCEPTION_STATUS_MAP.keys()):
-                        continue
-                    except Exception as retry_exc:
-                        LOG.warning(
-                            "Compliant stream fallback candidate '%s' failed (%s); trying next",
-                            candidate,
-                            type(retry_exc).__name__,
-                        )
                         continue
             if allowlist:
                 status = _EXCEPTION_STATUS_MAP.get(type(exc), 502)
@@ -1716,6 +1854,7 @@ class LLMRouter:
         latency_budget_ms: int = 30000,
         weights: dict[str, float] | None = None,
         allowed_models: list[str] | None = None,
+        apply_sensitivity: bool = True,
     ) -> list[dict]:
         normalized_weights = self._normalize_weights(weights)
         allowed_set = {str(model).lower() for model in (allowed_models or []) if model}
@@ -1733,11 +1872,16 @@ class LLMRouter:
                 continue
             if allowed_set and model_name.lower() not in allowed_set and model_id.lower() not in allowed_set:
                 continue
-            if required_tags and not compliance_tags_satisfied(model.get("compliance_tags"), required_tags):
-                continue
-            model_sens = _SENSITIVITY_ORDER.get(str(model.get("data_sensitivity_level", "public")).strip().lower(), 0)
-            if model_sens < req_sens_level:
-                continue
+            if required_tags:
+                model_tags = model.get("compliance_tags") or []
+                if not all(tag in model_tags for tag in required_tags):
+                    continue
+            if apply_sensitivity:
+                model_sens = _SENSITIVITY_ORDER.get(
+                    str(model.get("data_sensitivity_level", "public")).strip().lower(), 0
+                )
+                if model_sens < req_sens_level:
+                    continue
             eligible.append(model)
 
         if not eligible:
@@ -1780,6 +1924,81 @@ class LLMRouter:
         scored.sort(key=lambda item: item["score"], reverse=True)
         return scored
 
+    def _score_with_sensitivity_fallback(
+        self,
+        routing_models: list[dict],
+        request_risk_score: float = 0.0,
+        required_compliance: list[str] | None = None,
+        data_sensitivity: str = "public",
+        estimated_tokens: int = 500,
+        latency_budget_ms: int = 30000,
+        weights: dict[str, float] | None = None,
+        allowed_models: list[str] | None = None,
+    ) -> tuple[list[dict], bool]:
+        """Score candidates; soft-fallback when sensitivity alone empties the pool.
+
+        Compliance tags remain a hard filter (empty → no fallback). Sensitivity
+        unsatisfiable → re-score without the sensitivity floor and return
+        ``sensitivity_fallback=True`` so callers can inform the client honestly.
+        """
+        scored = self._score_routing_models(
+            routing_models=routing_models,
+            request_risk_score=request_risk_score,
+            required_compliance=required_compliance,
+            data_sensitivity=data_sensitivity,
+            estimated_tokens=estimated_tokens,
+            latency_budget_ms=latency_budget_ms,
+            weights=weights,
+            allowed_models=allowed_models,
+            apply_sensitivity=True,
+        )
+        if scored:
+            return scored, False
+
+        required_tags = [tag for tag in (required_compliance or []) if tag]
+        if required_tags:
+            # Compliance unsatisfiable — fail closed (caller may 403).
+            return [], False
+
+        req_sens = _req_sensitivity_level(data_sensitivity)
+        if req_sens <= 0:
+            return [], False
+
+        scored = self._score_routing_models(
+            routing_models=routing_models,
+            request_risk_score=request_risk_score,
+            required_compliance=required_compliance,
+            data_sensitivity=data_sensitivity,
+            estimated_tokens=estimated_tokens,
+            latency_budget_ms=latency_budget_ms,
+            weights=weights,
+            allowed_models=allowed_models,
+            apply_sensitivity=False,
+        )
+        return scored, bool(scored)
+
+    @staticmethod
+    def _candidate_score_preview(scored: list[dict], limit: int = 5) -> list[dict]:
+        out: list[dict] = []
+        for item in scored[:limit]:
+            out.append({
+                "model_name": item.get("model_name"),
+                "score": item.get("score"),
+                "risk_component": item.get("risk_component"),
+                "cost_component": item.get("cost_component"),
+                "latency_component": item.get("latency_component"),
+                "priority_component": item.get("priority_component"),
+            })
+        return out
+
+    @staticmethod
+    def _scores_tied(scored: list[dict]) -> bool:
+        if len(scored) < 2:
+            return False
+        top = float(scored[0].get("score") or 0.0)
+        second = float(scored[1].get("score") or 0.0)
+        return abs(top - second) <= _SCORE_TIE_EPSILON
+
     @staticmethod
     def extract_usage(response: dict) -> dict | None:
         """Extract token usage from a litellm response dict."""
@@ -1806,11 +2025,13 @@ class LLMRouter:
         """
         Multi-dimensional model selection using weighted scoring.
 
-        Hard filters (binary): compliance tags, data sensitivity, is_active.
+        Hard filters: compliance tags, is_active, allowlist.
+        Sensitivity is a soft floor — when unsatisfiable, falls back to the
+        best available model and sets sensitivity_fallback=True.
         Soft scoring (weighted): risk, cost, latency, priority.
         """
         normalized_weights = self._normalize_weights(weights)
-        scored = self._score_routing_models(
+        scored, sens_fallback = self._score_with_sensitivity_fallback(
             routing_models=routing_models,
             request_risk_score=request_risk_score,
             required_compliance=required_compliance,
@@ -1826,15 +2047,49 @@ class LLMRouter:
         best = scored[0]
         best_model = best["model"]
         fallbacks = [item["model_name"] for item in scored[1:4]]
+        score_tie = self._scores_tied(scored)
+        factors = [
+            f"risk_weight={normalized_weights['risk']:.2f}",
+            f"cost_weight={normalized_weights['cost']:.2f}",
+            f"latency_weight={normalized_weights['latency']:.2f}",
+            f"priority_weight={normalized_weights['priority']:.2f}",
+            f"request_risk={request_risk_score:.2f}",
+            f"data_sensitivity={data_sensitivity}",
+        ]
+        reason = (
+            f"Weighted selection (risk={normalized_weights['risk']:.0%}, "
+            f"cost={normalized_weights['cost']:.0%}, "
+            f"latency={normalized_weights['latency']:.0%}, "
+            f"priority={normalized_weights['priority']:.0%})"
+        )
+        policy = "Weighted selection"
+        if sens_fallback:
+            factors.append("sensitivity_unsatisfiable_fallback")
+            factors.append(f"requested_sensitivity={data_sensitivity}")
+            factors.append("fallback_best_available=true")
+            policy = "Sensitivity unsatisfiable — best available"
+            reason = (
+                f"No model meets data_sensitivity={data_sensitivity}; "
+                f"soft-fallback to best available {best_model.get('model_name', '')} "
+                f"(score={best['score']:.3f})."
+            )
+        if score_tie:
+            factors.append("score_tie=true")
+            policy = f"{policy} (score tie)"
 
         return ModelSelection(
             model_name=best_model.get("model_name", ""),
             model_id=best_model.get("model_id", ""),
             score=best["score"],
-            reason=f"Weighted selection (risk={normalized_weights['risk']:.0%}, cost={normalized_weights['cost']:.0%}, latency={normalized_weights['latency']:.0%}, priority={normalized_weights['priority']:.0%})",
+            reason=reason,
             fallback_chain=fallbacks,
             decision_source="weighted",
+            policy_summary=policy,
+            decision_factors=factors,
             candidate_count=len(scored),
+            sensitivity_fallback=sens_fallback,
+            score_tie=score_tie,
+            candidate_scores=self._candidate_score_preview(scored),
         )
 
     async def adjudicate_model_selection(
@@ -1853,7 +2108,7 @@ class LLMRouter:
         adjudicator_model: str | None = None,
     ) -> ModelSelection | None:
         normalized_weights = self._normalize_weights(weights)
-        scored = self._score_routing_models(
+        scored, sens_fallback = self._score_with_sensitivity_fallback(
             routing_models=routing_models,
             request_risk_score=request_risk_score,
             required_compliance=required_compliance,
@@ -1879,31 +2134,53 @@ class LLMRouter:
         if heuristic is None:
             return None
 
-        # ── H5 perf: short-circuit the synchronous Bedrock adjudicator LLM call ──
-        # The deterministic weighted heuristic above already picked a model. The
-        # Bedrock adjudicator (Claude Haiku ~2-3s/request) only adds decision value
-        # when there is a genuine, governance-sensitive choice to make. Skip it when:
-        #   (a) there is at most one candidate — there is NO routing decision; or
-        #   (b) the request is low-risk AND carries no compliance constraints.
-        # This removes the dominant per-request latency (7-12s observed) for the
-        # common trivial path. Operators can force full adjudication with
-        # ROUTING_ADJUDICATOR_ALWAYS=true; the risk floor is tunable.
-        _adj_always = os.getenv("ROUTING_ADJUDICATOR_ALWAYS", "false").lower() in ("1", "true", "yes")
+        # Default ALWAYS-on adjudication when >1 candidates (routing-bias fix).
+        # Skip when:
+        #   (a) at most one candidate — no routing decision; or
+        #   (b) a single preference weight dominates (>=0.95) — honor knobs
+        #       deterministically so cost=1/risk=1/latency=1 diversify winners; or
+        #   (c) ROUTING_ADJUDICATOR_ALWAYS=false and low-risk fastpath applies.
+        _adj_always = os.getenv("ROUTING_ADJUDICATOR_ALWAYS", "true").lower() in ("1", "true", "yes")
         _adj_risk_floor = float(os.getenv("ROUTING_ADJUDICATOR_RISK_FLOOR", "0.30"))
+        _weight_lock = float(os.getenv("ROUTING_WEIGHT_LOCK_THRESHOLD", "0.95"))
         _no_real_choice = len(scored) <= 1
+        _dominant_weight = max(normalized_weights.values()) if normalized_weights else 0.0
+        _weight_extreme = _dominant_weight >= _weight_lock
         _low_risk = (request_risk_score < _adj_risk_floor) and not (required_compliance or [])
-        if not _adj_always and (_no_real_choice or _low_risk):
+        if _no_real_choice or _weight_extreme or (not _adj_always and _low_risk):
             heuristic.decision_source = "weighted_fastpath"
             heuristic.requested_model = preferred_model or "auto"
             heuristic.evaluator_model = "deterministic_weighted"
-            heuristic.policy_summary = (
-                "Single candidate — no routing decision required."
-                if _no_real_choice
-                else "Low-risk request routed by deterministic weighted scoring (adjudicator skipped for latency)."
-            )
-            heuristic.decision_factors = (heuristic.decision_factors or []) + [
-                "adjudicator_skipped_single_candidate" if _no_real_choice else "adjudicator_skipped_low_risk"
-            ]
+            if _no_real_choice:
+                heuristic.policy_summary = "Single candidate — no routing decision required."
+                skip_factor = "adjudicator_skipped_single_candidate"
+            elif _weight_extreme:
+                top_w = max(normalized_weights, key=normalized_weights.get)
+                heuristic.policy_summary = (
+                    f"Dominant {top_w} weight ({_dominant_weight:.0%}) — "
+                    "deterministic weighted selection (adjudicator skipped)."
+                )
+                skip_factor = f"adjudicator_skipped_weight_extreme:{top_w}"
+            else:
+                heuristic.policy_summary = (
+                    "Low-risk request routed by deterministic weighted scoring "
+                    "(adjudicator skipped for latency)."
+                )
+                skip_factor = "adjudicator_skipped_low_risk"
+            if sens_fallback and not heuristic.sensitivity_fallback:
+                heuristic.sensitivity_fallback = True
+                heuristic.decision_factors = (heuristic.decision_factors or []) + [
+                    "sensitivity_unsatisfiable_fallback",
+                    f"requested_sensitivity={data_sensitivity}",
+                    "fallback_best_available=true",
+                ]
+                heuristic.policy_summary = (
+                    f"Sensitivity unsatisfiable — best available ({heuristic.policy_summary})"
+                )
+            heuristic.decision_factors = (heuristic.decision_factors or []) + [skip_factor]
+            if not heuristic.candidate_scores:
+                heuristic.candidate_scores = self._candidate_score_preview(scored)
+            heuristic.score_tie = heuristic.score_tie or self._scores_tied(scored)
             return heuristic
 
         candidate_map = {item["model_name"]: item for item in scored}
@@ -1922,8 +2199,16 @@ class LLMRouter:
                 "content": str(message.get("content", ""))[:400],
             })
 
+        _client_pref = (preferred_model or "").strip()
+        _soft_pref = (
+            heuristic.model_name
+            if (not _client_pref or _client_pref.lower() == "auto")
+            else _client_pref
+        )
         adjudicator_prompt = {
-            "preferred_model": preferred_model or "auto",
+            "preferred_model": _soft_pref or "auto",
+            "client_preferred_model": preferred_model or "auto",
+            "weighted_heuristic_winner": heuristic.model_name,
             "request_risk_score": round(request_risk_score, 4),
             "required_compliance": required_compliance or [],
             "data_sensitivity": data_sensitivity,
@@ -1939,7 +2224,14 @@ class LLMRouter:
                     "latency": f"{normalized_weights.get('latency', 0):.0%} — higher = prefer faster models",
                     "priority": f"{normalized_weights.get('priority', 0):.0%} — higher = prefer higher-priority models",
                 },
-                "sensitivity_requirement": f"Model must support data_sensitivity_level >= '{data_sensitivity}'",
+                "sensitivity_requirement": (
+                    f"Model should support data_sensitivity_level >= '{data_sensitivity}' "
+                    + (
+                        "(soft-fallback: no exact match — pick best available)"
+                        if sens_fallback
+                        else ""
+                    )
+                ),
                 "compliance_requirement": f"Model must have ALL of: {required_compliance or ['none']}",
             },
             "request_preview": request_preview,
@@ -1980,7 +2272,9 @@ class LLMRouter:
             "   b) Weighted scoring: evaluate risk, cost, latency, and priority using the provided weights.\n"
             "   c) Request analysis: consider the request content to pick the best-suited model "
             "(e.g., complex reasoning → high-capability model, simple Q&A → fast/cheap model).\n"
-            "4. An explicit preferred_model is a soft preference, not a hard constraint.\n"
+            "4. preferred_model / weighted_heuristic_winner is the deterministic weighted "
+            "winner — soft preference. When a weight is dominant (>=50%), do NOT override "
+            "that winner unless a hard compliance/sensitivity constraint requires it.\n"
             "5. Return ONLY valid JSON with keys: selected_model, reason, policy_summary, decision_factors.\n"
             "   - selected_model: exact model_name string from candidate_models\n"
             "   - reason: 1-2 sentence explanation of why this model was chosen, explicitly referencing risk, latency budget, and cost/token budget impact\n"
@@ -2023,8 +2317,20 @@ class LLMRouter:
             heuristic.decision_source = "weighted_fallback"
             heuristic.evaluator_model = adjudicator_bedrock_model
             heuristic.requested_model = preferred_model or "auto"
-            heuristic.policy_summary = "Fallback to weighted routing after adjudicator failure."
-            heuristic.decision_factors = ["adjudicator_unavailable"]
+            heuristic.policy_summary = (
+                "Fallback to weighted routing after adjudicator failure."
+                + (
+                    " Sensitivity unsatisfiable — best available."
+                    if heuristic.sensitivity_fallback
+                    else ""
+                )
+            )
+            heuristic.decision_factors = list(heuristic.decision_factors or []) + [
+                "adjudicator_unavailable"
+            ]
+            if not heuristic.candidate_scores:
+                heuristic.candidate_scores = self._candidate_score_preview(scored)
+            heuristic.score_tie = heuristic.score_tie or self._scores_tied(scored)
             return heuristic
 
         parsed = self._parse_json_object(self._extract_response_text(response)) or {}
@@ -2069,7 +2375,12 @@ class LLMRouter:
             heuristic.evaluator_model = adjudicator_bedrock_model
             heuristic.requested_model = preferred_model or "auto"
             heuristic.policy_summary = "Fallback to weighted routing after invalid adjudicator response."
-            heuristic.decision_factors = ["invalid_adjudicator_selection"]
+            heuristic.decision_factors = list(heuristic.decision_factors or []) + [
+                "invalid_adjudicator_selection"
+            ]
+            if not heuristic.candidate_scores:
+                heuristic.candidate_scores = self._candidate_score_preview(scored)
+            heuristic.score_tie = heuristic.score_tie or self._scores_tied(scored)
             return heuristic
 
         selected = candidate_map[resolved_name]
@@ -2100,6 +2411,14 @@ class LLMRouter:
                 f"Risk={selected['model'].get('risk_score',0):.2f}, "
                 f"latency_sla={selected['model'].get('latency_sla_ms',0)}ms."
             )
+        if sens_fallback:
+            bedrock_policy = (
+                f"Sensitivity unsatisfiable — best available. {bedrock_policy}"
+            ).strip()
+            bedrock_reason = (
+                f"No model meets data_sensitivity={data_sensitivity}; "
+                f"adjudicated among best-available candidates. {bedrock_reason}"
+            ).strip()
         if not decision_factors:
             decision_factors = [
                 f"model_score={selected['score']:.4f}",
@@ -2110,14 +2429,24 @@ class LLMRouter:
                 f"candidates_evaluated={len(scored)}",
                 f"data_sensitivity={data_sensitivity}",
             ]
+        if sens_fallback:
+            decision_factors = list(decision_factors) + [
+                "sensitivity_unsatisfiable_fallback",
+                f"requested_sensitivity={data_sensitivity}",
+                "fallback_best_available=true",
+            ]
+        score_tie = self._scores_tied(scored)
+        if score_tie:
+            decision_factors = list(decision_factors) + ["score_tie=true"]
 
         _log.info(
             "ROUTING DECISION: bedrock_adjudicator selected '%s' "
-            "(score=%.4f, %d candidates, fallback=%s)",
+            "(score=%.4f, %d candidates, fallback=%s, sens_fallback=%s)",
             resolved_name,
             selected["score"],
             len(scored),
             fallback_chain,
+            sens_fallback,
         )
 
         return ModelSelection(
@@ -2132,4 +2461,7 @@ class LLMRouter:
             policy_summary=bedrock_policy,
             decision_factors=[str(item) for item in decision_factors if item],
             candidate_count=len(scored),
+            sensitivity_fallback=sens_fallback,
+            score_tie=score_tie,
+            candidate_scores=self._candidate_score_preview(scored),
         )

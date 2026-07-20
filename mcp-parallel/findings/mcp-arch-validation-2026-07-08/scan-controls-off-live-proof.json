@@ -1,0 +1,44 @@
+{
+  "title": "Scan controls off-by-default — live E2E proof",
+  "ts": "2026-07-08T14:45:00Z",
+  "org": "zeroshield",
+  "server": "everything-1",
+  "db_scan_control_rows": 0,
+  "resolve_effective_controls": {
+    "scan_controls_configured": false,
+    "note": "tier1 defaults still present in effective dict but gateway gates on scan_controls_configured is False"
+  },
+  "issue_found": {
+    "severity": "HIGH",
+    "title": "Deployed gateway image lacked scan-off gate",
+    "root_cause": "Source code has _mcp_security_scan gate at mcp_proxy.py L1693 (no_scan_controls_configured) but running container ai_mesh_firewall-gateway-1 had OLD mcp_proxy.py without the gate. Unit tests passed on source; live behavior scanned with 0 controls.",
+    "evidence_pre_fix": "mcp-enforcement-audit-2026-07-07/audit_results.json ssn_in_args gateway egress Echo: SSN ***-**-6789 with compliance_tags GDPR-PII/HIPAA-PHI",
+    "fix": "docker cp gateway/ai_mesh_gateway/mcp_proxy.py to container + docker kill -s HUP ai_mesh_firewall-gateway-1",
+    "permanent_fix_needed": "docker compose build gateway && recreate container so image includes gate"
+  },
+  "post_fix_gateway_path": {
+    "ssn_message": "SSN 123-45-6789",
+    "egress": "Echo: SSN 123-45-6789",
+    "raw_pii_egresses": true,
+    "scan_trace": [
+      {"scan_stage": "scan_skipped", "direction": "input", "reason": "no_scan_controls_configured"},
+      {"scan_stage": "scan_skipped", "direction": "output", "reason": "no_scan_controls_configured"}
+    ],
+    "compliance_tags": []
+  },
+  "post_fix_control_path_same_0_controls": {
+    "note": "Control /api/mcp-connector/tools/call/ uses MCP Policy engine separately from scan controls",
+    "egress": "Echo: SSN [REDACTED_SSN]",
+    "policy": "PII_MCP_2",
+    "architectural_separation": "0 Scan Controls disables two-tier scan on GATEWAY JSON-RPC path only; MCP Security Policies (10 enabled) still enforce on control-plane tool-call path"
+  },
+  "contrast_with_control_created": {
+    "create_org_tier1_monitor": "immediate cache invalidation via bump_scan_version",
+    "egress_with_control": "Echo: UNIQUE-after-0s SSN ***-**-6789",
+    "egress_after_delete": "Echo: UNIQUE-after-delete SSN 123-45-6789"
+  },
+  "fail_safe": {
+    "enabled_info_none": "Unit test test_flag_absent_fails_safe_to_scanning — control plane outage still scans",
+    "code": "gateway/ai_mesh_gateway/tests/test_mcp_scan_off_by_default.py"
+  }
+}

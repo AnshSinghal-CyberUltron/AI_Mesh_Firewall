@@ -1,0 +1,27 @@
+{
+  "checkpoint": "08",
+  "ok": true,
+  "error": null,
+  "net": [
+    "GET /mcp-connector/servers/",
+    "GET /mcp-connector/servers/",
+    "GET /mcp-connector/servers/",
+    "GET /mcp-connector/servers/",
+    "GET /mcp-connector/servers/4894a2bc-ec19-4e3d-a785-cfd225407e76/tools/",
+    "POST /mcp-connector/servers/",
+    "POST /mcp-connector/servers/ce920f62-d5c6-41fd-ad8c-fb9bc2ce3f16/tools/",
+    "PATCH /mcp-connector/servers/ce920f62-d5c6-41fd-ad8c-fb9bc2ce3f16/",
+    "POST /mcp-connector/servers/ce920f62-d5c6-41fd-ad8c-fb9bc2ce3f16/tools/",
+    "DELETE /mcp-connector/servers/ce920f62-d5c6-41fd-ad8c-fb9bc2ce3f16/"
+  ],
+  "errorShownFirst": true,
+  "modalStayedOpenFirst": true,
+  "errorShownAfterRetry": true,
+  "modalStayedOpenAfterRetry": true,
+  "createdOnce": true,
+  "firstSyncFired": true,
+  "retryPatchFired": true,
+  "retrySyncFired": true,
+  "orphanDeletedOnCancel": true,
+  "cp08Pass": true
+}

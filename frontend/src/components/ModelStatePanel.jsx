@@ -118,9 +118,12 @@ export function ModelStatePanel() {
   }, [polling, fetchModelStates, fetchAuditLogs]);
 
   const handleIsolate = async (modelName) => {
+    // Destructive: cuts live traffic to the model (blocked → 503) until recovered.
+    if (!window.confirm(`Isolate "${modelName}"? All requests to this model will be blocked (503) until you recover it.`)) return;
     setActionLoading(modelName);
+    setLoadError(null);
     try {
-      await fetchWithAuth("/api/models/isolate/", {
+      const res = await fetchWithAuth("/api/models/isolate/", {
         method: "POST",
         body: JSON.stringify({
           model_name: modelName,
@@ -128,19 +131,35 @@ export function ModelStatePanel() {
           reason: "Manual isolation from dashboard",
         }),
       });
+      if (!res.ok) {
+        // A safety-critical action must never fail silently — surface it so the
+        // operator doesn't believe the model was isolated when it wasn't.
+        setLoadError(`Could not isolate "${modelName}" — the model was not changed.`);
+        return;
+      }
       await fetchModelStates();
       await fetchAuditLogs();
+    } catch {
+      setLoadError(`Network error isolating "${modelName}".`);
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleRecover = async (modelName) => {
+    if (!window.confirm(`Recover "${modelName}"? Live traffic to this model will resume.`)) return;
     setActionLoading(modelName);
+    setLoadError(null);
     try {
-      await fetchWithAuth(`/api/models/recover/${modelName}/`, { method: "POST" });
+      const res = await fetchWithAuth(`/api/models/recover/${encodeURIComponent(modelName)}/`, { method: "POST" });
+      if (!res.ok) {
+        setLoadError(`Could not recover "${modelName}" — the model was not changed.`);
+        return;
+      }
       await fetchModelStates();
       await fetchAuditLogs();
+    } catch {
+      setLoadError(`Network error recovering "${modelName}".`);
     } finally {
       setActionLoading(null);
     }
@@ -188,13 +207,16 @@ export function ModelStatePanel() {
 
   const isolatedCount = models.filter((m) => m.status === "isolated").length;
   const degradedCount = models.filter((m) => m.status === "degraded").length;
+  // Strip platform/guard (ZeroShield) rows so the reserved guard model's raw id
+  // never surfaces in the audit trail — mirrors the allowlist/governance panels.
+  const visibleAuditLogs = filterUserManagedModels(auditLogs);
   const totalModels = models.length;
 
   return (
     <div className="ai-mesh-card ai-mesh-grid-bg rounded-3xl p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="min-w-0">
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center">
             Model State & Risk Monitor
             <InfoTooltip title="Real-Time Model Health">
@@ -208,7 +230,7 @@ export function ModelStatePanel() {
             ) : null}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={handleSyncStates}
@@ -262,7 +284,7 @@ export function ModelStatePanel() {
             <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">{degradedCount} Degraded</span>
           </div>
         )}
-        <div className="ml-auto text-[10px] text-slate-400">{polling ? "Auto-refresh: 5s" : "Paused"}</div>
+        <div className="ml-auto text-[10px] text-slate-500 dark:text-slate-400">{polling ? "Auto-refresh: 5s" : "Paused"}</div>
       </div>
 
       {loadError && (
@@ -339,7 +361,7 @@ export function ModelStatePanel() {
                           <div className={`text-lg font-bold ${(m.risk_score || 0) >= (m.threshold || 80) ? "text-red-600 dark:text-red-400" : "text-slate-800 dark:text-slate-200"}`}>
                             {(m.risk_score || 0).toFixed(1)}
                           </div>
-                          <div className="text-[10px] text-slate-400 uppercase tracking-wider">Risk Score</div>
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">Risk Score</div>
                         </div>
                       </div>
                     </div>
@@ -445,7 +467,7 @@ export function ModelStatePanel() {
           <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3 flex items-center gap-2">
             <Clock className="w-4 h-4" /> Kill-Switch Audit Log
           </h4>
-          {auditLogs.length === 0 ? (
+          {visibleAuditLogs.length === 0 ? (
             <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-4">No audit events recorded yet.</p>
           ) : (
             <div className="overflow-x-auto max-h-64 overflow-y-auto">
@@ -461,9 +483,9 @@ export function ModelStatePanel() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                  {auditLogs.slice(0, 20).map((log, i) => (
+                  {visibleAuditLogs.slice(0, 20).map((log, i) => (
                     <tr key={log.id || i} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/30">
-                      <td className="px-2 py-1.5 text-slate-500 whitespace-nowrap">
+                      <td className="px-2 py-1.5 text-slate-500 dark:text-slate-400 whitespace-nowrap">
                         {log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : "—"}
                       </td>
                       <td className="px-2 py-1.5">
@@ -476,9 +498,9 @@ export function ModelStatePanel() {
                         </span>
                       </td>
                       <td className="px-2 py-1.5 font-mono text-slate-700 dark:text-slate-300">{log.model_name}</td>
-                      <td className="px-2 py-1.5 font-mono">{log.risk_score != null ? log.risk_score.toFixed(1) : "—"}</td>
+                      <td className="px-2 py-1.5 font-mono text-slate-700 dark:text-slate-300">{log.risk_score != null ? log.risk_score.toFixed(1) : "—"}</td>
                       <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">{log.action || "—"}</td>
-                      <td className="px-2 py-1.5 text-slate-500 max-w-[200px] truncate">{log.reason || "—"}</td>
+                      <td className="px-2 py-1.5 text-slate-500 dark:text-slate-400 max-w-[200px] truncate">{log.reason || "—"}</td>
                     </tr>
                   ))}
                 </tbody>

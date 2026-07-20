@@ -2,14 +2,13 @@
 # syntax=docker/dockerfile:1
 
 # uv installs wheels into .venv; CPython in the runtime stage executes them.
-FROM python:3.12-slim-bookworm AS builder
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_HTTP_TIMEOUT=300
 
 WORKDIR /app/control
-RUN pip install --no-cache-dir uv
 COPY control/pyproject.toml control/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
@@ -27,8 +26,13 @@ COPY control/ai_mesh_control /app/control/ai_mesh_control
 COPY --from=builder /app/control/.venv /app/control/.venv
 
 WORKDIR /app/control
-COPY control/entrypoint.sh /entrypoint.sh
-RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 EXPOSE 8000
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "--proxy-headers", "main_app.asgi:application"]
+
+# Control runs gunicorn managing N UvicornWorker processes, N derived at start
+# from the cgroup-aware detector (one worker per core, RAM-bounded) instead of a
+# single Daphne. CONTROL_WEB_CONCURRENCY env overrides. See control/server-entrypoint.sh
+# + shared/ai_mesh_shared/resource_budget.py.
+COPY control/server-entrypoint.sh /app/control/server-entrypoint.sh
+RUN chmod +x /app/control/server-entrypoint.sh
+
+CMD ["/app/control/server-entrypoint.sh"]

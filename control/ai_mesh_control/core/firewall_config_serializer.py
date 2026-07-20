@@ -120,42 +120,15 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
                 }
             )
 
-        # §1.7 output-guardrail compliance floor: under strict data-protection
-        # frameworks, sensitive-data detectors cannot be disabled or set to
-        # "allow", and security-incident logging cannot be turned off. This makes
-        # exfiltration/compliance gaps structurally impossible (defense-in-depth).
-        strict_data_frameworks = {"HIPAA", "PCI-DSS", "SOC2"}
-        if strict_data_frameworks.intersection(set(compliance_frameworks)):
-            active = ", ".join(
-                sorted(strict_data_frameworks.intersection(set(compliance_frameworks)))
-            )
-
-            def _cur(name, default):
-                return attrs.get(name, getattr(self.instance, name, default))
-
-            floor_errors = {}
-            if not _cur("output_pii_enabled", True):
-                floor_errors["output_pii_enabled"] = (
-                    f"PII output detection cannot be disabled under {active}."
-                )
-            if _cur("output_pii_action", "redact") == "allow":
-                floor_errors["output_pii_action"] = (
-                    f"PII output action cannot be 'allow' under {active}."
-                )
-            if not _cur("output_credential_enabled", True):
-                floor_errors["output_credential_enabled"] = (
-                    f"Credential output detection cannot be disabled under {active}."
-                )
-            if _cur("output_credential_action", "block") == "allow":
-                floor_errors["output_credential_action"] = (
-                    f"Credential output action cannot be 'allow' under {active}."
-                )
-            if not _cur("output_incident_logging_enabled", True):
-                floor_errors["output_incident_logging_enabled"] = (
-                    f"Security incident logging cannot be disabled under {active}."
-                )
-            if floor_errors:
-                raise serializers.ValidationError(floor_errors)
+        # FULL OPERATOR CONTROL (2026-07-16): the organization owner is the SOLE
+        # controller of their output-guardrail posture. The previous compliance
+        # "floor" that force-rejected disabling a sensitive-data detector, setting
+        # any per-detector action to "allow", or turning off security-incident
+        # logging under strict frameworks (HIPAA / PCI-DSS / SOC2) is REMOVED — the
+        # operator's explicit per-detector enable + action choice is honoured with
+        # NO server-imposed default or override. Compliance frameworks still drive
+        # the tier2_execution_mode guard above and downstream telemetry tagging;
+        # they no longer override the operator's action choices.
 
         org = self.context.get("organization")
         # Only (re)validate model-governance fields when this request actually

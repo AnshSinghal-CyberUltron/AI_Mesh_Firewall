@@ -1,0 +1,10 @@
+{
+  "agent": "cursor-ralph-iter9",
+  "story": "P4.9",
+  "scope": [
+    "services/mcp-broker/sandbox-image/agent/**",
+    "services/mcp-broker/sandbox-image/pyproject.toml"
+  ],
+  "since": "2026-07-02T14:00:00Z",
+  "status": "released"
+}

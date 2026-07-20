@@ -1,0 +1,15 @@
+# Gateway auth/authz/validation live probes (backstop CHG-0016, 2026-07-02)
+# Endpoint: POST {gateway}/gateway/{org}/mcp/{server}  (tools/call echo)
+
+AUTH / AUTHZ (item 9):
+  1. no Authorization header        -> 401  {"error":"unauthorized","message":"Missing or malformed Authorization header"}
+  2. invalid API key                -> 401  {"error":"unauthorized","message":"Invalid API key."}
+  3. org-a key + org-a endpoint     -> 200  ok
+  4. org-a KEY + ORG-B endpoint     -> 403  {"error":"org_scope_violation"}   <-- cross-tenant rejected
+  5. org-b key + org-b endpoint     -> 200  ok
+  6. org-b KEY + ORG-A endpoint     -> 403  {"error":"org_scope_violation"}   <-- cross-tenant rejected (both directions)
+
+INPUT VALIDATION (no 500 crashes = graceful):
+  missing-method / malformed-json / empty-tool  -> all handled gracefully (no 500)
+
+RATE LIMIT (S12 TPM+burst/RPM): 60 rapid calls on one key -> all 200 (limit not tripped at 60; threshold higher).

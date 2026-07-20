@@ -1,0 +1,65 @@
+{
+  "opaque_canary_baseline": {
+    "blocked": false,
+    "canary_present": true,
+    "ssn_raw_leak": false,
+    "email_raw_leak": false,
+    "aws_key_raw_leak": false,
+    "base64_blob_raw_leak": false,
+    "exfil_full_url_prefix_intact": true
+  },
+  "ssn_in_url": {
+    "blocked": false,
+    "canary_present": false,
+    "ssn_raw_leak": false,
+    "email_raw_leak": false,
+    "aws_key_raw_leak": false,
+    "base64_blob_raw_leak": false,
+    "exfil_full_url_prefix_intact": false
+  },
+  "email_in_url": {
+    "blocked": false,
+    "canary_present": false,
+    "ssn_raw_leak": false,
+    "email_raw_leak": false,
+    "aws_key_raw_leak": false,
+    "base64_blob_raw_leak": false,
+    "exfil_full_url_prefix_intact": false
+  },
+  "aws_key_in_url": {
+    "blocked": true,
+    "canary_present": false,
+    "ssn_raw_leak": false,
+    "email_raw_leak": false,
+    "aws_key_raw_leak": false,
+    "base64_blob_raw_leak": false,
+    "exfil_full_url_prefix_intact": false
+  },
+  "base64_encoded_payload_in_url": {
+    "blocked": false,
+    "canary_present": false,
+    "ssn_raw_leak": false,
+    "email_raw_leak": false,
+    "aws_key_raw_leak": false,
+    "base64_blob_raw_leak": false,
+    "exfil_full_url_prefix_intact": false
+  },
+  "html_img_ssn": {
+    "blocked": false,
+    "canary_present": false,
+    "ssn_raw_leak": false,
+    "email_raw_leak": false,
+    "aws_key_raw_leak": false,
+    "base64_blob_raw_leak": false,
+    "exfil_full_url_prefix_intact": false
+  },
+  "bare_url_ssn": {
+    "blocked": false,
+    "canary_present": false,
+    "ssn_raw_leak": false,
+    "email_raw_leak": false,
+    "aws_key_raw_leak": false,
+    "base64_blob_raw_leak": false,
+    "exfil_full_url_prefix_intact": false
+  }
+}

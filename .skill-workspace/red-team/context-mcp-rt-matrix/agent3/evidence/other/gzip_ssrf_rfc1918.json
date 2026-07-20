@@ -1,0 +1,44 @@
+{
+  "server": "everything-mcp",
+  "tool": "gzip-file-as-resource",
+  "note": "SSRF probe RFC1918",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 8,
+      "method": "tools/call",
+      "params": {
+        "name": "gzip-file-as-resource",
+        "arguments": {
+          "name": "leak.gz",
+          "data": "http://10.0.0.1/",
+          "outputType": "resource"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "fetch failed"
+          }
+        ],
+        "isError": true
+      },
+      "jsonrpc": "2.0",
+      "id": 8
+    }
+  },
+  "elapsed_s": 10.442,
+  "_pii_scan": {},
+  "_raw_substring_hits": {}
+}

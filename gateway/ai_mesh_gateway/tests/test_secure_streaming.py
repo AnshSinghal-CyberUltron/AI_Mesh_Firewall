@@ -104,7 +104,8 @@ async def test_secure_stream_block_mid_stream_after_prior_chunks_were_yielded():
 
 
 @pytest.mark.asyncio
-async def test_flag_verdict_blocks_when_enforcement_mode_block():
+async def test_flag_verdict_delivers_when_enforcement_mode_block():
+    """F-003: Flag under enforcement_mode=block must deliver + flag, not block."""
     class _FlagGuard:
         async def inspect(self, text: str):
             class V:
@@ -132,7 +133,43 @@ async def test_flag_verdict_blocks_when_enforcement_mode_block():
     async for c in secure:
         chunks.append(c)
     body = "".join(chunks)
-    assert "output_blocked" in body
+    assert "output_blocked" not in body
+    assert "contact me" in body
+    assert any("[DONE]" in c for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_rewrite_verdict_rewrites_at_stream_done():
+    """F-002: rewrite at DONE emits rewritten text, not original / not block."""
+    class _RewriteGuard:
+        async def inspect(self, text: str):
+            class V:
+                action = "rewrite"
+                threat_type = "hallucination"
+                detail = "fabricated claim"
+                compliance_tags = []
+                matched_patterns = []
+
+            return V()
+
+    async def inner():
+        yield 'data: {"choices":[{"delta":{"content":"The API is at https://totally-fake.example/v99"}}]}\n\n'
+        yield "data: [DONE]\n\n"
+
+    secure = SecureStreamingResponse(
+        inner_generator=inner(),
+        scanner=_FakeScanner(),
+        buffer_max_bytes=4096,
+        max_buffer_chunks=8,
+        output_guard=_RewriteGuard(),
+        enforcement_mode="block",
+    )
+    chunks = []
+    async for c in secure:
+        chunks.append(c)
+    body = "".join(chunks)
+    assert "output_blocked" not in body
+    assert "totally-fake.example" not in body
     assert any("[DONE]" in c for c in chunks)
 
 

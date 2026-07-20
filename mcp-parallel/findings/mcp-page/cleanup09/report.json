@@ -1,0 +1,46 @@
+{
+  "checkpoint": "cleanup-09",
+  "consoleErrors": [],
+  "sweep": [
+    {
+      "theme": "light",
+      "w": 1440,
+      "h": 1000,
+      "horizontalOverflow": false
+    },
+    {
+      "theme": "light",
+      "w": 375,
+      "h": 812,
+      "horizontalOverflow": false
+    },
+    {
+      "theme": "dark",
+      "w": 1440,
+      "h": 1000,
+      "horizontalOverflow": false
+    },
+    {
+      "theme": "dark",
+      "w": 375,
+      "h": 812,
+      "horizontalOverflow": false
+    }
+  ],
+  "ok": true,
+  "badgeCounts": {
+    "Connected": 6,
+    "Failed": 15,
+    "Syncing": 0,
+    "Connecting": 0,
+    "Unknown": 0,
+    "Needs re-auth": 0,
+    "Pending": 0
+  },
+  "stuckUnknown": 0,
+  "hasResolved": true,
+  "hasNeverSynced": false,
+  "noConsoleErrors": true,
+  "noOverflow": true,
+  "cleanup09Pass": true
+}

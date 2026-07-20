@@ -1,0 +1,53 @@
+{
+  "rounds_required": 1,
+  "all_green": false,
+  "elapsed_s": 662.5,
+  "rounds": [
+    {
+      "round": 1,
+      "ok": false,
+      "gates": [
+        {
+          "gate": "broker-pytest",
+          "ok": true,
+          "summary": "157 passed, 3 warnings in 2.56s"
+        },
+        {
+          "gate": "agent-pytest",
+          "ok": true,
+          "summary": "67 passed, 1 warning in 250.62s (0:04:10)"
+        },
+        {
+          "gate": "multi-org",
+          "ok": true,
+          "summary": "HARNESS: GREEN"
+        },
+        {
+          "gate": "concurrency",
+          "ok": true,
+          "summary": "CONCURRENCY: PASS"
+        },
+        {
+          "gate": "load",
+          "ok": true,
+          "summary": "LOAD: PASS"
+        },
+        {
+          "gate": "leakage",
+          "ok": true,
+          "summary": "LEAKAGE: PASS (26/26 checks)"
+        },
+        {
+          "gate": "oauth",
+          "ok": false,
+          "summary": "OAUTH_TRANSPORT: FAIL (84/85 checks)"
+        },
+        {
+          "gate": "playwright",
+          "ok": true,
+          "summary": "B1/B2/B4 E2E: ALL PASS"
+        }
+      ]
+    }
+  ]
+}

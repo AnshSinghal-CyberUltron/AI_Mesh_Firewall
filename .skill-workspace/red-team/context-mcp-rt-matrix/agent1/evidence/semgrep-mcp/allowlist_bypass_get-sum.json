@@ -1,0 +1,45 @@
+{
+  "agent": "agent1",
+  "scope": "context-assembly|least-privilege|context-minimization|cross-mcp-leakage",
+  "server_slug": "semgrep-mcp",
+  "label": "allowlist_bypass_get-sum",
+  "captured_at_utc": "2026-07-07T10:55:54Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/semgrep-mcp",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "get-sum",
+        "arguments": {
+          "a": 1,
+          "b": 2
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:53 GMT",
+      "server": "uvicorn",
+      "content-length": "100",
+      "content-type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "error": {
+        "code": -32601,
+        "message": "MCP error -32601: Unknown tool: get-sum"
+      }
+    }
+  },
+  "notes": ""
+}

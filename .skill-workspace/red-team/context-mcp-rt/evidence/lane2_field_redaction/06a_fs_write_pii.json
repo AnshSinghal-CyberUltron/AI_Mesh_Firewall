@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/filesystem-canary",
+  "status_code": 200,
+  "elapsed_s": 0.007,
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "write_file",
+      "arguments": {
+        "path": "/tmp/rt_pii_canary.txt",
+        "content": "Customer record: SSN 123-45-6789, email alice.jones@corp.example, phone 555-867-5309, card 4111-1111-1111-1111. Infra creds: aws_key=AKIAIOSFODNN7EXAMPLE github=ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA stripe=sk_live_4242424242424242424242."
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "[BLOCKED] Tool 'write_file' arguments matched compliance tags: GDPR, HIPAA, INFRA, PCI-DSS, PII, SECRET, SOC2."
+        }
+      ],
+      "isError": true
+    }
+  },
+  "response_headers": {
+    "date": "Tue, 07 Jul 2026 09:27:53 GMT",
+    "server": "uvicorn",
+    "content-length": "198",
+    "content-type": "application/json"
+  },
+  "_captured_at": "2026-07-07T09:27:53.750670+00:00"
+}

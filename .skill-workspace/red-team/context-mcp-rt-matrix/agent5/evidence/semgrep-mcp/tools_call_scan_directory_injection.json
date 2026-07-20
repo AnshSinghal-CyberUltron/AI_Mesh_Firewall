@@ -1,0 +1,49 @@
+{
+  "server_slug": "semgrep-mcp",
+  "label": "tools_call_scan_directory_injection",
+  "captured_at_utc": "2026-07-07T10:55:29Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/semgrep-mcp",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "scan_directory",
+        "arguments": {
+          "path": "/tmp",
+          "config": "auto"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:26 GMT",
+      "server": "uvicorn",
+      "content-length": "160",
+      "content-type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Response from 'scan_directory' matched compliance tags: INFRA."
+          }
+        ],
+        "isError": true
+      }
+    },
+    "_latency_ms": 2480.1
+  },
+  "notes": ""
+}

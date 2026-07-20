@@ -1,0 +1,134 @@
+{
+  "story": "P5#16",
+  "bug": "B4",
+  "base": "http://127.0.0.1:8180",
+  "ok": true,
+  "asserts": [
+    {
+      "name": "B4-F focus kept: name",
+      "pass": true,
+      "detail": {
+        "field": "name",
+        "focusKeptAllKeystrokes": true,
+        "focusLossAtKeystroke": null,
+        "valueLength": 24
+      }
+    },
+    {
+      "name": "B4-F focus kept: url",
+      "pass": true,
+      "detail": {
+        "field": "url",
+        "focusKeptAllKeystrokes": true,
+        "focusLossAtKeystroke": null,
+        "valueLength": 24
+      }
+    },
+    {
+      "name": "B4-F focus kept: description",
+      "pass": true,
+      "detail": {
+        "field": "description",
+        "focusKeptAllKeystrokes": true,
+        "focusLossAtKeystroke": null,
+        "valueLength": 24
+      }
+    },
+    {
+      "name": "B4-F focus kept: stdio-command",
+      "pass": true,
+      "detail": {
+        "field": "stdio-command",
+        "focusKeptAllKeystrokes": true,
+        "focusLossAtKeystroke": null,
+        "valueLength": 24
+      }
+    },
+    {
+      "name": "B4-F focus kept: bearer-token",
+      "pass": true,
+      "detail": {
+        "field": "bearer-token",
+        "focusKeptAllKeystrokes": true,
+        "focusLossAtKeystroke": null,
+        "valueLength": 24
+      }
+    },
+    {
+      "name": "B4-ALL no focus loss in any field",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "B4-P1 preset prefills name=GitHub MCP",
+      "pass": true,
+      "detail": "GitHub MCP"
+    },
+    {
+      "name": "B4-P2 preset prefills url",
+      "pass": true,
+      "detail": "https://api.githubcopilot.com/mcp/"
+    },
+    {
+      "name": "B4-P3 preset transport=streamable-http",
+      "pass": true,
+      "detail": "streamable-http"
+    },
+    {
+      "name": "B4-P4 preset auth_type=bearer",
+      "pass": true,
+      "detail": "bearer"
+    },
+    {
+      "name": "B4-P5 focus retained on prefilled field",
+      "pass": true,
+      "detail": {
+        "typed": 37
+      }
+    }
+  ],
+  "findings": {
+    "fields": [
+      {
+        "field": "name",
+        "focusKeptAllKeystrokes": true,
+        "focusLossAtKeystroke": null,
+        "valueLength": 24
+      },
+      {
+        "field": "url",
+        "focusKeptAllKeystrokes": true,
+        "focusLossAtKeystroke": null,
+        "valueLength": 24
+      },
+      {
+        "field": "description",
+        "focusKeptAllKeystrokes": true,
+        "focusLossAtKeystroke": null,
+        "valueLength": 24
+      },
+      {
+        "field": "stdio-command",
+        "focusKeptAllKeystrokes": true,
+        "focusLossAtKeystroke": null,
+        "valueLength": 24
+      },
+      {
+        "field": "bearer-token",
+        "focusKeptAllKeystrokes": true,
+        "focusLossAtKeystroke": null,
+        "valueLength": 24
+      }
+    ],
+    "b4BugConfirmed": false,
+    "b4BugNotReproducing": true,
+    "prefill": {
+      "nameVal": "GitHub MCP",
+      "urlVal": "https://api.githubcopilot.com/mcp/",
+      "transportVal": "streamable-http",
+      "authVal": "bearer"
+    },
+    "focusKeptOnPrefilledField": true
+  },
+  "error": null
+}

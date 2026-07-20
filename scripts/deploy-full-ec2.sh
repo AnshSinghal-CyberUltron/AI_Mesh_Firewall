@@ -167,12 +167,15 @@ cat <<EOF
 ============================================================
  Deploy finished.
 
-  Images : ${ECR_REGISTRY}/ai-mesh-{gateway,control,workers,nginx}:${TAG}
+  Images : ${ECR_REGISTRY}/ai-mesh-{gateway,control,workers,nginx,demo,mcp-broker,mcp-sandbox}:${TAG}
   UI     : https://${FRONTEND_HOST:-aimeshfirewall.zeroshield.ai}
   API    : https://${BACKEND_HOST:-aimeshbackend.zeroshield.ai}/api/
   Gateway: https://${GATEWAY_HOST:-aimeshgateway.zeroshield.ai}/v1/
 
 Redeploy after a new push:
   make ecr-push TAG=<tag> && make sync-ec2-deploy
+
+Local gate (no SSH / no :80):
+  make verify-prod-local
 
 EOF

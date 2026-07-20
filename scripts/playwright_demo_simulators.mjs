@@ -131,14 +131,43 @@ async function gotoTab(page, tab, anchorText) {
 
 // Run an AttackSimulator scenario; returns the captured /v1/chat/completions status.
 async function runAttackScenario(page, panel, scenarioText) {
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+  // Re-resolve the panel — a prior LLM round can remount the card and stale locators
+  // stall on mid-navigation clicks (CONTROL-WEDGE / slow-model flakes).
+  panel = page.locator("div.ai-mesh-card").filter({ has: page.getByRole("heading", { name: /Attack Simulator/i }) }).first();
+  await panel.waitFor({ state: "visible", timeout: 30000 });
   const reset = panel.getByRole("button", { name: /^Reset$/ });
   if (await reset.count()) { await reset.first().click(); await page.waitForTimeout(200); }
   await panel.getByRole("button", { name: scenarioText }).first().click();
   await page.waitForTimeout(250);
-  const [resp] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/v1/chat/completions") && r.request().method() === "POST", { timeout: 120000 }),
-    panel.getByRole("button", { name: /Run Pipeline/ }).click(),
-  ]);
+  const runBtn = panel.getByRole("button", { name: /Run Pipeline/ });
+  await runBtn.waitFor({ state: "visible", timeout: 30000 });
+  let resp = null;
+  for (let attempt = 0; attempt < 6 && !resp; attempt++) {
+    const respP = page
+      .waitForResponse((r) => r.url().includes("/v1/chat/completions") && r.request().method() === "POST", { timeout: 120000 })
+      .catch(() => null);
+    // Bound the click: under host contention the SPA can be mid-navigation, which
+    // stalls the default 30s action timeout and aborts the whole gate. A stalled
+    // click is a transient race, not a product defect — let the page settle and
+    // retry instead of throwing.
+    try {
+      await runBtn.click({ timeout: 10000 });
+    } catch {
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.waitForTimeout(1500);
+      continue;
+    }
+    const noop = await page
+      .getByText(/Select a connected model/i)
+      .first()
+      .waitFor({ state: "visible", timeout: 4000 })
+      .then(() => true)
+      .catch(() => false);
+    if (noop) { await page.waitForTimeout(2000); continue; }
+    resp = await respP;
+  }
+  if (!resp) throw new Error("attack sim never fired /v1/chat/completions (model selector did not populate)");
   // let React paint the verdict
   await page.waitForTimeout(800);
   return resp.status();
@@ -257,17 +286,44 @@ async function main() {
     // ───────── 4. IsolationOps (1.6) Live gateway test: benign ALLOW ─────────
     CURRENT_PHASE = "isolation-sim";
     await gotoTab(page, "firewall-1-6", "/Isolation/i");
-    await page.waitForResponse((r) => r.url().includes("/api/firewall/models/"), { timeout: 30000 }).catch(() => {});
+    // Simulator lane sits below several control panels — anchor the panel first.
+    const isoPanel = page.locator("text=/Isolation Operations Simulator/i").first();
+    await isoPanel.waitFor({ state: "visible", timeout: 60000 });
+    await isoPanel.scrollIntoViewIfNeeded();
+    await page.waitForResponse((r) => r.url().includes("/api/firewall/models/"), { timeout: 90000 }).catch(() => {});
     await page.waitForTimeout(500);
     // Live gateway test tab is default; ensure it is active.
     const liveTab = page.getByRole("tab", { name: /Live gateway test/i });
     if (await liveTab.count()) { await liveTab.first().click().catch(() => {}); }
-    const execBtn = page.getByRole("button", { name: /^Execute$/ }).first();
-    await execBtn.waitFor({ state: "visible", timeout: 30000 });
-    const [isoResp] = await Promise.all([
-      page.waitForResponse((r) => r.url().includes("/v1/chat/completions") && r.request().method() === "POST", { timeout: 120000 }),
-      execBtn.click(),
-    ]);
+    const execBtn = page
+      .locator(".ai-mesh-card")
+      .filter({ hasText: "Isolation Operations Simulator" })
+      .getByRole("button", { name: /^Execute$/ })
+      .first();
+    await execBtn.scrollIntoViewIfNeeded();
+    await execBtn.waitFor({ state: "visible", timeout: 60000 });
+    // handleLiveChat (IsolationOpsSimulator) early-returns WITHOUT firing a request
+    // until gatewayModels.selectedModel is populated — the useSimulatorGatewayModels
+    // hook loads /api/firewall/models/ then auto-selects asynchronously. Clicking
+    // Execute before then no-ops with a "Select a connected model" error and never
+    // hits /v1/chat/completions, so a plain waitForResponse would hang the full 120s.
+    // Retry the click until the request actually fires, detecting the no-op fast.
+    let isoResp = null;
+    for (let attempt = 0; attempt < 6 && !isoResp; attempt++) {
+      const respP = page
+        .waitForResponse((r) => r.url().includes("/v1/chat/completions") && r.request().method() === "POST", { timeout: 120000 })
+        .catch(() => null);
+      await execBtn.click();
+      const noop = await page
+        .getByText(/Select a connected model/i)
+        .first()
+        .waitFor({ state: "visible", timeout: 4000 })
+        .then(() => true)
+        .catch(() => false);
+      if (noop) { await page.waitForTimeout(2000); continue; }
+      isoResp = await respP;
+    }
+    if (!isoResp) throw new Error("isolation live chat never fired /v1/chat/completions (model selector did not populate)");
     report.notes.push(`isolation live HTTP ${isoResp.status()}`);
     assert(isoResp.status() === 200, `isolation benign prompt allowed (HTTP ${isoResp.status()})`);
     await page.waitForTimeout(800);

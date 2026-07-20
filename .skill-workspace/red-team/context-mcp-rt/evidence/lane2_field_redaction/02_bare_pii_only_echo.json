@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+  "status_code": 200,
+  "elapsed_s": 0.105,
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "echo",
+      "arguments": {
+        "message": "Contact record: SSN 123-45-6789, email alice.jones@corp.example, phone 555-867-5309"
+      }
+    }
+  },
+  "response": {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Echo: Contact record: SSN ***-**-6789, email a***@c***.example, phone ***-***-5309"
+        }
+      ]
+    },
+    "jsonrpc": "2.0",
+    "id": 1
+  },
+  "response_headers": {
+    "date": "Tue, 07 Jul 2026 09:27:53 GMT",
+    "server": "uvicorn",
+    "content-length": "155",
+    "content-type": "application/json"
+  },
+  "_captured_at": "2026-07-07T09:27:53.431896+00:00"
+}

@@ -1,0 +1,41 @@
+{
+  "server": "everything-mcp",
+  "tool": "echo",
+  "note": "raw PCI card+cvv",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 19,
+      "method": "tools/call",
+      "params": {
+        "name": "echo",
+        "arguments": {
+          "message": "card 4111-1111-1111-1111 exp 12/29 cvv 123 RT3-3960c6b95f"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Echo: card ****-****-****-1111 exp 12/29 cvv 123 RT3-3960c6b95f"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 19
+    }
+  },
+  "elapsed_s": 0.045,
+  "_pii_scan": {},
+  "_raw_substring_hits": {}
+}

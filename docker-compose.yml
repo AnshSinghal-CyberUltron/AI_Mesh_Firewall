@@ -1,5 +1,10 @@
 # AI Mesh Firewall — standalone product (dev)
 # UI :8180  Control :8100  Gateway :8300  RabbitMQ UI :15772
+#
+# MCP per-org Docker sandboxes (broker + sandbox image): enable with
+#   docker compose --profile services up -d
+# That starts mcp-broker (Docker socket mounted on broker ONLY), builds
+# ai-mesh/mcp-sandbox:latest, and sets gateway MCP_STDIO_IN_PROCESS=false.
 
 name: ai_mesh_firewall
 
@@ -7,6 +12,15 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     ports: ["5432:5432"]
+    # max_connections raised from the pg default (100): the control plane opens a DB
+    # connection per request (CONN_MAX_AGE=60 keeps them ~60s) and celery adds more;
+    # under multi-tenant MCP load (15 sandboxes + parallel harnesses) 100 exhausts
+    # ("FATAL: too many clients"), which surfaces as bogus login-401s + a control-plane
+    # wedge. 400 gives headroom (~4GB RAM). Overridable via POSTGRES_MAX_CONNECTIONS.
+    command:
+      - postgres
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS:-400}
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ai_mesh_firewall}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ai_mesh_firewall}
@@ -77,17 +91,16 @@ services:
     build:
       context: .
       dockerfile: control/Dockerfile
-    # The image WORKDIR is /app/control, but the Django project (manage.py +
-    # main_app/) lives one level deeper at /app/control/ai_mesh_control. Pin
-    # working_dir there so the image Cmd `daphne main_app.asgi:application`
-    # (and `docker exec ... manage.py`) can import main_app. Without this the
-    # container exits with ModuleNotFoundError: No module named 'main_app'.
-    working_dir: /app/control/ai_mesh_control
+# Image WORKDIR is /app/control; manage.py lives there. Django code (main_app/)
+    # is under ai_mesh_control/ and is on PYTHONPATH (set in control/Dockerfile).
+    working_dir: /app/control
     ports: ["8100:8000"]
     env_file:
       - .env
     environment:
       DJANGO_SETTINGS_MODULE: main_app.settings
+      # .env may set gateway PYTHONPATH — override so gunicorn/daphne resolve main_app.
+      PYTHONPATH: /app/shared:/app/control/ai_mesh_control
       DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
       REDIS_URL: redis://redis:6379/0
       CHANNEL_LAYERS_REDIS_URL: redis://redis:6379/1
@@ -103,16 +116,9 @@ services:
       # Phase 1 Fx-2b: server-to-server admin proxy (control -> gateway)
       GATEWAY_URL: http://gateway:8300
       GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
-      # Security alerting email (Microsoft Graph application permissions)
-      TENANT_ID: ${TENANT_ID:-}
-      CLIENT_ID: ${CLIENT_ID:-}
-      CLIENT_SECRET: ${CLIENT_SECRET:-}
-      GRAPH_SENDER_EMAIL: ${GRAPH_SENDER_EMAIL:-support@zeroshield.ai}
-      # Drain telemetry + send alert emails without requiring --profile workers
       TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-thread}
       TELEMETRY_DRAIN_INTERVAL_SEC: ${TELEMETRY_DRAIN_INTERVAL_SEC:-1.0}
       TELEMETRY_DRAIN_BATCH_SIZE: ${TELEMETRY_DRAIN_BATCH_SIZE:-250}
-      ALERT_EMAIL_USE_CELERY: ${ALERT_EMAIL_USE_CELERY:-false}
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -136,11 +142,6 @@ services:
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
       REDIS_URL: redis://redis:6379/0
       TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-beat}
-      TENANT_ID: ${TENANT_ID:-}
-      CLIENT_ID: ${CLIENT_ID:-}
-      CLIENT_SECRET: ${CLIENT_SECRET:-}
-      GRAPH_SENDER_EMAIL: ${GRAPH_SENDER_EMAIL:-support@zeroshield.ai}
-      ALERT_EMAIL_USE_CELERY: ${ALERT_EMAIL_USE_CELERY:-true}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-secret-change-me}
       POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
     depends_on:
@@ -196,8 +197,15 @@ services:
       BEDROCK_REGION: ${BEDROCK_REGION:-ap-south-1}
       BEDROCK_MODEL: ${BEDROCK_MODEL:-global.anthropic.claude-haiku-4-5-20251001-v1:0}
       ENABLE_TIER2: ${ENABLE_TIER2:-true}
+      # Always run Bedrock routing adjudicator when >1 candidates (skip only
+      # single-candidate). Set false to restore low-risk weighted_fastpath.
+      ROUTING_ADJUDICATOR_ALWAYS: ${ROUTING_ADJUDICATOR_ALWAYS:-true}
       GUARDRAILS_SERVICE_URL: http://guardrails:8310
       MCP_BROKER_URL: http://mcp-broker:8311
+      MCP_BROKER_INTERNAL_KEY: ${MCP_BROKER_INTERNAL_KEY:-dev-mcp-broker-key-change-me}
+      # Sandbox path: broker delegates stdio MCP to per-org containers (S9+).
+      # Override MCP_STDIO_IN_PROCESS=true in .env for in-gateway dev fallback.
+      MCP_STDIO_IN_PROCESS: ${MCP_STDIO_IN_PROCESS:-false}
       VECTOR_SERVICE_URL: http://vector-retrieval:8312
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://127.0.0.1:8180}
       GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-http://127.0.0.1:8180}
@@ -214,6 +222,9 @@ services:
       MCP_STDIO_METHOD_TIMEOUT: ${MCP_STDIO_METHOD_TIMEOUT:-60}
       MCP_STDIO_HUNG_INIT_TIMEOUT: ${MCP_STDIO_HUNG_INIT_TIMEOUT:-180}
       MCP_STDIO_PACKAGE_ALLOWLIST: ${MCP_STDIO_PACKAGE_ALLOWLIST:-}
+      # Optional: extend ext_mcp_proxy allowlist for hermetic validation stubs (iter13+).
+      MCP_EXT_ALLOWED_DOMAINS: ${MCP_EXT_ALLOWED_DOMAINS:-}
+      MCP_EXT_PROXY_HTTP_HOSTS: ${MCP_EXT_PROXY_HTTP_HOSTS:-}
       UV_CACHE_DIR: /root/.cache/uv
       NPM_CONFIG_CACHE: /root/.npm
     volumes:
@@ -222,6 +233,18 @@ services:
     depends_on:
       control: { condition: service_healthy }
       redis: { condition: service_healthy }
+    # Phase-3 auto-recovery: the gateway was the only core service with neither a
+    # healthcheck nor a restart policy (BACKSTOP CHG-0020: health=none → never
+    # auto-restarted, and peers could not gate on service_healthy). /health is
+    # auth-exempt and returns 200 {"status":"ok"} normally, 503 on a fatal
+    # policy-signing misconfig — so an unhealthy gateway now reads unhealthy.
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8300/health', timeout=5)"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 60s
 
   guardrails:
     image: python:3.12-slim
@@ -231,13 +254,55 @@ services:
     ports: ["8310:8310"]
     profiles: ["services"]
 
-  mcp-broker:
-    image: python:3.12-slim
-    working_dir: /app
-    command: pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8311
-    volumes: ["./services/mcp-broker/src:/app"]
-    ports: ["8311:8311"]
+  mcp-sandbox-image:
     profiles: ["services"]
+    image: ai-mesh/mcp-sandbox:latest
+    build:
+      context: .
+      dockerfile: services/mcp-broker/sandbox-image/Dockerfile
+    command: ["true"]
+    restart: "no"
+
+  mcp-broker:
+    profiles: ["services"]
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: services/mcp-broker/Dockerfile
+    ports: ["8311:8311"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      MCP_BROKER_INTERNAL_KEY: ${MCP_BROKER_INTERNAL_KEY:-dev-mcp-broker-key-change-me}
+      MCP_SANDBOX_IMAGE: ai-mesh/mcp-sandbox:latest
+      MCP_SANDBOX_NETWORK: mcp_sandbox_bridge
+      MCP_SANDBOX_IDLE_TIMEOUT: ${MCP_SANDBOX_IDLE_TIMEOUT:-3600}
+      # Kernel isolation: runsc (gVisor). Requires host `runsc install` + Docker reload.
+      MCP_SANDBOX_RUNTIME: ${MCP_SANDBOX_RUNTIME:-runsc}
+      # Per-org sandbox memory limit + Node/V8 old-space heap cap (CP20). The heap
+      # cap defaults to ~75% of the memory limit so heavy Node MCP servers fail with
+      # a graceful V8 OOM instead of a kernel SIGKILL. Raise MEMORY_MB for heavy
+      # servers; leave NODE_MAX_OLD_SPACE_MB=0 to keep the auto-derived cap.
+      MCP_SANDBOX_MEMORY_MB: ${MCP_SANDBOX_MEMORY_MB:-2048}
+      MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB: ${MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB:-0}
+      # RAM-backed npm-cache tmpfs size (CP21). Heavy servers (e.g. Ruflo, dep
+      # tree > 1GB) overflow the default → raise this AND MCP_SANDBOX_MEMORY_MB
+      # (tmpfs counts against the mem cgroup). Ruflo connects at ~4096 mem / 3072 cache.
+      MCP_SANDBOX_NPM_CACHE_SIZE_MB: ${MCP_SANDBOX_NPM_CACHE_SIZE_MB:-1024}
+      MCP_BROKER_CONTAINER_NAME: ai_mesh_mcp_broker
+    container_name: ai_mesh_mcp_broker
+    networks:
+      - default
+      - mcp_sandbox_bridge
+    depends_on:
+      mcp-sandbox-image:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8311/health', timeout=10)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   # Submodule 1.4 hermetic MCP stub — deterministic target for live UI tests.
   # Implements streamable-http MCP at http://mcp-stub:9999/mcp .
@@ -263,6 +328,75 @@ services:
     ports: ["8312:8312"]
     profiles: ["services"]
 
+  # P4.13/P6.18 transport stubs — reachable from per-org sandboxes via DNS aliases.
+  # Prefer: docker compose --profile transport-stubs up -d
+  http-everything:
+    image: node:20-slim
+    profiles: ["transport-stubs"]
+    environment:
+      PORT: "3001"
+    command: >-
+      sh -c "npm_config_cache=/tmp/npm npx -y @modelcontextprotocol/server-everything streamableHttp"
+    networks:
+      mcp_sandbox_net_zeroshield:
+        aliases:
+          - http-everything.stub
+    restart: unless-stopped
+
+  sse-everything:
+    image: node:20-slim
+    profiles: ["transport-stubs"]
+    environment:
+      PORT: "3002"
+    command: >-
+      sh -c "npm_config_cache=/tmp/npm npx -y @modelcontextprotocol/server-everything sse"
+    networks:
+      mcp_sandbox_net_zeroshield:
+        aliases:
+          - sse-everything.stub
+    restart: unless-stopped
+
+  ws-everything:
+    image: node:20-slim
+    profiles: ["transport-stubs"]
+    environment:
+      PORT: "3003"
+    volumes:
+      - ./scripts/mcp_ws_everything_stub.mjs:/stub.mjs:ro
+    command: >-
+      sh -c "cd /tmp && npm_config_cache=/tmp/npm npm init -y >/dev/null 2>&1 &&
+      npm install ws@8 >/dev/null 2>&1 &&
+      cp /stub.mjs /tmp/stub.mjs &&
+      NODE_PATH=/tmp/node_modules node /tmp/stub.mjs"
+    networks:
+      mcp_sandbox_net_zeroshield:
+        aliases:
+          - ws-everything.stub
+    restart: unless-stopped
+
+  # OpenAI-SDK reference demo — login with console credentials; AI via openai.OpenAI
+  # to the gateway using the org simulator key. Reachable at http://127.0.0.1:8180/demo/
+  # (Vite proxy) or http://127.0.0.1:8770/ directly.
+  demo:
+    build:
+      context: ./examples/zeroshield-openai-demo
+      dockerfile: Dockerfile
+    ports: ["8770:8770"]
+    environment:
+      CONTROL_BASE_URL: http://control:8000
+      ZEROSHIELD_BASE_URL: http://gateway:8300/v1
+      RAG_COLLECTION: ${RAG_COLLECTION:-zeroshield-rag-e2e}
+    depends_on:
+      control: { condition: service_healthy }
+      gateway: { condition: service_started }
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8770/api/health', timeout=5)"]
+      interval: 20s
+      timeout: 6s
+      retries: 5
+      start_period: 30s
+
   frontend:
     image: node:22-alpine
     working_dir: /app
@@ -276,6 +410,7 @@ services:
     environment:
       VITE_CONTROL_PROXY: http://control:8000
       VITE_GATEWAY_PROXY: http://gateway:8300
+      VITE_DEMO_PROXY: http://demo:8770
       VITE_GATEWAY_BASE_URL: ${VITE_GATEWAY_BASE_URL:-http://127.0.0.1:8180}
       VITE_BACKEND_BASE_URL: ${VITE_BACKEND_BASE_URL:-http://127.0.0.1:8180}
       VITE_ENABLE_REALTIME_NOTIFICATIONS: ${VITE_ENABLE_REALTIME_NOTIFICATIONS:-true}
@@ -285,6 +420,9 @@ services:
       timeout: 5s
       retries: 24
       start_period: 120s
+    depends_on:
+      control: { condition: service_healthy }
+      demo: { condition: service_started }
 
 volumes:
   postgres_data:
@@ -295,3 +433,15 @@ volumes:
   npm_cache:
   uv_cache:
   frontend_node_modules:
+
+networks:
+  # Pre-created by tests/manual broker runs; external avoids compose label conflicts
+  # when the network already exists. Run scripts/ensure_mcp_sandbox_network.sh first.
+  mcp_sandbox_bridge:
+    name: mcp_sandbox_bridge
+    external: true
+  # Per-org sandbox network for zeroshield — transport stubs attach here.
+  # Run scripts/ensure_org_sandbox_network.sh before first transport-stubs up.
+  mcp_sandbox_net_zeroshield:
+    name: mcp_sandbox_net_zeroshield
+    external: true

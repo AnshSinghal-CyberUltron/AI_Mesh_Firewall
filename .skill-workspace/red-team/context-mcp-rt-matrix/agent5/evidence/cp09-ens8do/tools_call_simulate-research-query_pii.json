@@ -1,0 +1,49 @@
+{
+  "server_slug": "cp09-ens8do",
+  "label": "tools_call_simulate-research-query_pii",
+  "captured_at_utc": "2026-07-07T10:55:45Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/cp09-ens8do",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "simulate-research-query",
+        "arguments": {
+          "topic": "SSN=123-45-6789 email=redteam.live@corp.example key=AKIAIOSF",
+          "ambiguous": false
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:44 GMT",
+      "server": "uvicorn",
+      "content-length": "187",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "MCP error -32601: Tool simulate-research-query requires task augmentation (taskSupport: 'required')"
+          }
+        ],
+        "isError": true
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    },
+    "_latency_ms": 38.7
+  },
+  "notes": ""
+}

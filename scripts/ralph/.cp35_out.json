@@ -1,0 +1,33 @@
+{
+  "checkpoint": "35",
+  "cp35Pass": true,
+  "checks": [
+    {
+      "call": "everything.echo",
+      "status": 200,
+      "ok": true,
+      "result": "{\"result\": {\"content\": [{\"type\": \"text\", \"text\": \"Echo: hello-cp35-deterministic-42\"}]}, \"request_id\": \"b539cc73-129d-41\", \"decision\": \"allow\"}"
+    },
+    {
+      "call": "everything.add",
+      "ok": null,
+      "note": "tool not offered by this server build"
+    },
+    {
+      "call": "filesystem.list_allowed_directories",
+      "status": 200,
+      "ok": true,
+      "result": "{\"result\": {\"content\": [{\"type\": \"text\", \"text\": \"Allowed directories:\\n/data/mcp-auth\"}], \"structuredContent\": {\"content\": \"Allowed directories:\\n/data/mcp-aut"
+    },
+    {
+      "call": "memory.create_entities+read_graph",
+      "status": [
+        200,
+        200
+      ],
+      "ok": true,
+      "result": "{\"result\": {\"content\": [{\"type\": \"text\", \"text\": \"{\\n  \\\"entities\\\": [\\n    {\\n      \\\"name\\\": \\\"cp35-canary\\\",\\n      \\\"entityType\\\": \\\"test\\\",\\n      \\\"observ"
+    }
+  ]
+}
+CP35: PASS — 3/3 deterministic tool executions returned REAL results

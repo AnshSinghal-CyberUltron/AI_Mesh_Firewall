@@ -1,0 +1,44 @@
+{
+  "run_id": "e733a9e2",
+  "server_slug": "everything-3",
+  "label": "get-env__clean",
+  "captured_at_utc": "2026-07-07T10:54:46Z",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-3",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 16,
+      "method": "tools/call",
+      "params": {
+        "name": "get-env",
+        "arguments": {}
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "elapsed_s": 0.132,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\n  \"NODE_OPTIONS\": \"--max-old-space-size=1536\",\n  \"UV_CACHE_DIR\": \"/var/cache/uv\",\n  \"HOME\": \"/var/cache/home\",\n  \"NPM_CONFIG_CACHE\": \"/var/npm-cache\",\n  \"UV_TOOL_BIN_DIR\": \"/var/cache/uv/bin\",\n  \"UV_TOOL_DIR\": \"/var/cache/uv/tools\",\n  \"XDG_CACHE_HOME\": \"/var/cache\",\n  \"LANG\": \"C.UTF-8\",\n  \"PATH\": \"/var/cache/uv/bin:/var/npm-cache/global/bin:/opt/agent/.venv/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\n  \"npm_config_ignore_scripts\": \"true\",\n  \"MCP_REMOTE_CONFIG_DIR\": \"/data/mcp-auth\"\n}"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 16
+    },
+    "classified_action": "ALLOW",
+    "compliance_tags_found": [],
+    "raw_markers_in_response": [],
+    "canary_present_in_response": false,
+    "possible_leak": false
+  },
+  "notes": "tool=get-env variant=clean"
+}

@@ -55,19 +55,38 @@ function run(cmd, cmdArgs, env = {}, cwd = REPO_ROOT) {
 }
 
 async function curlOk(url) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+  const res = await fetch(url, { signal: AbortSignal.timeout(30000) });
   return res.ok ? res.json().catch(() => ({})) : null;
 }
 
-async function brokerFetch(pathname, opts = {}) {
-  return fetch(`${BROKER_URL.replace(/\/$/, "")}${pathname}`, {
-    ...opts,
-    headers: {
-      "Content-Type": "application/json",
-      "X-MCP-Broker-Key": BROKER_KEY,
-      ...(opts.headers || {}),
-    },
-  });
+async function brokerFetch(pathname, opts = {}, attempt = 0) {
+  const maxAttempts = 5;
+  const backoffMs = 1000 * (attempt + 1);
+  try {
+    const res = await fetch(`${BROKER_URL.replace(/\/$/, "")}${pathname}`, {
+      ...opts,
+      headers: {
+        "Content-Type": "application/json",
+        "X-MCP-Broker-Key": BROKER_KEY,
+        ...(opts.headers || {}),
+      },
+      signal: AbortSignal.timeout(60000),
+    });
+    if (
+      (res.status === 429 || res.status === 500 || res.status === 502 || res.status === 503) &&
+      attempt < maxAttempts
+    ) {
+      await new Promise((r) => setTimeout(r, backoffMs));
+      return brokerFetch(pathname, opts, attempt + 1);
+    }
+    return res;
+  } catch (e) {
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, backoffMs));
+      return brokerFetch(pathname, opts, attempt + 1);
+    }
+    throw e;
+  }
 }
 
 async function waitForAgent(containerId, maxWaitMs = 120000) {
@@ -91,15 +110,23 @@ async function waitForAgent(containerId, maxWaitMs = 120000) {
   throw new Error(`sandbox-agent not healthy for ${containerId.slice(0, 12)} within ${maxWaitMs}ms`);
 }
 
+async function waitBrokerDockerOk(maxWaitMs = 60000) {
+  const base = BROKER_URL.replace(/\/$/, "");
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    const brokerHealth = await curlOk(`${base}/health`);
+    if (brokerHealth?.docker_ok) return brokerHealth;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw new Error(
+    `mcp-broker not healthy at ${BROKER_URL} (docker_ok=false after ${maxWaitMs}ms). ` +
+      "Run: docker compose --profile services up -d"
+  );
+}
+
 async function bootstrap() {
   console.log("=== bootstrap: broker + gateway health ===");
-  const brokerHealth = await curlOk(`${BROKER_URL.replace(/\/$/, "")}/health`);
-  if (!brokerHealth?.docker_ok) {
-    throw new Error(
-      `mcp-broker not healthy at ${BROKER_URL} (docker_ok=${brokerHealth?.docker_ok}). ` +
-        "Run: docker compose --profile services up -d"
-    );
-  }
+  const brokerHealth = await waitBrokerDockerOk();
   console.log("broker docker_ok=true");
 
   const gatewayHealth = await curlOk(
@@ -113,16 +140,22 @@ async function bootstrap() {
 
   // Copy stdio stub into org sandboxes after ensure (workers call ensure first)
   for (const org of ORGS) {
-    const ensureRes = await fetch(`${BROKER_URL}/v1/sandbox/${org}/ensure`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-MCP-Broker-Key": BROKER_KEY,
-      },
-      body: JSON.stringify({ warm: true }),
-    });
-    if (!ensureRes.ok) {
-      throw new Error(`ensure ${org} failed: ${ensureRes.status}`);
+    let ensureRes = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      ensureRes = await fetch(`${BROKER_URL}/v1/sandbox/${org}/ensure`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-MCP-Broker-Key": BROKER_KEY,
+        },
+        body: JSON.stringify({ warm: true }),
+      });
+      if (ensureRes.ok) break;
+      if (![429, 500, 502, 503].includes(ensureRes.status)) break;
+      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+    }
+    if (!ensureRes?.ok) {
+      throw new Error(`ensure ${org} failed: ${ensureRes?.status}`);
     }
     const body = await ensureRes.json();
     const cid = body.container_id;
@@ -153,12 +186,52 @@ async function parallelWorkers() {
   console.log("=== parallel workers OK ===");
 }
 
+async function resetSandboxes() {
+  console.log("=== reset org sandboxes (clear stdio server slots) ===");
+  for (const org of ORGS) {
+    const res = await brokerFetch(`/v1/sandbox/${org}`, { method: "DELETE" });
+    if (!res.ok && res.status !== 404) {
+      throw new Error(`destroy ${org} failed: ${res.status}`);
+    }
+  }
+  const deadline = Date.now() + 60000;
+  for (const org of ORGS) {
+    while (Date.now() < deadline) {
+      const st = await brokerFetch(`/v1/sandbox/${org}/status`);
+      if (!st.ok) {
+        break;
+      }
+      const body = await st.json().catch(() => ({}));
+      if (body.status === "missing") {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  await waitBrokerDockerOk(30000);
+  for (const org of ORGS) {
+    const ensureRes = await brokerFetch(`/v1/sandbox/${org}/ensure`, {
+      method: "POST",
+      body: JSON.stringify({ warm: true }),
+    });
+    if (!ensureRes.ok) {
+      throw new Error(`re-ensure ${org} after reset failed: ${ensureRes.status}`);
+    }
+    const body = await ensureRes.json();
+    const cid = body.container_id;
+    if (!cid) throw new Error(`no container_id for ${org} after reset`);
+    await waitForAgent(cid);
+    await run("docker", ["cp", STUB_HOST, `${cid}:${STUB_CONTAINER}`]);
+    console.log(`sandbox re-warmed ${org} (${cid.slice(0, 12)})`);
+  }
+}
+
 async function pytestLeakage() {
   console.log("=== pytest adversarial leakage subset ===");
   const gatewayDir = path.join(REPO_ROOT, "gateway");
   const venvPy = path.join(gatewayDir, ".venv/bin/python");
   const py = fs.existsSync(venvPy) ? venvPy : "python3";
-  await run(
+    await run(
     py,
     [
       "-m",
@@ -169,7 +242,11 @@ async function pytestLeakage() {
       "volume or foreign_org or npm_cache or denylist_secrets",
       "--tb=short",
     ],
-    { MCP_BROKER_URL: BROKER_URL, MCP_BROKER_INTERNAL_KEY: BROKER_KEY },
+    {
+      MCP_BROKER_URL: BROKER_URL,
+      MCP_BROKER_INTERNAL_KEY: BROKER_KEY,
+      MCP_ADVERSARIAL_USE_LIVE_BROKER: "true",
+    },
     gatewayDir
   );
 }
@@ -183,7 +260,9 @@ async function main() {
       return;
     }
     await parallelWorkers();
+    await waitBrokerDockerOk(90000);
     if (full) {
+      await resetSandboxes();
       await pytestLeakage();
     }
     console.log("run_parallel_org_agents OK");

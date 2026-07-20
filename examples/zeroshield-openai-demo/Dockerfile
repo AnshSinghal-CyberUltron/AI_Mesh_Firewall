@@ -5,8 +5,9 @@
 #     -t ai-mesh-demo:dev examples/zeroshield-openai-demo
 #
 # Runtime config (env):
-#   ZEROSHIELD_API_KEY   — gateway key the demo authenticates with (server-side)
+#   CONTROL_BASE_URL     — control plane for login + org simulator key (http://control:8000)
 #   ZEROSHIELD_BASE_URL  — gateway /v1 base (internal: http://gateway:8300/v1)
+#   ZEROSHIELD_API_KEY   — optional legacy fallback (unused when users log in)
 FROM python:3.12-slim
 
 WORKDIR /app

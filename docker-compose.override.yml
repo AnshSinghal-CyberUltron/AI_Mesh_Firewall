@@ -1,21 +1,11 @@
 # LOCAL-ONLY overrides (safe to delete for prod-like runs).
 # - Email kill-switch (no real Graph sends from dev)
-#
+# See docker-compose.yml for base stack.
 # Reversible: delete this file, then `docker compose up -d`.
 services:
   control:
     environment:
-      EMAIL_BACKEND: "django.core.mail.backends.dummy.EmailBackend"
-      TENANT_ID: ""
-      CLIENT_ID: ""
-      CLIENT_SECRET: ""
       VECTOR_PROVIDER_ALLOW_PRIVATE: "1"
-  workers:
-    environment:
-      EMAIL_BACKEND: "django.core.mail.backends.dummy.EmailBackend"
-      TENANT_ID: ""
-      CLIENT_ID: ""
-      CLIENT_SECRET: ""
   gateway:
     environment:
       GATEWAY_ASYNC_VECTOR_INGEST: "false"

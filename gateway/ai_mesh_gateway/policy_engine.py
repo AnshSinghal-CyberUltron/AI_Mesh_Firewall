@@ -9,6 +9,7 @@ for sub-millisecond enforcement.
 Action precedence: block (3) > redact (2) > monitor (1) > allow (0)
 """
 
+import copy
 import functools
 import json
 import logging
@@ -47,18 +48,28 @@ _NESTED_QUANTIFIER_RE = re.compile(r"\([^()]*[+*]\s*\)\s*[+*{]")
 # quantified-alternation ((X|XY)+) ReDoS families, so a dangerous redaction_config
 # regex reached apply_redaction. Mirror the control-side shapes.
 _QUANTIFIED_WILDCARD_GROUP_RE = re.compile(r"\([^()]*\.[*+][^()]*\)\s*[+*{]")
-_QUANTIFIED_ALTERNATION_GROUP_RE = re.compile(r"\([^()]*\|[^()]*\)\s*[+*{]")
+_QUANTIFIED_ALTERNATION_GROUP_RE = re.compile(r"\([^()]*\|[^()]*\)[+*{]")
 _REGEX_MATCH_TIMEOUT_S = 1.0
 _MAX_MATCH_INPUT_LEN = 100_000
 
 
+def _strip_for_redos_probe(pattern: str) -> str:
+    """Neutralize escaped parens for group-boundary probing.
+
+    Do NOT strip ``\\s``, ``\\d``, ``\\w``, etc. — the old ``re.sub(r'\\\\.', ...)``
+    corrupted those shorthands (``\\s+`` → ``+``) and falsely flagged safe
+    catalog patterns like PIPE_PHI MRN matchers as ReDoS.
+    """
+    return pattern.replace(r"\(", "(").replace(r"\)", ")")
+
+
 def _has_redos_shape(pattern: str) -> bool:
     """True if ``pattern`` carries a nested unbounded-quantifier shape known to
-    cause catastrophic backtracking (e.g. ``(a+)+``). Backslashes are stripped
-    first so escaped parens/metacharacters can't spoof a group boundary."""
+    cause catastrophic backtracking (e.g. ``(a+)+``). Escaped literal parens are
+    neutralized first so they cannot spoof a group boundary."""
     if not isinstance(pattern, str):
         return False
-    stripped = re.sub(r"\\.", "", pattern)
+    stripped = _strip_for_redos_probe(pattern)
     return bool(
         _NESTED_QUANTIFIER_RE.search(stripped)
         or _QUANTIFIED_WILDCARD_GROUP_RE.search(stripped)
@@ -149,6 +160,23 @@ class EvaluationResult:
     matched_policy_categories: list[str] = field(default_factory=list)
     matched_rule_descriptions: list[str] = field(default_factory=list)
     redaction_hints: list[dict[str, Any]] = field(default_factory=list)
+    # I-05: the matched REWRITE rules' conditions. §1.2 defines rewrite as "strip
+    # harmful pattern, log original", but the gateway only PREPENDED an advisory
+    # notice to the untouched prompt — and even that never reached the wire. Carrying
+    # the rule conditions lets the rewrite genuinely remove the matched span using the
+    # same masking machinery as redact (apply_redaction), instead of attesting a
+    # strip that never happened.
+    rewrite_hints: list[dict[str, Any]] = field(default_factory=list)
+    # 3b (BACKSTOP finding #1): named response fields to mask for the MATCHED
+    # actor-scoped policies. Mirrors control Policy.redaction_fields; the compiler
+    # already emits these into the compiled bundle (compiler.py:521 under M-04) but
+    # the gateway never consumed them — so the stdio/websocket ADAPTER path did
+    # content-scan yet NO field-level RBAC masking (the HTTP path masks them via
+    # control apply_field_redaction). Populated by evaluate() from every matched
+    # policy that declares redaction_fields (D6 trigger = "policy matched AND has
+    # non-empty redaction_fields", NOT gated on the verdict); applied to the OUTPUT
+    # structured payload downstream (mcp_scan_orchestrator.scan_mcp_payload).
+    redaction_fields: list[str] = field(default_factory=list)
     # FIX-1.2a: the winning model_downgrade rule's target model. Empty when the
     # final action is not model_downgrade (or the rule carries no downgrade_to).
     model_downgrade_target: str = ""
@@ -326,6 +354,12 @@ def evaluate(
             result.matched_policy_severities.append(policy.get("severity", ""))
             result.matched_policy_categories.append(policy.get("category", ""))
             result.matched_rule_descriptions.append(rule.get("description", ""))
+            # 3b: surface the MATCHED policy's response-field redaction list so the
+            # adapter path can mask those named fields on the tool RESULT. Deduped +
+            # order-preserving; idempotent across a policy's multiple matching rules.
+            for _rf in (policy.get("redaction_fields") or []):
+                if isinstance(_rf, str) and _rf and _rf not in result.redaction_fields:
+                    result.redaction_fields.append(_rf)
 
             action = rule.get("action", "monitor")
             rank = ACTION_ORDER.get(action, 0)
@@ -359,11 +393,28 @@ def evaluate(
             # apply_redaction masked just that one pattern; the remaining PII (SSN/
             # email/phone) leaked through to Tier-2 and the LLM. Deterministic
             # policy redaction must cover all matched patterns.
-            if action == "redact" and rule.get("redaction_config"):
+            # G5 ENFORCEMENT-CONSISTENCY: append a redaction hint for EVERY matched
+            # redact rule — even one authored WITHOUT a redaction_config. Previously the
+            # append was gated on redaction_config, so a redact rule with none yielded
+            # action=='redact' but ZERO hints; apply_redaction was then a no-op and the
+            # caller forwarded the sensitive content RAW (a redact-that-leaks). apply_
+            # redaction falls back to the rule's own condition regex/keywords + the
+            # default placeholder, so a redact verdict now always masks its matched span.
+            if action == "redact":
                 result.redaction_hints.append({
                     "rule_id": rule.get("id"),
                     "rule_name": rule.get("name"),
-                    "config": rule.get("redaction_config"),
+                    "config": rule.get("redaction_config") or {},
+                    "condition": rule.get("condition") or {},
+                })
+            # I-05: same hint shape for REWRITE rules, kept in a SEPARATE list so a
+            # rewrite verdict cannot be mistaken for a redact one downstream (the
+            # redact path builds redacted_prompt/telemetry off redaction_hints).
+            elif action == "rewrite":
+                result.rewrite_hints.append({
+                    "rule_id": rule.get("id"),
+                    "rule_name": rule.get("name"),
+                    "config": rule.get("redaction_config") or {},
                     "condition": rule.get("condition") or {},
                 })
 
@@ -432,20 +483,40 @@ def _safe_json(value: Any) -> str:
         return str(value)
 
 
-def _collect_key_values(obj: Any, key: str, *, _depth: int = 0) -> list[str]:
-    if _depth > 10 or not key:
+# #31 (gateway twin of control #29): the old RECURSIVE depth-10 cap was a
+# DETECTION BYPASS — a scope='key' rule targeting a field nested 11..500 deep was
+# silently NOT matched, so its block/redact action never fired. The gateway admits
+# payloads to _MCP_MAX_RESULT_DEPTH=500 and apply_field_redaction (CHG-0148) masks
+# to 500 → this matcher was the inconsistent sibling. Iterative (explicit stack) so
+# depth 500 is safe with no RecursionError; node cap bounds pathological width.
+_KEY_COLLECT_MAX_DEPTH = 500
+_KEY_COLLECT_MAX_NODES = 2_000_000
+
+
+def _collect_key_values(obj: Any, key: str) -> list[str]:
+    if not key:
         return []
     target = _normalize_key(key)
     out: list[str] = []
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            if _normalize_key(k) == target:
-                out.append(v if isinstance(v, str) else _safe_json(v))
-            else:
-                out.extend(_collect_key_values(v, key, _depth=_depth + 1))
-    elif isinstance(obj, list):
-        for item in obj:
-            out.extend(_collect_key_values(item, key, _depth=_depth + 1))
+    stack: list[tuple[Any, int]] = [(obj, 0)]
+    nodes = 0
+    while stack:
+        cur, depth = stack.pop()
+        if depth > _KEY_COLLECT_MAX_DEPTH:
+            continue
+        nodes += 1
+        if nodes > _KEY_COLLECT_MAX_NODES:
+            break
+        if isinstance(cur, dict):
+            for k, v in cur.items():
+                if _normalize_key(k) == target:
+                    # Matched key: collect but do NOT descend (original semantics).
+                    out.append(v if isinstance(v, str) else _safe_json(v))
+                else:
+                    stack.append((v, depth + 1))
+        elif isinstance(cur, list):
+            for item in cur:
+                stack.append((item, depth + 1))
     return out
 
 
@@ -606,6 +677,12 @@ def evaluate_mcp_policies(
             result.matched_policy_severities.append(policy.get("severity", ""))
             result.matched_policy_categories.append(policy.get("category", ""))
             result.matched_rule_descriptions.append(rule.get("description", ""))
+            # 3b: surface the MATCHED policy's response-field redaction list so the
+            # adapter path can mask those named fields on the tool RESULT. Deduped +
+            # order-preserving; idempotent across a policy's multiple matching rules.
+            for _rf in (policy.get("redaction_fields") or []):
+                if isinstance(_rf, str) and _rf and _rf not in result.redaction_fields:
+                    result.redaction_fields.append(_rf)
 
             action = rule.get("action", "monitor")
             rank = ACTION_ORDER.get(action, 0)
@@ -895,3 +972,96 @@ def apply_redaction(
             result = _compile_regex(pattern).sub(repl, result)
 
     return result
+
+
+FIELD_REDACT_PLACEHOLDER = "[REDACTED]"
+
+
+def _normalize_field_key(key: Any) -> str:
+    """Normalize a dict key for case-insensitive, Unicode-safe matching.
+
+    NFKC folds Cyrillic/Greek homoglyphs (e.g. Cyrillic 'е' U+0435 and Latin
+    'e' U+0065) onto the same compatibility codepoint, defeating the
+    lookalike-key bypass. Mirrors control/policy/redaction._normalize_key so the
+    stdio/websocket adapter path masks the same field names the HTTP path does.
+    """
+    if not isinstance(key, str):
+        return ""
+    return unicodedata.normalize("NFKC", key).lower()
+
+
+def apply_field_redaction(
+    obj: Any,
+    fields: Any,
+    *,
+    placeholder: str = FIELD_REDACT_PLACEHOLDER,
+    # CHG-0148: max_depth was 10, but the gateway only rejects results deeper than
+    # _MCP_MAX_RESULT_DEPTH (500) BEFORE redaction — so a name-based redaction target
+    # nested at depth 11..500 evaded masking and egressed RAW. Raised to 500 to cover
+    # everything that can reach here; the walk is now ITERATIVE (below) so a 500-deep
+    # structure cannot blow the recursion limit (which would raise -> caller fail-open).
+    max_depth: int = 500,
+    # CHG-0150: was 100_000 — a wide result with a redaction_fields target beyond the 100k-th
+    # node had the walk STOP early → the target egressed RAW (CHG-0148 residual #1). Raised
+    # ABOVE the gateway's _MCP_MAX_RESULT_NODES guard (1M), which BLOCKS results wider than
+    # that before this runs — so anything reaching here is ≤1M nodes and is now FULLY walked
+    # (2M margin absorbs any node-counting discrepancy between the guard and this walk).
+    max_nodes: int = 2_000_000,
+) -> Any:
+    """Return a deep-copied ``obj`` with values under matching keys replaced.
+
+    3b (BACKSTOP finding #1): the gateway had NO field-name redactor, so the
+    stdio/websocket adapter path could not honor a policy's ``redaction_fields``
+    (named-field RBAC masking of tool RESULTS) even though the compiler emits
+    them into the bundle. This is a Django-free port of
+    control/ai_mesh_control/policy/redaction.apply_field_redaction so both
+    transports mask identically.
+
+    Walks dicts/lists recursively; whenever a dict key matches (after NFKC +
+    casefold) any name in ``fields`` its value is replaced with ``placeholder``.
+    Bounded by ``max_depth``/``max_nodes`` (safety over strictness on adversarial
+    payloads). ``obj`` is never mutated — a deep copy is returned.
+    """
+    if not fields or not isinstance(obj, (dict, list)):
+        return obj
+
+    targets = {_normalize_field_key(f) for f in fields if isinstance(f, str)}
+    targets.discard("")
+    if not targets:
+        return obj
+
+    result = copy.deepcopy(obj)
+    node_count = 0
+    masked = False
+
+    # CHG-0148: ITERATIVE walk (explicit stack) — the old recursion could not safely
+    # descend to max_depth=500 (RecursionError -> fail-open leak), which is exactly why
+    # max_depth was pinned at a shallow 10 that a nested field could hide beneath.
+    stack: list = [(result, 0)]
+    while stack:
+        node, depth = stack.pop()
+        if depth > max_depth or node_count > max_nodes:
+            continue
+        if isinstance(node, dict):
+            for k in list(node.keys()):
+                node_count += 1
+                if node_count > max_nodes:
+                    break
+                if _normalize_field_key(k) in targets:
+                    node[k] = placeholder
+                    masked = True
+                else:
+                    v = node[k]
+                    if isinstance(v, (dict, list)):
+                        stack.append((v, depth + 1))
+        elif isinstance(node, list):
+            for item in node:
+                node_count += 1
+                if node_count > max_nodes:
+                    break
+                if isinstance(item, (dict, list)):
+                    stack.append((item, depth + 1))
+    # Identity on a true no-op: when none of the declared fields were present the
+    # caller must be able to tell nothing changed (``masked_out is payload``) so a
+    # field-projection scan does not mislabel an unchanged result as "redacted".
+    return result if masked else obj

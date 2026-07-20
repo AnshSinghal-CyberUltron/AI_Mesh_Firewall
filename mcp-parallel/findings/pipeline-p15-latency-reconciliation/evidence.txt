@@ -1,0 +1,1 @@
+PIPELINE-0015: test_pipeline_latency.py 5/5; gateway 2039 passed; skip model_output latency 0 with processing_time_ms=11.6

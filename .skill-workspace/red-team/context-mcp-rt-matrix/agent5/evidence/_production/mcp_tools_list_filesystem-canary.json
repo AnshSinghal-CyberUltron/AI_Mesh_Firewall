@@ -1,0 +1,26 @@
+{
+  "server_slug": "_production",
+  "label": "mcp_tools_list_filesystem-canary",
+  "captured_at_utc": "2026-07-07T10:56:05Z",
+  "request": {
+    "url": "https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/filesystem-canary",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {}
+    }
+  },
+  "response": {
+    "status_code": 401,
+    "body": {
+      "error": "unauthorized",
+      "message": "Invalid API key."
+    }
+  },
+  "notes": ""
+}

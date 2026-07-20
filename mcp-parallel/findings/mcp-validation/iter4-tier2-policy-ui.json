@@ -1,0 +1,78 @@
+{
+  "org": "zeroshield",
+  "server": "everything-1",
+  "checks": {
+    "all_cases_pass": true,
+    "sdk_pass": true
+  },
+  "cases": [
+    {
+      "name": "zero_controls_scan_skipped",
+      "scan_rows": 0,
+      "decision": "scan_skipped",
+      "scan_skipped": null,
+      "stages": [
+        "scan_skipped",
+        "scan_skipped"
+      ],
+      "egress": {
+        "request_id": "iter4-315d2d81",
+        "status": 200,
+        "latency_ms": 101.7,
+        "egress_text": "Echo: ITER4-A-4bcebb SSN 123-45-6789",
+        "raw_ssn_visible": true,
+        "masked": false
+      },
+      "pass": true
+    },
+    {
+      "name": "tier1_only_no_tier2",
+      "tier2_input_enabled": false,
+      "decision": "allow",
+      "stages": [
+        "tier1",
+        "tier1"
+      ],
+      "pass": true
+    },
+    {
+      "name": "tier2_row_but_org_disabled",
+      "mcp_tier2_enabled": false,
+      "stages": [
+        "tier1",
+        "tier2_skipped",
+        "tier1"
+      ],
+      "reasons": [
+        null,
+        "org_mcp_tier2_disabled",
+        null
+      ],
+      "pass": true
+    },
+    {
+      "name": "control_tools_call_live",
+      "status": 200,
+      "has_decision": true,
+      "pass": true
+    },
+    {
+      "name": "enabled_tools_contract",
+      "scan_controls_configured": true,
+      "mcp_tier2_enabled": false,
+      "pass": true
+    }
+  ],
+  "sdk_smoke": {
+    "ok": true,
+    "exit_code": 0,
+    "summary_line": "46 passed, 2 xpassed, 4 warnings in 2.37s"
+  },
+  "f002_ext_proxy": {
+    "finding": "F-002",
+    "status": "DOCUMENTED",
+    "detail": "ext_mcp_proxy passes enabled_info=None \u2192 scan_controls gate never fires; static tier1 floors still run by design",
+    "code": "gateway/ai_mesh_gateway/mcp_proxy.py ext_mcp_proxy ~L1989"
+  },
+  "ok": true
+}

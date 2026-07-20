@@ -16,6 +16,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { toAbsoluteGatewayUrl } from "../../utils/environmentUrls";
 
 /**
  * MCPGuardrailSimulator — live MCP tool-call sandbox for the active org.
@@ -57,6 +58,32 @@ function flattenArgs(args) {
   }
 }
 
+/**
+ * Dry-run cannot execute tools, so output-direction rules (field=response)
+ * never match when response="". For echo-like tools, synthesize the tool
+ * result the live path would return so Dry-Run exercises the same rules.
+ */
+export function isEchoLikeTool(toolName, toolDescription) {
+  const name = String(toolName || "").toLowerCase();
+  if (name === "echo" || name.endsWith("_echo") || name.includes("echo")) return true;
+  const desc = String(toolDescription || "").toLowerCase();
+  return desc.includes("echo");
+}
+
+export function simulateEchoToolOutput(args) {
+  const message =
+    args && typeof args === "object" && args.message != null
+      ? String(args.message)
+      : flattenArgs(args);
+  const text = `Echo: ${message}`;
+  return {
+    response: text,
+    output_data: {
+      content: [{ type: "text", text }],
+    },
+  };
+}
+
 function actionTone(action) {
   const a = String(action || "").toLowerCase();
   if (a === "block" || a === "deny") {
@@ -81,6 +108,25 @@ function actionTone(action) {
       icon: Activity,
       ring: "border-sky-300 bg-sky-50/80 dark:border-sky-700 dark:bg-sky-900/20",
       text: "text-sky-700 dark:text-sky-300",
+    };
+  }
+  if (a === "flag" || a === "alert") {
+    return {
+      label: "FLAG",
+      icon: AlertTriangle,
+      ring: "border-amber-300 bg-amber-50/80 dark:border-amber-700 dark:bg-amber-900/20",
+      text: "text-amber-700 dark:text-amber-300",
+    };
+  }
+  // A backend failure (non-2xx / gateway down → action "error") must render as
+  // a distinct ERROR verdict, never fall through to the green ALLOW default —
+  // showing a 500 as "ALLOWED" in a security console is a fabricated decision.
+  if (a === "error") {
+    return {
+      label: "ERROR",
+      icon: AlertTriangle,
+      ring: "border-rose-300 bg-rose-50/80 dark:border-rose-700 dark:bg-rose-900/20",
+      text: "text-rose-700 dark:text-rose-300",
     };
   }
   return {
@@ -155,7 +201,19 @@ export function MCPGuardrailSimulator() {
       const srvData = await srvRes.json();
       const list = Array.isArray(srvData) ? srvData : srvData.results || [];
       setServers(list);
-      setServerId((prev) => prev || (list.length ? list[0].id : ""));
+      setServerId((prev) => {
+        if (prev) return prev;
+        if (!list.length) return "";
+        // Default to a CONNECTED server that actually exposes tools — defaulting to
+        // a Failed or 0-tool server (whatever happens to sort first) makes the
+        // simulator dead on arrival (item 19). Prefer connected+tools, then any
+        // connected, then fall back to the first registered server.
+        const pick =
+          list.find((s) => s.connection_status === "connected" && Number(s.tools_count) > 0) ||
+          list.find((s) => s.connection_status === "connected") ||
+          list[0];
+        return pick.id;
+      });
     } catch (e) {
       setLoadError(e.message || "Failed to load org context.");
     }
@@ -249,21 +307,35 @@ export function MCPGuardrailSimulator() {
     try {
       let res;
       if (mode === MODE_DRYRUN) {
+        const dryBody = {
+          policy_domain: "mcp",
+          // Structured args drive per-key (scope=key) matching server-side.
+          input_args: parsedArgs.value,
+          // Flattened prompt kept for back-compat with entire-scope text
+          // rules and older evaluators.
+          prompt: `tool:${toolName} ${flattenArgs(parsedArgs.value)}`,
+          response: "",
+          metadata: {
+            tool_name: toolName,
+            server_slug: selectedServer.server_slug,
+          },
+        };
+        // Output-direction rules (field=response) need a response body.
+        // Echo-like tools: synthesize the live echo result so Dry-Run matches
+        // the same PKG2 PEM/SSN output rules Live Call would hit.
+        if (isEchoLikeTool(toolName, selectedTool?.description)) {
+          const sim = simulateEchoToolOutput(parsedArgs.value);
+          dryBody.response = sim.response;
+          dryBody.output_data = sim.output_data;
+          dryBody.metadata = {
+            ...dryBody.metadata,
+            dry_run_simulated_output: true,
+            dry_run_simulation: "echo",
+          };
+        }
         res = await fetchWithAuth("/api/policies/test/", {
           method: "POST",
-          body: JSON.stringify({
-            policy_domain: "mcp",
-            // Structured args drive per-key (scope=key) matching server-side.
-            input_args: parsedArgs.value,
-            // Flattened prompt kept for back-compat with entire-scope text
-            // rules and older evaluators.
-            prompt: `tool:${toolName} ${flattenArgs(parsedArgs.value)}`,
-            response: "",
-            metadata: {
-              tool_name: toolName,
-              server_slug: selectedServer.server_slug,
-            },
-          }),
+          body: JSON.stringify(dryBody),
         });
       } else {
         res = await fetchWithAuth("/api/mcp-connector/tools/call/", {
@@ -289,13 +361,16 @@ export function MCPGuardrailSimulator() {
     } finally {
       setSubmitting(false);
     }
-  }, [fetchWithAuth, mode, parsedArgs, selectedServer, toolName]);
+  }, [fetchWithAuth, mode, parsedArgs, selectedServer, selectedTool, toolName]);
 
   const verdict = useMemo(() => {
     if (!result) return null;
     const { status, data, mode: m } = result;
     if (m === MODE_DRYRUN) {
-      const action = data?.action || (status === 200 ? "allow" : "error");
+      // A 200 with a null/unparseable body carries no real policy decision —
+      // don't fabricate a green "allow"; only claim allow when the dry-run
+      // actually returned a body (a real evaluation with no blocking action).
+      const action = data?.action || (status === 200 && data != null ? "allow" : "error");
       return {
         action,
         matched_policies: data?.matched_policies || [],
@@ -380,19 +455,22 @@ export function MCPGuardrailSimulator() {
             <select
               value={serverId}
               onChange={(e) => setServerId(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             >
               {servers.length === 0 && <option value="">No servers registered</option>}
               {servers.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} {s.server_slug ? `(${s.server_slug})` : ""} ·{" "}
-                  {s.transport || "?"} · {s.is_active ? "active" : "disabled"}
+                  {s.transport || "?"} ·{" "}
+                  {s.connection_status === "connected"
+                    ? `connected · ${Number(s.tools_count) || 0} tools`
+                    : s.connection_status || "unknown"}
                 </option>
               ))}
             </select>
             {selectedServer && (
               <p className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">
-                {selectedServer.url || selectedServer.gateway_endpoint || "—"}
+                {selectedServer.url || toAbsoluteGatewayUrl(selectedServer.gateway_endpoint) || "—"}
               </p>
             )}
           </div>
@@ -407,7 +485,7 @@ export function MCPGuardrailSimulator() {
               value={toolName}
               onChange={(e) => setToolName(e.target.value)}
               disabled={!serverTools.length}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             >
               {!serverTools.length && (
                 <option value="">No tools discovered for this server</option>
@@ -425,6 +503,13 @@ export function MCPGuardrailSimulator() {
             {selectedTool?.description && (
               <p className="mt-1 line-clamp-2 text-[11px] text-slate-500 dark:text-slate-400">
                 {selectedTool.description}
+              </p>
+            )}
+            {!toolsLoading && serverId && serverTools.length === 0 && (
+              <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                {selectedServer?.connection_status === "connected"
+                  ? "Connected, but no tools discovered yet — re-sync this server from the Servers tab."
+                  : "This server isn’t connected, so it has no tools. Pick a connected server above, or re-sync it from the Servers tab."}
               </p>
             )}
           </div>
@@ -456,7 +541,7 @@ export function MCPGuardrailSimulator() {
               onChange={(e) => setArgsText(e.target.value)}
               rows={8}
               className={classNames(
-                "w-full rounded-lg border bg-slate-50 p-3 font-mono text-[12px] text-slate-800 focus:outline-none dark:bg-slate-900 dark:text-slate-100",
+                "w-full rounded-lg border bg-slate-50 p-3 font-mono text-[12px] text-slate-800 dark:bg-slate-900 dark:text-slate-100",
                 argsError || !parsedArgs.ok
                   ? "border-red-400 focus:border-red-500"
                   : "border-slate-200 focus:border-indigo-500 dark:border-slate-700",
@@ -510,12 +595,35 @@ export function MCPGuardrailSimulator() {
             >
               {submitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
+              ) : mode === MODE_DRYRUN ? (
+                <FlaskConical className="h-4 w-4" />
               ) : (
                 <Play className="h-4 w-4" />
               )}
               {mode === MODE_DRYRUN ? "Evaluate Policies" : "Invoke Tool"}
             </button>
           </div>
+          {mode === MODE_DRYRUN && (
+            <p className="text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+              Dry-Run evaluates policies without calling the tool.
+              {isEchoLikeTool(toolName, selectedTool?.description) ? (
+                <>
+                  {" "}
+                  For <span className="font-medium text-slate-600 dark:text-slate-300">echo</span>,
+                  it also simulates the tool output so response-direction rules
+                  (PEM, SSN, secrets) can match. Use{" "}
+                  <span className="font-medium text-slate-600 dark:text-slate-300">Live Call</span>{" "}
+                  for the full gateway scan chain.
+                </>
+              ) : (
+                <>
+                  {" "}
+                  Output-only rules need a Live Call (or a tool that echoes
+                  input) to match — Dry-Run sends an empty response by default.
+                </>
+              )}
+            </p>
+          )}
         </div>
 
         {/* RIGHT: Result */}

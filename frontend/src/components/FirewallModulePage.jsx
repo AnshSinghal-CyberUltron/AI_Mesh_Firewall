@@ -39,8 +39,11 @@ export function FirewallModulePage({
 }) {
   const [timeRange, setTimeRange] = useState(DEFAULT_TIME_RANGE_BY_MODULE[moduleId] || "24h");
   const firewallData = useFirewallData(moduleId, timeRange);
-  const hasSidebar =
-    (Array.isArray(flowNodes) && flowNodes.length > 0) || (Array.isArray(inspectionPanels) && inspectionPanels.length > 0);
+  // Only reserve a right column when there is real inspection content.
+  // Flow-only sidebars (e.g. module 1.4) left a large empty gap and starved
+  // control panels of width — traffic path renders full-width above instead.
+  const hasInspectionSidebar = Array.isArray(inspectionPanels) && inspectionPanels.length > 0;
+  const hasFlowNodes = Array.isArray(flowNodes) && flowNodes.length > 0;
 
   const pageConfig = getModulePageConfig(moduleId);
   const pageData = useMemo(
@@ -49,11 +52,26 @@ export function FirewallModulePage({
         socKpis: firewallData.socKpis,
         gatewayStats: firewallData.gatewayStats,
         ragPipelineKpis: firewallData.ragPipelineKpis,
+        threatFeedCount: firewallData.threatFeedCount,
+        threatFeedActionCounts: firewallData.threatFeedActionCounts,
       }),
-    [moduleId, firewallData.threatFeed, firewallData.socKpis, firewallData.gatewayStats, firewallData.ragPipelineKpis],
+    [moduleId, firewallData.threatFeed, firewallData.socKpis, firewallData.gatewayStats, firewallData.ragPipelineKpis, firewallData.threatFeedCount, firewallData.threatFeedActionCounts],
   );
 
   const isLoading = firewallData.loading;
+  // During the FIRST load the KPI cards would otherwise render a full board of
+  // computed "0"s (empty data → summarizeEvents total 0), indistinguishable from a
+  // real "0 events" state. Show a muted placeholder until the card's PRIMARY source
+  // has resolved. That source differs by module: 1.1's summary cards derive from the
+  // (slow) soc-kpis distinct-request partition, every other module from the
+  // threat-feed. Since useFirewallData now streams state in independently, gating on
+  // the right source stops 1.1 from flashing the raw-feed total before soc-kpis
+  // lands, and lets the feed-based modules reveal the instant the feed is in.
+  // `threatFeedCount !== null` marks "feed resolved" (0 included), and prior data is
+  // retained across lens changes / polls, so neither blanks good data.
+  const primaryKpiReady =
+    moduleId === "1.1" ? firewallData.socKpis != null : firewallData.threatFeedCount !== null;
+  const awaitingFirstData = isLoading && !primaryKpiReady;
 
   const resolvedFooterPanels = useMemo(() => {
     if (!footerPanels?.length) return [];
@@ -126,7 +144,7 @@ export function FirewallModulePage({
 
             <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {pageData.summaryCards.map((card) => (
-                <SummaryCard key={card.label} {...card} />
+                <SummaryCard key={card.label} {...card} loading={awaitingFirstData} />
               ))}
             </div>
           </div>
@@ -160,7 +178,7 @@ export function FirewallModulePage({
 
               <div className="mt-6 space-y-3">
                 {pageData.spotlightCards.map((card) => (
-                  <QuickStatus key={card.label} {...card} />
+                  <QuickStatus key={card.label} {...card} loading={awaitingFirstData} />
                 ))}
               </div>
             </div>
@@ -202,26 +220,21 @@ export function FirewallModulePage({
           title={pageConfig.workspaceTitle}
           description={pageConfig.workspaceDescription}
         />
-        <div className={cn("grid gap-6", hasSidebar && "xl:grid-cols-[1.4fr,0.9fr]")}>
-          <div className="space-y-6">
-            {controlPanels.length > 0 ? (
-              <PanelLane label={pageConfig.panelLabels.control} panels={resolvedControlPanels} />
-            ) : null}
-            {simulatorPanels.length > 0 ? (
-              <PanelLane label={pageConfig.panelLabels.simulator} panels={simulatorPanels} />
-            ) : null}
-            {secondaryPanels.length > 0 ? (
-              <PanelLane label={pageConfig.panelLabels.secondary} panels={secondaryPanels} />
-            ) : null}
-          </div>
-
-          {hasSidebar ? (
-            <div className="space-y-6 xl:sticky xl:top-6 xl:self-start">
-              <FlowSection flowNodes={flowNodes} summary={pageData.summary} />
-              {inspectionPanels.length > 0 ? (
-                <PanelLane label={pageConfig.panelLabels.inspection} panels={inspectionPanels} />
-              ) : null}
-            </div>
+        {hasFlowNodes ? (
+          <FlowSection flowNodes={flowNodes} summary={pageData.summary} layout="strip" />
+        ) : null}
+        <div className="space-y-6">
+          {controlPanels.length > 0 ? (
+            <PanelLane label={pageConfig.panelLabels.control} panels={resolvedControlPanels} />
+          ) : null}
+          {simulatorPanels.length > 0 ? (
+            <PanelLane label={pageConfig.panelLabels.simulator} panels={simulatorPanels} />
+          ) : null}
+          {secondaryPanels.length > 0 ? (
+            <PanelLane label={pageConfig.panelLabels.secondary} panels={secondaryPanels} />
+          ) : null}
+          {hasInspectionSidebar ? (
+            <PanelLane label={pageConfig.panelLabels.inspection} panels={inspectionPanels} />
           ) : null}
         </div>
       </section>
@@ -281,21 +294,25 @@ function SectionHeading({ eyebrow, title, description, action }) {
   );
 }
 
-function SummaryCard({ label, value, detail }) {
+function SummaryCard({ label, value, detail, loading }) {
   return (
     <div className="ai-mesh-kpi p-5">
       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{label}</div>
-      <div className="mt-4 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">{value}</div>
+      <div className="mt-4 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+        {loading ? <span className="text-slate-400 dark:text-slate-500" aria-hidden="true">—</span> : value}
+      </div>
       <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">{detail}</div>
     </div>
   );
 }
 
-function QuickStatus({ label, value, detail }) {
+function QuickStatus({ label, value, detail, loading }) {
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/45">
       <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">{label}</div>
-      <div className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">{value}</div>
+      <div className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">
+        {loading ? <span className="text-slate-400 dark:text-slate-500" aria-hidden="true">—</span> : value}
+      </div>
       <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">{detail}</div>
     </div>
   );
@@ -310,19 +327,36 @@ function PanelLane({ label, panels }) {
   );
 }
 
-function FlowSection({ flowNodes = [], summary }) {
+function FlowSection({ flowNodes = [], summary, layout = "stack" }) {
   if (!Array.isArray(flowNodes) || flowNodes.length === 0) {
     return null;
   }
 
+  const isStrip = layout === "strip";
+
   return (
-    <div className="ai-mesh-card rounded-[28px] p-6">
+    <div className={cn("ai-mesh-card rounded-[28px]", isStrip ? "p-4 sm:p-5" : "p-6")}>
       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-teal-600 dark:text-teal-300">Traffic path</div>
-      <div className="mt-4 space-y-3">
+      <div
+        className={cn(
+          "mt-4",
+          isStrip
+            ? "grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+            : "space-y-3",
+        )}
+      >
         {flowNodes.map((node) => (
-          <div key={`${node.label}-${node.value}`} className="rounded-2xl border border-slate-200/80 bg-white/80 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/45">
+          <div
+            key={`${node.label}-${node.value}`}
+            className={cn(
+              "rounded-2xl border border-slate-200/80 bg-white/80 dark:border-slate-700 dark:bg-slate-950/45",
+              isStrip ? "px-4 py-3" : "px-4 py-4",
+            )}
+          >
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{node.label}</div>
-            <div className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">{typeof node.format === "function" ? node.format(summary) : node.value}</div>
+            <div className={cn("font-semibold text-slate-950 dark:text-slate-50", isStrip ? "mt-1.5 text-xl" : "mt-2 text-2xl")}>
+              {typeof node.format === "function" ? node.format(summary) : node.value}
+            </div>
           </div>
         ))}
       </div>
@@ -427,5 +461,5 @@ function SeverityBadge({ value }) {
 }
 
 function EmptyState({ message }) {
-  return <div className="flex h-[280px] items-center justify-center text-sm text-slate-400 dark:text-slate-500">{message}</div>;
+  return <div className="flex h-[280px] items-center justify-center text-sm text-slate-500 dark:text-slate-400">{message}</div>;
 }

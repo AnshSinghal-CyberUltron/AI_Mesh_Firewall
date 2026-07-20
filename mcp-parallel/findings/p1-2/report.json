@@ -1,0 +1,184 @@
+{
+  "story": "P1.2",
+  "bug": "B2",
+  "base": "http://127.0.0.1:8180",
+  "probeName": "p1-2-http-oauth-mr3753tg",
+  "ok": true,
+  "steps": [
+    "login",
+    "navigate-1-4",
+    "screenshot:01-mcp-panel-before",
+    "register-modal-201",
+    "screenshot:02-after-modal-register",
+    "screenshot:03-immediate-list-state",
+    "repro-complete",
+    "cleanup-delete"
+  ],
+  "findings": {
+    "registerVia": "modal",
+    "registeredServer": {
+      "id": "fd13c8bd-af33-4b95-a411-c65dded29eed",
+      "name": "p1-2-http-oauth-mr3753tg",
+      "server_slug": "p1-2-http-oauth-mr3753tg",
+      "url": "https://mcp.linear.app/mcp",
+      "transport": "streamable-http",
+      "command": "",
+      "args": [],
+      "env_vars": {},
+      "description": "",
+      "is_active": true,
+      "is_exposed_to_agents": true,
+      "connection_status": "unknown",
+      "tools_count": 0,
+      "last_sync_at": null,
+      "last_health_at": null,
+      "last_health_status": "unreachable",
+      "risk_level": "low",
+      "gateway_endpoint": "https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/p1-2-http-oauth-mr3753tg",
+      "default_scan_action": "tag",
+      "auth_type": "oauth",
+      "oauth_authorized": false,
+      "oauth_token_expires_at": null,
+      "last_sync_error": "",
+      "last_sync_attempt_at": null,
+      "needs_reauth": false,
+      "created_at": "2026-07-02T07:42:10.414050Z",
+      "updated_at": "2026-07-02T07:42:10.414057Z",
+      "default_gateway_key_prefix": "FBGFPicy",
+      "has_gateway_key": true
+    },
+    "backendRow": {
+      "id": "fd13c8bd-af33-4b95-a411-c65dded29eed",
+      "name": "p1-2-http-oauth-mr3753tg",
+      "transport": "streamable-http",
+      "auth_type": "oauth",
+      "oauth_authorized": false,
+      "tools_count": 0,
+      "connection_status": "unknown",
+      "last_sync_at": null
+    },
+    "uiCard": {
+      "titleSnippet": "p1-2-http-oauth-mr3753tgUnknownauthorization required",
+      "cardSnippet": "p1-2-http-oauth-mr3753tg\nUnknown\nauthorization required\n\nhttps://mcp.linear.app/mcp\n\n0 tools\nhttps://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/p1-2-http-oauth-mr3753tg\nCopy MCP Config (key placeholder)\nstreamable-http\nScan: tag\nScan: redact\nScan: block\nAuthorize",
+      "toolsCount": 0,
+      "hasAuthorizationRequiredBadge": true,
+      "hasNeedsReauthBadge": false,
+      "connectionLabels": [
+        "Unknown",
+        "authorization required"
+      ],
+      "hasUnknownConnection": false,
+      "syncDisabled": true,
+      "hasAuthorizeButton": true,
+      "authorizeLabel": "Authorize"
+    },
+    "listedImmediately": true,
+    "toolsEndpoint": {
+      "status": 200,
+      "count": 0
+    },
+    "b2BugConfirmed": false,
+    "b2BugPartial": true,
+    "b2ListsZeroToolsWhileUnauthorized": true
+  },
+  "network": [
+    {
+      "ts": "2026-07-02T07:42:09.783Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/health/",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:09.787Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/org-gateway-key/",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:09.797Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/servers/",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:09.799Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/events/summary/?hours=24",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:09.848Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/health/",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:09.852Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/org-gateway-key/",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:09.934Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/servers/",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:09.934Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/events/summary/?hours=24",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:09.936Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/servers/",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:09.936Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/servers/",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:10.039Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/servers/26b25e94-d2c9-4fc6-8245-71d849281e2c/tools/",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:10.442Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/servers/",
+      "status": 201,
+      "method": "POST"
+    },
+    {
+      "ts": "2026-07-02T07:42:10.460Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/servers/",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:11.389Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/servers/",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:11.553Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/servers/fd13c8bd-af33-4b95-a411-c65dded29eed/tools/",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "ts": "2026-07-02T07:42:11.574Z",
+      "url": "http://127.0.0.1:8180/api/mcp-connector/servers/fd13c8bd-af33-4b95-a411-c65dded29eed/",
+      "status": 204,
+      "method": "DELETE"
+    }
+  ],
+  "pageErrors": [],
+  "error": null
+}

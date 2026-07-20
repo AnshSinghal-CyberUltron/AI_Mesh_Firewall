@@ -1,0 +1,48 @@
+{
+  "agent": "agent1",
+  "scope": "context-assembly|least-privilege|context-minimization|cross-mcp-leakage",
+  "server_slug": "cp09-verify",
+  "label": "tools_call_echo_clean_plus_foreign_canary",
+  "captured_at_utc": "2026-07-07T10:55:36Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/cp09-verify",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "echo",
+        "arguments": {
+          "message": "benign agent1-context-probe RT-A1-cp09-verify-4650740322 RT-A1-playwright-62ace9ee6f"
+        }
+      }
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:35 GMT",
+      "server": "uvicorn",
+      "content-length": "163",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Echo: benign agent1-context-probe RT-A1-cp09-verify-4650740322 RT-A1-playwright-62ace9ee6f"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    }
+  },
+  "notes": ""
+}

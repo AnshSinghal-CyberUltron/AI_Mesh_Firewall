@@ -459,6 +459,19 @@ def sync_firewall_config_to_redis(
 
     transaction.on_commit(_do_sync)
 
+    # Gateway embeds mcp_tier2_enabled in _get_enabled_tools; bump scan_ver so the
+    # tier-2 org gate invalidates that cache without waiting for TTL.
+    if org_slug:
+        try:
+            from mcp_connector.signals import bump_scan_version
+
+            bump_scan_version(org_slug)
+        except Exception:
+            logger.exception(
+                "Failed to schedule MCP scan-version bump after FirewallConfig save for org=%s",
+                org_slug,
+            )
+
 
 # -- LLMModelConfig Redis sync --
 

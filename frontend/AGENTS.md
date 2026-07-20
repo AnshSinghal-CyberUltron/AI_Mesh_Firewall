@@ -47,6 +47,24 @@
   is gated by an SSRF guard that requires DNS resolution to succeed → public hosts 400 from inside the
   control container. tool-call request body is `{name, arguments, server_slug}` (NOT `tool_name`).
 
+### MCP OAuth bug sites (B1/B2/B4) — current state (map: `docs/mcp/frontend-panel-flow.md`)
+These carry substantial PRIOR fixes — treat as verification-first, don't blind re-implement.
+- **B1 (oauth+stdio / one Authorize button / "Server has no URL"):** form filters the `oauth`
+  auth-type option to `streamable-http`/`sse` only (`:1483-1490`) and drops oauth→none on transport
+  switch (`:1385-1392`). Cards show exactly one Authorize via mutually-exclusive helpers:
+  `serverNeedsOAuth` (`:711`, stdio mcp-remote) → `startOAuth` (`:773`, **gateway** `oauth/start`) vs
+  `serverUsesHttpOAuth` (`:726`, http-oauth+url) → `startControlOAuth` (`:845`, **control**
+  `servers/{id}/oauth/authorize/`). `serverUsesHttpOAuth` requires `!!srv.url` so the button never
+  surfaces "Server has no URL". REMAINING: the control path (`startControlOAuth` → backend
+  `MCPServerOAuthStartView`, `views.py:2513/2526/2582`) is the dup/broken path B1 wants deleted.
+- **B2 (fresh oauth server 0-tools card):** `serverAwaitingAuth` (`:741`) renders the
+  `"authorization required"` badge (`:1095-1097`); `syncBlockedForAuth` (`:757`) disables sync until
+  authorized. Backend signal = `oauth_authorized` (`control models.py:178`). Verify UX reads as pending.
+- **B4 (modal focus loss):** ADDRESSED at code level — no component-defined-inside-render (render
+  helpers are function CALLS `{renderServers()}` `:2203-2208`, not `<Comp/>`); `ui/Dialog.jsx` keeps
+  `onClose` in a ref so the focus-trap effect (deps `[open, handleKey]`, `handleKey`=`useCallback([])`)
+  runs only on open-toggle, not per keystroke. Verify with Playwright: type a long string per field.
+
 ## Module-1 live simulators (D6) — verdict honesty
 - A gateway policy/CONTENT block is **HTTP 400 `code=content_filter`** on this gateway (OpenAI-compat
   content-block status is on), NOT 403. Any verdict mapping that keys "block" off 403-only mislabels it.
@@ -69,3 +87,30 @@
   Buttons: "Check Health" / "Send Test"; result cell "Recommended Action" = block|flag|allow.
 - Durable gate: `scripts/playwright_demo_simulators.mjs` (run from frontend/). Double-checks each verdict:
   `waitForResponse` captures the real API status AND asserts the on-screen label; raw PII never rendered.
+
+## MCP page (?tab=firewall-1-4) — data honesty (CP45)
+- **Aggregated lists need composite React keys.** The Tool Discovery tab (`renderTools`)
+  shows tools across ALL servers; keying by bare `tool.name` collides when servers share a
+  tool (echo/add/printEnv across `everything` presets) → "two children with the same key" →
+  rows swap identity → WRONG value vs WRONG row. Use `${makeExecuteToolKey(tool)}-${idx}`
+  (`server_slug::name-idx`), same as the Execute tab. Any list aggregated across servers:
+  key on server_slug + name (+ idx), never a field that repeats across servers.
+- **Gateway API key is masked-by-default, reveal-once.** `renderGatewayKeyBanner` shows
+  `{prefix}••••`; the backend GET (`/org-gateway-key/`) returns NO plaintext (only prefix
+  metadata) — plaintext arrives ONLY on POST-create (`default_gateway_key`) and the MCP
+  default key is hash-only at rest. So on any reload the reveal/copy buttons are absent and
+  no raw key is in the DOM. Never render `orgGatewayKey.key` outside the explicit
+  `keyRevealed` toggle.
+
+## MCP page verification harnesses (CP46)
+- **Type-sim regression = `scripts/ralph/mcp_page_cp06_verify.mjs`** — types every modal
+  field char-by-char (commas+spaces) across 4 viewports × 2 themes, asserts value correct +
+  focus never drops + 0 console errors. Run after ANY MCPConnectorPanel change to confirm
+  the comma-drop/focus-loss modal fix still holds. NEVER use `fill()` — it masks the bug.
+- **Ignore OS transport flaps in console-error gates.** On this shared GCP VM under
+  parallel-loop load, Chromium intermittently emits `Failed to load resource:
+  net::ERR_NETWORK_CHANGED` (and IO_SUSPENDED / INTERNET_DISCONNECTED / ABORTED). These are
+  network-stack events, NOT app errors — filter them (see CP06 `TRANSIENT_NET`). KEEP real
+  signals: `ERR_CONNECTION_REFUSED` (backend down), 4xx/5xx, React warnings, pageerrors.
+- **Impeccable detector** = `node .claude/skills/impeccable/scripts/detect.mjs <files>`
+  (exit 0 + `[]` = clean). Page needs auth so scan the component SOURCE, not the URL.

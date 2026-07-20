@@ -1,0 +1,13 @@
+{
+  "agent": "cursor-ralph-iter7",
+  "story": "P2.7",
+  "scope": [
+    "docs/mcp/oss-research-oauth-sandbox-client.md",
+    "docs/mcp/oss-research-oauth-spec.md",
+    "docs/mcp/PARALLEL_CLAIMS.md",
+    "mcp-parallel/findings/p2-7/**",
+    ".cursor/ralph/scratchpad.md"
+  ],
+  "since": "2026-07-02T12:00:00Z",
+  "status": "released"
+}

@@ -1,0 +1,12 @@
+{
+  "checkpoint": "17-ui",
+  "ok": true,
+  "error": null,
+  "stillOpen": true,
+  "showsBrandedMessage": true,
+  "showsRef": true,
+  "showsErrorCode": true,
+  "noLeak": true,
+  "cp17UiPass": true,
+  "alertText": "Connection failed: The MCP server could not be reached or returned an error. Verify the configuration and retry. (Ref: abc123def456)\n\nError code: MCP_UNAVAILABLE"
+}

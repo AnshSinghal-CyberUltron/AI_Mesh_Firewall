@@ -1,0 +1,149 @@
+{
+  "title": "Chat Output Guardrail REWRITE stream+SDK (post F-002 fix)",
+  "collected_at": "2026-07-10T07:29:08.485584+00:00",
+  "model": "cohere/north-mini-code:free",
+  "canary": "john.doe@corp.example",
+  "prompt": "Write a one-sentence customer support reply that includes the contact email john.doe@corp.example exactly once. Keep it under 40 words.",
+  "ui_action": "rewrite",
+  "config_mutation": {
+    "output_pii_action": "rewrite",
+    "redis_synced": true
+  },
+  "parts": {
+    "http_non_stream": {
+      "http_status": 200,
+      "request_id": "zs-fd567694c899",
+      "blocked_by": null,
+      "code": null,
+      "final_action": "redact",
+      "raw_canary_present": false,
+      "redaction_markers": [
+        "[REDACTED]",
+        "j***@c***.example",
+        "[redacted]"
+      ],
+      "rewrite_hints": [],
+      "content_preview": "Thank you for reaching out; our support team will address your inquiry and get back to you at [redacted] shortly.",
+      "content_len": 113,
+      "delivered": true,
+      "is_blocked": false,
+      "output_guard_stage": {
+        "name": "output_guardrail",
+        "action": "redact",
+        "detail": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+        "guard_reason": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+        "guard_action": "redact",
+        "latency_ms": 936.9
+      },
+      "sse_error": null,
+      "observed_action": "redact",
+      "body_head": "{\"id\":\"chatcmpl-1783668413-QFUzUEpi0mYMULV6SIlt\",\"created\":1783668413,\"model\":\"cohere/north-mini-code:free\",\"object\":\"chat.completion\",\"system_fingerprint\":null,\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"message\":{\"content\":\"Thank you for reaching out; our support team will address your inquiry and get back to you at [redacted] shortly.\",\"role\":\"assistant\",\"tool_calls\":null,\"function_call\":null,\"reasoning_content\":\"\"}}],\"usage\":{\"completion_tokens\":120,\"prompt_tokens\":29,\"total_tokens\":149,",
+      "elapsed_ms": 8825.3,
+      "transport": "http_json"
+    },
+    "http_stream": {
+      "http_status": 200,
+      "request_id": "zs-ceda1e5e1963",
+      "blocked_by": null,
+      "code": null,
+      "final_action": "redact",
+      "raw_canary_present": false,
+      "redaction_markers": [
+        "j***@c***.example"
+      ],
+      "rewrite_hints": [],
+      "content_preview": "Sensitive personal information was removed from the generated response.",
+      "content_len": 71,
+      "delivered": true,
+      "is_blocked": false,
+      "output_guard_stage": {
+        "name": "output_guardrail",
+        "action": "redact",
+        "detail": "PII detected in prompt: email_smart_masked",
+        "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "guard_action": "allow",
+        "latency_ms": 0.0
+      },
+      "sse_error": null,
+      "observed_action": "redact",
+      "body_head": "data: {\"id\": \"chatcmpl-1783668422-27bCyYvZkpvBsHycLHS8\", \"created\": 1783668423, \"model\": \"cohere/north-mini-code:free\", \"object\": \"chat.completion.chunk\", \"system_fingerprint\": null, \"choices\": [{\"finish_reason\": \"length\", \"index\": 0, \"delta\": {\"content\": null, \"role\": null, \"function_call\": null, \"tool_calls\": null, \"audio\": null}, \"logprobs\": null}], \"service_tier\": null}\n\ndata: {\"id\": \"chatcmpl-1783668422-27bCyYvZkpvBsHycLHS8\", \"created\": 1783668423, \"model\": \"cohere/north-mini-code:free\", \"o",
+      "elapsed_ms": 60823.7,
+      "transport": "http_sse"
+    },
+    "sdk_non_stream": {
+      "http_status": 200,
+      "request_id": "zs-c41ef74da1d5",
+      "blocked_by": null,
+      "code": null,
+      "final_action": "redact",
+      "raw_canary_present": false,
+      "redaction_markers": [
+        "j***@c***.example"
+      ],
+      "rewrite_hints": [],
+      "content_preview": "Sensitive personal information was removed from the generated response.",
+      "content_len": 71,
+      "delivered": true,
+      "is_blocked": false,
+      "output_guard_stage": {
+        "name": "output_guardrail",
+        "action": "redact",
+        "detail": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+        "guard_reason": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+        "guard_action": "redact",
+        "latency_ms": 986.0
+      },
+      "sse_error": null,
+      "observed_action": "redact",
+      "body_head": "{\"id\":\"chatcmpl-1783668483-43AiMXMZVZQkiMGUcpUd\",\"created\":1783668483,\"model\":\"cohere/north-mini-code:free\",\"object\":\"chat.completion\",\"system_fingerprint\":null,\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"message\":{\"content\":\"Sensitive personal information was removed from the generated response.\",\"role\":\"assistant\",\"tool_calls\":null,\"function_call\":null,\"reasoning_content\":\"\"}}],\"usage\":{\"completion_tokens\":120,\"prompt_tokens\":29,\"total_tokens\":149,\"completion_tokens_details\":{\"accepted_pre",
+      "elapsed_ms": 7061.5,
+      "transport": "openai_sdk",
+      "ok": true
+    },
+    "sdk_stream": {
+      "http_status": 200,
+      "content_preview": "Sensitive personal information was removed from the generated response.",
+      "content_len": 71,
+      "raw_canary_present": false,
+      "delivered": true,
+      "is_blocked": false,
+      "observed_action": "delivered_masked_or_clean",
+      "sdk_note": "iterated_stream_no_raw",
+      "elapsed_ms": 57883.2,
+      "transport": "openai_sdk",
+      "ok": true
+    }
+  },
+  "stream_checks": {
+    "http_stream": {
+      "not_output_blocked": true,
+      "raw_absent": true,
+      "observed": "redact",
+      "og_action": "redact"
+    },
+    "sdk_stream": {
+      "not_output_blocked": true,
+      "raw_absent": true,
+      "observed": "delivered_masked_or_clean",
+      "og_action": null
+    }
+  },
+  "verdict": "PASS",
+  "fails": [],
+  "notes": [
+    "http_non_stream:delivered_no_raw(og=redact)",
+    "http_stream:delivered_no_raw(og=redact)",
+    "sdk_non_stream:delivered_no_raw(og=redact)",
+    "sdk_stream:delivered_no_raw(og=None)",
+    "static_rewrite_text on: ['http_stream', 'sdk_non_stream', 'sdk_stream']",
+    "pipeline_trace final_action/og may still say redact while body is rewrite static text \u2014 body bytes are source of truth"
+  ],
+  "expect": "stream must NOT be output_blocked; raw canary absent; rewrite/static rewrite preferred",
+  "static_rewrite_text_delivered_on": [
+    "http_stream",
+    "sdk_non_stream",
+    "sdk_stream"
+  ],
+  "static_rewrite_text": "Sensitive personal information was removed from the generated response.",
+  "f002_fix_evidence": "Pre-fix: stream under rewrite \u2192 SSE output_blocked. Post-fix: http_stream+sdk_stream HTTP 200, not output_blocked, content is static rewrite text, raw email absent."
+}

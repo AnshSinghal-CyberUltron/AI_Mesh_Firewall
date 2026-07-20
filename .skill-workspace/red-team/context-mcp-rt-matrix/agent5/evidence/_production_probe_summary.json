@@ -1,0 +1,177 @@
+{
+  "target": "https://aimeshgateway.zeroshield.ai",
+  "generated_at_utc": "2026-07-07T10:56:05Z",
+  "api_key_redacted": "XlI7...I1I2",
+  "health": {
+    "status_code": 200,
+    "body": {
+      "status": "ok",
+      "agent_id": "58013fb4-cdc9-47ab-b7f1-8eafe6ab2707",
+      "policy_cache_loaded": true,
+      "policy_cache_version": 366,
+      "policy_count": 46,
+      "config_sync_loaded": false,
+      "firewall_enabled": true,
+      "enforcement_mode": "block",
+      "vector_policy_cache_loaded": true,
+      "vector_policy_cache_version": 339,
+      "vector_policy_count": 14,
+      "vector_clients": [],
+      "telemetry_queue_depth": 0
+    }
+  },
+  "v1_models": {
+    "status_code": 401,
+    "body": {
+      "error": {
+        "message": "A valid API key is required to list models.",
+        "type": "authentication_error",
+        "param": null,
+        "code": "unauthorized"
+      },
+      "request_id": "zs-5928392dd441"
+    }
+  },
+  "mcp_tools_list_all_16": [
+    {
+      "slug": "semgrep-mcp",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "playwright-mcp",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "cp09-ens8do",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "cp09-verify",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "playwright",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "ws-everything-stub",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "sse-everything-stub",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "http-everything-stub",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "linear-manual-oauth",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "everything-5",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "everything-4",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "everything-3",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "everything-2",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "everything-1",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "filesystem-canary",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    },
+    {
+      "slug": "everything-mcp",
+      "status_code": 401,
+      "body": {
+        "error": "unauthorized",
+        "message": "Invalid API key."
+      }
+    }
+  ],
+  "chat_completions": {
+    "status_code": 401,
+    "body": {
+      "error": {
+        "message": "Invalid API key.",
+        "type": "authentication_error",
+        "param": null,
+        "code": "unauthorized"
+      },
+      "request_id": "zs-e5b00ea46a23"
+    }
+  }
+}

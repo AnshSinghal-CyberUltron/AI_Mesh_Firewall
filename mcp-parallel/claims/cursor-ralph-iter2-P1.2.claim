@@ -1,0 +1,12 @@
+{
+  "agent": "cursor-ralph-iter2",
+  "story": "P1.2",
+  "scope": [
+    "mcp-parallel/findings/p1-2/**",
+    "scripts/playwright_mcp_p1_http_oauth_repro.mjs",
+    "docs/mcp/PARALLEL_CLAIMS.md",
+    ".cursor/ralph/scratchpad.md"
+  ],
+  "since": "2026-07-02T08:00:00Z",
+  "status": "released"
+}

@@ -1,0 +1,7 @@
+{
+  "total_records_scanned": 213,
+  "cross_agent_tool_canary_leaks": [],
+  "cross_agent_tool_leak_count": 0,
+  "blocked_count": 4,
+  "allowed_count": 209
+}

@@ -3,10 +3,6 @@ import {
   Loader2, RefreshCw, TrendingUp, AlertTriangle, Shield, Users, BookOpen,
   ChevronDown, ChevronRight,
 } from "lucide-react";
-import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
-} from "recharts";
 import { useAuth } from "../context/AuthContext";
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
 
@@ -18,11 +14,15 @@ const DAYS_OPTIONS = [
   { value: 90, label: "90d" },
 ];
 
+// All six categories the backend's violations_by_* buckets emit
+// (control/policy/analytics_views.py). agenticThreat was previously omitted, so
+// the stacked bar undercounted totals — every backend key must be drawn.
 const VIOLATION_COLORS = {
   promptInjection: "#ef4444",
   jailbreak: "#f59e0b",
   piiDetection: "#8b5cf6",
   toolOverreach: "#3b82f6",
+  agenticThreat: "#ec4899",
   sourceCode: "#6b7280",
 };
 
@@ -31,6 +31,7 @@ const VIOLATION_LABELS = {
   jailbreak: "Jailbreak",
   piiDetection: "PII Detection",
   toolOverreach: "Tool Overreach",
+  agenticThreat: "Agentic Threat",
   sourceCode: "Source Code",
 };
 
@@ -40,12 +41,61 @@ const GRANULARITY_OPTIONS = [
   { value: "week", label: "Weekly" },
 ];
 
+// ── ECharts option builders (data-identical to the prior recharts views) ──
+// The registered zs-light/zs-dark theme drives axis/grid/tooltip/legend/text
+// colors (fixes the old hardcoded #94a3b8/#f1f5f9 recharts styling that showed
+// a light grid on the dark card); these builders supply only series + data +
+// the brand series colors.
+function effectivenessOption(rows) {
+  return {
+    grid: { top: 14, right: 14, bottom: 26, left: 42 },
+    tooltip: { trigger: "axis", valueFormatter: (v) => `${v}%` },
+    xAxis: { type: "category", boundaryGap: false, data: rows.map((r) => r.date), axisLabel: { fontSize: 10 } },
+    yAxis: { type: "value", min: 0, max: 100, axisLabel: { fontSize: 10, formatter: "{value}%" } },
+    series: [{
+      name: "Enforcement rate",
+      type: "line",
+      smooth: true,
+      showSymbol: false,
+      data: rows.map((r) => r.effectiveness),
+      lineStyle: { color: "#14b8a6", width: 2 },
+      itemStyle: { color: "#14b8a6" },
+      areaStyle: {
+        color: {
+          type: "linear", x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: "rgba(20,184,166,0.30)" },
+            { offset: 1, color: "rgba(20,184,166,0.00)" },
+          ],
+        },
+      },
+    }],
+  };
+}
+
+function violationOption(rows, xKey, rotate) {
+  return {
+    grid: { top: 30, right: 12, bottom: rotate ? 52 : 26, left: 36 },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    legend: { top: 0, itemHeight: 8, itemWidth: 12, textStyle: { fontSize: 10 } },
+    xAxis: { type: "category", data: rows.map((r) => r[xKey]), axisLabel: { fontSize: 9, rotate: rotate ? 30 : 0, interval: 0 } },
+    yAxis: { type: "value", minInterval: 1, axisLabel: { fontSize: 10 } },
+    series: Object.entries(VIOLATION_COLORS).map(([key, color]) => ({
+      name: VIOLATION_LABELS[key] || key,
+      type: "bar",
+      stack: "a",
+      itemStyle: { color },
+      data: rows.map((r) => r[key] ?? 0),
+    })),
+  };
+}
+
 function StatusBadge({ status }) {
   const cfg = {
-    EXCELLENT: { bg: "bg-emerald-100 dark:bg-emerald-800/30", text: "text-emerald-700" },
-    GOOD: { bg: "bg-blue-100 dark:bg-blue-800/30", text: "text-blue-700" },
-    "NEEDS REVIEW": { bg: "bg-amber-100 dark:bg-amber-800/30", text: "text-amber-700" },
-    LOW: { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700" },
+    EXCELLENT: { bg: "bg-emerald-100 dark:bg-emerald-800/30", text: "text-emerald-700 dark:text-emerald-300" },
+    GOOD: { bg: "bg-blue-100 dark:bg-blue-800/30", text: "text-blue-700 dark:text-blue-300" },
+    "NEEDS REVIEW": { bg: "bg-amber-100 dark:bg-amber-800/30", text: "text-amber-700 dark:text-amber-300" },
+    LOW: { bg: "bg-red-100 dark:bg-red-800/30", text: "text-red-700 dark:text-red-300" },
   };
   const c = cfg[status] || cfg.LOW;
   return (
@@ -190,7 +240,7 @@ export function PolicyAnalyticsPanel() {
       </div>
 
       {loadError ? (
-        <div className="mb-4 p-3 rounded-lg text-xs flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700">
+        <div className="mb-4 p-3 rounded-lg text-xs flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300">
           <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
           <span>{loadError}</span>
         </div>
@@ -204,7 +254,7 @@ export function PolicyAnalyticsPanel() {
       ) : (
         <div className="space-y-4">
           {/* Metric Cards */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <MetricCard
               icon={AlertTriangle}
               label="Total Violations"
@@ -247,21 +297,7 @@ export function PolicyAnalyticsPanel() {
             </button>
             {expandedSections.effectiveness && analytics?.effectiveness_trend && (
               <div className="p-4">
-                <SafeResponsiveChart className="h-[200px]">
-                  <AreaChart data={analytics.effectiveness_trend} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-                    <defs>
-                      <linearGradient id="gradEff" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="date" stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                    <YAxis domain={[0, 100]} stroke="#94a3b8" tick={{ fontSize: 10 }} unit="%" />
-                    <Tooltip contentStyle={{ fontSize: 11, border: "1px solid #e2e8f0", borderRadius: "8px" }} formatter={(v) => `${v}%`} />
-                    <Area type="monotone" dataKey="effectiveness" stroke="#14b8a6" strokeWidth={2} fill="url(#gradEff)" name="Enforcement rate" />
-                  </AreaChart>
-                </SafeResponsiveChart>
+                <SafeResponsiveChart className="h-[200px]" option={effectivenessOption(analytics.effectiveness_trend)} />
               </div>
             )}
           </div>
@@ -295,18 +331,7 @@ export function PolicyAnalyticsPanel() {
             </button>
             {expandedSections.violations && violationData.length > 0 && (
               <div className="p-4">
-                <SafeResponsiveChart className="h-[220px]">
-                  <BarChart data={violationData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey={violationXKey} stroke="#94a3b8" tick={{ fontSize: 9 }} angle={granularity === "hour" ? 0 : -30} textAnchor={granularity === "hour" ? "middle" : "end"} height={granularity === "hour" ? 30 : 50} />
-                    <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} />
-                    <Tooltip contentStyle={{ fontSize: 11, border: "1px solid #e2e8f0", borderRadius: "8px" }} />
-                    <Legend wrapperStyle={{ fontSize: 10 }} />
-                    {Object.entries(VIOLATION_COLORS).map(([key, color]) => (
-                      <Bar key={key} dataKey={key} stackId="a" fill={color} name={VIOLATION_LABELS[key] || key} />
-                    ))}
-                  </BarChart>
-                </SafeResponsiveChart>
+                <SafeResponsiveChart className="h-[220px]" option={violationOption(violationData, violationXKey, granularity !== "hour")} />
               </div>
             )}
           </div>

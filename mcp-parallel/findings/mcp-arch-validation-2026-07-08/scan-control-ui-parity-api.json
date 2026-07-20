@@ -1,0 +1,15 @@
+{
+  "scan_control_rows": 0,
+  "ui_empty_state_required": true,
+  "gateway_egress": "Echo: SSN 123-45-6789",
+  "raw_ssn_present": true,
+  "masked_ssn_absent": true,
+  "event_decision": "scan_skipped",
+  "event_reason": "no_scan_controls_configured",
+  "scan_trace_stages": [
+    "scan_skipped",
+    "scan_skipped"
+  ],
+  "scan_skipped_in_trace": true,
+  "parityPass": true
+}

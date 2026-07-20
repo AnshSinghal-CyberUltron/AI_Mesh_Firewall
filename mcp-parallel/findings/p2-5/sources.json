@@ -1,0 +1,49 @@
+{
+  "story": "P2.5",
+  "agent": "cursor-ralph-iter5",
+  "date": "2026-07-02",
+  "sources": [
+    {
+      "title": "modelcontextprotocol/servers",
+      "url": "https://github.com/modelcontextprotocol/servers",
+      "topic": "reference stdio + streamableHttp launch modes"
+    },
+    {
+      "title": "MCP Transports (2025-03-26)",
+      "url": "https://modelcontextprotocol.io/specification/2025-03-26/basic/transports",
+      "topic": "stdio vs Streamable HTTP spec"
+    },
+    {
+      "title": "Streamable HTTP transport",
+      "url": "https://modelcontextprotocol.io/specification/draft/basic/transports/streamable-http",
+      "topic": "replaces legacy HTTP+SSE"
+    },
+    {
+      "title": "geelen/mcp-remote",
+      "url": "https://github.com/geelen/mcp-remote",
+      "topic": "stdio↔remote HTTP/SSE + OAuth; Linear bridge"
+    },
+    {
+      "title": "supercorp-ai/supergateway",
+      "url": "https://github.com/supercorp-ai/supergateway",
+      "topic": "stdio↔SSE/WS/Streamable HTTP bidirectional"
+    },
+    {
+      "title": "sparfenyuk/mcp-proxy",
+      "url": "https://github.com/sparfenyuk/mcp-proxy",
+      "topic": "Python Streamable HTTP↔stdio"
+    },
+    {
+      "title": "ChatForest MCP gateway patterns",
+      "url": "https://chatforest.com/guides/mcp-gateway-proxy-patterns/",
+      "topic": "proxy vs gateway; nginx SSE buffering"
+    }
+  ],
+  "internal_docs": [
+    "docs/mcp/oss-research-remote-transport-proxies.md",
+    "docs/mcp/oss-research-mcp-remote.md",
+    "docs/mcp/oss-research-stdio-patterns.md",
+    "docs/mcp/oss-research-oauth-transport-ux.md",
+    "docs/mcp/request-path-map.md"
+  ]
+}

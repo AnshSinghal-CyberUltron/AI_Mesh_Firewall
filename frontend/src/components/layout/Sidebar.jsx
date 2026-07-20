@@ -12,9 +12,11 @@ import {
   ChevronUp,
   ChevronDown,
   X,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../context/AuthContext";
+import { useBackendHealth } from "../../hooks/useBackendHealth";
 
 const menuItems = [
   {
@@ -66,6 +68,16 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [flyoutModule, setFlyoutModule] = useState(null);
   const { user, logout } = useAuth();
+  // Real backend reachability — the widget below was a hardcoded "All systems
+  // operational / Protected" that stayed green even when the backend was down.
+  const backendHealth = useBackendHealth();
+  const sysStatus = backendHealth === "connected"
+    ? { line: "All systems operational", dot: "bg-teal-500", pulse: "animate-pulse", label: "Protected", labelCls: "text-teal-700 dark:text-teal-400" }
+    : backendHealth === "checking"
+      ? { line: "Checking system status…", dot: "bg-amber-500", pulse: "animate-pulse", label: "Connecting…", labelCls: "text-amber-700 dark:text-amber-400" }
+      : backendHealth === "degraded"
+        ? { line: "Backend slow to respond", dot: "bg-amber-500", pulse: "animate-pulse", label: "Degraded", labelCls: "text-amber-700 dark:text-amber-400" }
+        : { line: "Backend unreachable", dot: "bg-red-500", pulse: "", label: "Offline", labelCls: "text-red-700 dark:text-red-400" };
   const { hasPlatform } = useOfferingVisibility(user);
   const [expandedModules, setExpandedModules] = useState([]);
   const [hasCustomizedExpansion, setHasCustomizedExpansion] = useState(false);
@@ -235,7 +247,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
           <div key={item.id}>
             {item.section && !isCollapsed && (
               <div className="px-3 pt-4 pb-2">
-                <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-400 uppercase tracking-wider">
                   {item.section}
                 </span>
               </div>
@@ -370,13 +382,28 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
             <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-cyan-400/20 to-teal-400/20 rounded-full blur-2xl"></div>
             <div className="relative">
               <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100 mb-1">System Status</h3>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">All systems operational</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">{sysStatus.line}</p>
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-pulse"></div>
-                <span className="text-xs font-medium text-teal-700 dark:text-teal-400">Protected</span>
+                <div className={`w-1.5 h-1.5 rounded-full ${sysStatus.dot} ${sysStatus.pulse}`}></div>
+                <span className={`text-xs font-medium ${sysStatus.labelCls}`}>{sysStatus.label}</span>
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {!isCollapsed && (
+        <div className="px-3 pb-2 border-t border-slate-200 dark:border-slate-700 pt-3">
+          <a
+            href="/demo/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors"
+            data-testid="sidebar-openai-sdk-demo"
+          >
+            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            <span>OpenAI SDK Demo</span>
+          </a>
         </div>
       )}
 
@@ -425,7 +452,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
                 </div>
                 <ChevronUp
                   className={cn(
-                    "w-4 h-4 text-slate-400 dark:text-slate-500 dark:text-slate-400 transition-transform flex-shrink-0",
+                    "w-4 h-4 text-slate-500 dark:text-slate-400 dark:text-slate-400 transition-transform flex-shrink-0",
                     showAccountMenu && "rotate-180"
                   )}
                 />

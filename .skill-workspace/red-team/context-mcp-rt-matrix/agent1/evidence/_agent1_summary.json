@@ -1,0 +1,2977 @@
+{
+  "agent": "agent1",
+  "scope": [
+    "context-assembly",
+    "least-privilege",
+    "context-minimization",
+    "cross-mcp-context-leakage"
+  ],
+  "target": "http://127.0.0.1:8300",
+  "openai_base_url": "http://127.0.0.1:8300/v1",
+  "generated_at_utc": "2026-07-07T10:57:18Z",
+  "api_key_redacted": "XlI7...I1I2",
+  "servers_total": 16,
+  "servers_tested": 12,
+  "total_tools_enumerated": 168,
+  "total_tools_invoked": 168,
+  "per_server": [
+    {
+      "slug": "semgrep-mcp",
+      "transport": "stdio",
+      "own_canary": "RT-A1-semgrep-mcp-617a6a7d59",
+      "foreign_canary_used": "RT-A1-playwright-mcp-911e80ced4",
+      "foreign_canary_owner": "playwright-mcp",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "allow",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 7,
+      "tools_tested": 7,
+      "tool_results": [
+        {
+          "tool": "scan_directory",
+          "args_sent": {
+            "path": "/tmp RT-A1-playwright-mcp-911e80ced4"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "list_rules",
+          "args_sent": {
+            "language": "benign agent1-context-probe RT-A1-semgrep-mcp-617a6a7d59 RT-A1-playwright-mcp-911e80ced4"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "analyze_results",
+          "args_sent": {
+            "results_file": "benign agent1-context-probe RT-A1-semgrep-mcp-617a6a7d59 RT-A1-playwright-mcp-911e80ced4"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "jsonrpc_error",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "create_rule",
+          "args_sent": {
+            "output_path": "benign agent1-context-probe RT-A1-semgrep-mcp-617a6a7d59 RT-A1-playwright-mcp-911e80ced4",
+            "pattern": "benign agent1-context-probe RT-A1-semgrep-mcp-617a6a7d59",
+            "language": "benign agent1-context-probe RT-A1-semgrep-mcp-617a6a7d59",
+            "message": "benign agent1-context-probe RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "jsonrpc_error",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "filter_results",
+          "args_sent": {
+            "results_file": "benign agent1-context-probe RT-A1-semgrep-mcp-617a6a7d59 RT-A1-playwright-mcp-911e80ced4"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "jsonrpc_error",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "export_results",
+          "args_sent": {
+            "results_file": "benign agent1-context-probe RT-A1-semgrep-mcp-617a6a7d59 RT-A1-playwright-mcp-911e80ced4",
+            "output_file": "benign agent1-context-probe RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "jsonrpc_error",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "compare_results",
+          "args_sent": {
+            "old_results": "benign agent1-context-probe RT-A1-semgrep-mcp-617a6a7d59 RT-A1-playwright-mcp-911e80ced4",
+            "new_results": "benign agent1-context-probe RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "jsonrpc_error",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        }
+      ],
+      "status": "TESTED"
+    },
+    {
+      "slug": "playwright-mcp",
+      "transport": "stdio",
+      "own_canary": "RT-A1-playwright-mcp-911e80ced4",
+      "foreign_canary_used": "RT-A1-cp09-ens8do-54724b3c5b",
+      "foreign_canary_owner": "cp09-ens8do",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "allow",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 23,
+      "tools_tested": 23,
+      "tool_results": [
+        {
+          "tool": "browser_close",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_resize",
+          "args_sent": {
+            "width": 1,
+            "height": 1,
+            "_agent1_context_probe": "RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_console_messages",
+          "args_sent": {
+            "level": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_handle_dialog",
+          "args_sent": {
+            "accept": false,
+            "_agent1_context_probe": "RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_evaluate",
+          "args_sent": {
+            "function": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_file_upload",
+          "args_sent": {
+            "paths": [
+              "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4"
+            ],
+            "_agent1_context_probe": "RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_drop",
+          "args_sent": {
+            "target": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_fill_form",
+          "args_sent": {
+            "fields": [
+              {
+                "note": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4"
+              }
+            ],
+            "_agent1_context_probe": "RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_press_key",
+          "args_sent": {
+            "key": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_type",
+          "args_sent": {
+            "target": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b",
+            "text": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_navigate",
+          "args_sent": {
+            "url": "about:blank RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_navigate_back",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_network_requests",
+          "args_sent": {
+            "static": false,
+            "_agent1_context_probe": "RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_network_request",
+          "args_sent": {
+            "index": 1,
+            "_agent1_context_probe": "RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_run_code_unsafe",
+          "args_sent": {
+            "code": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_take_screenshot",
+          "args_sent": {
+            "type": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b",
+            "scale": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_snapshot",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_click",
+          "args_sent": {
+            "target": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_drag",
+          "args_sent": {
+            "startTarget": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b",
+            "endTarget": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_hover",
+          "args_sent": {
+            "target": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_select_option",
+          "args_sent": {
+            "target": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b",
+            "values": [
+              "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4"
+            ]
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_tabs",
+          "args_sent": {
+            "action": "benign agent1-context-probe RT-A1-playwright-mcp-911e80ced4 RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_wait_for",
+          "args_sent": {
+            "time": 1,
+            "_agent1_context_probe": "RT-A1-cp09-ens8do-54724b3c5b"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        }
+      ],
+      "status": "TESTED"
+    },
+    {
+      "slug": "cp09-ens8do",
+      "transport": "stdio",
+      "own_canary": "RT-A1-cp09-ens8do-54724b3c5b",
+      "foreign_canary_used": "RT-A1-cp09-verify-4650740322",
+      "foreign_canary_owner": "cp09-verify",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "allow",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 13,
+      "tools_tested": 13,
+      "tool_results": [
+        {
+          "tool": "echo",
+          "args_sent": {
+            "message": "benign agent1-context-probe RT-A1-cp09-ens8do-54724b3c5b RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "get-annotated-message",
+          "args_sent": {
+            "messageType": "benign agent1-context-probe RT-A1-cp09-ens8do-54724b3c5b RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-env",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-links",
+          "args_sent": {
+            "count": 1,
+            "_agent1_context_probe": "RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-reference",
+          "args_sent": {
+            "resourceType": "benign agent1-context-probe RT-A1-cp09-ens8do-54724b3c5b RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-structured-content",
+          "args_sent": {
+            "location": "benign agent1-context-probe RT-A1-cp09-ens8do-54724b3c5b RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-sum",
+          "args_sent": {
+            "a": 2,
+            "b": 3,
+            "_agent1_context_probe": "RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-tiny-image",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "gzip-file-as-resource",
+          "args_sent": {
+            "name": "benign agent1-context-probe RT-A1-cp09-ens8do-54724b3c5b RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "toggle-simulated-logging",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "toggle-subscriber-updates",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "trigger-long-running-operation",
+          "args_sent": {
+            "duration": 1,
+            "_agent1_context_probe": "RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "simulate-research-query",
+          "args_sent": {
+            "topic": "benign agent1-context-probe RT-A1-cp09-ens8do-54724b3c5b RT-A1-cp09-verify-4650740322"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        }
+      ],
+      "status": "TESTED"
+    },
+    {
+      "slug": "cp09-verify",
+      "transport": "stdio",
+      "own_canary": "RT-A1-cp09-verify-4650740322",
+      "foreign_canary_used": "RT-A1-playwright-62ace9ee6f",
+      "foreign_canary_owner": "playwright",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "allow",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 13,
+      "tools_tested": 13,
+      "tool_results": [
+        {
+          "tool": "echo",
+          "args_sent": {
+            "message": "benign agent1-context-probe RT-A1-cp09-verify-4650740322 RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "get-annotated-message",
+          "args_sent": {
+            "messageType": "benign agent1-context-probe RT-A1-cp09-verify-4650740322 RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-env",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-links",
+          "args_sent": {
+            "count": 1,
+            "_agent1_context_probe": "RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-reference",
+          "args_sent": {
+            "resourceType": "benign agent1-context-probe RT-A1-cp09-verify-4650740322 RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-structured-content",
+          "args_sent": {
+            "location": "benign agent1-context-probe RT-A1-cp09-verify-4650740322 RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-sum",
+          "args_sent": {
+            "a": 2,
+            "b": 3,
+            "_agent1_context_probe": "RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-tiny-image",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "gzip-file-as-resource",
+          "args_sent": {
+            "name": "benign agent1-context-probe RT-A1-cp09-verify-4650740322 RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "toggle-simulated-logging",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "toggle-subscriber-updates",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "trigger-long-running-operation",
+          "args_sent": {
+            "duration": 1,
+            "_agent1_context_probe": "RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "simulate-research-query",
+          "args_sent": {
+            "topic": "benign agent1-context-probe RT-A1-cp09-verify-4650740322 RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        }
+      ],
+      "status": "TESTED"
+    },
+    {
+      "slug": "playwright",
+      "transport": "stdio",
+      "own_canary": "RT-A1-playwright-62ace9ee6f",
+      "foreign_canary_used": "RT-A1-ws-everything-stub-73aa2a7b1e",
+      "foreign_canary_owner": "ws-everything-stub",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "allow",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 23,
+      "tools_tested": 23,
+      "tool_results": [
+        {
+          "tool": "browser_close",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_resize",
+          "args_sent": {
+            "width": 1,
+            "height": 1,
+            "_agent1_context_probe": "RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_console_messages",
+          "args_sent": {
+            "level": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_handle_dialog",
+          "args_sent": {
+            "accept": false,
+            "_agent1_context_probe": "RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_evaluate",
+          "args_sent": {
+            "function": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_file_upload",
+          "args_sent": {
+            "paths": [
+              "benign agent1-context-probe RT-A1-playwright-62ace9ee6f"
+            ],
+            "_agent1_context_probe": "RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_drop",
+          "args_sent": {
+            "target": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_fill_form",
+          "args_sent": {
+            "fields": [
+              {
+                "note": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f"
+              }
+            ],
+            "_agent1_context_probe": "RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_press_key",
+          "args_sent": {
+            "key": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_type",
+          "args_sent": {
+            "target": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f RT-A1-ws-everything-stub-73aa2a7b1e",
+            "text": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_navigate",
+          "args_sent": {
+            "url": "about:blank RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_navigate_back",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_network_requests",
+          "args_sent": {
+            "static": false,
+            "_agent1_context_probe": "RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_network_request",
+          "args_sent": {
+            "index": 1,
+            "_agent1_context_probe": "RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_run_code_unsafe",
+          "args_sent": {
+            "code": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_take_screenshot",
+          "args_sent": {
+            "type": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f RT-A1-ws-everything-stub-73aa2a7b1e",
+            "scale": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_snapshot",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_click",
+          "args_sent": {
+            "target": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_drag",
+          "args_sent": {
+            "startTarget": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f RT-A1-ws-everything-stub-73aa2a7b1e",
+            "endTarget": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_hover",
+          "args_sent": {
+            "target": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_select_option",
+          "args_sent": {
+            "target": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f RT-A1-ws-everything-stub-73aa2a7b1e",
+            "values": [
+              "benign agent1-context-probe RT-A1-playwright-62ace9ee6f"
+            ]
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_tabs",
+          "args_sent": {
+            "action": "benign agent1-context-probe RT-A1-playwright-62ace9ee6f RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "browser_wait_for",
+          "args_sent": {
+            "time": 1,
+            "_agent1_context_probe": "RT-A1-ws-everything-stub-73aa2a7b1e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        }
+      ],
+      "status": "TESTED"
+    },
+    {
+      "slug": "ws-everything-stub",
+      "transport": "websocket",
+      "own_canary": "RT-A1-ws-everything-stub-73aa2a7b1e",
+      "foreign_canary_used": "RT-A1-sse-everything-stub-9fc055befd",
+      "foreign_canary_owner": "sse-everything-stub",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "jsonrpc_error",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 0,
+      "tools_tested": 0,
+      "tool_results": [],
+      "status": "ERROR_LIST",
+      "reason": {
+        "code": -32002,
+        "message": "egress denied: cannot resolve host 'ws-everything.stub' ([Errno -2] Name or service not known)"
+      }
+    },
+    {
+      "slug": "sse-everything-stub",
+      "transport": "sse",
+      "own_canary": "RT-A1-sse-everything-stub-9fc055befd",
+      "foreign_canary_used": "RT-A1-http-everything-stub-094a565f44",
+      "foreign_canary_owner": "http-everything-stub",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "jsonrpc_error",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 0,
+      "tools_tested": 0,
+      "tool_results": [],
+      "status": "ERROR_LIST",
+      "reason": {
+        "code": -32002,
+        "message": "egress denied: cannot resolve host 'sse-everything.stub' ([Errno -2] Name or service not known)"
+      }
+    },
+    {
+      "slug": "http-everything-stub",
+      "transport": "streamable-http",
+      "own_canary": "RT-A1-http-everything-stub-094a565f44",
+      "foreign_canary_used": "RT-A1-linear-manual-oauth-e20df178a1",
+      "foreign_canary_owner": "linear-manual-oauth",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "jsonrpc_error",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 0,
+      "tools_tested": 0,
+      "tool_results": [],
+      "status": "ERROR_LIST",
+      "reason": {
+        "code": -32002,
+        "message": "egress denied: cannot resolve host 'http-everything.stub' ([Errno -2] Name or service not known)"
+      }
+    },
+    {
+      "slug": "linear-manual-oauth",
+      "transport": "streamable-http",
+      "own_canary": "RT-A1-linear-manual-oauth-e20df178a1",
+      "foreign_canary_used": "RT-A1-everything-1-8a787ba185",
+      "foreign_canary_owner": "everything-1",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "jsonrpc_error",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 0,
+      "tools_tested": 0,
+      "tool_results": [],
+      "status": "ERROR_LIST",
+      "reason": {
+        "code": -32001,
+        "message": "upstream returned 401; re-authenticate"
+      }
+    },
+    {
+      "slug": "everything-1",
+      "transport": "stdio",
+      "own_canary": "RT-A1-everything-1-8a787ba185",
+      "foreign_canary_used": "RT-A1-everything-2-c4a20f61cd",
+      "foreign_canary_owner": "everything-2",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "allow",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 13,
+      "tools_tested": 13,
+      "tool_results": [
+        {
+          "tool": "echo",
+          "args_sent": {
+            "message": "benign agent1-context-probe RT-A1-everything-1-8a787ba185 RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "get-annotated-message",
+          "args_sent": {
+            "messageType": "benign agent1-context-probe RT-A1-everything-1-8a787ba185 RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-env",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-links",
+          "args_sent": {
+            "count": 1,
+            "_agent1_context_probe": "RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-reference",
+          "args_sent": {
+            "resourceType": "benign agent1-context-probe RT-A1-everything-1-8a787ba185 RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-structured-content",
+          "args_sent": {
+            "location": "benign agent1-context-probe RT-A1-everything-1-8a787ba185 RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-sum",
+          "args_sent": {
+            "a": 2,
+            "b": 3,
+            "_agent1_context_probe": "RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-tiny-image",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "gzip-file-as-resource",
+          "args_sent": {
+            "name": "benign agent1-context-probe RT-A1-everything-1-8a787ba185 RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "toggle-simulated-logging",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "toggle-subscriber-updates",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "trigger-long-running-operation",
+          "args_sent": {
+            "duration": 1,
+            "_agent1_context_probe": "RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "simulate-research-query",
+          "args_sent": {
+            "topic": "benign agent1-context-probe RT-A1-everything-1-8a787ba185 RT-A1-everything-2-c4a20f61cd"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        }
+      ],
+      "status": "TESTED"
+    },
+    {
+      "slug": "everything-2",
+      "transport": "stdio",
+      "own_canary": "RT-A1-everything-2-c4a20f61cd",
+      "foreign_canary_used": "RT-A1-everything-3-4e6f81ff4a",
+      "foreign_canary_owner": "everything-3",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "allow",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 13,
+      "tools_tested": 13,
+      "tool_results": [
+        {
+          "tool": "echo",
+          "args_sent": {
+            "message": "benign agent1-context-probe RT-A1-everything-2-c4a20f61cd RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "get-annotated-message",
+          "args_sent": {
+            "messageType": "benign agent1-context-probe RT-A1-everything-2-c4a20f61cd RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-env",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-links",
+          "args_sent": {
+            "count": 1,
+            "_agent1_context_probe": "RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-reference",
+          "args_sent": {
+            "resourceType": "benign agent1-context-probe RT-A1-everything-2-c4a20f61cd RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-structured-content",
+          "args_sent": {
+            "location": "benign agent1-context-probe RT-A1-everything-2-c4a20f61cd RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-sum",
+          "args_sent": {
+            "a": 2,
+            "b": 3,
+            "_agent1_context_probe": "RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-tiny-image",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "gzip-file-as-resource",
+          "args_sent": {
+            "name": "benign agent1-context-probe RT-A1-everything-2-c4a20f61cd RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "toggle-simulated-logging",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "toggle-subscriber-updates",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "trigger-long-running-operation",
+          "args_sent": {
+            "duration": 1,
+            "_agent1_context_probe": "RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "simulate-research-query",
+          "args_sent": {
+            "topic": "benign agent1-context-probe RT-A1-everything-2-c4a20f61cd RT-A1-everything-3-4e6f81ff4a"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        }
+      ],
+      "status": "TESTED"
+    },
+    {
+      "slug": "everything-3",
+      "transport": "stdio",
+      "own_canary": "RT-A1-everything-3-4e6f81ff4a",
+      "foreign_canary_used": "RT-A1-everything-4-7ce82e3232",
+      "foreign_canary_owner": "everything-4",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "allow",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 13,
+      "tools_tested": 13,
+      "tool_results": [
+        {
+          "tool": "echo",
+          "args_sent": {
+            "message": "benign agent1-context-probe RT-A1-everything-3-4e6f81ff4a RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "get-annotated-message",
+          "args_sent": {
+            "messageType": "benign agent1-context-probe RT-A1-everything-3-4e6f81ff4a RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-env",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-links",
+          "args_sent": {
+            "count": 1,
+            "_agent1_context_probe": "RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-reference",
+          "args_sent": {
+            "resourceType": "benign agent1-context-probe RT-A1-everything-3-4e6f81ff4a RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-structured-content",
+          "args_sent": {
+            "location": "benign agent1-context-probe RT-A1-everything-3-4e6f81ff4a RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-sum",
+          "args_sent": {
+            "a": 2,
+            "b": 3,
+            "_agent1_context_probe": "RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-tiny-image",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "gzip-file-as-resource",
+          "args_sent": {
+            "name": "benign agent1-context-probe RT-A1-everything-3-4e6f81ff4a RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "toggle-simulated-logging",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "toggle-subscriber-updates",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "trigger-long-running-operation",
+          "args_sent": {
+            "duration": 1,
+            "_agent1_context_probe": "RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "simulate-research-query",
+          "args_sent": {
+            "topic": "benign agent1-context-probe RT-A1-everything-3-4e6f81ff4a RT-A1-everything-4-7ce82e3232"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        }
+      ],
+      "status": "TESTED"
+    },
+    {
+      "slug": "everything-4",
+      "transport": "stdio",
+      "own_canary": "RT-A1-everything-4-7ce82e3232",
+      "foreign_canary_used": "RT-A1-everything-5-76d4b8b379",
+      "foreign_canary_owner": "everything-5",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "allow",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 13,
+      "tools_tested": 13,
+      "tool_results": [
+        {
+          "tool": "echo",
+          "args_sent": {
+            "message": "benign agent1-context-probe RT-A1-everything-4-7ce82e3232 RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "get-annotated-message",
+          "args_sent": {
+            "messageType": "benign agent1-context-probe RT-A1-everything-4-7ce82e3232 RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-env",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-links",
+          "args_sent": {
+            "count": 1,
+            "_agent1_context_probe": "RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-reference",
+          "args_sent": {
+            "resourceType": "benign agent1-context-probe RT-A1-everything-4-7ce82e3232 RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-structured-content",
+          "args_sent": {
+            "location": "benign agent1-context-probe RT-A1-everything-4-7ce82e3232 RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-sum",
+          "args_sent": {
+            "a": 2,
+            "b": 3,
+            "_agent1_context_probe": "RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-tiny-image",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "gzip-file-as-resource",
+          "args_sent": {
+            "name": "benign agent1-context-probe RT-A1-everything-4-7ce82e3232 RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "toggle-simulated-logging",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "toggle-subscriber-updates",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "trigger-long-running-operation",
+          "args_sent": {
+            "duration": 1,
+            "_agent1_context_probe": "RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "simulate-research-query",
+          "args_sent": {
+            "topic": "benign agent1-context-probe RT-A1-everything-4-7ce82e3232 RT-A1-everything-5-76d4b8b379"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        }
+      ],
+      "status": "TESTED"
+    },
+    {
+      "slug": "everything-5",
+      "transport": "stdio",
+      "own_canary": "RT-A1-everything-5-76d4b8b379",
+      "foreign_canary_used": "RT-A1-filesystem-canary-45b4aa264e",
+      "foreign_canary_owner": "filesystem-canary",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "allow",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 13,
+      "tools_tested": 13,
+      "tool_results": [
+        {
+          "tool": "echo",
+          "args_sent": {
+            "message": "benign agent1-context-probe RT-A1-everything-5-76d4b8b379 RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "get-annotated-message",
+          "args_sent": {
+            "messageType": "benign agent1-context-probe RT-A1-everything-5-76d4b8b379 RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-env",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-links",
+          "args_sent": {
+            "count": 1,
+            "_agent1_context_probe": "RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-reference",
+          "args_sent": {
+            "resourceType": "benign agent1-context-probe RT-A1-everything-5-76d4b8b379 RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-structured-content",
+          "args_sent": {
+            "location": "benign agent1-context-probe RT-A1-everything-5-76d4b8b379 RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-sum",
+          "args_sent": {
+            "a": 2,
+            "b": 3,
+            "_agent1_context_probe": "RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-tiny-image",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "gzip-file-as-resource",
+          "args_sent": {
+            "name": "benign agent1-context-probe RT-A1-everything-5-76d4b8b379 RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "toggle-simulated-logging",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "toggle-subscriber-updates",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "trigger-long-running-operation",
+          "args_sent": {
+            "duration": 1,
+            "_agent1_context_probe": "RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "simulate-research-query",
+          "args_sent": {
+            "topic": "benign agent1-context-probe RT-A1-everything-5-76d4b8b379 RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        }
+      ],
+      "status": "TESTED"
+    },
+    {
+      "slug": "filesystem-canary",
+      "transport": "stdio",
+      "own_canary": "RT-A1-filesystem-canary-45b4aa264e",
+      "foreign_canary_used": "RT-A1-everything-mcp-d0d6573690",
+      "foreign_canary_owner": "everything-mcp",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "allow",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 11,
+      "tools_tested": 11,
+      "tool_results": [
+        {
+          "tool": "read_file",
+          "args_sent": {
+            "path": "/tmp/agent1-rt-probe.txt RT-A1-everything-mcp-d0d6573690"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "read_multiple_files",
+          "args_sent": {
+            "paths": [
+              "/tmp/agent1-rt-probe.txt"
+            ],
+            "_agent1_context_probe": "RT-A1-everything-mcp-d0d6573690"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "write_file",
+          "args_sent": {
+            "path": "/tmp/agent1-rt-probe.txt RT-A1-everything-mcp-d0d6573690",
+            "content": "benign agent1-context-probe RT-A1-filesystem-canary-45b4aa264e"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "edit_file",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-mcp-d0d6573690"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "create_directory",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-mcp-d0d6573690"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "list_directory",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-mcp-d0d6573690"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "directory_tree",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-mcp-d0d6573690"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "move_file",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-mcp-d0d6573690"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "search_files",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-mcp-d0d6573690"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get_file_info",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-mcp-d0d6573690"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "list_allowed_directories",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-everything-mcp-d0d6573690"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        }
+      ],
+      "status": "TESTED"
+    },
+    {
+      "slug": "everything-mcp",
+      "transport": "stdio",
+      "own_canary": "RT-A1-everything-mcp-d0d6573690",
+      "foreign_canary_used": "RT-A1-semgrep-mcp-617a6a7d59",
+      "foreign_canary_owner": "semgrep-mcp",
+      "tools_list": {
+        "http_status": 200,
+        "decision": "allow",
+        "raw_pii_in_response": [],
+        "own_canary_echoed": false
+      },
+      "tool_count": 13,
+      "tools_tested": 13,
+      "tool_results": [
+        {
+          "tool": "echo",
+          "args_sent": {
+            "message": "benign agent1-context-probe RT-A1-everything-mcp-d0d6573690 RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "get-annotated-message",
+          "args_sent": {
+            "messageType": "benign agent1-context-probe RT-A1-everything-mcp-d0d6573690 RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-env",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-links",
+          "args_sent": {
+            "count": 1,
+            "_agent1_context_probe": "RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-resource-reference",
+          "args_sent": {
+            "resourceType": "benign agent1-context-probe RT-A1-everything-mcp-d0d6573690 RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-structured-content",
+          "args_sent": {
+            "location": "benign agent1-context-probe RT-A1-everything-mcp-d0d6573690 RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-sum",
+          "args_sent": {
+            "a": 2,
+            "b": 3,
+            "_agent1_context_probe": "RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "get-tiny-image",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "gzip-file-as-resource",
+          "args_sent": {
+            "name": "benign agent1-context-probe RT-A1-everything-mcp-d0d6573690 RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": true,
+            "foreign_canary_present_in_own_response": true
+          }
+        },
+        {
+          "tool": "toggle-simulated-logging",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "toggle-subscriber-updates",
+          "args_sent": {
+            "_agent1_context_probe": "RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "trigger-long-running-operation",
+          "args_sent": {
+            "duration": 1,
+            "_agent1_context_probe": "RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "allow",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        },
+        {
+          "tool": "simulate-research-query",
+          "args_sent": {
+            "topic": "benign agent1-context-probe RT-A1-everything-mcp-d0d6573690 RT-A1-semgrep-mcp-617a6a7d59"
+          },
+          "analysis": {
+            "http_status": 200,
+            "decision": "scan_blocked",
+            "raw_pii_in_response": [],
+            "own_canary_echoed": false,
+            "foreign_canary_present_in_own_response": false
+          }
+        }
+      ],
+      "status": "TESTED"
+    }
+  ],
+  "cross_org_attacks": [
+    {
+      "org_attempted": "other-org-probe",
+      "blocked": true,
+      "status_code": 403
+    },
+    {
+      "org_attempted": "acme-corp",
+      "blocked": true,
+      "status_code": 403
+    },
+    {
+      "org_attempted": "admin",
+      "blocked": true,
+      "status_code": 403
+    },
+    {
+      "org_attempted": "root",
+      "blocked": true,
+      "status_code": 403
+    },
+    {
+      "org_attempted": "ZEROSHIELD",
+      "blocked": true,
+      "status_code": 403
+    },
+    {
+      "org_attempted": "Zeroshield",
+      "blocked": true,
+      "status_code": 403
+    },
+    {
+      "org_attempted": "zeroshield ",
+      "blocked": true,
+      "status_code": 403
+    },
+    {
+      "org_attempted": "zeroshield%2e%2e",
+      "blocked": true,
+      "status_code": 403
+    },
+    {
+      "org_attempted": "..",
+      "blocked": true,
+      "status_code": 404
+    },
+    {
+      "org_attempted": "zeroshield/../acme-corp",
+      "blocked": true,
+      "status_code": 403
+    }
+  ],
+  "unauthorized_discovery": {
+    "fake_slug_probes": [
+      {
+        "slug_attempted": "admin-internal-mcp",
+        "status_code": 200,
+        "response": {
+          "status_code": 200,
+          "body": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "slug_attempted": "secrets-vault-mcp",
+        "status_code": 200,
+        "response": {
+          "status_code": 200,
+          "body": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "slug_attempted": "nonexistent-mcp-xyz",
+        "status_code": 200,
+        "response": {
+          "status_code": 200,
+          "body": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "slug_attempted": "internal-tools-mcp",
+        "status_code": 200,
+        "response": {
+          "status_code": 200,
+          "body": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "slug_attempted": "everything-mcp-6",
+        "status_code": 200,
+        "response": {
+          "status_code": 200,
+          "body": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+              "tools": []
+            }
+          }
+        }
+      },
+      {
+        "slug_attempted": "everything-0",
+        "status_code": 200,
+        "response": {
+          "status_code": 200,
+          "body": {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": {
+              "tools": []
+            }
+          }
+        }
+      }
+    ],
+    "endpoint_probes": [
+      {
+        "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp",
+        "status_code": 404
+      },
+      {
+        "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/servers",
+        "status_code": 405
+      },
+      {
+        "url": "http://127.0.0.1:8300/v1/mcp/servers",
+        "status_code": 404
+      },
+      {
+        "url": "http://127.0.0.1:8300/api/mcp/servers",
+        "status_code": 404
+      }
+    ]
+  },
+  "tool_allowlist_bypass": [
+    {
+      "server": "everything-mcp",
+      "tool_attempted": "admin_delete_all",
+      "http_status": 200,
+      "decision": "scan_blocked",
+      "executed_unexpectedly": false
+    },
+    {
+      "server": "everything-mcp",
+      "tool_attempted": "read_file",
+      "http_status": 200,
+      "decision": "scan_blocked",
+      "executed_unexpectedly": false
+    },
+    {
+      "server": "filesystem-canary",
+      "tool_attempted": "echo",
+      "http_status": 200,
+      "decision": "scan_blocked",
+      "executed_unexpectedly": false
+    },
+    {
+      "server": "semgrep-mcp",
+      "tool_attempted": "get-sum",
+      "http_status": 200,
+      "decision": "jsonrpc_error",
+      "executed_unexpectedly": false
+    },
+    {
+      "server": "cp09-ens8do",
+      "tool_attempted": "browser_navigate",
+      "http_status": 200,
+      "decision": "scan_blocked",
+      "executed_unexpectedly": false
+    },
+    {
+      "server": "everything-1",
+      "tool_attempted": "__proto__",
+      "http_status": 200,
+      "decision": "scan_blocked",
+      "executed_unexpectedly": false
+    }
+  ],
+  "sdk_context_assembly": [
+    {
+      "label": "sdk_mcp_context_benign_summarize",
+      "status": "ok",
+      "http_status_code": null,
+      "raw_pii_in_output": [],
+      "canary_mcp_echoed": false,
+      "canary_agent_echoed": false
+    },
+    {
+      "label": "sdk_mcp_context_repeat_verbatim_exfil",
+      "status": "error",
+      "http_status_code": 400,
+      "raw_pii_in_output": [],
+      "canary_mcp_echoed": false,
+      "canary_agent_echoed": false
+    },
+    {
+      "label": "sdk_agent_data_benign_summarize",
+      "status": "error",
+      "http_status_code": 400,
+      "raw_pii_in_output": [],
+      "canary_mcp_echoed": false,
+      "canary_agent_echoed": false
+    },
+    {
+      "label": "sdk_agent_data_repeat_verbatim_exfil",
+      "status": "error",
+      "http_status_code": 400,
+      "raw_pii_in_output": [],
+      "canary_mcp_echoed": false,
+      "canary_agent_echoed": false
+    },
+    {
+      "label": "sdk_mixed_mcp_context_and_agent_data_cross_reference",
+      "status": "ok",
+      "http_status_code": null,
+      "raw_pii_in_output": [],
+      "canary_mcp_echoed": false,
+      "canary_agent_echoed": false
+    },
+    {
+      "label": "sdk_unauthorized_mcp_server_reference",
+      "status": "error",
+      "http_status_code": 400,
+      "raw_pii_in_output": [],
+      "canary_mcp_echoed": false,
+      "canary_agent_echoed": false
+    }
+  ],
+  "cross_mcp_leaks_corpus_scan": [
+    {
+      "file": "evidence/cp09-ens8do/tools_call_echo_clean_plus_foreign_canary.json",
+      "response_belongs_to": "cp09-ens8do",
+      "foreign_canary_owner": "cp09-verify",
+      "canary": "RT-A1-cp09-verify-4650740322"
+    },
+    {
+      "file": "evidence/cp09-ens8do/tools_call_gzip-file-as-resource_clean_plus_foreign_canary.json",
+      "response_belongs_to": "cp09-ens8do",
+      "foreign_canary_owner": "cp09-verify",
+      "canary": "RT-A1-cp09-verify-4650740322"
+    },
+    {
+      "file": "evidence/cp09-verify/tools_call_echo_clean_plus_foreign_canary.json",
+      "response_belongs_to": "cp09-verify",
+      "foreign_canary_owner": "playwright",
+      "canary": "RT-A1-playwright-62ace9ee6f"
+    },
+    {
+      "file": "evidence/cp09-verify/tools_call_gzip-file-as-resource_clean_plus_foreign_canary.json",
+      "response_belongs_to": "cp09-verify",
+      "foreign_canary_owner": "playwright",
+      "canary": "RT-A1-playwright-62ace9ee6f"
+    },
+    {
+      "file": "evidence/everything-1/tools_call_echo_clean_plus_foreign_canary.json",
+      "response_belongs_to": "everything-1",
+      "foreign_canary_owner": "everything-2",
+      "canary": "RT-A1-everything-2-c4a20f61cd"
+    },
+    {
+      "file": "evidence/everything-1/tools_call_gzip-file-as-resource_clean_plus_foreign_canary.json",
+      "response_belongs_to": "everything-1",
+      "foreign_canary_owner": "everything-2",
+      "canary": "RT-A1-everything-2-c4a20f61cd"
+    },
+    {
+      "file": "evidence/everything-2/tools_call_echo_clean_plus_foreign_canary.json",
+      "response_belongs_to": "everything-2",
+      "foreign_canary_owner": "everything-3",
+      "canary": "RT-A1-everything-3-4e6f81ff4a"
+    },
+    {
+      "file": "evidence/everything-2/tools_call_gzip-file-as-resource_clean_plus_foreign_canary.json",
+      "response_belongs_to": "everything-2",
+      "foreign_canary_owner": "everything-3",
+      "canary": "RT-A1-everything-3-4e6f81ff4a"
+    },
+    {
+      "file": "evidence/everything-3/tools_call_echo_clean_plus_foreign_canary.json",
+      "response_belongs_to": "everything-3",
+      "foreign_canary_owner": "everything-4",
+      "canary": "RT-A1-everything-4-7ce82e3232"
+    },
+    {
+      "file": "evidence/everything-3/tools_call_gzip-file-as-resource_clean_plus_foreign_canary.json",
+      "response_belongs_to": "everything-3",
+      "foreign_canary_owner": "everything-4",
+      "canary": "RT-A1-everything-4-7ce82e3232"
+    },
+    {
+      "file": "evidence/everything-4/tools_call_echo_clean_plus_foreign_canary.json",
+      "response_belongs_to": "everything-4",
+      "foreign_canary_owner": "everything-5",
+      "canary": "RT-A1-everything-5-76d4b8b379"
+    },
+    {
+      "file": "evidence/everything-4/tools_call_gzip-file-as-resource_clean_plus_foreign_canary.json",
+      "response_belongs_to": "everything-4",
+      "foreign_canary_owner": "everything-5",
+      "canary": "RT-A1-everything-5-76d4b8b379"
+    },
+    {
+      "file": "evidence/everything-5/tools_call_echo_clean_plus_foreign_canary.json",
+      "response_belongs_to": "everything-5",
+      "foreign_canary_owner": "filesystem-canary",
+      "canary": "RT-A1-filesystem-canary-45b4aa264e"
+    },
+    {
+      "file": "evidence/everything-5/tools_call_gzip-file-as-resource_clean_plus_foreign_canary.json",
+      "response_belongs_to": "everything-5",
+      "foreign_canary_owner": "filesystem-canary",
+      "canary": "RT-A1-filesystem-canary-45b4aa264e"
+    },
+    {
+      "file": "evidence/everything-mcp/tools_call_echo_clean_plus_foreign_canary.json",
+      "response_belongs_to": "everything-mcp",
+      "foreign_canary_owner": "semgrep-mcp",
+      "canary": "RT-A1-semgrep-mcp-617a6a7d59"
+    },
+    {
+      "file": "evidence/everything-mcp/tools_call_gzip-file-as-resource_clean_plus_foreign_canary.json",
+      "response_belongs_to": "everything-mcp",
+      "foreign_canary_owner": "semgrep-mcp",
+      "canary": "RT-A1-semgrep-mcp-617a6a7d59"
+    },
+    {
+      "file": "evidence/filesystem-canary/tools_call_read_file_clean_plus_foreign_canary.json",
+      "response_belongs_to": "filesystem-canary",
+      "foreign_canary_owner": "everything-mcp",
+      "canary": "RT-A1-everything-mcp-d0d6573690"
+    },
+    {
+      "file": "evidence/filesystem-canary/tools_call_write_file_clean_plus_foreign_canary.json",
+      "response_belongs_to": "filesystem-canary",
+      "foreign_canary_owner": "everything-mcp",
+      "canary": "RT-A1-everything-mcp-d0d6573690"
+    },
+    {
+      "file": "evidence/semgrep-mcp/tools_call_analyze_results_clean_plus_foreign_canary.json",
+      "response_belongs_to": "semgrep-mcp",
+      "foreign_canary_owner": "playwright-mcp",
+      "canary": "RT-A1-playwright-mcp-911e80ced4"
+    },
+    {
+      "file": "evidence/semgrep-mcp/tools_call_compare_results_clean_plus_foreign_canary.json",
+      "response_belongs_to": "semgrep-mcp",
+      "foreign_canary_owner": "playwright-mcp",
+      "canary": "RT-A1-playwright-mcp-911e80ced4"
+    },
+    {
+      "file": "evidence/semgrep-mcp/tools_call_create_rule_clean_plus_foreign_canary.json",
+      "response_belongs_to": "semgrep-mcp",
+      "foreign_canary_owner": "playwright-mcp",
+      "canary": "RT-A1-playwright-mcp-911e80ced4"
+    },
+    {
+      "file": "evidence/semgrep-mcp/tools_call_export_results_clean_plus_foreign_canary.json",
+      "response_belongs_to": "semgrep-mcp",
+      "foreign_canary_owner": "playwright-mcp",
+      "canary": "RT-A1-playwright-mcp-911e80ced4"
+    },
+    {
+      "file": "evidence/semgrep-mcp/tools_call_filter_results_clean_plus_foreign_canary.json",
+      "response_belongs_to": "semgrep-mcp",
+      "foreign_canary_owner": "playwright-mcp",
+      "canary": "RT-A1-playwright-mcp-911e80ced4"
+    }
+  ],
+  "raw_pii_in_response_sections": []
+}

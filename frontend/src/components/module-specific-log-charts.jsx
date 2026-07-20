@@ -1,9 +1,61 @@
-import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-} from "recharts";
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
+import { resolveTotalLatencyMs } from "../utils/pipelineTrace";
+
+// ── ECharts option builders (replace recharts; the registered zs-light/zs-dark
+// theme drives axis/grid/tooltip/legend colors). Only charts backed by REAL
+// per-scan data are built — the previous factory synthesized multi-point
+// breakdowns from single scalars (latency×0.3/0.5, prompt.length×ratios,
+// similarity decay curves, 2-point "trends"), which is fabricated analysis and
+// has been removed. Builders with no real chart return { charts: [] } and the
+// "Module-Specific Scan Analysis" card hides.
+function logBar(data, xKey, series, opts = {}) {
+  const multi = series.length > 1;
+  const rotate = opts.rotate || 0;
+  return {
+    grid: { top: multi ? 28 : 12, right: 14, bottom: rotate ? 64 : 26, left: 46 },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    ...(multi ? { legend: { top: 0, itemHeight: 8, itemWidth: 12, textStyle: { fontSize: 10 } } } : {}),
+    xAxis: { type: "category", data: data.map((d) => d[xKey]), axisLabel: { fontSize: 10, rotate, interval: 0 } },
+    yAxis: { type: "value", ...(opts.max != null ? { max: opts.max } : {}), axisLabel: { fontSize: 11 } },
+    series: series.map((s) => ({
+      name: s.name,
+      type: "bar",
+      ...(s.stack ? { stack: "a" } : {}),
+      itemStyle: { color: s.color, ...(s.stack ? {} : { borderRadius: [3, 3, 0, 0] }) },
+      data: data.map((d) => d[s.key]),
+    })),
+  };
+}
+
+function logHBar(data, catKey, valKey, color, name) {
+  return {
+    grid: { top: 12, right: 18, bottom: 24, left: 92 },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    xAxis: { type: "value", axisLabel: { fontSize: 11 } },
+    yAxis: { type: "category", data: data.map((d) => d[catKey]), axisLabel: { fontSize: 10 } },
+    series: [{ name, type: "bar", itemStyle: { color, borderRadius: [0, 3, 3, 0] }, data: data.map((d) => d[valKey]) }],
+  };
+}
+
+function logPie(data, nameKey, valKey, suffix = "") {
+  return {
+    tooltip: { trigger: "item", formatter: `{b}: {c}${suffix} ({d}%)` },
+    legend: { bottom: 0, itemHeight: 8, itemWidth: 12, textStyle: { fontSize: 10 } },
+    series: [{
+      type: "pie",
+      radius: "66%",
+      center: ["50%", "44%"],
+      avoidLabelOverlap: true,
+      label: { formatter: `{b}: {c}${suffix}`, fontSize: 11 },
+      labelLine: { length: 6, length2: 6 },
+      data: data.map((d) => ({ name: d[nameKey], value: d[valKey], itemStyle: { color: d.color } })),
+    }],
+  };
+}
+
+function chart(title, option) {
+  return { title, component: <SafeResponsiveChart className="h-[250px] w-full" option={option} /> };
+}
 
 export function getModuleLogCharts(logData) {
   const moduleId = detectModuleId(logData);
@@ -75,21 +127,21 @@ function detectModuleId(logData) {
 
 function get11LogCharts(logData) {
   const metadata = logData?.metadata || {};
-  const requestLatency = parseNumeric(logData.latency) || parseNumeric(logData.duration) || parseNumeric(metadata?.latency_ms) || 0;
   const tokenUsageMeta = metadata?.tokens_used || {};
   const inputTokens = parseNumeric(tokenUsageMeta.prompt) || parseNumeric(logData.tokens) || parseNumeric(logData.tokensUsed);
   const outputTokens = parseNumeric(tokenUsageMeta.completion);
   const totalTokens = inputTokens + outputTokens;
-  const requestSize = totalTokens || inputTokens || 0;
   // REAL per-stage latency from the pipeline trace (same data as the Pipeline
   // Stages section) — never fabricate a latency breakdown from the total.
   const ptStages = (metadata?.extra?.pipeline_trace?.stages || metadata?.pipeline_trace?.stages || logData?.pipeline_trace?.stages || []);
   const realTimeline = (Array.isArray(ptStages) ? ptStages : [])
     .map((s) => ({ step: String(s?.name || "").replace(/_/g, " "), latency: Math.round(parseNumeric(s?.latency_ms)) }))
     .filter((s) => s.step);
+  // Real token counts only (guarded below by totalTokens <= 0). No synthetic
+  // 0.6/0.4 split of a request size when the real breakdown is missing.
   const tokenUsage = [
-    { type: "Input", tokens: inputTokens || Math.round(requestSize * 0.6), color: "#14b8a6" },
-    { type: "Output", tokens: outputTokens || Math.round(requestSize * 0.4), color: "#8b5cf6" },
+    { type: "Input", tokens: inputTokens, color: "#14b8a6" },
+    { type: "Output", tokens: outputTokens, color: "#8b5cf6" },
   ];
   return {
     charts: [
@@ -97,31 +149,11 @@ function get11LogCharts(logData) {
         // Real per-stage latency (from the pipeline trace). Hidden when the
         // scan carries no trace — no synthetic latency breakdown.
         empty: realTimeline.length === 0,
-        title: "Pipeline Stage Latency",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <BarChart data={realTimeline}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis dataKey="step" stroke="#64748b" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={70} />
-              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
-              <Tooltip /><Bar dataKey="latency" fill="#14b8a6" name="Latency (ms)" />
-            </BarChart>
-          </SafeResponsiveChart>
-        ),
+        ...chart("Pipeline Stage Latency", logBar(realTimeline, "step", [{ key: "latency", name: "Latency (ms)", color: "#14b8a6" }], { rotate: realTimeline.length > 3 ? 30 : 0 })),
       },
       {
         empty: totalTokens <= 0,
-        title: "Token Usage Distribution",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <PieChart>
-              <Pie data={tokenUsage} cx="50%" cy="50%" outerRadius={90} dataKey="tokens" label={({ type, tokens }) => `${type}: ${tokens}`}>
-                {tokenUsage.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </SafeResponsiveChart>
-        ),
+        ...chart("Token Usage Distribution", logPie(tokenUsage, "type", "tokens")),
       },
     ],
   };
@@ -134,7 +166,11 @@ function get12LogCharts(logData) {
   const hasAudit = Object.keys(auditStages).length > 0;
 
   const detected = logData.action === "block" || logData.action === "redact" ? 1 : 0;
-  const totalLatency = parseNumeric(metadata.latency_ms) || parseNumeric(logData.duration) || 0;
+  const totalLatency = resolveTotalLatencyMs({
+    pipelineTrace: metadata?.pipeline_trace || metadata?.extra?.pipeline_trace || logData?.pipeline_trace,
+    meta: metadata,
+    logData,
+  }) || parseNumeric(metadata.latency_ms) || parseNumeric(logData.duration) || 0;
   const riskScore = parseNumeric(metadata.security_risk_score) || Math.round((parseNumeric(metadata.risk_score) || 0) * 100);
   const stageHint = String(metadata.pipeline_stage || logData.stage || "").toLowerCase();
   const hasStageData = !!stageHint;
@@ -196,424 +232,84 @@ function get12LogCharts(logData) {
   // (pipeline_audit, or at least a pipeline_stage hint). A plain chat/policy
   // request has neither — so mark them empty and they get dropped (the card
   // hides) instead of rendering an empty "no stage data" RAG pipeline.
-  const ragEmpty = !hasAudit && !hasStageData;
+  // Only render these RAG-pipeline charts from REAL pipeline_audit data. The
+  // prior non-audit fallback synthesized single-stage latency + a placeholder
+  // "documents: 100" — fabricated, so it is dropped (chart hidden) here.
+  const ragEmpty = !hasAudit;
   return {
     charts: [
       {
         empty: ragEmpty,
-        title: hasAudit ? "Pipeline Stage Latency (real audit)" : (hasStageData ? `Pipeline Stage: ${stageHint.charAt(0).toUpperCase() + stageHint.slice(1)}` : "Pipeline Stage (no stage data)"),
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <BarChart data={pipelineStages}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis dataKey="stage" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="latency" fill="#8b5cf6" name="Latency (ms)" />
-            </BarChart>
-          </SafeResponsiveChart>
-        ),
+        ...chart("Pipeline Stage Latency (real audit)", logBar(pipelineStages, "stage", [{ key: "latency", name: "Latency (ms)", color: "#8b5cf6" }])),
       },
       {
         empty: ragEmpty,
-        title: hasAudit ? "Stage Verdicts (real audit)" : "Detection vs Passed by Stage",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <BarChart data={detectionFlow}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis dataKey="stage" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="blocked" fill="#ef4444" stackId="a" name="Blocked" />
-              <Bar dataKey="flagged" fill="#f59e0b" stackId="a" name="Flagged/Rewritten" />
-              <Bar dataKey="passed" fill="#10b981" stackId="a" name="Passed" />
-            </BarChart>
-          </SafeResponsiveChart>
-        ),
+        ...chart("Stage Verdicts (real audit)", logBar(detectionFlow, "stage", [
+          { key: "blocked", name: "Blocked", color: "#ef4444", stack: true },
+          { key: "flagged", name: "Flagged/Rewritten", color: "#f59e0b", stack: true },
+          { key: "passed", name: "Passed", color: "#10b981", stack: true },
+        ])),
       },
       {
         empty: ragEmpty,
-        title: hasAudit ? "Document Filtering Funnel (real audit)" : "Stage Completion Funnel",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <BarChart data={docFunnel} layout="horizontal">
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis type="category" dataKey="stage" stroke="#64748b" tick={{ fontSize: 11 }} width={80} />
-              <Tooltip /><Bar dataKey="documents" fill="#14b8a6" name="Documents" />
-            </BarChart>
-          </SafeResponsiveChart>
-        ),
+        ...chart("Document Filtering Funnel (real audit)", logHBar(docFunnel, "stage", "documents", "#14b8a6", "Documents")),
       },
     ],
   };
 }
 
-function get13LogCharts(logData) {
-  const metadata = logData?.metadata || {};
-  const similarity = parseFloat(logData.similarity || logData.relevanceScore || metadata?.relevance_score || "0");
-  const docsRetrieved = parseInt(logData.docsRetrieved || metadata?.docs_retrieved || "1", 10) || 1;
-  const latency = parseNumeric(metadata?.latency_ms) || parseNumeric(logData.duration) || 0;
-  const anomalyCount = parseInt(metadata?.embedding_anomaly_count || "0", 10) || 0;
-  const similarityScores = Array.from({ length: Math.min(10, docsRetrieved) }, (_, i) => ({
-    doc: `Doc ${i + 1}`,
-    similarity: Math.max(0, Math.min(1, similarity || Math.max(0.05, 1 - i * 0.08))),
-  }));
-  const retrievalMetrics = [
-    { metric: "Latency", value: Math.max(1, Math.min(100, Math.round(latency || 1))) },
-    { metric: "Coverage", value: Math.min(100, docsRetrieved * 10) },
-    { metric: "Relevance", value: Math.max(1, Math.min(100, Math.round((similarity || 0.1) * 100))) },
-    { metric: "Anomaly", value: Math.min(100, anomalyCount * 20) },
-  ];
-  const timeBreakdown = [
-    { name: "Embedding", value: Math.max(1, Math.round(latency * 0.3) || 1), color: "#14b8a6" },
-    { name: "Search", value: Math.max(1, Math.round(latency * 0.5) || 1), color: "#8b5cf6" },
-    { name: "Ranking", value: Math.max(1, latency - (Math.round(latency * 0.3) + Math.round(latency * 0.5))), color: "#f59e0b" },
-  ];
-  return {
-    charts: [
-      {
-        title: "Document Similarity Scores",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <BarChart data={similarityScores}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis dataKey="doc" stroke="#64748b" tick={{ fontSize: 10 }} />
-              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 1]} />
-              <Tooltip /><Bar dataKey="similarity" fill="#8b5cf6" />
-            </BarChart>
-          </SafeResponsiveChart>
-        ),
-      },
-      {
-        title: "Retrieval Performance Radar",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <RadarChart data={retrievalMetrics}>
-              <PolarGrid stroke="#64748b" strokeOpacity={0.25} />
-              <PolarAngleAxis dataKey="metric" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#64748b" tick={{ fontSize: 10 }} />
-              <Radar name="Score" dataKey="value" stroke="#14b8a6" fill="#14b8a6" fillOpacity={0.6} /><Tooltip />
-            </RadarChart>
-          </SafeResponsiveChart>
-        ),
-      },
-      {
-        title: "Query Response Time Breakdown",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <PieChart>
-              <Pie data={timeBreakdown} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, value }) => `${name}: ${value}ms`}>
-                {timeBreakdown.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </SafeResponsiveChart>
-        ),
-      },
-    ],
-  };
+// RAG/vector logs (1.3): the prior charts (per-doc similarity DECAY CURVE from
+// one value, "time breakdown" latency×0.3/0.5, radar derived from scalars) were
+// all synthesized — no real per-scan array exists, so no chart is drawn.
+function get13LogCharts() {
+  return { charts: [] };
 }
 
 function get14LogCharts(logData) {
   const metadata = logData?.metadata || {};
   const tags = Array.isArray(metadata.compliance_tags) ? metadata.compliance_tags : [];
   const matched = Array.isArray(metadata.matched_patterns) ? metadata.matched_patterns : [];
-  const prompt = String(metadata.prompt_snippet || logData.details || "");
-  const totalLatency = parseNumeric(metadata.latency_ms) || parseNumeric(logData.duration) || 0;
-  const fieldSizes = [
-    { field: "System", size: Math.max(1, Math.round(prompt.length * 0.15)) },
-    { field: "User", size: Math.max(1, Math.round(prompt.length * 0.45)) },
-    { field: "Documents", size: Math.max(1, Math.round(prompt.length * 0.3)) },
-    { field: "History", size: Math.max(1, Math.round(prompt.length * 0.1)) },
-  ];
+  const redactions = parseNumeric(logData.redactions) || parseNumeric(metadata.redaction_count) || 0;
+  // Real detection counts only. The prior "Context Field Sizes" (prompt.length
+  // split 0.15/0.45/0.3/0.1) and "Assembly Timeline" (latency splits) were
+  // fabricated from a single scalar and have been removed.
   const piiDetections = [
     { type: "Matched Patterns", count: matched.length, color: "#ef4444" },
     { type: "Compliance Tags", count: tags.length, color: "#f59e0b" },
-    { type: "Redactions", count: parseNumeric(logData.redactions) || parseNumeric(metadata.redaction_count), color: "#8b5cf6" },
-  ];
-  const timeline = [
-    { phase: "Collection", duration: Math.max(1, Math.round(totalLatency * 0.35)) },
-    { phase: "PII Scan", duration: Math.max(1, Math.round(totalLatency * 0.3)) },
-    { phase: "Tagging", duration: Math.max(1, Math.round(totalLatency * 0.2)) },
-    { phase: "Assembly", duration: Math.max(1, totalLatency - (Math.round(totalLatency * 0.35) + Math.round(totalLatency * 0.3) + Math.round(totalLatency * 0.2))) },
+    { type: "Redactions", count: redactions, color: "#8b5cf6" },
   ];
   return {
     charts: [
       {
-        title: "Context Field Sizes (tokens)",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <BarChart data={fieldSizes}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis dataKey="field" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
-              <Tooltip /><Bar dataKey="size" fill="#14b8a6" />
-            </BarChart>
-          </SafeResponsiveChart>
-        ),
-      },
-      {
-        title: "PII Detections by Type",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <PieChart>
-              <Pie data={piiDetections} cx="50%" cy="50%" outerRadius={90} dataKey="count" label={({ type, count }) => `${type}: ${count}`}>
-                {piiDetections.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </SafeResponsiveChart>
-        ),
-      },
-      {
-        title: "Assembly Process Timeline",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <BarChart data={timeline} layout="horizontal">
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis type="category" dataKey="phase" stroke="#64748b" tick={{ fontSize: 10 }} width={120} />
-              <Tooltip /><Bar dataKey="duration" fill="#8b5cf6" />
-            </BarChart>
-          </SafeResponsiveChart>
-        ),
+        empty: matched.length + tags.length + redactions === 0,
+        ...chart("PII Detections by Type", logPie(piiDetections, "type", "count")),
       },
     ],
   };
 }
 
-function get15LogCharts(logData) {
-  const metadata = logData?.metadata || {};
-  const requestedModel = logData.requested || metadata.requested_model || metadata.model || "unknown";
-  const routedModel = logData.routed || metadata.routed_model || requestedModel;
-  const risk = parseNumeric(metadata.security_risk_score) || Math.round((parseNumeric(metadata.risk_score) || 0) * 100);
-  const latency = parseNumeric(metadata.latency_ms) || parseNumeric(logData.duration) || 0;
-  const promptTokens = parseNumeric(metadata?.tokens_used?.prompt);
-  const completionTokens = parseNumeric(metadata?.tokens_used?.completion);
-  const totalTokens = promptTokens + completionTokens;
-  const routingDecision = [
-    { factor: "Cost", score: Math.max(1, Math.min(100, 100 - Math.round((totalTokens || 100) / 20))) },
-    { factor: "Latency", score: Math.max(1, Math.min(100, 100 - Math.round(latency / 10))) },
-    { factor: "Compliance", score: Math.max(1, Math.min(100, 100 - Math.round(risk * 0.6))) },
-    { factor: "Risk", score: Math.max(1, Math.min(100, 100 - risk)) },
-  ];
-  const costComparison = [
-    { model: requestedModel, cost: (promptTokens || 1200) / 100000 },
-    { model: routedModel, cost: (completionTokens || 900) / 120000 },
-  ];
-  const timeBreakdown = [
-    { name: "Routing", value: Math.max(1, Math.round(latency * 0.15) || 1), color: "#14b8a6" },
-    { name: "Model Processing", value: Math.max(1, Math.round(latency * 0.75) || 1), color: "#8b5cf6" },
-    { name: "Network", value: Math.max(1, latency - (Math.round(latency * 0.15) + Math.round(latency * 0.75))), color: "#f59e0b" },
-  ];
-  return {
-    charts: [
-      {
-        title: "Routing Decision Factors",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <RadarChart data={routingDecision}>
-              <PolarGrid stroke="#64748b" strokeOpacity={0.25} />
-              <PolarAngleAxis dataKey="factor" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#64748b" tick={{ fontSize: 10 }} />
-              <Radar name="Score" dataKey="score" stroke="#14b8a6" fill="#14b8a6" fillOpacity={0.6} /><Tooltip />
-            </RadarChart>
-          </SafeResponsiveChart>
-        ),
-      },
-      {
-        title: "Cost Comparison",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <BarChart data={costComparison}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis dataKey="model" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
-              <Tooltip /><Bar dataKey="cost" fill="#8b5cf6" />
-            </BarChart>
-          </SafeResponsiveChart>
-        ),
-      },
-      {
-        title: "Response Time Breakdown",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <PieChart>
-              <Pie data={timeBreakdown} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, value }) => `${name}: ${value}ms`}>
-                {timeBreakdown.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </SafeResponsiveChart>
-        ),
-      },
-    ],
-  };
+// Routing logs (1.5): routing radar, cost from tokens/100000, and a latency-split
+// pie were all synthetic. No real per-scan chart data.
+function get15LogCharts() {
+  return { charts: [] };
 }
 
-function get16LogCharts(logData) {
-  const metadata = logData?.metadata || {};
-  const risk = parseInt(logData.riskScore || metadata.security_risk_score || (parseNumeric(metadata.risk_score) * 100) || "0", 10) || 0;
-  const latency = parseNumeric(metadata.latency_ms) || parseNumeric(logData.duration) || 0;
-  const action = String(logData.action || metadata.action || "allow").toLowerCase();
-  const riskTrend = [
-    { time: "Baseline", risk: Math.max(0, Math.round(risk * 0.65)) },
-    { time: "Current", risk },
-  ];
-  const isolationMetrics = [
-    { metric: "Response Time", value: Math.max(1, Math.min(100, 100 - Math.round(latency / 10))) },
-    { metric: "Error Rate", value: action === "block" ? 20 : action === "redact" ? 10 : 4 },
-    { metric: "Anomaly Score", value: Math.max(1, Math.min(100, risk)) },
-    { metric: "Health Score", value: Math.max(1, Math.min(100, 100 - Math.round(risk * 0.5))) },
-  ];
-  const timeline = [
-    { phase: "Detection", duration: Math.max(1, Math.round(latency * 0.3)) },
-    { phase: "Analysis", duration: Math.max(1, Math.round(latency * 0.35)) },
-    { phase: "Decision", duration: Math.max(1, Math.round(latency * 0.2)) },
-    { phase: "Isolation", duration: Math.max(1, latency - (Math.round(latency * 0.3) + Math.round(latency * 0.35) + Math.round(latency * 0.2))) },
-  ];
-  return {
-    charts: [
-      {
-        title: "Risk Score Trend",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <AreaChart data={riskTrend}>
-              <defs>
-                <linearGradient id="riskGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8} /><stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis dataKey="time" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 100]} />
-              <Tooltip />
-              <Area type="monotone" dataKey="risk" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#riskGradient)" />
-            </AreaChart>
-          </SafeResponsiveChart>
-        ),
-      },
-      {
-        title: "Model Health Metrics",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <RadarChart data={isolationMetrics}>
-              <PolarGrid stroke="#64748b" strokeOpacity={0.25} />
-              <PolarAngleAxis dataKey="metric" stroke="#64748b" tick={{ fontSize: 10 }} />
-              <PolarRadiusAxis angle={90} domain={[0, 100]} stroke="#64748b" tick={{ fontSize: 10 }} />
-              <Radar name="Score" dataKey="value" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.6} /><Tooltip />
-            </RadarChart>
-          </SafeResponsiveChart>
-        ),
-      },
-      {
-        title: "Isolation Decision Timeline",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <BarChart data={timeline} layout="horizontal">
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis type="category" dataKey="phase" stroke="#64748b" tick={{ fontSize: 11 }} width={100} />
-              <Tooltip /><Bar dataKey="duration" fill="#ef4444" />
-            </BarChart>
-          </SafeResponsiveChart>
-        ),
-      },
-    ],
-  };
+// Isolation / kill-switch logs (1.6): a 2-point risk "trend" (risk×0.65 baseline),
+// a derived health radar, and a latency-split timeline were synthetic. No chart.
+function get16LogCharts() {
+  return { charts: [] };
 }
 
-function get17LogCharts(logData) {
-  const metadata = logData?.metadata || {};
-  const tags = Array.isArray(metadata.compliance_tags) ? metadata.compliance_tags : [];
-  const matched = Array.isArray(metadata.matched_patterns) ? metadata.matched_patterns : [];
-  const action = String(logData.action || metadata.action || "allow").toLowerCase();
-  const riskScore = parseNumeric(metadata.security_risk_score) || Math.round((parseNumeric(metadata.risk_score) || 0) * 100);
-  const latency = parseNumeric(metadata.latency_ms) || parseNumeric(logData.duration) || 0;
-  const guardrailScores = [
-    { guardrail: "PII", score: Math.max(0.01, Math.min(1, tags.length ? tags.length / 10 : 0.05)) },
-    { guardrail: "Credential", score: Math.max(0.01, Math.min(1, matched.length ? matched.length / 10 : 0.04)) },
-    { guardrail: "Policy", score: Math.max(0.01, Math.min(1, riskScore / 100 || 0.05)) },
-    { guardrail: "Hallucination", score: Math.max(0.01, Math.min(1, action === "monitor" ? 0.6 : 0.15)) },
-  ];
-  const contentAnalysis = [
-    { category: "Safe", value: action === "allow" ? 80 : 35, color: "#10b981" },
-    { category: "Flagged", value: action === "monitor" || action === "redact" ? 45 : 15, color: "#f59e0b" },
-    { category: "Blocked", value: action === "block" ? 50 : 5, color: "#ef4444" },
-  ];
-  const pipeline = [
-    { stage: "Output Scan", duration: Math.max(1, Math.round(latency * 0.35)) },
-    { stage: "PII/Secret", duration: Math.max(1, Math.round(latency * 0.25)) },
-    { stage: "Guardrail", duration: Math.max(1, Math.round(latency * 0.2)) },
-    { stage: "Policy Action", duration: Math.max(1, latency - (Math.round(latency * 0.35) + Math.round(latency * 0.25) + Math.round(latency * 0.2))) },
-  ];
-  return {
-    charts: [
-      {
-        title: "Guardrail Confidence Scores",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <BarChart data={guardrailScores}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis dataKey="guardrail" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} domain={[0, 1]} />
-              <Tooltip /><Bar dataKey="score" fill="#8b5cf6" />
-            </BarChart>
-          </SafeResponsiveChart>
-        ),
-      },
-      {
-        title: "Content Analysis Results",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <PieChart>
-              <Pie data={contentAnalysis} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ category, value }) => `${category}: ${value}%`}>
-                {contentAnalysis.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </SafeResponsiveChart>
-        ),
-      },
-      {
-        title: "Processing Pipeline",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <BarChart data={pipeline} layout="horizontal">
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis type="number" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis type="category" dataKey="stage" stroke="#64748b" tick={{ fontSize: 10 }} width={100} />
-              <Tooltip /><Bar dataKey="duration" fill="#14b8a6" />
-            </BarChart>
-          </SafeResponsiveChart>
-        ),
-      },
-    ],
-  };
+// Output-guard logs (1.7): "confidence" from count/10, a content-analysis pie
+// hardcoded by action (allow?80:35), and a latency-split pipeline were synthetic.
+function get17LogCharts() {
+  return { charts: [] };
 }
 
-function getDefaultLogCharts(logData) {
-  const value = parseNumeric(logData.duration) || parseNumeric(logData?.metadata?.latency_ms) || 0;
-  return {
-    charts: [
-      {
-        title: "Processing Timeline",
-        component: (
-          <SafeResponsiveChart className="h-[250px] w-full">
-            <LineChart data={[{ step: 1, value }]}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#64748b" strokeOpacity={0.25} />
-              <XAxis dataKey="step" stroke="#64748b" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
-              <Tooltip /><Line type="monotone" dataKey="value" stroke="#14b8a6" strokeWidth={2} />
-            </LineChart>
-          </SafeResponsiveChart>
-        ),
-      },
-    ],
-  };
+// Default: a single [{ step: 1, value }] point is not a timeline. No chart.
+function getDefaultLogCharts() {
+  return { charts: [] };
 }
-
 function parseNumeric(value) {
   if (typeof value === "number") return value;
   if (typeof value !== "string") return 0;

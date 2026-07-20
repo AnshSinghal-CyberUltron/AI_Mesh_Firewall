@@ -1,0 +1,44 @@
+{
+  "run_id": "e733a9e2",
+  "server_slug": "cp09-ens8do",
+  "label": "toggle-subscriber-updates__clean",
+  "captured_at_utc": "2026-07-07T10:54:43Z",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/cp09-ens8do",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 27,
+      "method": "tools/call",
+      "params": {
+        "name": "toggle-subscriber-updates",
+        "arguments": {}
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "elapsed_s": 0.162,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Started simulated resource updated notifications for session undefined at a 5 second pace. Client will receive updates for any resources the it is subscribed to."
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 27
+    },
+    "classified_action": "ALLOW",
+    "compliance_tags_found": [],
+    "raw_markers_in_response": [],
+    "canary_present_in_response": false,
+    "possible_leak": false
+  },
+  "notes": "tool=toggle-subscriber-updates variant=clean"
+}

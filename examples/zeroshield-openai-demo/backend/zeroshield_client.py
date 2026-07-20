@@ -20,15 +20,25 @@ from typing import Any, Iterator
 
 from openai import OpenAI, APIStatusError
 
-GATEWAY_BASE_URL = os.environ.get("ZEROSHIELD_BASE_URL", "https://aimeshgateway.zeroshield.ai/v1")
+try:
+    from config import GATEWAY_BASE_URL as _CFG_BASE
+except Exception:  # pragma: no cover
+    _CFG_BASE = os.environ.get("ZEROSHIELD_BASE_URL", "https://aimeshgateway.zeroshield.ai/v1")
+
+GATEWAY_BASE_URL = (_CFG_BASE or "").rstrip("/") or "https://aimeshgateway.zeroshield.ai/v1"
+# Optional process-wide fallback (local CLI / legacy env). Prefer per-request keys.
 GATEWAY_API_KEY = os.environ.get("ZEROSHIELD_API_KEY", "")
 
 
-def make_client() -> OpenAI:
+def make_client(api_key: str | None = None, base_url: str | None = None) -> OpenAI:
     """The ONE place an OpenAI client is constructed — drop-in, two fields."""
-    if not GATEWAY_API_KEY:
-        raise RuntimeError("ZEROSHIELD_API_KEY is not set")
-    return OpenAI(api_key=GATEWAY_API_KEY, base_url=GATEWAY_BASE_URL, timeout=90, max_retries=1)
+    key = (api_key or GATEWAY_API_KEY or "").strip()
+    url = (base_url or GATEWAY_BASE_URL or "").rstrip("/")
+    if not key:
+        raise RuntimeError("gateway API key is not set (login required)")
+    if not url:
+        raise RuntimeError("ZEROSHIELD_BASE_URL is not set")
+    return OpenAI(api_key=key, base_url=url, timeout=90, max_retries=1)
 
 
 def _zs(d: dict) -> dict:
@@ -36,74 +46,171 @@ def _zs(d: dict) -> dict:
 
 
 def _error_body(e: APIStatusError) -> dict:
-    """The gateway's firewall-block envelope (carries pipeline_trace + verdict)."""
+    """The gateway's firewall-block envelope (carries pipeline_trace + verdict).
+
+    Prefer the FULL HTTP response body. The OpenAI SDK sets ``e.body`` to the
+    *nested* ``error`` object only (``{message,type,param,code}``), which drops
+    ZeroShield top-level fields: ``pipeline_trace``, ``category``, ``blocked_by``,
+    ``request_id``, and the original ``code``.
+    """
+    try:
+        full = json.loads(e.response.text)
+        if isinstance(full, dict):
+            return full
+    except Exception:
+        pass
     body = getattr(e, "body", None)
     if isinstance(body, dict):
         return body
-    try:
-        return json.loads(e.response.text)
-    except Exception:
-        return {"message": str(e)}
+    return {"message": str(e)}
 
 
 def _blocked_result(e: APIStatusError) -> dict:
     """Turn a firewall block (403/422/503) into a structured result with the trace,
     so the demo VISUALIZES the block instead of erroring out."""
     body = _error_body(e)
+    nested = body.get("error") if isinstance(body.get("error"), dict) else {}
+    message = (
+        body.get("message")
+        or nested.get("message")
+        or str(e)
+    )
+    # Prefer org threat category; fall back to OpenAI content_filter / ZS code.
+    threat = (
+        body.get("category")
+        or nested.get("code")
+        or body.get("code")
+    )
+    pt = body.get("pipeline_trace") if isinstance(body.get("pipeline_trace"), dict) else {}
     synth = {
         "zeroshield": {
-            "request_id": body.get("request_id"),
+            "request_id": body.get("request_id") or nested.get("request_id"),
             "action": "block",
-            "threat_type": body.get("category") or body.get("code"),
-            "detail": body.get("message"),
-            "processing_time_ms": (body.get("pipeline_trace") or {}).get("total_latency_ms"),
-            "routing": (body.get("pipeline_trace") or {}).get("routing") or {},
+            "threat_type": threat,
+            "detail": message,
+            "guard_reason": message,
+            "blocked_by": body.get("blocked_by"),
+            "detection_tier": body.get("detection_tier"),
+            "processing_time_ms": pt.get("total_latency_ms"),
+            "routing": pt.get("routing") or {},
         },
-        "pipeline_trace": body.get("pipeline_trace") or {},
+        "pipeline_trace": pt,
     }
-    return {"content": "", "model": None, "blocked": True, "status": e.status_code,
-            "message": body.get("message"), "category": body.get("category"),
-            "trace": summarize_trace(synth), "raw": body}
+    return {
+        "content": "",
+        "model": None,
+        "blocked": True,
+        "status": e.status_code,
+        "message": message,
+        "category": body.get("category") or threat,
+        "trace": summarize_trace(synth),
+        "raw": body,
+    }
+
+
+def _passthrough_stage(stage: Any) -> dict:
+    """Copy a gateway stage object verbatim; normalize name from stage if needed."""
+    if not isinstance(stage, dict):
+        return {}
+    out = dict(stage)
+    if not out.get("name") and out.get("stage"):
+        out["name"] = out["stage"]
+    return out
 
 
 def summarize_trace(body: dict) -> dict:
-    """Normalize the gateway envelope into a compact shape for the visualizer."""
+    """Normalize the gateway envelope for the demo pipeline visualizer.
+
+    Stages and the pipeline_trace root are passed through so the UI can render
+    the same StageTimeline / LogDetail fields as the main console (transparency
+    keys, routing adjudicator fields, I/O, latency breakdown).
+    """
     zs = _zs(body)
-    routing = zs.get("routing") or {}
-    trace = body.get("pipeline_trace") or {}
-    stages = [
-        {
-            "name": s.get("name"),
-            "action": s.get("action"),
-            "detail": s.get("detail"),
-            "latency_ms": s.get("latency_ms"),
-            "matched_policies": s.get("matched_policies") or [],
-            "matched_rules": s.get("matched_rules") or [],
-            "threat_type": s.get("threat_type"),
+    raw_trace = body.get("pipeline_trace") or {}
+    if not isinstance(raw_trace, dict):
+        raw_trace = {}
+
+    stages = [_passthrough_stage(s) for s in (raw_trace.get("stages") or []) if s]
+
+    # Full trace root for I/O + latency (PIPELINE-0015/0017/0021/0022).
+    pipeline_trace = dict(raw_trace)
+    pipeline_trace["stages"] = stages
+
+    # Prefer zeroshield.routing, then trace-root routing, then model_routing stage.
+    zs_routing = zs.get("routing") if isinstance(zs.get("routing"), dict) else {}
+    root_routing = raw_trace.get("routing") if isinstance(raw_trace.get("routing"), dict) else {}
+    mr_stage = next((s for s in stages if s.get("name") == "model_routing"), None) or {}
+    routing_src = zs_routing or root_routing or mr_stage
+
+    requested = (
+        routing_src.get("original_model")
+        or routing_src.get("requested_model")
+        or ""
+    )
+    selected = (
+        routing_src.get("selected_model")
+        or routing_src.get("routed_model")
+        or ""
+    )
+    compact_routing = {
+        "requested": requested or "auto",
+        "selected": selected,
+        "rerouted": routing_src.get("rerouted"),
+        "reason": routing_src.get("routing_reason") or routing_src.get("reroute_reason") or "",
+        "decision_source": routing_src.get("decision_source") or "",
+        "fallback_reason_code": routing_src.get("fallback_reason_code"),
+        "weights": routing_src.get("weights"),
+        "compliance": routing_src.get("compliance_requirements"),
+        "data_sensitivity": routing_src.get("data_sensitivity"),
+        # Full adjudicator fields for RoutingDecisionCard parity.
+        "requested_model": requested or routing_src.get("requested_model") or "auto",
+        "selected_model": selected or routing_src.get("selected_model") or "",
+        "routed_model": routing_src.get("routed_model") or selected or "",
+        "route_destination": routing_src.get("route_destination") or "llm",
+        "route_destination_label": routing_src.get("route_destination_label") or "",
+        "routing_reason": routing_src.get("routing_reason") or routing_src.get("reroute_reason") or "",
+        "decision_source_label": routing_src.get("decision_source_label") or "",
+        "policy_summary": routing_src.get("policy_summary") or "",
+        "decision_factors": routing_src.get("decision_factors") or [],
+        "routing_score": routing_src.get("routing_score") or 0,
+        "candidate_count": routing_src.get("candidate_count") or 0,
+        "fallback_chain": routing_src.get("fallback_chain") or [],
+        "evaluator_model": routing_src.get("evaluator_model") or "",
+    }
+    if compact_routing and not pipeline_trace.get("routing"):
+        pipeline_trace["routing"] = {
+            k: compact_routing[k]
+            for k in (
+                "requested_model", "selected_model", "routed_model",
+                "route_destination", "route_destination_label", "routing_reason",
+                "decision_source", "decision_source_label", "policy_summary",
+                "decision_factors", "weights", "routing_score", "candidate_count",
+                "fallback_chain", "evaluator_model",
+            )
+            if compact_routing.get(k) not in (None, "", [], {})
         }
-        for s in trace.get("stages", [])
-    ]
+
+    processing_ms = zs.get("processing_time_ms")
+    if processing_ms is None:
+        processing_ms = raw_trace.get("total_latency_ms")
+
     return {
-        "request_id": zs.get("request_id"),
-        "action": zs.get("action"),
+        "request_id": zs.get("request_id") or raw_trace.get("request_id"),
+        "action": zs.get("action") or raw_trace.get("final_action"),
         "threat_type": zs.get("threat_type"),
         "confidence": zs.get("confidence"),
         "matched_patterns": zs.get("matched_patterns") or [],
-        "processing_time_ms": zs.get("processing_time_ms"),
+        "processing_time_ms": processing_ms,
         "guard_action": zs.get("guard_action"),
-        "guard_reason": zs.get("guard_reason"),
-        "routing": {
-            "requested": routing.get("original_model"),
-            "selected": routing.get("selected_model") or routing.get("routed_model"),
-            "rerouted": routing.get("rerouted"),
-            "reason": routing.get("routing_reason") or routing.get("reroute_reason"),
-            "decision_source": routing.get("decision_source"),
-            "fallback_reason_code": routing.get("fallback_reason_code"),
-            "weights": routing.get("weights"),
-            "compliance": routing.get("compliance_requirements"),
-            "data_sensitivity": routing.get("data_sensitivity"),
-        },
+        "guard_reason": zs.get("guard_reason") or zs.get("detail") or "",
+        "detail": zs.get("detail") or zs.get("guard_reason") or "",
+        "blocked_by": zs.get("blocked_by") or "",
+        "routing": compact_routing,
         "stages": stages,
+        "pipeline_trace": pipeline_trace,
+        "final_action": raw_trace.get("final_action") or zs.get("action"),
+        "total_latency_ms": raw_trace.get("total_latency_ms"),
+        "ttft_ms": raw_trace.get("ttft_ms"),
     }
 
 

@@ -1,0 +1,11 @@
+{
+  "checkpoint": "07",
+  "ok": true,
+  "error": null,
+  "beforeClickModalOpen": true,
+  "stayedOpenDuringConnect": true,
+  "sawConnectingState": true,
+  "sawInlineError": true,
+  "inlineErrorText": "Connection failed: Upstream MCP error: upstream HTTP 405: <!doctype html><html lang=\"en\"><head><title>Example Domain</title><link rel=\"icon\" href=\"data:,\"><meta",
+  "cp07Pass": true
+}

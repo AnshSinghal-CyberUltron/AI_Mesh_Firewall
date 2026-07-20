@@ -1,0 +1,114 @@
+{
+  "totalDecisions": 0,
+  "modelDistribution": {
+    "haiku": 0,
+    "sonnet": 0,
+    "opus": 0,
+    "inherit": 0
+  },
+  "avgComplexity": 0.5,
+  "avgConfidence": 0.8,
+  "circuitBreakerTrips": 6,
+  "lastUpdated": "2026-07-10T10:55:47.259Z",
+  "learningHistory": [
+    {
+      "task": "Search all migrations (*/migrations/*.py) in /home/contact_cyberultron_com/AI_Mesh_Firewall for: (1)",
+      "model": "haiku",
+      "complexity": 0.5265413533834585,
+      "outcome": "failure",
+      "timestamp": "2026-07-10T10:55:37.187Z"
+    },
+    {
+      "task": "Search the AI_Mesh_Firewall codebase (/home/contact_cyberultron_com/AI_Mesh_Firewall) for all WebSoc",
+      "model": "haiku",
+      "complexity": 0.49481527093596056,
+      "outcome": "failure",
+      "timestamp": "2026-07-10T10:55:37.990Z"
+    },
+    {
+      "task": "Audit /home/contact_cyberultron_com/AI_Mesh_Firewall/control for QuerySet patterns: (1) Search all v",
+      "model": "haiku",
+      "complexity": 0.5020362473347547,
+      "outcome": "failure",
+      "timestamp": "2026-07-10T10:55:39.764Z"
+    },
+    {
+      "task": "Audit /home/contact_cyberultron_com/AI_Mesh_Firewall/control serializers (*/serializers.py): (1) Sea",
+      "model": "haiku",
+      "complexity": 0.6168487394957983,
+      "outcome": "failure",
+      "timestamp": "2026-07-10T10:55:42.844Z"
+    },
+    {
+      "task": "Audit API endpoints in /home/contact_cyberultron_com/AI_Mesh_Firewall/control: (1) Find all APIView/",
+      "model": "haiku",
+      "complexity": 0.5953764478764478,
+      "outcome": "failure",
+      "timestamp": "2026-07-10T10:55:44.707Z"
+    },
+    {
+      "task": "Audit for cross-org data leaks in /home/contact_cyberultron_com/AI_Mesh_Firewall/control: (1) Search",
+      "model": "haiku",
+      "complexity": 0.593136645962733,
+      "outcome": "failure",
+      "timestamp": "2026-07-10T10:55:47.259Z"
+    }
+  ],
+  "version": 2,
+  "priors": {
+    "low": {
+      "haiku": {
+        "alpha": 1,
+        "beta": 1
+      },
+      "sonnet": {
+        "alpha": 1,
+        "beta": 1
+      },
+      "opus": {
+        "alpha": 1,
+        "beta": 1
+      },
+      "inherit": {
+        "alpha": 1,
+        "beta": 1
+      }
+    },
+    "med": {
+      "haiku": {
+        "alpha": 1,
+        "beta": 7
+      },
+      "sonnet": {
+        "alpha": 1,
+        "beta": 1
+      },
+      "opus": {
+        "alpha": 1,
+        "beta": 1
+      },
+      "inherit": {
+        "alpha": 1,
+        "beta": 1
+      }
+    },
+    "high": {
+      "haiku": {
+        "alpha": 1,
+        "beta": 1
+      },
+      "sonnet": {
+        "alpha": 1,
+        "beta": 1
+      },
+      "opus": {
+        "alpha": 1,
+        "beta": 1
+      },
+      "inherit": {
+        "alpha": 1,
+        "beta": 1
+      }
+    }
+  }
+}

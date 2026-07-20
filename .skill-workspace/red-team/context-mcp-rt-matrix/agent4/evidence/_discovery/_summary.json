@@ -1,0 +1,274 @@
+{
+  "semgrep-mcp": {
+    "http_status": 200,
+    "tool_names": [
+      "scan_directory",
+      "list_rules",
+      "analyze_results",
+      "create_rule",
+      "filter_results",
+      "export_results",
+      "compare_results"
+    ],
+    "error": null
+  },
+  "playwright-mcp": {
+    "http_status": 200,
+    "tool_names": [
+      "browser_close",
+      "browser_resize",
+      "browser_console_messages",
+      "browser_handle_dialog",
+      "browser_evaluate",
+      "browser_file_upload",
+      "browser_drop",
+      "browser_fill_form",
+      "browser_press_key",
+      "browser_type",
+      "browser_navigate",
+      "browser_navigate_back",
+      "browser_network_requests",
+      "browser_network_request",
+      "browser_run_code_unsafe",
+      "browser_take_screenshot",
+      "browser_snapshot",
+      "browser_click",
+      "browser_drag",
+      "browser_hover",
+      "browser_select_option",
+      "browser_tabs",
+      "browser_wait_for"
+    ],
+    "error": null
+  },
+  "cp09-ens8do": {
+    "http_status": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "error": null
+  },
+  "cp09-verify": {
+    "http_status": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "error": null
+  },
+  "playwright": {
+    "http_status": 200,
+    "tool_names": [
+      "browser_close",
+      "browser_resize",
+      "browser_console_messages",
+      "browser_handle_dialog",
+      "browser_evaluate",
+      "browser_file_upload",
+      "browser_drop",
+      "browser_fill_form",
+      "browser_press_key",
+      "browser_type",
+      "browser_navigate",
+      "browser_navigate_back",
+      "browser_network_requests",
+      "browser_network_request",
+      "browser_run_code_unsafe",
+      "browser_take_screenshot",
+      "browser_snapshot",
+      "browser_click",
+      "browser_drag",
+      "browser_hover",
+      "browser_select_option",
+      "browser_tabs",
+      "browser_wait_for"
+    ],
+    "error": null
+  },
+  "everything-1": {
+    "http_status": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "error": null
+  },
+  "everything-2": {
+    "http_status": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "error": null
+  },
+  "everything-3": {
+    "http_status": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "error": null
+  },
+  "everything-4": {
+    "http_status": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "error": null
+  },
+  "everything-5": {
+    "http_status": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "error": null
+  },
+  "filesystem-canary": {
+    "http_status": 200,
+    "tool_names": [
+      "read_file",
+      "read_multiple_files",
+      "write_file",
+      "edit_file",
+      "create_directory",
+      "list_directory",
+      "directory_tree",
+      "move_file",
+      "search_files",
+      "get_file_info",
+      "list_allowed_directories"
+    ],
+    "error": null
+  },
+  "everything-mcp": {
+    "http_status": 200,
+    "tool_names": [
+      "echo",
+      "get-annotated-message",
+      "get-env",
+      "get-resource-links",
+      "get-resource-reference",
+      "get-structured-content",
+      "get-sum",
+      "get-tiny-image",
+      "gzip-file-as-resource",
+      "toggle-simulated-logging",
+      "toggle-subscriber-updates",
+      "trigger-long-running-operation",
+      "simulate-research-query"
+    ],
+    "error": null
+  },
+  "ws-everything-stub": {
+    "http_status": 200,
+    "tool_names": [],
+    "error": {
+      "code": -32002,
+      "message": "egress denied: cannot resolve host 'ws-everything.stub' ([Errno -2] Name or service not known)"
+    }
+  },
+  "sse-everything-stub": {
+    "http_status": 200,
+    "tool_names": [],
+    "error": {
+      "code": -32002,
+      "message": "egress denied: cannot resolve host 'sse-everything.stub' ([Errno -2] Name or service not known)"
+    }
+  },
+  "http-everything-stub": {
+    "http_status": 200,
+    "tool_names": [],
+    "error": {
+      "code": -32002,
+      "message": "egress denied: cannot resolve host 'http-everything.stub' ([Errno -2] Name or service not known)"
+    }
+  },
+  "linear-manual-oauth": {
+    "http_status": 200,
+    "tool_names": [],
+    "error": {
+      "code": -32001,
+      "message": "upstream returned 401; re-authenticate"
+    }
+  }
+}

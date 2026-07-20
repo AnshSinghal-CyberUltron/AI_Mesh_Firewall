@@ -1,0 +1,127 @@
+{
+  "title": "Chat Output Guardrail FLAG honesty under enforcement_mode=block (post F-003 fix)",
+  "collected_at": "2026-07-10T07:30:23.064334+00:00",
+  "model": "cohere/north-mini-code:free",
+  "canary": "john.doe@corp.example",
+  "prompt": "Write a one-sentence customer support reply that includes the contact email john.doe@corp.example exactly once. Keep it under 40 words.",
+  "ui_action": "flag",
+  "enforcement_mode": "block",
+  "config_mutation": {
+    "output_pii_action": "flag",
+    "redis_synced": true
+  },
+  "parts": {
+    "http_non_stream": {
+      "http_status": 200,
+      "request_id": "zs-87e620ea55d4",
+      "blocked_by": null,
+      "code": null,
+      "final_action": "redact",
+      "raw_canary_present": false,
+      "redaction_markers": [
+        "j***@c***.example"
+      ],
+      "rewrite_hints": [],
+      "content_preview": "The user asks: \"Write a one-sentence customer support reply that includes the contact email j***@c***.example exactly once. Keep it under 40 words.\"\n\nWe need to produce a single sentence, under 40 words, including the email \"j***@c***.example\" exactly once. The email is partially redacted: j***@c***.example. So we must include that exact string exactly once. No extra occurrences. Must be under 40 words. Also it's a customer support reply. So something like: \"Thank you for contacting us; please reach out to j",
+      "content_len": 513,
+      "delivered": true,
+      "is_blocked": false,
+      "output_guard_stage": {
+        "name": "output_guardrail",
+        "action": "redact",
+        "detail": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+        "guard_reason": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+        "guard_action": "redact",
+        "latency_ms": 1215.9
+      },
+      "sse_error": null,
+      "observed_action": "redact",
+      "body_head": "{\"id\":\"chatcmpl-1783668551-4lKfZ1m6vqgVbxMCMWv0\",\"created\":1783668551,\"model\":\"cohere/north-mini-code:free\",\"object\":\"chat.completion\",\"system_fingerprint\":null,\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"message\":{\"content\":\"The user asks: \\\"Write a one-sentence customer support reply that includes the contact email j***@c***.example exactly once. Keep it under 40 words.\\\"\\n\\nWe need to produce a single sentence, under 40 words, including the email \\\"j***@c***.example\\\" exactly once. The em",
+      "elapsed_ms": 4639.0,
+      "transport": "http_json"
+    },
+    "http_stream": {
+      "http_status": 200,
+      "request_id": "zs-abff9985624b",
+      "blocked_by": null,
+      "code": null,
+      "final_action": "redact",
+      "raw_canary_present": false,
+      "redaction_markers": [
+        "j***@c***.example"
+      ],
+      "rewrite_hints": [],
+      "content_preview": "",
+      "content_len": 0,
+      "delivered": false,
+      "is_blocked": false,
+      "output_guard_stage": {
+        "name": "output_guardrail",
+        "action": "redact",
+        "detail": "PII detected in prompt: email_smart_masked",
+        "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+        "guard_action": "allow",
+        "latency_ms": 0.0
+      },
+      "sse_error": null,
+      "observed_action": "redact",
+      "body_head": "data: {\"id\": \"chatcmpl-1783668554-BfroJAn5gUUj3I7NmSp3\", \"created\": 1783668555, \"model\": \"cohere/north-mini-code:free\", \"object\": \"chat.completion.chunk\", \"system_fingerprint\": null, \"choices\": [{\"finish_reason\": \"length\", \"index\": 0, \"delta\": {\"content\": null, \"role\": null, \"function_call\": null, \"tool_calls\": null, \"audio\": null}, \"logprobs\": null}], \"service_tier\": null}\n\ndata: {\"id\": \"chatcmpl-1783668554-BfroJAn5gUUj3I7NmSp3\", \"created\": 1783668555, \"model\": \"cohere/north-mini-code:free\", \"o",
+      "elapsed_ms": 62470.0,
+      "transport": "http_sse"
+    },
+    "sdk_non_stream": {
+      "http_status": 200,
+      "request_id": "zs-4f7588f40c0c",
+      "blocked_by": null,
+      "code": null,
+      "final_action": "redact",
+      "raw_canary_present": false,
+      "redaction_markers": [
+        "j***@c***.example"
+      ],
+      "rewrite_hints": [],
+      "content_preview": "The user asks: \"Write a one-sentence customer support reply that includes the contact email j***@c***.example exactly once. Keep it under 40 words.\"\n\nWe need to produce a single sentence, under 40 words, including the email \"j***@c***.example\" exactly once. The email is partially redacted: j***@c***.example. So we must include that exact string exactly once. No extra occurrences. Must be under 40 words. Also it's a customer support reply. So something like: \"Thank you for contacting us; please reach out to j",
+      "content_len": 513,
+      "delivered": true,
+      "is_blocked": false,
+      "output_guard_stage": {
+        "name": "output_guardrail",
+        "action": "redact",
+        "detail": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+        "guard_reason": "ZeroShield Output Guard \u2014 enforcement: REDACT\nThreat category: pii\nConfidence: 85%\nPII/secret detected in output: email_smart_masked \u2014 email_smart_masked=j****************\nEvidence: email_smart_masked",
+        "guard_action": "redact",
+        "latency_ms": 4.3
+      },
+      "sse_error": null,
+      "observed_action": "redact",
+      "body_head": "{\"id\":\"chatcmpl-1783668617-aLoMyIGnYJP6YFnieUu4\",\"created\":1783668617,\"model\":\"cohere/north-mini-code:free\",\"object\":\"chat.completion\",\"system_fingerprint\":null,\"choices\":[{\"finish_reason\":\"length\",\"index\":0,\"message\":{\"content\":\"The user asks: \\\"Write a one-sentence customer support reply that includes the contact email j***@c***.example exactly once. Keep it under 40 words.\\\"\\n\\nWe need to produce a single sentence, under 40 words, including the email \\\"j***@c***.example\\\" exactly once. The em",
+      "elapsed_ms": 1962.0,
+      "transport": "openai_sdk",
+      "ok": true
+    },
+    "sdk_stream": {
+      "http_status": 200,
+      "content_preview": "",
+      "content_len": 0,
+      "raw_canary_present": false,
+      "delivered": false,
+      "is_blocked": false,
+      "observed_action": "empty_or_incomplete",
+      "sdk_note": "iterated_stream_no_raw",
+      "elapsed_ms": 4224.5,
+      "transport": "openai_sdk",
+      "ok": true
+    }
+  },
+  "verdict": "PASS",
+  "fails": [],
+  "notes": [
+    "http_non_stream:delivered og=redact raw=False",
+    "http_stream:empty obs=redact",
+    "sdk_non_stream:delivered og=redact raw=False",
+    "sdk_stream:empty obs=empty_or_incomplete",
+    "Pre-fix: flag under enforcement_mode=block \u2192 block/withhold. Post-fix: http_non_stream+sdk_non_stream HTTP 200 delivered (not output_blocked). Stream HTTP 200 not blocked (empty assembled content / redact markers in body). Note: OutputGuard still resolved PII to redact action in trace; enforce_output no longer escalates flag\u2192block."
+  ],
+  "expect": "DELIVER content (not block) + flag telemetry when OG fires",
+  "f003_fix_evidence": "Pre-fix: flag under enforcement_mode=block \u2192 block/withhold. Post-fix: http_non_stream+sdk_non_stream HTTP 200 delivered (not output_blocked). Stream HTTP 200 not blocked (empty assembled content / redact markers in body). Note: OutputGuard still resolved PII to redact action in trace; enforce_output no longer escalates flag\u2192block."
+}

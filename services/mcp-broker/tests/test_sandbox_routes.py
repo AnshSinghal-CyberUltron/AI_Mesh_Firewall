@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -10,7 +11,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from auth import BROKER_KEY_HEADER
-from sandbox.docker_manager import DockerManager, SandboxDockerConfig
+from sandbox.docker_health import bind_docker_manager, cached_docker_ok
+from sandbox.docker_manager import (
+    LABEL_ORG_SLUG,
+    LABEL_ROLE,
+    ROLE_VALUE,
+    DockerManager,
+    SandboxDockerConfig,
+)
 from sandbox.registry import SandboxRegistry
 from sandbox.routes import build_sandbox_router
 
@@ -27,8 +35,10 @@ def _mock_container(
 ) -> MagicMock:
     container = MagicMock()
     container.id = container_id
-    container.name = f"mcp-sandbox-{org_slug}"
+    container.name = f"{org_slug}-mcp-sandbox"
     container.status = status
+    # Real sandbox containers always carry these (CHG-0112 verifies them by-name).
+    container.labels = {LABEL_ROLE: ROLE_VALUE, LABEL_ORG_SLUG: org_slug}
     container.attrs = {
         "Created": "2026-06-29T12:00:00.000000000Z",
         "State": {"Status": status},
@@ -45,6 +55,7 @@ def _mock_container(
 def _mock_client() -> MagicMock:
     client = MagicMock()
     client.ping.return_value = True
+    client.info.return_value = {"Runtimes": {"runc": {}, "runsc": {}}}
     client.containers.list.return_value = []
     client.containers.get.side_effect = Exception("not found")
     client.networks.get.side_effect = Exception("not found")
@@ -61,7 +72,10 @@ def registry() -> SandboxRegistry:
 @pytest.fixture
 def docker_manager(registry: SandboxRegistry) -> DockerManager:
     config = SandboxDockerConfig(memory_mb=2048, cpus=1.0)
-    return DockerManager(client=_mock_client(), config=config, registry=registry)
+    manager = DockerManager(client=_mock_client(), config=config, registry=registry)
+    bind_docker_manager(manager)
+    cached_docker_ok(force=True)
+    return manager
 
 
 @pytest.fixture
@@ -78,6 +92,28 @@ def broker_client(
 
 def _auth_headers() -> dict[str, str]:
     return {BROKER_KEY_HEADER: BROKER_KEY}
+
+
+def _agent_stream_mock(json_body, *, status: int = 200, agent_url: str = "http://172.28.0.42:9320/rpc"):
+    """An httpx.AsyncClient mock whose .stream() yields ``json_body`` — CHG-0151:
+    _post_agent_rpc now STREAMS the agent reply (capped) instead of client.post()."""
+    resp = MagicMock()
+    resp.status_code = status
+    resp.headers = {"content-type": "application/json"}
+    resp.request = httpx.Request("POST", agent_url)
+
+    async def _aiter():
+        yield json.dumps(json_body).encode()
+
+    resp.aiter_bytes = _aiter
+    stream_cm = MagicMock()
+    stream_cm.__aenter__ = AsyncMock(return_value=resp)
+    stream_cm.__aexit__ = AsyncMock(return_value=False)
+    mock_http = AsyncMock()
+    mock_http.stream = MagicMock(return_value=stream_cm)
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+    return mock_http
 
 
 def test_auth_rejects_missing_key(broker_client: TestClient):
@@ -118,8 +154,12 @@ def test_ensure_returns_running_sandbox(broker_client: TestClient, docker_manage
 def test_ensure_503_when_docker_unavailable(
     broker_client: TestClient,
     docker_manager: DockerManager,
+    monkeypatch: pytest.MonkeyPatch,
 ):
-    docker_manager.client.ping.return_value = False
+    monkeypatch.setattr(
+        "sandbox.routes.cached_docker_ok",
+        lambda *args, **kwargs: False,
+    )
 
     resp = broker_client.post(
         f"/v1/sandbox/{ORG}/ensure",
@@ -159,15 +199,7 @@ def test_stdio_rpc_forwards_to_agent_and_touches_activity(
     docker_manager.client.containers.list.return_value = [running]
     registry.register(ORG, running.id, "http://172.28.0.42:9320", last_activity=100.0)
 
-    agent_response = httpx.Response(
-        200,
-        json={"jsonrpc": "2.0", "id": 42, "result": {"tools": []}},
-        request=httpx.Request("POST", "http://172.28.0.42:9320/rpc"),
-    )
-    mock_http = AsyncMock()
-    mock_http.post.return_value = agent_response
-    mock_http.__aenter__.return_value = mock_http
-    mock_http.__aexit__.return_value = None
+    mock_http = _agent_stream_mock({"jsonrpc": "2.0", "id": 42, "result": {"tools": []}})
 
     rpc_body = {
         "server_slug": "playwright",
@@ -186,24 +218,146 @@ def test_stdio_rpc_forwards_to_agent_and_touches_activity(
 
     assert resp.status_code == 200
     assert resp.json()["result"] == {"tools": []}
-    mock_http.post.assert_called_once()
-    call_args = mock_http.post.call_args
-    assert call_args[0][0] == "http://172.28.0.42:9320/rpc"
+    mock_http.stream.assert_called_once()
+    call_args = mock_http.stream.call_args
+    assert call_args[0][0] == "POST"                          # method
+    assert call_args[0][1] == "http://172.28.0.42:9320/rpc"   # url
     assert call_args[1]["json"]["server_slug"] == "playwright"
     entry = registry.get(ORG)
     assert entry is not None
     assert entry.last_activity == 1_719_660_000.0
 
 
-def test_stdio_rpc_502_on_agent_unreachable(
+def _rpc_with_timeouts(broker_client, docker_manager, registry, timeouts):
+    """Drive one /stdio/rpc and return the timeout(s) httpx.AsyncClient was built with."""
+    running = _mock_container()
+    docker_manager.client.containers.list.return_value = [running]
+    registry.register(ORG, running.id, "http://172.28.0.42:9320", last_activity=100.0)
+    mock_http = _agent_stream_mock({"jsonrpc": "2.0", "id": 1, "result": {}})
+    factory = MagicMock(return_value=mock_http)
+    body = {"server_slug": "srv", "command": "npx", "args": ["-y", "x"],
+            "method": "tools/list", "jsonrpc_id": 1, "timeouts": timeouts}
+    with patch("sandbox.routes.httpx.AsyncClient", factory):
+        resp = broker_client.post(f"/v1/sandbox/{ORG}/stdio/rpc", json=body, headers=_auth_headers())
+    assert resp.status_code == 200
+    return [c.kwargs.get("timeout") for c in factory.call_args_list]
+
+
+def test_agent_rpc_timeout_clamped_to_ceiling(broker_client, docker_manager, registry):
+    """CHG-0146: a caller-supplied agent timeout beyond the ceiling is clamped, so no single
+    RPC can pin a broker->agent connection open for an unbounded duration (DoS containment)."""
+    from sandbox.routes import _AGENT_TIMEOUT_MAX
+    timeouts_used = _rpc_with_timeouts(
+        broker_client, docker_manager, registry,
+        {"init_seconds": 99999, "method_seconds": 99999},
+    )
+    assert _AGENT_TIMEOUT_MAX in timeouts_used, timeouts_used
+    assert 99999 not in timeouts_used
+    assert all(t is None or t <= _AGENT_TIMEOUT_MAX for t in timeouts_used), timeouts_used
+
+
+def test_agent_rpc_normal_timeout_not_clamped(broker_client, docker_manager, registry):
+    """A normal (sub-ceiling) timeout is passed through unchanged — the clamp only trims
+    pathological values, never a legitimate slow cold-start/tool call."""
+    from sandbox.routes import _AGENT_TIMEOUT, _AGENT_TIMEOUT_MAX
+    timeouts_used = _rpc_with_timeouts(
+        broker_client, docker_manager, registry,
+        {"init_seconds": 120, "method_seconds": 60},
+    )
+    # Effective = max(base, 120, 60) = base (130 default), which is < ceiling -> unclamped.
+    assert _AGENT_TIMEOUT in timeouts_used, timeouts_used
+    assert all(t is None or t <= _AGENT_TIMEOUT_MAX for t in timeouts_used)
+
+
+def test_unified_rpc_route_forwards_remote_transport(
     broker_client: TestClient,
     docker_manager: DockerManager,
+    registry: SandboxRegistry,
 ):
+    # P4.13/P6.18: the unified POST /{org}/rpc route must EXIST (non-404) and
+    # forward a remote transport (streamable-http) + upstream block verbatim to the
+    # agent, so the gateway never dials the upstream MCP URL directly.
+    running = _mock_container()
+    docker_manager.client.containers.list.return_value = [running]
+    registry.register(ORG, running.id, "http://172.28.0.42:9320", last_activity=100.0)
+
+    mock_http = _agent_stream_mock(
+        {"jsonrpc": "2.0", "id": 7, "result": {"tools": [{"name": "echo"}]}})
+
+    rpc_body = {
+        "server_slug": "remote-http",
+        "transport": "streamable-http",
+        "upstream": {
+            "url": "https://mcp.example.com/mcp",
+            "allowed_hosts": ["mcp.example.com"],
+            "headers": {"Authorization": "Bearer injected-token"},
+        },
+        "method": "tools/list",
+        "jsonrpc_id": 7,
+    }
+
+    with patch("sandbox.routes.httpx.AsyncClient", return_value=mock_http):
+        resp = broker_client.post(
+            f"/v1/sandbox/{ORG}/rpc",
+            json=rpc_body,
+            headers=_auth_headers(),
+        )
+
+    assert resp.status_code == 200  # route exists (NOT 404) and forwarded
+    assert resp.json()["result"]["tools"] == [{"name": "echo"}]
+    fwd = mock_http.stream.call_args[1]["json"]
+    assert fwd["transport"] == "streamable-http"
+    assert fwd["upstream"]["url"] == "https://mcp.example.com/mcp"
+    assert fwd["upstream"]["allowed_hosts"] == ["mcp.example.com"]
+
+
+def test_stdio_rpc_alias_still_forwards(
+    broker_client: TestClient,
+    docker_manager: DockerManager,
+    registry: SandboxRegistry,
+):
+    # The deprecated /stdio/rpc alias must keep working (back-compat for the
+    # pre-contract gateway payload) and default transport to stdio.
+    running = _mock_container()
+    docker_manager.client.containers.list.return_value = [running]
+    registry.register(ORG, running.id, "http://172.28.0.42:9320", last_activity=100.0)
+
+    mock_http = _agent_stream_mock({"jsonrpc": "2.0", "id": 5, "result": {"ok": True}})
+
+    with patch("sandbox.routes.httpx.AsyncClient", return_value=mock_http):
+        resp = broker_client.post(
+            f"/v1/sandbox/{ORG}/stdio/rpc",
+            json={"server_slug": "s", "command": "npx", "args": ["-y", "pkg"], "method": "tools/list"},
+            headers=_auth_headers(),
+        )
+    assert resp.status_code == 200
+    fwd = mock_http.stream.call_args[1]["json"]
+    assert fwd["transport"] == "stdio"  # alias forces stdio for legacy callers
+    assert fwd["command"] == "npx"
+
+
+def test_stdio_rpc_503_provisioning_on_agent_unreachable(
+    broker_client: TestClient,
+    docker_manager: DockerManager,
+    monkeypatch,
+):
+    # B3 #20: when the agent socket never binds within the cold-start retries the
+    # broker reports a RETRYABLE 503 provisioning state (not a hard 502) so the
+    # gateway client backs off + retries instead of surfacing "temporarily
+    # unavailable".
+    import sandbox.routes as routes
+
+    monkeypatch.setattr(routes, "_AGENT_READY_RETRIES", 2)
+    monkeypatch.setattr(routes, "_AGENT_READY_BASE_DELAY", 0.0)
+    monkeypatch.setattr(routes, "_AGENT_READY_MAX_DELAY", 0.0)
+
     running = _mock_container()
     docker_manager.client.containers.list.return_value = [running]
 
     mock_http = AsyncMock()
-    mock_http.post.side_effect = httpx.ConnectError("connection refused")
+    # CHG-0151: stream() is a SYNC method returning an async CM; a cold-start ConnectError
+    # raises when the stream is opened. side_effect on the sync call reproduces that.
+    mock_http.stream = MagicMock(side_effect=httpx.ConnectError("connection refused"))
     mock_http.__aenter__.return_value = mock_http
     mock_http.__aexit__.return_value = None
 
@@ -219,7 +373,70 @@ def test_stdio_rpc_502_on_agent_unreachable(
             headers=_auth_headers(),
         )
 
-    assert resp.status_code == 502
+    assert resp.status_code == 503
+    assert "provisioning" in resp.json()["detail"].lower()
+
+
+def test_agent_response_over_cap_is_rejected(
+    broker_client: TestClient, docker_manager: DockerManager, registry: SandboxRegistry, monkeypatch
+):
+    """CHG-0151: a per-org sandbox agent (untrusted tenant code) returning a body larger than
+    the ceiling must not OOM the SHARED broker — the broker streams the reply with a byte cap
+    and aborts with 502, rather than buffering it unbounded via response.json()."""
+    import sandbox.routes as routes
+
+    monkeypatch.setattr(routes, "_AGENT_MAX_RESPONSE_BYTES", 1024)  # small cap for a light test
+    running = _mock_container()
+    docker_manager.client.containers.list.return_value = [running]
+    registry.register(ORG, running.id, "http://172.28.0.42:9320", last_activity=100.0)
+
+    resp_obj = MagicMock()
+    resp_obj.status_code = 200
+    resp_obj.headers = {"content-type": "application/json"}
+    resp_obj.request = httpx.Request("POST", "http://172.28.0.42:9320/rpc")
+
+    async def _aiter():
+        for _ in range(10):
+            yield b"x" * 200  # 2 KiB total, over the 1 KiB cap
+
+    resp_obj.aiter_bytes = _aiter
+    stream_cm = MagicMock()
+    stream_cm.__aenter__ = AsyncMock(return_value=resp_obj)
+    stream_cm.__aexit__ = AsyncMock(return_value=False)
+    mock_http = AsyncMock()
+    mock_http.stream = MagicMock(return_value=stream_cm)
+    mock_http.__aenter__.return_value = mock_http
+    mock_http.__aexit__.return_value = None
+
+    with patch("sandbox.routes.httpx.AsyncClient", return_value=mock_http):
+        r = broker_client.post(
+            f"/v1/sandbox/{ORG}/stdio/rpc",
+            json={"server_slug": "s", "command": "npx", "method": "tools/list", "jsonrpc_id": 1},
+            headers=_auth_headers(),
+        )
+    assert r.status_code == 502
+    assert "ceiling" in r.json()["detail"].lower()
+
+
+def test_agent_response_under_cap_ok(
+    broker_client: TestClient, docker_manager: DockerManager, registry: SandboxRegistry, monkeypatch
+):
+    """A normal (under-cap) agent reply streams through and is returned unchanged."""
+    import sandbox.routes as routes
+
+    monkeypatch.setattr(routes, "_AGENT_MAX_RESPONSE_BYTES", 1024)
+    running = _mock_container()
+    docker_manager.client.containers.list.return_value = [running]
+    registry.register(ORG, running.id, "http://172.28.0.42:9320", last_activity=100.0)
+    mock_http = _agent_stream_mock({"jsonrpc": "2.0", "id": 1, "result": {"ok": True}})
+    with patch("sandbox.routes.httpx.AsyncClient", return_value=mock_http):
+        r = broker_client.post(
+            f"/v1/sandbox/{ORG}/stdio/rpc",
+            json={"server_slug": "s", "command": "npx", "method": "tools/list", "jsonrpc_id": 1},
+            headers=_auth_headers(),
+        )
+    assert r.status_code == 200
+    assert r.json()["result"] == {"ok": True}
 
 
 def test_status_running_sandbox(broker_client: TestClient, docker_manager: DockerManager):
@@ -300,3 +517,51 @@ def test_destroy_is_idempotent(broker_client: TestClient, docker_manager: Docker
     assert resp2.status_code == 200
     running.remove.assert_called_once_with(force=True)
     volume.remove.assert_called_once_with(force=True)
+
+
+def test_ensure_warm_reports_agent_ready(broker_client, docker_manager, monkeypatch):
+    """B3 item#19: with warm=True and a bound agent, ensure blocks until the
+    agent /health is OK and reports agent_ready=True / provisioning=False."""
+    import sandbox.routes as routes
+
+    created = _mock_container()
+    docker_manager.client.containers.run.return_value = created
+    monkeypatch.setattr(routes, "_warm_ready_timeout", lambda: 5.0)
+    monkeypatch.setattr(routes, "_agent_health_ok", AsyncMock(return_value=True))
+
+    resp = broker_client.post(
+        f"/v1/sandbox/{ORG}/ensure",
+        json={"warm": True},
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "running"
+    assert body["agent_ready"] is True
+    assert body["provisioning"] is False
+
+
+def test_ensure_warm_reports_provisioning_when_agent_not_ready(
+    broker_client, docker_manager, monkeypatch
+):
+    """B3 item#19: when the agent socket never binds within the bounded warm
+    window, ensure reports provisioning=True — a distinct 'still starting'
+    state, NOT a hard 502."""
+    import sandbox.routes as routes
+
+    created = _mock_container()
+    docker_manager.client.containers.run.return_value = created
+    monkeypatch.setattr(routes, "_warm_ready_timeout", lambda: 0.2)
+    monkeypatch.setattr(routes, "_warm_ready_interval", lambda: 0.01)
+    monkeypatch.setattr(routes, "_agent_health_ok", AsyncMock(return_value=False))
+
+    resp = broker_client.post(
+        f"/v1/sandbox/{ORG}/ensure",
+        json={"warm": True},
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "running"
+    assert body["provisioning"] is True
+    assert body["agent_ready"] is False

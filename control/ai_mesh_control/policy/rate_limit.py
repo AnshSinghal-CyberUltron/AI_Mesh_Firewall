@@ -27,12 +27,26 @@ def check_rate_limit(request):
     key = get_rate_limit_key(request)
     minute_bucket = int(time.time() // 60)
     cache_key = f"ratelimit:policy_check:{key}:{minute_bucket}"
-    count = cache.get(cache_key, 0)
-    if count >= limit:
+
+    # #33: ATOMIC increment. The old `count = cache.get(); ...; cache.set(count+1)`
+    # was a read-modify-write RACE — N concurrent requests all read the same count
+    # and all wrote count+1, so the bucket under-counted and MORE than `limit`
+    # requests/minute slipped through (rate-limit bypass under load). `cache.add`
+    # (create-if-absent) + `cache.incr` (atomic; Redis INCR / locmem lock) makes the
+    # increment race-free. `current` is the value AFTER this request, so rejecting on
+    # `current > limit` admits exactly `limit` requests — identical to the old
+    # `count >= limit` allowance, just without the race.
+    cache.add(cache_key, 0, timeout=120)
+    try:
+        current = cache.incr(cache_key)
+    except ValueError:
+        # Bucket expired between add and incr (extremely rare) — reseed.
+        cache.set(cache_key, 1, timeout=120)
+        current = 1
+    if current > limit:
         return Response(
             {"detail": "Rate limit exceeded. Try again later."},
             status=status.HTTP_429_TOO_MANY_REQUESTS,
             headers={"Retry-After": "60"},
         )
-    cache.set(cache_key, count + 1, timeout=120)
     return None

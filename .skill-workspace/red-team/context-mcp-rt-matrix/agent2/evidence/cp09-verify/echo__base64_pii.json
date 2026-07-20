@@ -1,0 +1,46 @@
+{
+  "run_id": "e733a9e2",
+  "server_slug": "cp09-verify",
+  "label": "echo__base64_pii",
+  "captured_at_utc": "2026-07-07T10:54:43Z",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/cp09-verify",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 14,
+      "method": "tools/call",
+      "params": {
+        "name": "echo",
+        "arguments": {
+          "message": "metadata=MTIzLTQ1LTY3ODkgcmVkdGVhbS5hZ2VudDJAY29ycC5leGFtcGxl RT-A2-cp09-verify-6451776aca"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "elapsed_s": 0.281,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Echo: metadata=[ENCODED_SECRET_REDACTED]-A2-cp09-verify-6451776aca"
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 14
+    },
+    "classified_action": "REDACT",
+    "compliance_tags_found": [],
+    "raw_markers_in_response": [],
+    "canary_present_in_response": false,
+    "possible_leak": false
+  },
+  "notes": "tool=echo variant=base64_pii"
+}

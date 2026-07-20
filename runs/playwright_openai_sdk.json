@@ -1,0 +1,36 @@
+{
+  "base": "http://127.0.0.1:8180",
+  "phase": "stream",
+  "ok": true,
+  "steps": [
+    "login",
+    "stream"
+  ],
+  "asserts": [
+    {
+      "label": "seed admin auth (token mint 2xx, got ok)",
+      "pass": true,
+      "phase": "login"
+    },
+    {
+      "label": "stream chat allowed (HTTP 200)",
+      "pass": true,
+      "phase": "stream"
+    },
+    {
+      "label": "stream response is SSE (text/event-stream; charset=utf-8)",
+      "pass": true,
+      "phase": "stream"
+    },
+    {
+      "label": "no page JS errors (0)",
+      "pass": true,
+      "phase": "stream"
+    }
+  ],
+  "pageErrors": [],
+  "notes": [
+    "stream HTTP 200 ctype=text/event-stream; charset=utf-8"
+  ],
+  "error": null
+}

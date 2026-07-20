@@ -1,0 +1,13 @@
+agent: cursor-ralph-iter12
+story: P4.12
+files:
+  - services/mcp-broker/src/sandbox/docker_manager.py
+  - services/mcp-broker/tests/test_sandbox_lifecycle.py
+  - services/mcp-broker/tests/test_sandbox_routes.py
+  - services/mcp-broker/tests/test_sandbox_reaper.py
+  - docs/mcp/PARALLEL_CLAIMS.md
+  - docs/mcp/oss-research-docker-hardening.md
+  - .cursor/ralph/scratchpad.md
+since: 2026-07-02T15:00:00Z
+status: released
+session: Cursor Ralph iter 12 — P4.12 gVisor hardening

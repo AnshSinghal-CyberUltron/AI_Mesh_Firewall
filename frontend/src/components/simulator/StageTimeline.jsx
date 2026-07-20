@@ -1,5 +1,10 @@
 import { useRef, useState } from "react";
 import { Clock, Shield, AlertTriangle, XCircle, CheckCircle, Pin, X, ArrowRightLeft } from "lucide-react";
+import { normalizeStages, formatRouteDestination, honestStageAction } from "../../utils/pipelineTrace";
+import { summarizeRoutingDecision } from "../../utils/routingExplain";
+import { summarizeInputScanStage } from "../../utils/inputScanExplain";
+import { RoutingTechnicalDetails } from "../RoutingTechnicalDetails";
+import { InputScanTechnicalDetails } from "../InputScanTechnicalDetails";
 import {
   formatDecisionSource,
   formatDetectionTier,
@@ -97,12 +102,19 @@ function formatStageLatency(stage) {
  * Shows color-coded stages with hoverable detail cards, latency, and threat info.
  * Detail card appears on hover and stays visible when hovering over the card itself.
  */
-export function StageTimeline({ stages = [], className = "" }) {
+export function StageTimeline({ stages: rawStages = [], className = "" }) {
   const containerRef = useRef(null);
   const stageRefs = useRef({});
   const [hoveredStage, setHoveredStage] = useState(null);
   const [expandedStage, setExpandedStage] = useState(null);
   const [popoverPos, setPopoverPos] = useState({ left: 180, top: 160, placement: "below" });
+
+  // Robustness: several callers pass the gateway's RAW pipeline_trace.stages[] straight in
+  // (not via extractRealStages, which filters). A null / non-object element would make the
+  // render below (`stage.action`) throw and CRASH the whole trace card. normalizeStages keeps
+  // only renderable object stages so one malformed entry never blanks the card (and a null
+  // `stages` prop is handled). Honest: nothing is fabricated — only non-renderable junk drops.
+  const stages = normalizeStages(rawStages);
 
   if (!stages.length) return null;
 
@@ -116,7 +128,8 @@ export function StageTimeline({ stages = [], className = "" }) {
     const containerRect = container.getBoundingClientRect();
     const stageRect = stageEl.getBoundingClientRect();
     const desiredLeft = stageRect.left - containerRect.left + stageRect.width / 2;
-    const clampedLeft = Math.max(180, Math.min(desiredLeft, containerRect.width - 180));
+    const halfPopover = Math.min(180, Math.max(96, containerRect.width / 2 - 8));
+    const clampedLeft = Math.max(halfPopover, Math.min(desiredLeft, containerRect.width - halfPopover));
 
     // Viewport-aware vertical placement: the detail card can be tall (input_scan /
     // output_guardrail carry guard reasoning + before/after blocks). If there is
@@ -153,15 +166,17 @@ export function StageTimeline({ stages = [], className = "" }) {
   return (
     <div
       ref={containerRef}
+      data-testid="pipeline-stage-timeline"
       className={`relative rounded-2xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50 p-3 shadow-sm dark:border-slate-700/70 dark:from-slate-900 dark:to-slate-900/70 ${className}`}
       onMouseLeave={() => setHoveredStage(null)}
     >
-      <div className="pointer-events-none absolute left-8 right-8 top-[56px] h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-slate-600" />
+      <div className="pointer-events-none absolute left-4 right-4 top-[56px] hidden h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent sm:left-8 sm:right-8 dark:via-slate-600 sm:block" />
 
-      <div className="flex items-stretch gap-3 overflow-x-auto pb-2 pt-1">
+      <div className="-mx-1 flex items-stretch gap-2 overflow-x-auto pb-2 pt-1 sm:mx-0 sm:gap-3">
         {stages.map((stage, i) => {
-          const theme = ACTION_THEME[stage.action] || ACTION_THEME.skip;
-          const Icon = ACTION_ICONS[stage.action] || Clock;
+          const displayAction = honestStageAction(stage);
+          const theme = ACTION_THEME[displayAction] || ACTION_THEME.skip;
+          const Icon = ACTION_ICONS[displayAction] || Clock;
           const isHovered = hoveredStage === i;
           const isExpanded = expandedStage === i;
           const isActive = isHovered || isExpanded;
@@ -169,12 +184,19 @@ export function StageTimeline({ stages = [], className = "" }) {
           return (
             <div key={i} className="relative flex items-center">
               <button
+                type="button"
                 ref={(el) => {
                   stageRefs.current[i] = el;
                 }}
                 onMouseEnter={() => handleStageEnter(i)}
+                onFocus={() => handleStageEnter(i)}
+                onBlur={() => setHoveredStage((cur) => (cur === i ? null : cur))}
                 onClick={() => handleStageClick(i)}
-                className={`group relative min-w-[132px] cursor-pointer rounded-2xl border px-3 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${theme.card} ${
+                aria-expanded={isExpanded}
+                aria-label={`Pipeline stage ${(stage.name || "").replace(/_/g, " ")}: ${displayAction}, ${formatStageLatency(stage)}. ${
+                  isExpanded ? "Details pinned; activate to unpin." : "Activate to pin details."
+                }`}
+                className={`group relative min-h-11 min-w-[120px] cursor-pointer rounded-2xl border px-3 py-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:min-w-[132px] ${theme.card} ${
                   isActive ? `ring-2 ${theme.highlight}` : "ring-0"
                 }`}
               >
@@ -183,11 +205,11 @@ export function StageTimeline({ stages = [], className = "" }) {
                     <Icon className={`h-4 w-4 ${theme.icon}`} />
                   </div>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${theme.badge}`}>
-                    {stage.action}
+                    {displayAction}
                   </span>
                 </div>
 
-                <div className="text-xs font-semibold capitalize leading-tight text-slate-800 dark:text-slate-100">
+                <div className="text-xs font-semibold capitalize leading-snug text-slate-800 dark:text-slate-100">
                   {(stage.name || "").replace(/_/g, " ")}
                 </div>
                 <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
@@ -197,13 +219,15 @@ export function StageTimeline({ stages = [], className = "" }) {
                 <div className="mt-2 flex items-center gap-1.5">
                   <span className={`h-1.5 w-1.5 rounded-full ${theme.dot} ${isActive ? "animate-pulse" : ""}`} />
                   <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                    {isExpanded ? "Pinned" : "Hover for details"}
+                    {isExpanded ? "Pinned" : "View details"}
                   </span>
                 </div>
               </button>
 
+              {/* Directional connector: the gradient darkens toward the NEXT stage so the
+                  left→right pipeline flow reads at a glance (was a flat segment). */}
               {i < stages.length - 1 && (
-                <div className="mx-1 h-[2px] w-4 rounded-full bg-slate-300/70 dark:bg-slate-600/60" />
+                <div className="mx-1 h-[2px] w-4 rounded-full bg-gradient-to-r from-slate-300/50 to-slate-400/80 dark:from-slate-600/50 dark:to-slate-500/80" />
               )}
             </div>
           );
@@ -212,7 +236,7 @@ export function StageTimeline({ stages = [], className = "" }) {
 
       {visibleStageIndex !== null && stages[visibleStageIndex] && (
         <div
-          className={`absolute z-40 w-[360px] max-w-[calc(100%-1rem)] -translate-x-1/2 ${
+          className={`absolute z-40 w-[min(360px,calc(100vw-2rem))] max-w-[calc(100%-1rem)] -translate-x-1/2 ${
             popoverPos.placement === "above" ? "-translate-y-full" : ""
           }`}
           style={{ left: `${popoverPos.left}px`, top: `${popoverPos.top}px` }}
@@ -231,7 +255,7 @@ export function StageTimeline({ stages = [], className = "" }) {
       )}
 
       <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-        Tip: Hover a stage for instant detail, click to pin details while comparing stages.
+        Tip: Hover or tap a stage for instant detail; click to pin while comparing stages.
       </div>
     </div>
   );
@@ -248,7 +272,7 @@ function BeforeAfterBlock({ beforeLabel, beforeText, afterLabel, afterText }) {
       </div>
       <div>
         <span className="mb-1 block text-slate-500 dark:text-slate-400">{afterLabel}:</span>
-        <pre className="max-h-40 overflow-y-auto rounded-lg border border-emerald-200 bg-emerald-50/70 p-2 font-mono text-[11px] whitespace-pre-wrap text-slate-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-slate-100">
+        <pre className="max-h-40 overflow-y-auto rounded-lg border border-emerald-200 bg-emerald-50/70 p-2 font-mono text-[11px] whitespace-pre-wrap text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-50">
           {afterText}
         </pre>
       </div>
@@ -265,15 +289,22 @@ const BEFORE_AFTER_LABELS = {
 };
 
 function StageDetailCard({ stage, onClose, isPinned }) {
-  const theme = ACTION_THEME[stage.action] || ACTION_THEME.skip;
+  const displayAction = honestStageAction(stage);
+  const theme = ACTION_THEME[displayAction] || ACTION_THEME.skip;
   const hasWeights = stage.weights && typeof stage.weights === "object" && Object.keys(stage.weights).length > 0;
   const hasDecisionFactors = Array.isArray(stage.decision_factors) && stage.decision_factors.length > 0;
 
   // Before/after (Input -> Output) detection: render only when both sides are
-  // present AND actually differ. Otherwise fall back to the legacy single block.
+  // present AND actually differ. Policy + operator-masked Before is an exception:
+  // show the pair (and honesty note) even when display-masked strings match.
   const promptIn = typeof stage.prompt_in === "string" ? stage.prompt_in : "";
   const promptOut = typeof stage.prompt_out === "string" ? stage.prompt_out : "";
-  const hasBeforeAfter = promptIn.length > 0 && promptOut.length > 0 && promptIn !== promptOut;
+  const policyOperatorMasked =
+    stage.name === "policy" && Boolean(stage.prompt_in_operator_masked);
+  const hasBeforeAfter =
+    promptIn.length > 0
+    && promptOut.length > 0
+    && (promptIn !== promptOut || policyOperatorMasked);
   const baLabels = BEFORE_AFTER_LABELS[stage.name] || BEFORE_AFTER_LABELS.default;
 
   // Evidence de-duplication. The guard_reason violet block is the canonical
@@ -302,26 +333,66 @@ function StageDetailCard({ stage, onClose, isPinned }) {
   // block for the same stage to avoid showing the same text twice.
   const showPromptSubmitted = Boolean(stage.prompt_submitted) && !hasBeforeAfter;
 
+  const isModelRouting = stage.name === "model_routing";
+  const routingExplain = isModelRouting ? summarizeRoutingDecision(stage) : null;
+  const isInputScan = stage.name === "input_scan";
+  const inputScanExplain = isInputScan ? summarizeInputScanStage(stage) : null;
+  const collapseInputScanGuardRaw = isInputScan && (
+    stage.scan_outcome === "analyzed" || stage.redact_noop === true
+  );
+
   return (
     <div className={`rounded-2xl border bg-white/95 p-4 shadow-2xl backdrop-blur-sm dark:bg-slate-900/95 ${theme.card}`}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <h4 className="text-sm font-semibold capitalize text-slate-900 dark:text-slate-100">
-          {(stage.name || "").replace(/_/g, " ")} - <span className={theme.icon}>{stage.action}</span>
+          {(stage.name || "").replace(/_/g, " ")}
+          {displayAction && (
+            <span className={`ml-1.5 inline-block rounded px-1.5 py-0.5 align-middle text-xs font-semibold ${theme.badge}`}>
+              {displayAction}
+            </span>
+          )}
         </h4>
         <button
+          type="button"
           onClick={onClose}
-          className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+          className="inline-flex min-h-9 min-w-9 items-center justify-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
         >
           {isPinned ? <X className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
           {isPinned ? "Close" : "Pin"}
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
-        {(stage.name === "input_scan" || stage.name === "output_guardrail") && stage.guard_reason && (
+      <div className="grid grid-cols-1 gap-2 text-xs text-slate-600 dark:text-slate-300 sm:grid-cols-2">
+        {isModelRouting && routingExplain?.summary && (
           <div className="col-span-2 rounded-xl border border-violet-200/80 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-500/10">
             <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
-              {stage.guard_model || ZEROSHIELD_GUARD_MODEL_LABEL}
+              Why this model
+            </div>
+            <p className="font-sans text-[11px] leading-relaxed text-slate-800 dark:text-slate-100">
+              {routingExplain.summary}
+            </p>
+            <RoutingTechnicalDetails technical={routingExplain.technical} />
+          </div>
+        )}
+        {isInputScan && inputScanExplain?.summary && (
+          <div className="col-span-2 rounded-xl border border-violet-200/80 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-500/10">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+              Why this stage
+            </div>
+            <p className="font-sans text-[11px] leading-relaxed text-slate-800 dark:text-slate-100">
+              {inputScanExplain.summary}
+            </p>
+            <InputScanTechnicalDetails technical={inputScanExplain.technical} />
+          </div>
+        )}
+        {((stage.name === "output_guardrail" || stage.name === "policy")
+          || (stage.name === "input_scan" && !collapseInputScanGuardRaw))
+          && stage.guard_reason && (
+          <div className="col-span-2 rounded-xl border border-violet-200/80 bg-violet-50/90 p-3 dark:border-violet-500/30 dark:bg-violet-500/10">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+              {stage.name === "policy"
+                ? "Policy decision"
+                : (stage.guard_model || ZEROSHIELD_GUARD_MODEL_LABEL)}
             </div>
             <pre className="whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-slate-800 dark:text-slate-100">
               {stage.guard_reason}
@@ -339,12 +410,27 @@ function StageDetailCard({ stage, onClose, isPinned }) {
           </div>
         )}
         {hasBeforeAfter && (
-          <BeforeAfterBlock
-            beforeLabel={baLabels.before}
-            beforeText={promptIn}
-            afterLabel={baLabels.after}
-            afterText={promptOut}
-          />
+          <div className="col-span-2 space-y-2">
+            {stage.name === "policy" && stage.prompt_in_operator_masked && (
+              <div
+                className="rounded-lg border border-amber-300/80 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"
+                data-testid="policy-before-operator-masked-note"
+              >
+                {stage.redaction_display_note
+                  || "Before is display-masked for operator safety (raw PII is never shown). Near-identical Before/After means both sides are masked views — not that policy redaction was a no-op."}
+              </div>
+            )}
+            <BeforeAfterBlock
+              beforeLabel={
+                stage.name === "policy" && stage.prompt_in_operator_masked
+                  ? "Before (display-masked)"
+                  : baLabels.before
+              }
+              beforeText={promptIn}
+              afterLabel={baLabels.after}
+              afterText={promptOut}
+            />
+          </div>
         )}
         {showDetail && (
           <div className="col-span-2">
@@ -354,9 +440,11 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             <span className="text-slate-700 dark:text-slate-200">{detailText}</span>
           </div>
         )}
-        {stage.action === "allow" && stage.name === "input_scan" && stage.tier && (
+        {displayAction === "allow" && stage.name === "input_scan" && stage.tier && (
           <div className="col-span-2 text-[11px] text-emerald-700 dark:text-emerald-300">
-            Scan ran ({stage.tier}) — request was not blocked; later stages executed normally.
+            {stage.scan_outcome === "analyzed"
+              ? `Scan ran (${stage.tier}) — context analyzed after policy redaction; no additional masking.`
+              : `Scan ran (${stage.tier}) — request was not blocked; later stages executed normally.`}
           </div>
         )}
         {stage.name === "input_scan" && (() => {
@@ -366,7 +454,7 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             confidence: stage.confidence,
             risk_score: stage.risk_score,
             scan_outcome: stage.scan_outcome,
-            action: stage.action,
+            action: displayAction,
           });
           return (
             <>
@@ -407,13 +495,21 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             <span className="font-mono text-slate-700 dark:text-slate-200">{stage.requested_model}</span>
           </div>
         )}
+        {(stage.route_destination || stage.route_destination_label) && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Destination:</span>{" "}
+            <span className="font-semibold text-indigo-700 dark:text-indigo-300">
+              {stage.route_destination_label || formatRouteDestination(stage.route_destination)}
+            </span>
+          </div>
+        )}
         {stage.selected_model && (
           <div>
             <span className="text-slate-500 dark:text-slate-400">Selected model:</span>{" "}
             <span className="font-mono text-slate-700 dark:text-slate-200">{stage.selected_model}</span>
           </div>
         )}
-        {stage.decision_source && (
+        {stage.decision_source && !isModelRouting && (
           <div>
             <span className="text-slate-500 dark:text-slate-400">Decision source:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">
@@ -421,7 +517,7 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             </span>
           </div>
         )}
-        {stage.routing_reason && (
+        {stage.routing_reason && !isModelRouting && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Routing reason:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">
@@ -429,19 +525,19 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             </span>
           </div>
         )}
-        {stage.policy_summary && (
+        {stage.policy_summary && !isModelRouting && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Policy summary:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">{stage.policy_summary}</span>
           </div>
         )}
-        {hasDecisionFactors && (
+        {hasDecisionFactors && !isModelRouting && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Decision factors:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">{stage.decision_factors.join(", ")}</span>
           </div>
         )}
-        {hasWeights && (
+        {hasWeights && !isModelRouting && (
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Applied weights:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">
@@ -455,10 +551,30 @@ function StageDetailCard({ stage, onClose, isPinned }) {
             </span>
           </div>
         )}
-        {stage.tier && (
+        {Number(stage.routing_score) > 0 && !isModelRouting && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Routing score:</span>{" "}
+            <span className="text-slate-700 dark:text-slate-200">{Number(stage.routing_score).toFixed(3)}</span>
+          </div>
+        )}
+        {Number(stage.candidate_count) > 0 && !isModelRouting && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Candidates:</span>{" "}
+            <span className="text-slate-700 dark:text-slate-200">{stage.candidate_count}</span>
+          </div>
+        )}
+        {stage.tier && stage.name !== "input_scan" && (
           <div>
             <span className="text-slate-500 dark:text-slate-400">Tier:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">{formatDetectionTier(stage.tier)}</span>
+          </div>
+        )}
+        {Number(stage.confidence) > 0 && stage.name !== "input_scan" && (
+          <div>
+            <span className="text-slate-500 dark:text-slate-400">Confidence:</span>{" "}
+            <span className="text-slate-700 dark:text-slate-200">
+              {Math.round(Number(stage.confidence) * 100)}%
+            </span>
           </div>
         )}
         {dedupedPatterns.length > 0 && (
@@ -495,7 +611,8 @@ function StageDetailCard({ stage, onClose, isPinned }) {
           <div className="col-span-2">
             <span className="text-slate-500 dark:text-slate-400">Docs:</span>{" "}
             <span className="text-slate-700 dark:text-slate-200">
-              {stage.docs_in} in {"->"} {stage.docs_out} out ({stage.docs_dropped} dropped)
+              {stage.docs_in} in {"->"} {stage.docs_out ?? "—"} out
+              {stage.docs_dropped != null ? ` (${stage.docs_dropped} dropped)` : ""}
             </span>
           </div>
         )}

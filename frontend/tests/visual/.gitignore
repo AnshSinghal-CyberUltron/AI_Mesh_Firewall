@@ -1,0 +1,4 @@
+# Per-run artifacts (screenshots + behavior snapshot). The gate is threshold-based
+# (in audit.mjs), so these are review artifacts, not committed baselines.
+__output__/
+.token

@@ -324,12 +324,16 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 12},
     },
     {
         "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
+    {
+        "NAME": "auth.password_validators.PasswordComplexityValidator",
     },
 ]
 
@@ -510,18 +514,6 @@ if MODULE2_UEBA_AUTO_KILL_ENABLED:
 # Redis
 REDIS_URL = _redis_url
 
-# Email configuration for security alerts
-EMAIL_BACKEND = os.environ.get(
-    "EMAIL_BACKEND",
-    "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.SMTPBackend",
-)
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "true").lower() in ("true", "1", "yes")
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "zeroshield-alerts@company.com")
-
 # REST Framework configuration
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -542,6 +534,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "login_ip": os.environ.get("LOGIN_THROTTLE_IP_RATE", "10/min"),
         "login_user": os.environ.get("LOGIN_THROTTLE_USER_RATE", "5/min"),
+        "policy_write": os.environ.get("POLICY_WRITE_THROTTLE_RATE", "30/min"),
     },
     # Number of TRUSTED reverse proxies in front of the app. DRF's get_ident
     # uses this to pick the real client IP from X-Forwarded-For; with it set,
@@ -571,7 +564,7 @@ SIMPLE_JWT = {
     "UPDATE_LAST_LOGIN": True,
     # Short-lived access token; clients refresh via /api/auth/token/refresh/.
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     # Rotate the refresh token on every refresh and blacklist the previous one
     # so a stolen/replayed refresh token cannot be reused, and logout can revoke.
     "ROTATE_REFRESH_TOKENS": True,

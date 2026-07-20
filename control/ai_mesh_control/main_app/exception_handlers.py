@@ -11,6 +11,7 @@ Two goals:
 
 import logging
 
+from django.db import InterfaceError, OperationalError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
@@ -26,6 +27,22 @@ def safe_exception_handler(exc, context):
 
     request = context.get("request") if context else None
     path = getattr(request, "path", "?")
+
+    # Transient DB operational faults → 503 (retryable), not a raw 500. The classic
+    # case is Postgres "FATAL: sorry, too many clients already" (connection-pool
+    # exhaustion under load), raised in DRF ``perform_authentication`` BEFORE the
+    # view body — so it surfaces here on ANY endpoint (the MCP Observability tab
+    # 500 was this). A 503 + Retry-After lets the client back off and retry instead
+    # of showing a hard error; the pool recovers in seconds. (CP26)
+    if isinstance(exc, (OperationalError, InterfaceError)):
+        logger.warning("Transient DB fault (%s) at %s: %s", type(exc).__name__, path, exc)
+        resp = Response(
+            {"detail": "Service temporarily unavailable, please retry.",
+             "code": "db_unavailable"},
+            status=503,
+        )
+        resp["Retry-After"] = "2"
+        return resp
 
     # Malformed-input errors → 400 (not 500). Covers int('abc'), 'x'.strip() on a
     # non-str, iterating a non-iterable body field, and out-of-range numerics that

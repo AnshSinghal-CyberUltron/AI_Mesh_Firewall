@@ -1,0 +1,9 @@
+{
+  "proxy_base_url": "http://host.docker.internal:8901",
+  "_note": "E13 ISOLATED governance-routing/isolation capture. Own port 8901, own captures dir; does NOT touch the parallel session's 8900 harness.",
+  "channels": {
+    "gemma": {"upstream_base_url": "https://openrouter.ai/api/v1", "model": "gemma-free"},
+    "haiku": {"upstream_base_url": "https://openrouter.ai/api/v1", "model": "haiku-cheap"},
+    "gpt4o": {"upstream_base_url": "https://openrouter.ai/api/v1", "model": "gpt4o-mini"}
+  }
+}

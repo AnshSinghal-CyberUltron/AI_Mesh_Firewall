@@ -1,0 +1,30 @@
+{
+  "server_slug": "_sdk_edge_cases",
+  "label": "e7_negative_max_tokens",
+  "captured_at_utc": "2026-07-07T10:57:46Z",
+  "request": {
+    "sdk": "openai.OpenAI.chat.completions.create",
+    "base_url": "http://127.0.0.1:8300/v1",
+    "model": "openrouter/free",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hi"
+      }
+    ],
+    "max_tokens": -5
+  },
+  "response": {
+    "status": "error",
+    "type": "BadRequestError",
+    "message": "Error code: 400 - {'error': {'message': \"'max_tokens' must be a positive integer.\", 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'invalid_max_tokens'}, 'request_id': 'zs-2c9d61d90c49'}",
+    "status_code": 400,
+    "body": {
+      "message": "'max_tokens' must be a positive integer.",
+      "type": "invalid_request_error",
+      "param": "max_tokens",
+      "code": "invalid_max_tokens"
+    }
+  },
+  "notes": ""
+}

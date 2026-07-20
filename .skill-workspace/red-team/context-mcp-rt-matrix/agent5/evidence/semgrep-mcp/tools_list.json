@@ -1,0 +1,212 @@
+{
+  "server_slug": "semgrep-mcp",
+  "label": "tools_list",
+  "captured_at_utc": "2026-07-07T10:55:21Z",
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/semgrep-mcp",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer <redacted>"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {}
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 10:55:20 GMT",
+      "server": "uvicorn",
+      "content-length": "2974",
+      "content-type": "application/json"
+    },
+    "body": {
+      "result": {
+        "tools": [
+          {
+            "name": "scan_directory",
+            "description": "Performs a Semgrep scan on a directory",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Absolute path to the directory to scan (must be within an allowed workspace root)"
+                },
+                "config": {
+                  "type": "string",
+                  "description": "Semgrep configuration (e.g. \"auto\" or absolute path to rule file)",
+                  "default": "auto"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          },
+          {
+            "name": "list_rules",
+            "description": "Lists available Semgrep rules",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "language": {
+                  "type": "string",
+                  "description": "Programming language for rules (optional)"
+                }
+              }
+            }
+          },
+          {
+            "name": "analyze_results",
+            "description": "Analyzes scan results",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "results_file": {
+                  "type": "string",
+                  "description": "Absolute path to JSON results file (must be within an allowed workspace root)"
+                }
+              },
+              "required": [
+                "results_file"
+              ]
+            }
+          },
+          {
+            "name": "create_rule",
+            "description": "Creates a new Semgrep rule",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "output_path": {
+                  "type": "string",
+                  "description": "Absolute path for output rule file"
+                },
+                "pattern": {
+                  "type": "string",
+                  "description": "Search pattern for the rule"
+                },
+                "language": {
+                  "type": "string",
+                  "description": "Target language for the rule"
+                },
+                "message": {
+                  "type": "string",
+                  "description": "Message to display when rule matches"
+                },
+                "severity": {
+                  "type": "string",
+                  "description": "Rule severity (ERROR, WARNING, INFO)",
+                  "default": "WARNING"
+                },
+                "id": {
+                  "type": "string",
+                  "description": "Rule identifier",
+                  "default": "custom_rule"
+                }
+              },
+              "required": [
+                "output_path",
+                "pattern",
+                "language",
+                "message"
+              ]
+            }
+          },
+          {
+            "name": "filter_results",
+            "description": "Filters scan results by various criteria",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "results_file": {
+                  "type": "string",
+                  "description": "Absolute path to JSON results file"
+                },
+                "severity": {
+                  "type": "string",
+                  "description": "Filter by severity (ERROR, WARNING, INFO)"
+                },
+                "rule_id": {
+                  "type": "string",
+                  "description": "Filter by rule ID"
+                },
+                "path_pattern": {
+                  "type": "string",
+                  "description": "Filter by file path pattern (regex)"
+                },
+                "language": {
+                  "type": "string",
+                  "description": "Filter by programming language"
+                },
+                "message_pattern": {
+                  "type": "string",
+                  "description": "Filter by message content (regex)"
+                }
+              },
+              "required": [
+                "results_file"
+              ]
+            }
+          },
+          {
+            "name": "export_results",
+            "description": "Exports scan results in various formats",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "results_file": {
+                  "type": "string",
+                  "description": "Absolute path to JSON results file"
+                },
+                "output_file": {
+                  "type": "string",
+                  "description": "Absolute path to output file"
+                },
+                "format": {
+                  "type": "string",
+                  "description": "Output format (json, sarif, text)",
+                  "default": "text"
+                }
+              },
+              "required": [
+                "results_file",
+                "output_file"
+              ]
+            }
+          },
+          {
+            "name": "compare_results",
+            "description": "Compares two scan results",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "old_results": {
+                  "type": "string",
+                  "description": "Absolute path to older JSON results file"
+                },
+                "new_results": {
+                  "type": "string",
+                  "description": "Absolute path to newer JSON results file"
+                }
+              },
+              "required": [
+                "old_results",
+                "new_results"
+              ]
+            }
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    },
+    "_latency_ms": 506.4
+  },
+  "notes": ""
+}

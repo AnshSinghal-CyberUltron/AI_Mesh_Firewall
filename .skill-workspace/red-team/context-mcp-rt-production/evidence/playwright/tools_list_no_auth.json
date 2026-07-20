@@ -1,0 +1,44 @@
+{
+  "server_slug": "playwright",
+  "label": "tools_list_no_auth",
+  "captured_at_utc": "2026-07-07T09:58:20Z",
+  "request": {
+    "method": "POST",
+    "url": "https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/playwright",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {}
+    }
+  },
+  "response": {
+    "status_code": 401,
+    "headers": {
+      "date": "Tue, 07 Jul 2026 09:58:20 GMT",
+      "content-type": "application/json",
+      "content-length": "106",
+      "connection": "keep-alive",
+      "server": "cloudflare",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "www-authenticate": "Bearer resource_metadata=\"https://aimeshgateway.zeroshield.ai/.well-known/oauth-protected-resource\"",
+      "x-content-type-options": "nosniff",
+      "x-frame-options": "DENY",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "content-security-policy": "frame-ancestors 'none'",
+      "strict-transport-security": "max-age=31536000",
+      "cf-cache-status": "DYNAMIC",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=PFK71IIOlq1FPacNVITJHg%2Bvh7axqmyjCLXLlILTUeeRx03V2RVrR2z34i0Mxk6zbkOIXmjUzpyxH31eq%2BEG8nE1YHF6I%2BfzgrhTOMxJ1UHuAz8XfyEsRyTktloLXwBWTi43%2FF%2BzeV720KJGgSg%3D\"}]}",
+      "cf-ray": "a175fd7c7a93b269-BOM",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": {
+      "error": "unauthorized",
+      "message": "Missing or malformed Authorization header. Expected: Bearer <api_key>"
+    }
+  },
+  "notes": ""
+}

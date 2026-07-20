@@ -1,0 +1,37 @@
+{
+  "remote.autoForwardPorts": true,
+  "remote.autoForwardPortsSource": "hybrid",
+  "remote.restoreForwardedPorts": true,
+  "remote.forwardOnOpen": true,
+  "remote.localPortHost": "localhost",
+  "remote.SSH.defaultForwardedPorts": [
+    { "name": "Frontend (Vite /login /demo)", "localPort": 8180, "remotePort": 8180 },
+    { "name": "Demo API", "localPort": 8770, "remotePort": 8770 },
+    { "name": "Control", "localPort": 8100, "remotePort": 8100 },
+    { "name": "Gateway", "localPort": 8300, "remotePort": 8300 }
+  ],
+  "remote.portsAttributes": {
+    "8180": {
+      "label": "AI Mesh Frontend (Vite + /demo + /login)",
+      "onAutoForward": "openBrowser",
+      "requireLocalPort": true,
+      "protocol": "http"
+    },
+    "8770": {
+      "label": "OpenAI SDK Demo (direct)",
+      "onAutoForward": "silent",
+      "requireLocalPort": true,
+      "protocol": "http"
+    },
+    "8100": {
+      "label": "Control API",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    },
+    "8300": {
+      "label": "Gateway",
+      "onAutoForward": "silent",
+      "requireLocalPort": true
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/everything-mcp",
+  "status_code": 200,
+  "elapsed_s": 0.076,
+  "request": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "echo",
+      "arguments": {
+        "message": "internal host 10.1.2.3 metadata 169.254.169.254 ipv6-ula fc00::1234:5678 ipv6-linklocal fe80::1 hostname internal-db.corp.svc.cluster.local"
+      }
+    }
+  },
+  "response": {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "Echo: internal host [INTERNAL_IPV4_REDACTED] metadata [LINK_LOCAL_IPV4_REDACTED] ipv6-ula [INTERNAL_IPV6_REDACTED] ipv6-linklocal [INTERNAL_IPV6_REDACTED] hostname [INTERNAL_HOSTNAME_REDACTED].svc.[INTERNAL_HOSTNAME_REDACTED]"
+        }
+      ]
+    },
+    "jsonrpc": "2.0",
+    "id": 1
+  },
+  "response_headers": {
+    "date": "Tue, 07 Jul 2026 09:27:52 GMT",
+    "server": "uvicorn",
+    "content-length": "298",
+    "content-type": "application/json"
+  },
+  "_captured_at": "2026-07-07T09:27:53.507846+00:00"
+}

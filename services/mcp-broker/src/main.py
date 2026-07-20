@@ -1,22 +1,65 @@
 """MCP broker scaffold — tool mediation and policy enforcement."""
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from sandbox.docker_health import bind_docker_manager, cached_docker_ok
 from sandbox.docker_manager import DockerManager
 from sandbox.registry import SandboxRegistry
 from sandbox.reaper import start_reaper, stop_reaper
 from sandbox.routes import build_sandbox_router
 
+LOG = logging.getLogger("mcp_broker.main")
+
 sandbox_registry = SandboxRegistry()
 docker_manager = DockerManager(registry=sandbox_registry)
+bind_docker_manager(docker_manager)
+
+_DOCKER_OK_TTL_SECONDS = 15.0
+
+
+async def _boot_reconcile() -> None:
+    """Restart-safety (item #24): re-adopt live sandbox containers into the
+    (empty, in-memory) registry on boot so the org quota counts them and the
+    reaper tracks/reaps idle ones — no orphan leak after a broker restart."""
+    try:
+        adopted = await asyncio.to_thread(docker_manager.reconcile_registry)
+        if adopted:
+            LOG.info("Reconciled %d orphaned sandbox(es) into the registry on boot", adopted)
+    except Exception as exc:  # noqa: BLE001
+        LOG.warning("Boot sandbox reconcile failed: %s", exc)
+
+
+async def _docker_ok_refresh_loop() -> None:
+    while True:
+        await asyncio.sleep(_DOCKER_OK_TTL_SECONDS)
+        await asyncio.to_thread(cached_docker_ok, force=True)
+
+
+async def _warm_docker_ok() -> None:
+    """Populate docker_ok cache soon after startup without blocking request handling."""
+    for _ in range(12):
+        await asyncio.to_thread(cached_docker_ok, force=True)
+        if cached_docker_ok():
+            return
+        await asyncio.sleep(2)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    asyncio.create_task(_warm_docker_ok())
+    asyncio.create_task(_boot_reconcile())
+    refresh_task = asyncio.create_task(_docker_ok_refresh_loop(), name="docker-ok-refresh")
     start_reaper(sandbox_registry, docker_manager)
     yield
+    refresh_task.cancel()
+    try:
+        await refresh_task
+    except asyncio.CancelledError:
+        pass
     await stop_reaper()
 
 
@@ -26,8 +69,9 @@ app.include_router(build_sandbox_router(docker_manager))
 
 @app.get("/health")
 def health() -> dict:
+    # Never block liveness on docker.ping() — background tasks keep the cache warm.
     return {
         "status": "ok",
         "service": "mcp-broker",
-        "docker_ok": docker_manager.ping(),
+        "docker_ok": cached_docker_ok(),
     }

@@ -9,6 +9,7 @@ node_modules/
 dist/
 *.egg-info/
 .pytest_cache/
+gateway/tests/golden/.live_session.json
 .coverage
 postgres_data/
 *.log
@@ -39,6 +40,16 @@ crash.log
 # Local env with secrets (never commit)
 .env
 .env.bak
+.env*
+!.env.example
+# Chat-stress session: runtime secrets must never be committed. The pre-commit
+# guard scripts/ralph/precommit-secret-scan.sh is the active enforcement.
+*.key
+*.secret
 .playwright-mcp/
 /tmp/
-.skill-workspace/
+.skill-workspace/scripts/ralph/mcp_sandbox/.pw-profile/
+scripts/ralph/mcp_sandbox/runs/
+scripts/ralph/.mcp_scale_manifest.json
+
+gateway/tests/golden/.live_session.json

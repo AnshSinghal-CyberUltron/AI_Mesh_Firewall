@@ -1,0 +1,51 @@
+{
+  "run_id": "e733a9e2",
+  "server_slug": "semgrep-mcp",
+  "label": "scan_directory__pii_email_only",
+  "captured_at_utc": "2026-07-07T10:54:43Z",
+  "request": {
+    "url": "http://127.0.0.1:8300/gateway/zeroshield/mcp/semgrep-mcp",
+    "headers": {
+      "Authorization": "Bearer <redacted>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 13,
+      "method": "tools/call",
+      "params": {
+        "name": "scan_directory",
+        "arguments": {
+          "path": "Contact me at redteam.agent2@corp.example regarding this RT-A2-semgrep-mcp-ab238285be",
+          "config": "placeholder"
+        }
+      }
+    }
+  },
+  "response": {
+    "http_status": 200,
+    "elapsed_s": 3.164,
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 13,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "[BLOCKED] Response from 'scan_directory' matched compliance tags: GDPR, PII."
+          }
+        ],
+        "isError": true
+      }
+    },
+    "classified_action": "BLOCK",
+    "compliance_tags_found": [
+      "GDPR",
+      "PII"
+    ],
+    "raw_markers_in_response": [],
+    "canary_present_in_response": false,
+    "possible_leak": false
+  },
+  "notes": "tool=scan_directory variant=pii_email_only"
+}

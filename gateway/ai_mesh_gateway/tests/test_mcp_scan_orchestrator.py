@@ -229,6 +229,93 @@ async def test_redact_rule_still_redacts_under_redact_enforcement():
 
 
 @pytest.mark.asyncio
+async def test_block_rule_honored_under_tag_posture():
+    """CHG-0007 (G2 item 3, finding #3): a policy rule authored action='block'
+    BLOCKS even under the default 'tag' posture — parity with the control-plane
+    engine and the backend HTTP path. Without this the stdio/websocket adapter
+    path (which bypasses the backend) would downgrade an actor-scoped block rule
+    to detect-and-tag."""
+    block_eval = EvaluationResult(action="block", matched_rule_ids=[1],
+                                  matched_rule_names=["deny-intern"], message="blocked")
+    mock_sync = MagicMock()
+    mock_sync.get_policies_for_server.return_value = [{"policy": {"id": 1}, "rules": []}]
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=mock_sync),
+        patch("mcp_scan_orchestrator.evaluate_mcp_policies", return_value=block_eval),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        _, result = await scan_mcp_payload(
+            {"q": "hi"},
+            scan_direction="input",
+            enforcement="tag",   # coarse posture, NOT block
+            effective_controls=_ctrl("input"),
+            org_slug="demo", server_slug="stub", tool_name="secret_tool",
+        )
+    assert result.blocked is True
+
+
+@pytest.mark.asyncio
+async def test_block_rule_not_honored_under_monitor_posture():
+    """Guard: a 'monitor' posture is explicit observe-only and still wins over a
+    block rule (no block, no mutation)."""
+    block_eval = EvaluationResult(action="block", matched_rule_ids=[1], message="blocked")
+    mock_sync = MagicMock()
+    mock_sync.get_policies_for_server.return_value = [{"policy": {"id": 1}, "rules": []}]
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=mock_sync),
+        patch("mcp_scan_orchestrator.evaluate_mcp_policies", return_value=block_eval),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        _, result = await scan_mcp_payload(
+            {"q": "hi"},
+            scan_direction="input",
+            enforcement="monitor",
+            effective_controls=_ctrl("input"),
+            org_slug="demo", server_slug="stub", tool_name="secret_tool",
+        )
+    assert result.blocked is False
+
+
+@pytest.mark.asyncio
+async def test_scan_enforces_actor_scoped_block_on_adapter_path():
+    """CHG-0008 (G2 item 3, finding #1): END-TO-END proof that scan_mcp_payload —
+    the path the stdio/websocket ADAPTER uses via _mcp_security_scan(actor=...) —
+    enforces a per-ROLE block policy under the DEFAULT 'tag' posture, blocking the
+    scoped role and NOT a different role. Uses a REAL compiled bundle (no mocked
+    evaluate), combining actor-scoping (_policy_applies_to_actor) with the CHG-0007
+    rule-block honoring. This is the per-actor ACCESS authorization the audit
+    claimed was absent on the adapter path — it is enforced, one layer down."""
+    compiled = [{
+        "policy": {"id": 1, "code": "P1", "name": "p1", "priority": 10,
+                   "severity": "high", "allowed_roles": ["admin"]},
+        "rules": [{"id": 11, "name": "kw", "rule_type": "keywords",
+                   "condition": {"keywords": ["forbidden"]}, "action": "block"}],
+    }]
+    mock_sync = MagicMock()
+    mock_sync.get_policies_for_server.return_value = compiled
+
+    async def _run(actor_roles):
+        with (
+            patch("mcp_scan_orchestrator._get_policy_sync", return_value=mock_sync),
+            patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+        ):
+            _, result = await scan_mcp_payload(
+                {"text": "this is forbidden content"},
+                scan_direction="input",
+                enforcement="tag",   # DEFAULT posture, NOT block
+                effective_controls=_ctrl("input"),
+                org_slug="demo", server_slug="stub", tool_name="echo",
+                actor={"roles": actor_roles},
+            )
+        return result
+
+    blocked = await _run(["admin"])
+    assert blocked.blocked is True     # scoped role -> block rule applies -> blocked
+    allowed = await _run(["intern"])
+    assert allowed.blocked is False    # non-scoped role -> policy skipped -> not blocked
+
+
+@pytest.mark.asyncio
 async def test_a4_tier2_block_floor_on_redact_verdict():
     """A4 Tier-2 parity: a Bedrock 'redact' verdict under a 'block' posture BLOCKS."""
     verdict = MagicMock()
@@ -387,3 +474,618 @@ async def test_action_appears_in_scan_trace():
         )
     t1 = [t for t in result.scan_trace if t.get("scan_stage") == "tier1"]
     assert t1 and t1[0].get("action") == "monitor"
+
+
+# ── 3b: per-policy FIELD-level RBAC redaction on the stdio/websocket ADAPTER path
+# The compiler emits Policy.redaction_fields into the bundle (compiler.py:521) but
+# the gateway never consumed them, so the adapter path did content-scan yet NO
+# field-level masking of named tool-RESULT fields (the HTTP path masks them via
+# control apply_field_redaction). These pin the new parity: a matched policy's
+# redaction_fields mask the named OUTPUT fields, scoped by actor, suppressed under
+# a 'monitor' posture, and never applied to input args. Uses REAL compiled bundles
+# (no mocked evaluate) so the whole redaction_fields → EvaluationResult →
+# apply_field_redaction chain is exercised end-to-end.
+
+
+def _field_policy(fields, *, action="monitor", roles=None, keyword="flagme"):
+    policy = {
+        "id": 5, "code": "FR", "name": "field-rbac", "priority": 10,
+        "severity": "medium", "redaction_fields": list(fields),
+    }
+    if roles is not None:
+        policy["allowed_roles"] = list(roles)
+    return [{
+        "policy": policy,
+        "rules": [{
+            "id": 55, "name": "kw", "rule_type": "keywords",
+            "condition": {"keywords": [keyword]}, "action": action,
+        }],
+    }]
+
+
+def _field_sync(compiled):
+    sync = MagicMock()
+    sync.get_policies_for_server.return_value = compiled
+    return sync
+
+
+@pytest.mark.asyncio
+async def test_field_redaction_masks_named_output_fields():
+    """A matched policy's redaction_fields mask the named OUTPUT fields (values
+    replaced with the placeholder) while sibling fields survive — under a
+    non-monitor posture, output direction. Original payload is not mutated."""
+    payload = {"account": "ACME-123", "ssn": "123-45-6789",
+               "note": "please flagme this record"}
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync",
+              return_value=_field_sync(_field_policy(["ssn", "account"]))),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="tag",
+            effective_controls=_ctrl("output"),
+            org_slug="demo", server_slug="stub", tool_name="get_user_record",
+        )
+    assert result.blocked is False
+    assert out["ssn"] == "[REDACTED]"
+    assert out["account"] == "[REDACTED]"
+    assert out["note"] == "please flagme this record"      # sibling untouched
+    assert result.redacted_fields == ["ssn", "account"]
+    assert any(t.get("scan_stage") == "field_redaction" for t in result.scan_trace)
+    assert payload["ssn"] == "123-45-6789"                 # non-mutating (audit-safe)
+
+
+@pytest.mark.asyncio
+async def test_field_redaction_suppressed_under_monitor_posture():
+    """A 'monitor' posture is observe-only: named fields are NOT masked and
+    redacted_fields stays empty (mirrors the HTTP path's _output_monitor guard)."""
+    payload = {"ssn": "123-45-6789", "note": "flagme"}
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync",
+              return_value=_field_sync(_field_policy(["ssn"]))),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="monitor",
+            effective_controls=_ctrl("output"),
+            org_slug="demo", server_slug="stub", tool_name="get_user_record",
+        )
+    assert out["ssn"] == "123-45-6789"                     # observe-only, unmasked
+    assert result.redacted_fields == []
+    assert not any(t.get("scan_stage") == "field_redaction" for t in result.scan_trace)
+
+
+@pytest.mark.asyncio
+async def test_field_redaction_not_applied_on_input_args():
+    """Field-level RBAC masking is an OUTPUT (tool-result) concern — input args
+    are never field-masked, so an input scan leaves them intact."""
+    payload = {"ssn": "123-45-6789", "note": "flagme"}
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync",
+              return_value=_field_sync(_field_policy(["ssn"]))),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="input", enforcement="tag",
+            effective_controls=_ctrl("input"),
+            org_slug="demo", server_slug="stub", tool_name="echo",
+        )
+    assert out["ssn"] == "123-45-6789"
+    assert result.redacted_fields == []
+
+
+@pytest.mark.asyncio
+async def test_field_redaction_empty_list_is_noop():
+    """Backward-compat: a policy with redaction_fields=[] (every legacy policy)
+    changes nothing — no masking, no field_redaction trace."""
+    payload = {"ssn": "keep-me", "note": "flagme"}
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync",
+              return_value=_field_sync(_field_policy([]))),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="tag",
+            effective_controls=_ctrl("output"),
+            org_slug="demo", server_slug="stub", tool_name="get_user_record",
+        )
+    assert out["ssn"] == "keep-me"
+    assert result.redacted_fields == []
+
+
+@pytest.mark.asyncio
+async def test_field_redaction_scoped_to_actor_role():
+    """RBAC dimension: redaction_fields only surface (and mask) for the actor the
+    policy is scoped to — a non-scoped actor's response is left intact."""
+    compiled = _field_policy(["ssn"], roles=["support"])
+
+    async def _run(actor_roles):
+        with (
+            patch("mcp_scan_orchestrator._get_policy_sync", return_value=_field_sync(compiled)),
+            patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+        ):
+            out, result = await scan_mcp_payload(
+                {"ssn": "123-45-6789", "note": "flagme"},
+                scan_direction="output", enforcement="tag",
+                effective_controls=_ctrl("output"),
+                org_slug="demo", server_slug="stub", tool_name="get_user_record",
+                actor={"roles": actor_roles},
+            )
+        return out, result
+
+    scoped_out, scoped_res = await _run(["support"])
+    assert scoped_out["ssn"] == "[REDACTED]"
+    assert scoped_res.redacted_fields == ["ssn"]
+
+    other_out, other_res = await _run(["admin"])
+    assert other_out["ssn"] == "123-45-6789"     # policy skipped -> no masking
+    assert other_res.redacted_fields == []
+
+
+def test_apply_field_redaction_nested_homoglyph_and_nonmutating():
+    """apply_field_redaction: recurse into nested dict/list, match keys
+    case-insensitively + NFKC (fullwidth folds to ASCII), and never mutate input."""
+    from policy_engine import apply_field_redaction
+
+    obj = {"outer": {"ssn": "111", "keep": "ok"}, "rows": [{"ssn": "222"}]}
+    out = apply_field_redaction(obj, ["ssn"])
+    assert out["outer"]["ssn"] == "[REDACTED]"
+    assert out["outer"]["keep"] == "ok"
+    assert out["rows"][0]["ssn"] == "[REDACTED]"
+    assert obj["outer"]["ssn"] == "111"          # non-mutating deep copy
+
+    # case-insensitive + NFKC: uppercase and fullwidth 'ｓｓｎ' both match "ssn".
+    assert apply_field_redaction({"SSN": "x"}, ["ssn"])["SSN"] == "[REDACTED]"
+    assert apply_field_redaction({"ｓｓｎ": "x"}, ["ssn"])["ｓｓｎ"] == "[REDACTED]"
+
+    # no fields / non-container -> returned unchanged (identity).
+    assert apply_field_redaction({"ssn": "x"}, []) == {"ssn": "x"}
+    assert apply_field_redaction("scalar", ["ssn"]) == "scalar"
+
+
+def test_apply_field_redaction_identity_on_noop():
+    """CHG-0025: when none of the declared fields are present the SAME object is
+    returned (identity), so a caller can detect 'nothing changed' and not mislabel
+    an unchanged result as redacted."""
+    from policy_engine import apply_field_redaction
+
+    obj = {"other": "x", "nested": {"keep": "y"}}
+    assert apply_field_redaction(obj, ["ssn"]) is obj          # no match -> identity
+    masked = apply_field_redaction({"ssn": "x", "other": "y"}, ["ssn"])
+    assert masked == {"ssn": "[REDACTED]", "other": "y"}        # match -> new copy
+
+
+def test_apply_field_redaction_deep_nesting_not_a_bypass():
+    """CHG-0148: a name-based redaction target nested BELOW the old max_depth=10 must
+    still be masked. The gateway only rejects results deeper than _MCP_MAX_RESULT_DEPTH
+    (500) before redaction, so a field at depth 11..500 used to evade masking and egress
+    RAW (opaque name-redacted fields are NOT caught by the content/pattern scan). max_depth
+    is now 500 and the walk is iterative (no recursion-limit blow-up)."""
+    import json
+
+    from policy_engine import apply_field_redaction
+
+    # 'ssn' wrapped 40 levels deep (well past the old limit of 10).
+    node = {"ssn": "SECRET-DEEP"}
+    for _ in range(40):
+        node = {"wrap": node}
+    out = apply_field_redaction(node, ["ssn"])
+    assert "SECRET-DEEP" not in json.dumps(out), "deep field must be redacted, not egressed"
+
+    # Reach in and confirm the exact leaf was masked.
+    cur = out
+    for _ in range(40):
+        cur = cur["wrap"]
+    assert cur["ssn"] == "[REDACTED]"
+
+    # A moderately-wide-and-deep mix is still fully covered.
+    mixed = {"a": [{"b": {"ssn": "X"}}, {"c": {"deep": {"ssn": "Y"}}}]}
+    out2 = apply_field_redaction(mixed, ["ssn"])
+    assert "X" not in json.dumps(out2) and "Y" not in json.dumps(out2)
+
+
+def test_apply_field_redaction_wide_result_not_a_bypass():
+    """CHG-0150: a redaction target 'late' in the walk order (behind padding, beyond the node
+    budget) must still be masked when the budget covers the result. Demonstrates the
+    overflow-leak mechanism with a small budget, then confirms the raised default (2M — the
+    gateway's _MCP_MAX_RESULT_NODES guard blocks anything wider upstream) masks it. Kept light
+    via a small explicit max_nodes rather than building millions of nodes."""
+    import json
+
+    from policy_engine import apply_field_redaction
+
+    # LIFO walk processes 'pad' before 'deep', so the ssn sits beyond the padding in walk order.
+    payload = {"deep": {"ssn": "LEAK"}, "pad": [{"i": i} for i in range(500)]}  # ~1000 nodes
+    leaky = apply_field_redaction(payload, ["ssn"], max_nodes=100)   # too small -> target beyond -> leaks
+    assert "LEAK" in json.dumps(leaky), "sanity: a too-small node budget leaks a late target"
+    covered = apply_field_redaction(payload, ["ssn"])                # default (2M) covers it
+    assert "LEAK" not in json.dumps(covered), "a target within the node budget must be masked"
+    assert covered["deep"]["ssn"] == "[REDACTED]"
+
+
+# ── 3b cross-stage: extra_redaction_fields projects INPUT-stage policy fields out
+# of the RESPONSE (control HTTP-path parity for "role X never sees field F", where
+# the rule fires on the CALL not the response). The caller threads an input scan's
+# policy_redaction_fields into the paired output scan.
+
+
+@pytest.mark.asyncio
+async def test_extra_redaction_fields_projects_output_without_content_match():
+    """extra_redaction_fields mask named OUTPUT fields even when THIS scan matched
+    no policy/PII (pure actor-scoped field projection)."""
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=None),
+        patch("mcp_scan_orchestrator.evaluate_mcp_policies", return_value=EvaluationResult(action="allow")),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        payload = {"ssn": "SECRET-VALUE", "note": "hello world"}
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="tag",
+            effective_controls=_ctrl("output"),
+            org_slug="demo", server_slug="stub", tool_name="get_user_record",
+            extra_redaction_fields=["ssn"],
+        )
+    assert out["ssn"] == "[REDACTED]"
+    assert out["note"] == "hello world"
+    assert result.redacted_fields == ["ssn"]
+    assert result.policy_redaction_fields == []          # this scan declared none
+    assert any(t.get("scan_stage") == "field_redaction" for t in result.scan_trace)
+
+
+@pytest.mark.asyncio
+async def test_extra_redaction_fields_ignored_on_input():
+    """Cross-stage projection is OUTPUT-only: input args are never field-masked."""
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=None),
+        patch("mcp_scan_orchestrator.evaluate_mcp_policies", return_value=EvaluationResult(action="allow")),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            {"ssn": "SECRET-VALUE", "note": "x"}, scan_direction="input",
+            enforcement="tag", effective_controls=_ctrl("input"),
+            org_slug="demo", server_slug="stub", tool_name="echo",
+            extra_redaction_fields=["ssn"],
+        )
+    assert out["ssn"] == "SECRET-VALUE"
+    assert result.redacted_fields == []
+
+
+@pytest.mark.asyncio
+async def test_extra_redaction_fields_noop_when_field_absent():
+    """extra_redaction_fields naming an absent field is a true no-op: unchanged
+    output, empty redacted_fields, no field_redaction trace (identity)."""
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=None),
+        patch("mcp_scan_orchestrator.evaluate_mcp_policies", return_value=EvaluationResult(action="allow")),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        payload = {"note": "nothing sensitive here"}
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="tag",
+            effective_controls=_ctrl("output"),
+            org_slug="demo", server_slug="stub", tool_name="get_user_record",
+            extra_redaction_fields=["ssn", "account"],
+        )
+    assert out == {"note": "nothing sensitive here"}
+    assert result.redacted_fields == []
+    assert not any(t.get("scan_stage") == "field_redaction" for t in result.scan_trace)
+
+
+@pytest.mark.asyncio
+async def test_policy_redaction_fields_surfaced_on_input_scan_not_applied():
+    """An INPUT scan whose matched policy declares redaction_fields SURFACES them
+    on result.policy_redaction_fields (for the caller to project onto the response)
+    but does NOT mask the input args itself."""
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync",
+              return_value=_field_sync(_field_policy(["ssn"], keyword="flagme"))),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            {"ssn": "SECRET-VALUE", "note": "please flagme"},
+            scan_direction="input", enforcement="tag",
+            effective_controls=_ctrl("input"),
+            org_slug="demo", server_slug="stub", tool_name="echo",
+        )
+    assert result.policy_redaction_fields == ["ssn"]     # surfaced for cross-stage
+    assert result.redacted_fields == []                  # not applied on input
+    assert out["ssn"] == "SECRET-VALUE"
+
+
+# ── 1.4 "PII/IP/regulated": IP / infrastructure-leakage detection on the MCP path
+# detect_ip_leakage + IP_LEAKAGE_PATTERNS already ran on the chat output_guard, but
+# the MCP tool-call scan only ran detect_pii/detect_secrets — so an internal
+# host/IP/path in a tool RESULT was never detected/tagged/redacted (CHG-0030).
+
+
+def _no_policy_ctx():
+    return (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=None),
+        patch("mcp_scan_orchestrator.evaluate_mcp_policies", return_value=EvaluationResult(action="allow")),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    )
+
+
+@pytest.mark.asyncio
+async def test_ip_leakage_internal_ip_redacted_and_tagged_infra():
+    a, b, c = _no_policy_ctx()
+    with a, b, c:
+        payload = {"note": "connect to 10.1.2.3 now"}
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="monitor",
+            effective_controls=_two_tier("output", t1_action="redact"),
+        )
+    assert result.blocked is False
+    assert "10.1.2.3" not in str(out)                       # internal IP masked
+    assert any(f.threat_type == "ip_leakage" for f in result.findings)
+    assert "INFRA" in result.compliance_tags
+
+
+@pytest.mark.asyncio
+async def test_ip_leakage_private_file_path_fails_closed_under_redact():
+    """redact_all does NOT mask private file paths, so a redact posture must BLOCK
+    rather than forward a 'redacted' result that still carries the path."""
+    a, b, c = _no_policy_ctx()
+    with a, b, c:
+        payload = {"note": "see /home/deploy/secrets.env for creds"}
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="monitor",
+            effective_controls=_two_tier("output", t1_action="redact"),
+        )
+    assert result.blocked is True                           # fail-closed, not forwarded
+    assert any(f.threat_type == "ip_leakage" for f in result.findings)
+
+
+@pytest.mark.asyncio
+async def test_ip_leakage_blocked_under_block_posture():
+    a, b, c = _no_policy_ctx()
+    with a, b, c:
+        payload = {"note": "internal host db01.corp is up"}
+        _, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="monitor",
+            effective_controls=_two_tier("output", t1_action="block"),
+        )
+    assert result.blocked is True
+
+
+@pytest.mark.asyncio
+async def test_ip_leakage_monitor_tags_without_mutation():
+    a, b, c = _no_policy_ctx()
+    with a, b, c:
+        payload = {"note": "connect to 10.1.2.3 now"}
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="monitor",
+            effective_controls=_two_tier("output", t1_action="monitor"),
+        )
+    assert result.blocked is False
+    assert result.monitored is True
+    assert "10.1.2.3" in str(out)                           # observe-only, unmutated
+    assert "INFRA" in result.compliance_tags
+
+
+@pytest.mark.asyncio
+async def test_public_ip_not_flagged_as_ip_leakage():
+    """A public IP (8.8.8.8) is NOT internal-infra leakage — no false positive."""
+    a, b, c = _no_policy_ctx()
+    with a, b, c:
+        payload = {"note": "ping 8.8.8.8 to test"}
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="monitor",
+            effective_controls=_two_tier("output", t1_action="redact"),
+        )
+    assert not any(f.threat_type == "ip_leakage" for f in result.findings)
+    assert "8.8.8.8" in str(out)                            # untouched
+
+
+# ── CHG-0046: non-string key_path target redaction is real, not a no-op ──────────
+# A redact rule on a key_path pointing at a NON-STRING value (number/list) must MASK
+# the value in the output payload. Before the fix the setter for a non-string target
+# was a no-op, so scan_mcp_payload set result_redacted=True while the RAW value
+# egressed (report-redact / forward-raw) — and the E12 result-floor was bypassed.
+
+
+@pytest.mark.asyncio
+async def test_chg0046_keypath_nonstring_value_setter_applied_end_to_end():
+    # Prove scan_mcp_payload APPLIES tier1 redaction to a NON-STRING key_path target.
+    # tier1 is stubbed to return a masked text so the assertion is decoupled from the
+    # redaction-pattern internals; the point under test is that the setter is now real
+    # (before CHG-0046 the non-string setter was a no-op, so the raw int survived while
+    # result_redacted was set → report-redact / forward-raw).
+    ctrl = {
+        "scan_controls_configured": True,
+        "tier1_output": {
+            "enabled": True, "target_mode": "key_path", "key_path": "ssn",
+            "strict_mode": "fail_open", "control_id": "t1",
+        },
+        "tier2_output": {
+            "enabled": False, "target_mode": "key_path", "key_path": "ssn",
+            "strict_mode": "fail_open", "control_id": None,
+        },
+    }
+
+    async def _fake_tier1(text, **kwargs):
+        # Simulate a redaction that changed the text (masked the numeric value).
+        return "MASKED", [], False, []
+
+    with (
+        patch("mcp_scan_orchestrator._scan_text_tier1", new=_fake_tier1),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        scanned, result = await scan_mcp_payload(
+            {"ssn": 123456789, "note": "ok"},
+            scan_direction="output",
+            enforcement="redact",
+            effective_controls=ctrl,
+            org_slug="demo", server_slug="stub", tool_name="echo",
+        )
+    assert result.blocked is False
+    assert scanned["ssn"] == "MASKED"                       # non-string value REPLACED (was no-op → 123456789)
+    assert "123456789" not in str(scanned)                  # raw value gone from egress bytes
+    assert scanned["note"] == "ok"                          # untouched field intact
+
+
+# ── CHG-0047: fail-closed no-op-scrub guard ──────────────────────────────────────
+# Tier-1 produced a redaction (new_text != text) but the setter silently failed to
+# apply it (a no-op scrub) — the raw value would egress while result_redacted claims
+# a scrub. scan_mcp_payload must detect the unchanged payload bytes and BLOCK.
+
+
+@pytest.mark.asyncio
+async def test_chg0047_noop_setter_fails_closed():
+    state = [{"ssn": 123456789}]
+
+    def _noop_setter(_new):
+        pass  # simulates a setter that silently fails to mutate the payload
+
+    def _fake_extract(payload, *, target_mode, key_path):
+        return state, [("123456789", _noop_setter, "ssn")]
+
+    async def _fake_tier1(text, **kwargs):
+        return "MASKED", [], False, []  # tier1 "redacted" the text (new_text != text)
+
+    ctrl = {
+        "scan_controls_configured": True,
+        "tier1_output": {
+            "enabled": True, "target_mode": "key_path", "key_path": "ssn",
+            "strict_mode": "fail_open", "control_id": "t1",
+        },
+        "tier2_output": {
+            "enabled": False, "target_mode": "key_path", "key_path": "ssn",
+            "strict_mode": "fail_open", "control_id": None,
+        },
+    }
+    with (
+        patch("mcp_scan_orchestrator.extract_and_bind", _fake_extract),
+        patch("mcp_scan_orchestrator._scan_text_tier1", new=_fake_tier1),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        _, result = await scan_mcp_payload(
+            {"ssn": 123456789},
+            scan_direction="output",
+            enforcement="redact",
+            effective_controls=ctrl,
+            org_slug="demo", server_slug="stub", tool_name="echo",
+        )
+    # The scrub was a no-op (payload bytes unchanged) → fail CLOSED, not raw egress.
+    assert result.blocked is True
+    assert any(
+        t.get("scan_stage") == "noop_scrub_failclosed" for t in result.scan_trace
+    )
+
+
+@pytest.mark.asyncio
+async def test_chg0047_real_setter_not_blocked():
+    # Control: when the setter DOES apply the redaction, no fail-closed block fires.
+    state = [{"ssn": 123456789}]
+
+    def _real_setter(new, _s=state):
+        _s[0]["ssn"] = new
+
+    def _fake_extract(payload, *, target_mode, key_path):
+        return state, [("123456789", _real_setter, "ssn")]
+
+    async def _fake_tier1(text, **kwargs):
+        return "MASKED", [], False, []
+
+    ctrl = {
+        "scan_controls_configured": True,
+        "tier1_output": {
+            "enabled": True, "target_mode": "key_path", "key_path": "ssn",
+            "strict_mode": "fail_open", "control_id": "t1",
+        },
+        "tier2_output": {
+            "enabled": False, "target_mode": "key_path", "key_path": "ssn",
+            "strict_mode": "fail_open", "control_id": None,
+        },
+    }
+    with (
+        patch("mcp_scan_orchestrator.extract_and_bind", _fake_extract),
+        patch("mcp_scan_orchestrator._scan_text_tier1", new=_fake_tier1),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        scanned, result = await scan_mcp_payload(
+            {"ssn": 123456789},
+            scan_direction="output",
+            enforcement="redact",
+            effective_controls=ctrl,
+            org_slug="demo", server_slug="stub", tool_name="echo",
+        )
+    assert result.blocked is False
+    assert scanned["ssn"] == "MASKED"
+
+
+# ── CHG-0057: byte-verify ALL detected categories on the tier1 redact path ──────
+# If redact_all leaves a DETECTED pii/secret value verbatim (a masker bug / partial
+# mask, cf. CHG-0054), the redact path must fail CLOSED (block), not forward a
+# "redacted" result that still carries the secret. Previously only ip_leak was checked.
+
+
+@pytest.mark.asyncio
+async def test_chg0057_redact_that_leaks_pii_fails_closed():
+    import mcp_scan_orchestrator as orch
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync", return_value=None),
+        patch("mcp_scan_orchestrator.redact_all", lambda t: t),   # simulate a no-op scrub
+    ):
+        _mut, findings, blocked, _rf = await orch._scan_text_tier1(
+            "contact john.doe@example.com now",
+            scan_direction="output", enforcement="redact", full_payload={},
+            org_slug="demo", server_slug="srv", tool_name="echo",
+        )
+    assert findings                       # PII detected
+    assert blocked is True                # detected value survived the scrub -> fail closed
+
+
+@pytest.mark.asyncio
+async def test_chg0057_normal_pii_redacts_not_blocked():
+    # Control: a real redact_all masks the PII -> redact (NOT block), no false-positive.
+    import mcp_scan_orchestrator as orch
+    with patch("mcp_scan_orchestrator._get_policy_sync", return_value=None):
+        mutated, findings, blocked, _rf = await orch._scan_text_tier1(
+            "contact john.doe@example.com now",
+            scan_direction="output", enforcement="redact", full_payload={},
+            org_slug="demo", server_slug="srv", tool_name="echo",
+        )
+    assert findings
+    assert blocked is False
+    assert "john.doe@example.com" not in mutated
+
+
+@pytest.mark.asyncio
+async def test_tier2_bedrock_exception_fails_closed_under_strict():
+    """CHG-0134 regression-lock: when the Tier-2 (Bedrock) scanner RAISES, strict
+    mode MUST block (fail-closed) and fail_open MUST forward. Tier-1 allows a benign
+    text so Tier-2 actually runs; the scanner's scan_prompt_with_tier2 raises."""
+    from policy_engine import EvaluationResult
+
+    def _eff(t2_strict):
+        return {
+            "scan_controls_configured": True,
+            "tier1_input": {"enabled": True, "target_mode": "entire", "key_path": "",
+                            "strict_mode": "fail_open", "control_id": "t1"},
+            "tier2_input": {"enabled": True, "target_mode": "entire", "key_path": "",
+                            "strict_mode": t2_strict, "control_id": "t2"},
+        }
+
+    async def _run(t2_strict):
+        scanner = MagicMock()
+        scanner.scan_prompt_with_tier2 = AsyncMock(side_effect=RuntimeError("bedrock unavailable"))
+        with (
+            patch("mcp_scan_orchestrator._get_policy_sync", return_value=None),
+            patch("mcp_scan_orchestrator.evaluate_mcp_policies",
+                  return_value=EvaluationResult(action="allow")),
+            patch("mcp_scan_orchestrator._get_input_scanner", return_value=scanner),
+        ):
+            _payload, result = await scan_mcp_payload(
+                {"text": "hello world benign"},
+                scan_direction="input", enforcement="block",
+                effective_controls=_eff(t2_strict),
+                enabled_info={"mcp_tier2_enabled": True, "tier2_strict": (t2_strict == "strict")},
+                org_slug="demo", server_slug="stub", tool_name="echo",
+            )
+        return result
+
+    strict = await _run("strict")
+    assert strict.blocked is True, "tier-2 Bedrock error under strict MUST fail CLOSED (block)"
+    lenient = await _run("fail_open")
+    assert lenient.blocked is False, "tier-2 Bedrock error under fail_open forwards (tier-1 already ran)"

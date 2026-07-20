@@ -1,0 +1,10 @@
+{
+  "checkpoint": "40-ui",
+  "ok": true,
+  "hasTier2Toggle": true,
+  "hasSegmented": true,
+  "hasEffectivePreview": true,
+  "hasAddControl": true,
+  "addDialogOpened": true,
+  "cp40UiPass": true
+}

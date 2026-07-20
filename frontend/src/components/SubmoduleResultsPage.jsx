@@ -3,20 +3,12 @@ import {
   ChevronRight, Search, Filter as FilterIcon, Download, RefreshCw,
   X, Home, Loader2,
 } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-} from "recharts";
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { useFirewallData } from "../hooks/useFirewallData";
-import { useTheme } from "../context/ThemeContext";
+
+// Bar colors keyed to the enforcement action (theme-agnostic accents; the registered
+// zs-light/zs-dark ECharts theme drives axis/grid/tooltip colors).
+const ACTION_BAR_COLORS = { block: "#ef4444", redact: "#f59e0b", monitor: "#3b82f6", allow: "#10b981", allowed: "#10b981", flag: "#f59e0b", flagged: "#f59e0b" };
 
 export function SubModuleResultsPage({
   moduleId, onBack, onViewLogDetail,
@@ -28,36 +20,11 @@ export function SubModuleResultsPage({
   const [selectedRow, setSelectedRow] = useState(null);
   const itemsPerPage = 20;
 
-  const { resolvedTheme } = (typeof useTheme === "function" ? useTheme() : {}) || {};
-  const isDark = resolvedTheme === "dark";
-
-  const chartTheme = isDark
-    ? {
-        grid: "#334155",
-        axis: "#94a3b8",
-        tooltipBg: "rgba(15, 23, 42, 0.96)",
-        tooltipBorder: "#475569",
-        tooltipText: "#e5e7eb",
-        areaPrimary: "#14b8a6",
-        areaSecondary: "#8b5cf6",
-        barFill: "#14b8a6",
-        chartHover: "rgba(51, 65, 85, 0.35)",
-      }
-    : {
-        grid: "#e2e8f0",
-        axis: "#64748b",
-        tooltipBg: "#f9fafb",
-        tooltipBorder: "#cbd5e1",
-        tooltipText: "#0f172a",
-        areaPrimary: "#14b8a6",
-        areaSecondary: "#8b5cf6",
-        barFill: "#14b8a6",
-        chartHover: "rgba(226, 232, 240, 0.45)",
-      };
-
   const {
     socKpis,
     threatFeed,
+    threatFeedCount,
+    threatFeedActionCounts,
     timeSeriesData,
     actionDistributionData,
     loading,
@@ -65,11 +32,61 @@ export function SubModuleResultsPage({
     refetch,
   } = useFirewallData(moduleId, "24h");
 
-  const moduleConfig = getModuleResultsConfig(moduleId, socKpis);
+  // Module-scoped enforcement summary. soc-kpis is ORG-WIDE (no source filter), so it
+  // must not drive a scoped lane's flow nodes — that rendered e.g. module 1.5
+  // "Request: 93,553" instead of its 552 routing events. Mirror the module pages: use
+  // the source-scoped threat-feed count + per-action aggregate (which also match THIS
+  // page's table, since the table is the same scoped feed). Module 1.1 stays org-wide.
+  const scoped = useMemo(() => {
+    const ac = threatFeedActionCounts || {};
+    const num = (k) => Number(ac[k]) || 0;
+    const critical = (threatFeed || []).filter((ev) => {
+      const s = Number(ev?.metadata?.security_risk_score ?? ev?.severity);
+      return Number.isFinite(s) ? s >= 80 : String(ev?.severity || "").toLowerCase() === "critical";
+    }).length;
+    return {
+      total: typeof threatFeedCount === "number" ? threatFeedCount : (threatFeed?.length || 0),
+      blocked: num("block"),
+      redacted: num("redact"),
+      critical,
+    };
+  }, [threatFeed, threatFeedCount, threatFeedActionCounts]);
+
+  const moduleConfig = getModuleResultsConfig(moduleId, socKpis, scoped);
   const ModuleIcon = moduleConfig.icon;
   const tableData = useMemo(() => mapThreatFeedToTableData(moduleId, threatFeed), [moduleId, threatFeed]);
   const keys = moduleConfig.tableColumnKeys;
   const tableColumns = moduleConfig.tableColumns;
+
+  // High-density traffic-vs-enforcement time series (ECharts line+area; theme-aware
+  // via the registered zs-light/zs-dark theme). Data-identical to the prior recharts view.
+  const timeSeriesOption = useMemo(() => ({
+    grid: { top: 24, right: 16, bottom: 26, left: 46 },
+    tooltip: { trigger: "axis" },
+    legend: { top: 0, itemHeight: 8, itemWidth: 12, textStyle: { fontSize: 10 } },
+    xAxis: {
+      type: "category", boundaryGap: false,
+      data: (timeSeriesData || []).map((d) => d.time),
+      axisLabel: { fontSize: 10, interval: Math.max(0, Math.ceil((timeSeriesData || []).length / 6) - 1) },
+    },
+    yAxis: { type: "value", axisLabel: { fontSize: 10 } },
+    series: [
+      { name: "Total Traffic", type: "line", smooth: true, showSymbol: false, lineStyle: { width: 2 }, itemStyle: { color: "#14b8a6" }, areaStyle: { color: "#14b8a6", opacity: 0.18 }, data: (timeSeriesData || []).map((d) => d.primary) },
+      { name: "Enforcements", type: "line", smooth: true, showSymbol: false, lineStyle: { width: 2 }, itemStyle: { color: "#8b5cf6" }, areaStyle: { color: "#8b5cf6", opacity: 0.14 }, data: (timeSeriesData || []).map((d) => d.secondary) },
+    ],
+  }), [timeSeriesData]);
+
+  // Action distribution (ECharts horizontal bar; bars keyed to enforcement action).
+  const actionDistOption = useMemo(() => ({
+    grid: { top: 12, right: 18, bottom: 20, left: 88 },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    xAxis: { type: "value", axisLabel: { fontSize: 11 } },
+    yAxis: { type: "category", data: (actionDistributionData || []).map((d) => d.name), axisLabel: { fontSize: 11 } },
+    series: [{
+      type: "bar", barWidth: "55%",
+      data: (actionDistributionData || []).map((d) => ({ value: d.value, itemStyle: { color: ACTION_BAR_COLORS[String(d.name).toLowerCase()] || "#14b8a6", borderRadius: [0, 4, 4, 0] } })),
+    }],
+  }), [actionDistributionData]);
 
   const filteredData = tableData.filter((row) => {
     const matchesSearch =
@@ -127,7 +144,7 @@ export function SubModuleResultsPage({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 dark:from-slate-900 via-white dark:via-slate-900 to-slate-50 dark:to-slate-900">
-      <div className="p-8 space-y-6">
+      <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Breadcrumb */}
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-4">
           <div className="flex items-center gap-2 text-sm">
@@ -162,8 +179,13 @@ export function SubModuleResultsPage({
 
         {/* AI Traffic Flow & Processing Pipeline */}
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-6">AI Traffic Flow & Processing Pipeline</h2>
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-8 border border-slate-200 dark:border-slate-700">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">AI Traffic Flow &amp; Processing Pipeline</h2>
+            {socKpis?.avg_latency_ms != null && (
+              <span className="text-xs font-mono text-slate-500 dark:text-slate-400">avg {Math.round(socKpis.avg_latency_ms)} ms end-to-end</span>
+            )}
+          </div>
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 sm:p-6 lg:p-8 border border-slate-200 dark:border-slate-700 overflow-x-auto">
             <div className="flex items-center justify-between">
               {moduleConfig.flowNodes.map((node, index) => (
                 <div key={index} className="flex items-center">
@@ -199,53 +221,7 @@ export function SubModuleResultsPage({
           <div className="lg:col-span-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6">
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">High-Density Time-Series Analysis (7 Days)</h3>
             {timeSeriesData.length > 0 ? (
-              <SafeResponsiveChart className="h-[350px] w-full">
-                <AreaChart data={timeSeriesData}>
-                  <defs>
-                    <linearGradient id="colorPrimary2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={chartTheme.areaPrimary} stopOpacity={0.8} />
-                      <stop offset="95%" stopColor={chartTheme.areaPrimary} stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorSecondary2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={chartTheme.areaSecondary} stopOpacity={0.6} />
-                      <stop offset="95%" stopColor={chartTheme.areaSecondary} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} strokeOpacity={0.25} />
-                  <XAxis dataKey="time" stroke={chartTheme.axis} tick={{ fontSize: 10, fill: chartTheme.axis }} interval={23} />
-                  <YAxis stroke={chartTheme.axis} tick={{ fontSize: 10, fill: chartTheme.axis }} />
-                  <Tooltip
-                    cursor={{ fill: chartTheme.chartHover }}
-                    contentStyle={{
-                      backgroundColor: chartTheme.tooltipBg,
-                      border: `1px solid ${chartTheme.tooltipBorder}`,
-                      borderRadius: "8px",
-                      color: chartTheme.tooltipText,
-                    }}
-                    formatter={(value, name) => [value, name === "primary" ? "Total Traffic" : "Enforcements"]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="primary"
-                    stroke={chartTheme.areaPrimary}
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#colorPrimary2)"
-                    name="Total Traffic"
-                    activeDot={{ r: 4, fill: chartTheme.areaPrimary, stroke: isDark ? "#0f172a" : "#ffffff", strokeWidth: 2 }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="secondary"
-                    stroke={chartTheme.areaSecondary}
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#colorSecondary2)"
-                    name="Enforcements"
-                    activeDot={{ r: 4, fill: chartTheme.areaSecondary, stroke: isDark ? "#0f172a" : "#ffffff", strokeWidth: 2 }}
-                  />
-                </AreaChart>
-              </SafeResponsiveChart>
+              <SafeResponsiveChart className="h-[350px] w-full" option={timeSeriesOption} />
             ) : (
               <div className="h-[350px] flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">
                 {loading ? "Loading timeline..." : "No timeline data available"}
@@ -255,28 +231,7 @@ export function SubModuleResultsPage({
           <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm p-6">
             <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 mb-4">Action Distribution</h3>
             {actionDistributionData && actionDistributionData.length > 0 ? (
-              <SafeResponsiveChart className="h-[350px] w-full">
-                <BarChart data={actionDistributionData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} strokeOpacity={0.25} />
-                  <XAxis type="number" stroke={chartTheme.axis} tick={{ fontSize: 11, fill: chartTheme.axis }} />
-                  <YAxis type="category" dataKey="name" stroke={chartTheme.axis} tick={{ fontSize: 11, fill: chartTheme.axis }} width={80} />
-                  <Tooltip
-                    cursor={{ fill: chartTheme.chartHover }}
-                    contentStyle={{
-                      backgroundColor: chartTheme.tooltipBg,
-                      border: `1px solid ${chartTheme.tooltipBorder}`,
-                      borderRadius: "8px",
-                      color: chartTheme.tooltipText,
-                    }}
-                  />
-                  <Bar
-                    dataKey="value"
-                    fill={chartTheme.barFill}
-                    radius={[0, 4, 4, 0]}
-                    activeBar={{ fill: chartTheme.barFill, opacity: 0.92, stroke: isDark ? "#1e293b" : "#cbd5e1", strokeWidth: 1 }}
-                  />
-                </BarChart>
-              </SafeResponsiveChart>
+              <SafeResponsiveChart className="h-[350px] w-full" option={actionDistOption} />
             ) : (
               <div className="h-[350px] flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">
                 {loading ? "Loading distribution..." : "No action data available"}
@@ -288,9 +243,9 @@ export function SubModuleResultsPage({
         {/* Detailed Records */}
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
           <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Detailed Records ({filteredData.length})</h3>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={refetch}
                   disabled={loading}
@@ -352,11 +307,7 @@ export function SubModuleResultsPage({
                   placeholder="Search all fields..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className={`w-full pl-10 pr-4 py-2 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 ${
-                    isDark
-                      ? "bg-slate-800/60 border border-slate-700 text-slate-100 placeholder:text-slate-400"
-                      : "bg-white border border-slate-300 text-slate-900 placeholder:text-slate-500"
-                  }`}
+                  className="w-full pl-10 pr-4 py-2 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-500 dark:placeholder:text-slate-400"
                 />
               </div>
             </div>
@@ -397,7 +348,7 @@ export function SubModuleResultsPage({
               </tbody>
             </table>
           </div>
-          <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <div className="p-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
             <div className="text-sm text-slate-600 dark:text-slate-400">
               Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredData.length)} of {filteredData.length}
             </div>
@@ -465,19 +416,28 @@ export function SubModuleResultsPage({
   );
 }
 
-function getModuleResultsConfig(moduleId, socKpis) {
-  const total = socKpis?.total_threats ?? 0;
-  const blocked = socKpis?.blocked ?? 0;
-  const redacted = socKpis?.redacted ?? 0;
+function getModuleResultsConfig(moduleId, socKpis, scoped) {
+  // soc-kpis is ORG-WIDE (no source filter). Only module 1.1 (the ingress lane) is
+  // legitimately org-wide; every other lane is source-scoped, so its flow nodes must
+  // use the module-scoped threat-feed aggregate (`scoped`) instead of the whole-mesh
+  // soc-kpis totals. `scoped` = { total, blocked, redacted, critical }.
+  const isIngress = moduleId === "1.1";
+  const orgTotal = socKpis?.total_threats ?? 0;
+  const total = isIngress ? orgTotal : (scoped?.total ?? 0);
+  const blocked = isIngress ? (socKpis?.blocked ?? 0) : (scoped?.blocked ?? 0);
+  const redacted = isIngress ? (socKpis?.redacted ?? 0) : (scoped?.redacted ?? 0);
+  const criticalCount = isIngress ? (socKpis?.critical_count ?? 0) : (scoped?.critical ?? 0);
   const allowed = Math.max(0, total - blocked - redacted);
   // Module 1.1 (ingress) reflects REQUESTS, not all enforcement events. With
   // routing active each request also emits a model_routed event, so total_threats
   // double-counts ingress. Use the request-scoped count for the 1.1 flow only.
-  const requestsInspected = socKpis?.requests_inspected ?? total;
+  const requestsInspected = socKpis?.requests_inspected ?? orgTotal;
   const allowedReq = Math.max(0, requestsInspected - blocked - redacted);
-  const lat = socKpis?.avg_latency_ms;
-  const timings3 = lat ? [Math.round(lat * 0.3), Math.round(lat * 0.4), Math.round(lat * 0.3)] : [null, null, null];
-  const timings2 = lat ? [Math.round(lat * 0.5), Math.round(lat * 0.5)] : [null, null];
+  // The backend emits only an end-to-end avg_latency_ms — no per-hop breakdown. A
+  // synthetic 0.3/0.4/0.3 split would fabricate per-arrow numbers, so arrow labels stay
+  // "--" and the real end-to-end average is surfaced once in the flow heading instead.
+  const timings3 = [null, null, null];
+  const timings2 = [null, null];
   const base = {
     "1.1": {
       title: "AI Gateway & Traffic Ingress",
@@ -555,7 +515,7 @@ function getModuleResultsConfig(moduleId, socKpis) {
       icon: FilterIcon,
       flowNodes: [
         { label: "Model", value: total.toLocaleString(), color: "emerald" },
-        { label: "Risk", value: (socKpis?.critical_count ?? 0).toLocaleString(), color: "amber" },
+        { label: "Risk", value: criticalCount.toLocaleString(), color: "amber" },
         { label: "Block", value: blocked.toLocaleString(), color: "orange" },
         { label: "Status", value: allowed.toLocaleString(), color: "emerald" },
       ],

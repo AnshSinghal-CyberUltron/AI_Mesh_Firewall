@@ -1,0 +1,33 @@
+{
+  "checkpoint": "10",
+  "scenarios": {
+    "A_error": {
+      "closed": false,
+      "modalOpen": true,
+      "inlineError": true,
+      "listedZeroTools": false,
+      "listedWithTools": false,
+      "pass": true
+    },
+    "B_zerotools": {
+      "closed": false,
+      "modalOpen": true,
+      "inlineError": true,
+      "listedZeroTools": false,
+      "listedWithTools": false,
+      "pass": true
+    },
+    "C_success": {
+      "closed": true,
+      "modalOpen": false,
+      "inlineError": false,
+      "listedZeroTools": false,
+      "listedWithTools": true,
+      "pass": true
+    }
+  },
+  "ok": true,
+  "error": null,
+  "neverListedZeroTools": true,
+  "cp10Pass": true
+}

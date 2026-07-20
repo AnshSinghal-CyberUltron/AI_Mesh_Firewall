@@ -1,0 +1,15 @@
+
+=== Regression iteration 5 — regression iter 5 (R1-regression-iter5) 2026-06-30T07:00:52Z ===
+--- parallel org agents --full (attempt 1/2) ---
+=== bootstrap: broker + gateway health ===
+broker docker_ok=true
+gateway health ok
+stub copied into adv-org-alpha (c8715dd585eb)
+stub copied into adv-org-beta (2e8502fa84db)
+=== bootstrap OK ===
+=== parallel org workers (2 × 6 servers) + cross-org leak probe ===
+OK org_worker adv-org-alpha broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+OK org_worker adv-org-beta broker-health → sandbox-running → servers-6 → adversarial-probes-ok
+OK cross_org_leak_probe hammer-12-rounds → cross-org-markers-ok → secret-denylist-ok
+=== parallel workers OK ===
+=== pytest adversarial leakage subset ===

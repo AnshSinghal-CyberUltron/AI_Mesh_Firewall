@@ -1,9 +1,14 @@
-=== START ITER 11 2026-06-30T06:19:03Z ===
+=== START ITER 11 2026-06-30T06:28:10Z ===
+Another MCP regression iteration is already running (lock: /Users/anshsinghal/Desktop/AI_Security/AI_Mesh_Firewall/scripts/ralph/.regression.lockdir)
+STOPPED_AT=11
+=== START ITER 11 2026-06-30T06:32:14Z ===
 
-=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:19:03Z ===
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:32:14Z ===
 --- parallel org agents --full (attempt 1/2) ---
-FAIL: parallel org agents --full (attempt 1/2) (exit 1)
+=== START ITER 11 2026-06-30T06:32:44Z ===
+
+=== Regression iteration 11 (R7-regression-iter11) 2026-06-30T06:32:44Z ===
+--- parallel org agents --full (attempt 1/2) ---
+Terminated: 15
+FAIL: parallel org agents --full (attempt 1/2) (exit 143)
 Retrying parallel org agents --full after 20s cooldown...
---- parallel org agents --full (attempt 2/2) ---
-FAIL: parallel org agents --full (attempt 2/2) (exit 1)
---- prep: docker cooldown before isolated pytest broker ---

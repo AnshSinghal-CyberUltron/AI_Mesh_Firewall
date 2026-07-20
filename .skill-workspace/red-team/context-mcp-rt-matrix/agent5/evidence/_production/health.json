@@ -1,0 +1,27 @@
+{
+  "server_slug": "_production",
+  "label": "health",
+  "captured_at_utc": "2026-07-07T10:56:05Z",
+  "request": {
+    "url": "https://aimeshgateway.zeroshield.ai/health"
+  },
+  "response": {
+    "status_code": 200,
+    "body": {
+      "status": "ok",
+      "agent_id": "58013fb4-cdc9-47ab-b7f1-8eafe6ab2707",
+      "policy_cache_loaded": true,
+      "policy_cache_version": 366,
+      "policy_count": 46,
+      "config_sync_loaded": false,
+      "firewall_enabled": true,
+      "enforcement_mode": "block",
+      "vector_policy_cache_loaded": true,
+      "vector_policy_cache_version": 339,
+      "vector_policy_count": 14,
+      "vector_clients": [],
+      "telemetry_queue_depth": 0
+    }
+  },
+  "notes": ""
+}

@@ -37,11 +37,10 @@ RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 
 EXPOSE 8300
 
-CMD gunicorn ai_mesh_gateway.main:app \
-    -k uvicorn.workers.UvicornWorker \
-    --bind 0.0.0.0:8300 \
-    --workers ${WEB_CONCURRENCY:-4} \
-    --worker-connections ${GUNICORN_WORKER_CONNECTIONS:-1000} \
-    --timeout ${GUNICORN_TIMEOUT:-120} \
-    --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-60} \
-    --keep-alive ${GUNICORN_KEEPALIVE:-65}
+# Worker count is derived at start from the cgroup-aware detector (one async
+# worker per core, RAM-bounded) instead of a hardcoded number. WEB_CONCURRENCY
+# (env) still overrides. See gateway/entrypoint.sh + shared/.../resource_budget.py.
+COPY gateway/entrypoint.sh /app/gateway/entrypoint.sh
+RUN chmod +x /app/gateway/entrypoint.sh
+
+CMD ["/app/gateway/entrypoint.sh"]
