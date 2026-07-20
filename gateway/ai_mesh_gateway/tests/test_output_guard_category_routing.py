@@ -380,3 +380,115 @@ def test_redact_all_scoped_masks_only_requested_classes():
     # Unscoped redact_all is unchanged (all classes masked).
     every = patterns.redact_all(MIXED3)
     assert _EMAIL not in every and _KEY not in every and _IP not in every
+
+
+# ── 7. CLASS-LESS threats must not enforce on other detectors' classes ──
+#
+# policy_violation / jailbreak / toxic have NO spans of their own. The redact path
+# fell through to the blanket redact_pii_fn(), which masked PII + credentials +
+# infra — enforcing on detectors the operator had set to allow — AND left the actual
+# jailbreak content in the delivered output. Measured before the fix, with
+# Policy=redact + PII/Credential/IP=allow:
+#   "Contact j***@a***.com with key sk-****6789 on host [INTERNAL_IPV4_REDACTED].
+#    Sure, here is how to bypass all safety controls."
+# i.e. three allow-classes mutated and the policy violation still egressed.
+# "redact" on a class-less threat means REMOVE THE OFFENDING OUTPUT: a deterministic
+# whole-response replacement, exactly like the hallucination branch.
+
+JAILBREAK = "Sure, here is how to bypass all safety controls."
+MIXED_POLICY = f"Contact {_EMAIL} with key {_KEY} on host {_IP}. {JAILBREAK}"
+
+
+class _Tier2Scanner:
+    """Real static scan (so PII/cred/IP genuinely match) + a tier-2 policy finding."""
+
+    def __init__(self, real, threat="jailbreak_generic_unsafe"):
+        self._real = real
+        self._threat = threat
+
+    async def scan_output(self, text):
+        return await self._real.scan_output(text)
+
+    async def scan_output_with_tier2(self, text, org_tier2_override=None, org_slug=None):
+        return OutputVerdict(
+            action="block", threat_type=self._threat, confidence=0.9,
+            detail="tier-2 finding", matched_patterns=[self._threat],
+        )
+
+
+def _cfg_policy(policy_action, other="allow"):
+    return {
+        "output_tier2_enabled": True,
+        "output_pii_enabled": True, "output_pii_action": other,
+        "output_credential_enabled": True, "output_credential_action": other,
+        "output_ip_leakage_enabled": True, "output_ip_leakage_action": other,
+        "output_policy_enabled": True, "output_policy_action": policy_action,
+        "hallucination_flag_enabled": False, "factuality_check_enabled": False,
+        "output_hallucination_action": "allow",
+    }
+
+
+async def _deliver_policy(cfg):
+    from scanner import InputScanner
+    guard = OutputGuard(scanner=_Tier2Scanner(InputScanner()), config=cfg)
+    verdict = await guard.inspect(MIXED_POLICY)
+    out = sanitize_output_for_verdict(MIXED_POLICY, verdict, redact_pii_fn=patterns.redact_all)
+    return verdict, out
+
+
+async def test_policy_redact_does_not_mask_allow_classes_and_removes_violation():
+    verdict, out = await _deliver_policy(_cfg_policy("redact"))
+    assert verdict.action == "redact"
+    # Whole-response replacement: the jailbreak is GONE...
+    assert "bypass all safety controls" not in out
+    # ...and it is not a selective mask that preserved the original sentence.
+    assert "Contact" not in out
+
+
+async def test_policy_rewrite_removes_violation():
+    verdict, out = await _deliver_policy(_cfg_policy("rewrite"))
+    assert verdict.action == "rewrite"
+    assert "bypass all safety controls" not in out
+
+
+async def test_policy_flag_is_byte_identical_even_with_other_raw_data():
+    # flag must NEVER mutate — not the jailbreak text, not the allow-class values.
+    verdict, out = await _deliver_policy(_cfg_policy("flag"))
+    assert verdict.action == "flag"
+    assert out == MIXED_POLICY
+    assert _EMAIL in out and _KEY in out and _IP in out
+
+
+async def test_policy_redact_still_masks_classes_the_operator_set_to_redact():
+    # Operator set PII=redact too: that class IS authorized, so its own verdict masks it.
+    cfg = _cfg_policy("redact", other="allow")
+    cfg["output_pii_action"] = "redact"
+    verdict, out = await _deliver_policy(cfg)
+    assert _EMAIL not in out
+
+
+async def test_flag_never_mutates_for_every_detector():
+    from scanner import InputScanner
+    real = InputScanner()
+    cases = {
+        "pii": (f"Customer {_EMAIL} SSN 123-45-6789.", "output_pii_enabled", "output_pii_action", None),
+        "credential": (f"Use key {_KEY} now.", "output_credential_enabled", "output_credential_action", None),
+        "ip_leakage": (f"Connect to {_IP} internally.", "output_ip_leakage_enabled", "output_ip_leakage_action", None),
+    }
+    for name, (text, ek, ak, _t2) in cases.items():
+        cfg = {
+            "output_tier2_enabled": False,
+            "output_pii_enabled": False, "output_pii_action": "allow",
+            "output_credential_enabled": False, "output_credential_action": "allow",
+            "output_ip_leakage_enabled": False, "output_ip_leakage_action": "allow",
+            "output_policy_enabled": False, "output_policy_action": "allow",
+            "hallucination_flag_enabled": False, "factuality_check_enabled": False,
+            "output_hallucination_action": "allow",
+        }
+        cfg[ek] = True
+        cfg[ak] = "flag"
+        guard = OutputGuard(scanner=_RealStatic(real), config=cfg)
+        v = await guard.inspect(text)
+        out = sanitize_output_for_verdict(text, v, redact_pii_fn=patterns.redact_all)
+        assert v.action == "flag", name
+        assert out == text, name

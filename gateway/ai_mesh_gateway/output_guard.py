@@ -1931,11 +1931,24 @@ def _sanitize_output_core(
         if redact_pii_fn is not None:
             return redact_pii_fn(response_text)
         return response_text
-    if _classes:
-        return _redact_all_scoped(response_text, set(_classes))
-    if redact_pii_fn is not None:
-        return redact_pii_fn(response_text)
-    return "[REDACTED]"
+    # CLASS-LESS THREATS (policy_violation / jailbreak / toxic / injection / guard
+    # model). These have NO spans of their own to mask, and the blanket
+    # redact_pii_fn() here masked PII + credentials + infra — i.e. it enforced on
+    # detector classes the operator may have set to allow/flag. Measured:
+    # Policy=redact with PII=allow, Credential=allow, IP=allow masked the email, the
+    # API key AND the internal IP. A detector's action must never reach outside its
+    # own class.
+    #
+    # "redact" on a class-less threat therefore means "remove the offending output",
+    # which is a deterministic whole-response replacement (identical to how the
+    # hallucination branch above already handles it) — NOT a selective mask of other
+    # detectors' data. Classes the operator DID set to redact are still masked on
+    # their own verdicts via the branches above.
+    return rewrite_output_response_text(
+        threat,
+        verdict.detail or None,
+        original_text=response_text,
+    )
 
 
 def output_verdict_applies_to_delivered_text(
