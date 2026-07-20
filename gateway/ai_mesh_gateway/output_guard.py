@@ -1978,8 +1978,13 @@ def _sanitize_output_core(
             base = _redact_all_scoped(response_text, set(_classes))
         else:
             base = redact_pii_fn(response_text) if redact_pii_fn is not None else "[REDACTED]"
-        spans = list(verdict.redaction_spans or []) + [
-            str(v) for v in (verdict.matched_values or {}).values()
+        # Defensive attribute access: the streaming path (and some producers) hand
+        # in duck-typed verdict objects that may not define every OutputVerdict
+        # field. The previous inline streaming implementation used getattr() here;
+        # now that streaming delegates to this function, keep the same tolerance so
+        # a minimal verdict cannot raise AttributeError mid-stream.
+        spans = list(getattr(verdict, "redaction_spans", None) or []) + [
+            str(v) for v in (getattr(verdict, "matched_values", None) or {}).values()
         ]
         return _mask_spans_typed(base, spans, threat)
     if threat == "ip_leakage":

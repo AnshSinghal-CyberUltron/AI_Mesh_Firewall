@@ -162,6 +162,11 @@ class SecureStreamingResponse:
         request: object | None = None,
     ) -> None:
         self._inner = inner_generator
+        # Latch: a WHOLE-RESPONSE replacement (hallucination / class-less policy
+        # redact) yields a FIXED string. _flush_buffer runs once per buffered
+        # segment, so without this latch that constant was re-emitted on every
+        # flush and the client received it 2-3 times concatenated.
+        self._response_replaced = False
         self._scanner = scanner
         self._redaction_enabled = redaction_enabled
         self._buffer_max_bytes = buffer_max_bytes
@@ -461,27 +466,53 @@ class SecureStreamingResponse:
                 # exfil beacon or encoded-PII rode out un-neutralized while the non-
                 # stream path defanged it. Lazy import avoids a circular dependency;
                 # only runs on redact verdicts (not the clean-release hot path).
+                # STREAM/NON-STREAM PARITY (2026-07-20): delegate to the SAME
+                # sanitizer the non-stream path uses. It already performs the
+                # neutralize passes (exfil beacons / encoded PII / markdown-split),
+                # the G10 semantic-span masking, the hallucination branch and the
+                # class-less whole-response replacement — and, critically, it honours
+                # verdict.redact_classes.
+                #
+                # The previous inline implementation called self._scanner.redact_pii()
+                # (a BLANKET redact_all) and so masked EVERY detector class on any
+                # redact verdict. Measured over the 27 delivered pii x cred x ip
+                # combinations: 14 STRICT VIOLATIONS and 14 stream/non-stream parity
+                # breaks — e.g. PII=flag + Credential=redact + IP=allow masked the
+                # email and the internal IP too, while non-stream masked only the
+                # key. For a class-less Policy=redact it masked three allow-classes
+                # AND still streamed the jailbreak text verbatim, because the
+                # class-less replacement branch lived only in the non-stream core.
                 from output_guard import (  # noqa: PLC0415
-                    neutralize_encoded_pii,
-                    neutralize_exfil_channels,
-                    neutralize_markdown_split_pii,
-                    _mask_spans_typed,
-                    _REDACTABLE_OUTPUT_CATEGORIES,
+                    sanitize_output_for_verdict as _sanitize_for_verdict,
                 )
-                _pre = neutralize_encoded_pii(neutralize_exfil_channels(full_text))
-                _pre = neutralize_markdown_split_pii(_pre)  # G45: streaming parity with G44
-                redacted_text = self._scanner.redact_pii(_pre)
-                # G46: mirror _sanitize_output_core's G10 semantic-span masking. A tier-2
-                # (Bedrock) verdict targets free-text PII (person names / non-standard
-                # layouts) the DETERMINISTIC regex redactor has no pattern for; without
-                # this those redaction_spans + matched_values egress RAW on the streamed
-                # channel while the non-stream path masks them. Redactable categories only.
-                if verdict.threat_type in _REDACTABLE_OUTPUT_CATEGORIES:
-                    _spans = list(getattr(verdict, "redaction_spans", None) or []) + [
-                        str(v) for v in (getattr(verdict, "matched_values", None) or {}).values()
-                    ]
-                    if _spans:
-                        redacted_text = _mask_spans_typed(redacted_text, _spans, verdict.threat_type)
+                redacted_text = _sanitize_for_verdict(
+                    full_text, verdict, redact_pii_fn=self._scanner.redact_pii
+                )
+                # Threat classes with no spans of their own (hallucination, and the
+                # class-less policy/jailbreak/toxic family) are sanitized by a
+                # WHOLE-RESPONSE replacement rather than an in-place mask. That
+                # constant must reach the client exactly once, no matter how many
+                # buffer segments the stream flushes.
+                from output_guard import (  # noqa: PLC0415
+                    _REDACTABLE_OUTPUT_CATEGORIES as _REDACTABLE_CATS,
+                )
+                _whole_response = (
+                    verdict.threat_type == "hallucination"
+                    or (
+                        verdict.threat_type not in _REDACTABLE_CATS
+                        and verdict.threat_type != "ip_leakage"
+                    )
+                )
+                if _whole_response:
+                    if self._response_replaced:
+                        # Already delivered the replacement on an earlier flush —
+                        # drop this segment instead of repeating it.
+                        self._clear_buffers()
+                        return
+                    self._response_replaced = True
+                # G46 semantic-span masking (redaction_spans + matched_values) is now
+                # performed inside _sanitize_output_core, so it is no longer repeated
+                # here — doing it twice could double-mask an already-masked span.
                 # Telemetry honesty (mirror of non-stream main.py:1566 / 7289):
                 # only claim action="redact" when the bytes actually changed. A
                 # tier-2 (semantic) verdict can target content the deterministic
