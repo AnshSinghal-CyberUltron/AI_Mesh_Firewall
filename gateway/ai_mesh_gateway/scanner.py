@@ -1153,6 +1153,16 @@ class InputScanner:
                 confidence=1.0,
                 detail=f"Prompt length {len(text)} exceeds maximum {MAX_PROMPT_LENGTH}",
                 tier="tier_1",
+                # I-19: a SIZE rejection is not a content judgement. Both this branch
+                # and the repetition heuristic below carry threat_type="dos", and the
+                # block path mapped every content-category block to
+                # error.code="content_filter" — so "your input was too large" was
+                # byte-identical, on the code the SDK exposes, to "your input was
+                # malicious". Carry OpenAI's own code for the size case so callers can
+                # tell them apart (the gateway already does this on /v1/embeddings,
+                # which emits 413/embedding_input_too_large). Repetition KEEPS
+                # content_filter — that one IS a content judgement.
+                reason_code="context_length_exceeded",
             )
         if self._is_repetitive(text):
             return ScanVerdict(

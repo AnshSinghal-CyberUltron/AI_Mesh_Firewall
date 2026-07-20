@@ -71,7 +71,14 @@ def _auth_payload() -> dict:
         "project_id": "proj-sdk-compat",
         "org_slug": "",
         "organization_id": "org-sdk-compat",
-        "permissions": {"allowed_actions": ["chat"], "denied_actions": []},
+        # I-03: mirror the control plane's DEFAULT_PERMISSIONS
+        # (control/ai_mesh_control/core/models.py) — a real key is provisioned with
+        # chat+completion+embedding. This list used to read ["chat"] while the same
+        # payload drove the /v1/embeddings tests; that was only harmless because
+        # allowed_actions was never enforced. Now that AuthMiddleware enforces it,
+        # the fixture has to describe a key that can actually do what the tests ask.
+        "permissions": {"allowed_actions": ["chat", "completion", "embedding"],
+                        "denied_actions": []},
         "allowed_models": ["gpt-4o-mini", "zs-embed"],
         "rate_limit_tpm": 50000,
         "risk_score": 0.0,
@@ -180,6 +187,7 @@ async def _make_sdk_app(monkeypatch, *, redis_client):
     config_sync.get_config = MagicMock(return_value=dict(TEST_CONFIG))
     config_sync.get_model_routing = MagicMock(return_value=[dict(TEST_MODEL), dict(EMBED_MODEL)])
     config_sync.reload_models_now = AsyncMock()
+    config_sync.get_fallback_chains = MagicMock(return_value={"chains": {}, "per_primary": {}})
 
     llm_router = MagicMock()
     llm_router.acompletion = AsyncMock(side_effect=_fake_completion)
@@ -188,6 +196,10 @@ async def _make_sdk_app(monkeypatch, *, redis_client):
     llm_router.get_model_list = MagicMock(return_value=[
         {"id": "gpt-4o-mini", "object": "model", "created": 1704067200, "owned_by": "openai"},
     ])
+    # The gateway asks the router to size the prompt for routing governance; a bare
+    # MagicMock returns a MagicMock that is not JSON-serialisable once it reaches
+    # zeroshield.routing.estimated_tokens. Stub the arithmetic, not the behaviour.
+    llm_router.estimate_prompt_tokens = MagicMock(return_value=500)
 
     monkeypatch.setattr(gateway_main, "CONFIG", dict(TEST_CONFIG))
     monkeypatch.setattr(gateway_main, "CONFIG_SYNC", config_sync)

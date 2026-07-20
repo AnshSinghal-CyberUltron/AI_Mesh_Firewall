@@ -160,6 +160,13 @@ class EvaluationResult:
     matched_policy_categories: list[str] = field(default_factory=list)
     matched_rule_descriptions: list[str] = field(default_factory=list)
     redaction_hints: list[dict[str, Any]] = field(default_factory=list)
+    # I-05: the matched REWRITE rules' conditions. §1.2 defines rewrite as "strip
+    # harmful pattern, log original", but the gateway only PREPENDED an advisory
+    # notice to the untouched prompt — and even that never reached the wire. Carrying
+    # the rule conditions lets the rewrite genuinely remove the matched span using the
+    # same masking machinery as redact (apply_redaction), instead of attesting a
+    # strip that never happened.
+    rewrite_hints: list[dict[str, Any]] = field(default_factory=list)
     # 3b (BACKSTOP finding #1): named response fields to mask for the MATCHED
     # actor-scoped policies. Mirrors control Policy.redaction_fields; the compiler
     # already emits these into the compiled bundle (compiler.py:521 under M-04) but
@@ -395,6 +402,16 @@ def evaluate(
             # default placeholder, so a redact verdict now always masks its matched span.
             if action == "redact":
                 result.redaction_hints.append({
+                    "rule_id": rule.get("id"),
+                    "rule_name": rule.get("name"),
+                    "config": rule.get("redaction_config") or {},
+                    "condition": rule.get("condition") or {},
+                })
+            # I-05: same hint shape for REWRITE rules, kept in a SEPARATE list so a
+            # rewrite verdict cannot be mistaken for a redact one downstream (the
+            # redact path builds redacted_prompt/telemetry off redaction_hints).
+            elif action == "rewrite":
+                result.rewrite_hints.append({
                     "rule_id": rule.get("id"),
                     "rule_name": rule.get("name"),
                     "config": rule.get("redaction_config") or {},

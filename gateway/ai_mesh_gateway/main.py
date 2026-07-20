@@ -710,6 +710,7 @@ def _build_safe_block_response(
     detection_tier: str = "",
     pipeline_trace: dict | None = None,
     blocked_by: str | None = None,
+    error_code_override: str = "",
 ) -> JSONResponse:
     """
     Build a client-safe error response for policy blocks.
@@ -767,6 +768,13 @@ def _build_safe_block_response(
     effective_status = _resolve_content_block_status(status_code, threat_category)
     is_content_filter = effective_status == 400 and status_code == 403
     error_code = "content_filter" if is_content_filter else code
+    # I-19: a size/DoS rejection is not a content judgement. ``error_code_override``
+    # carries the scanner's own reason_code (e.g. OpenAI's context_length_exceeded)
+    # so an oversized input is distinguishable from an unsafe one on the field the
+    # stock SDK exposes. Only content-filter-shaped blocks are re-labelled; auth /
+    # actor blocks keep their own code untouched.
+    if is_content_filter and error_code_override:
+        error_code = error_code_override
     error_type = "invalid_request_error" if is_content_filter else None
     # D2 (OpenAI-SDK exact-compat): the stock `openai` client reads
     # e.code / e.type / e.param / e.message from a NESTED body["error"] object. A
@@ -1108,6 +1116,26 @@ def _policy_check_cached(
             response["redacted_prompt"] = apply_redaction(prompt, result.redaction_hints)
         if response_text:
             response["redacted_response"] = apply_redaction(response_text, result.redaction_hints)
+        # I-04: carry the HINTS themselves, not just the flattened redacted string.
+        # ``redacted_prompt`` is a single role-prefixed blob of the whole
+        # conversation, so llm_router cannot write it back into body["messages"]
+        # without destroying the multi-turn structure — which is exactly why
+        # _apply_redaction treats it as a SIGNAL and re-derives the wire text with
+        # patterns.redact_all + a DIGIT-run backstop. That backstop only masks
+        # digit-bearing runs, so an operator-authored redaction_config targeting
+        # non-numeric text (a codename, a customer name) was silently DISCARDED:
+        # the raw value reached the provider while telemetry and pipeline_trace
+        # both attested action='redact'. A phantom redaction. Passing the hints
+        # down gives policy masks an actual channel to the wire, applied per
+        # message so multi-turn structure survives.
+        # NOTE: internal-only — the client envelope is assembled from an explicit
+        # field list, so rule ids/names in here never reach the caller.
+        response["redaction_hints"] = result.redaction_hints
+    if result.action == "rewrite" and getattr(result, "rewrite_hints", None):
+        # I-05: carry the matched rewrite rules' conditions so the gateway can
+        # actually STRIP the harmful span (§1.2 "rewrite: strip harmful pattern")
+        # rather than prepending a notice to the untouched prompt.
+        response["rewrite_hints"] = result.rewrite_hints
     elif result.action == "block" and result.redaction_hints:
         # B-POL FIX (PIPELINE-0009): when BOTH redact AND block rules match the
         # same input (e.g. a PCI prompt carries a card PAN [redact] AND a CVV
@@ -1465,6 +1493,24 @@ def _extract_tool_definitions_text(tools) -> str:
             schema_strs = _extract_schema_text(params, 0, budget)
             if schema_strs:
                 parts.append(f"tool_params[{name}]: " + " ".join(schema_strs))
+        # I-08 / I-23: fold EVERY REMAINING model-facing string on the tool object.
+        # The fold above reads only name/description/parameters, so whole provider-
+        # native tool shapes went to the model UNSCANNED:
+        #   * MCP     — server_label / server_url / allowed_tools (I-08). The scan
+        #               yielded literally 0 characters for an mcp tool spec.
+        #   * file_search — filters / ranking_options / store identifiers (I-23).
+        # Enumerating those keys would fix two shapes and leave the CLASS open: the
+        # same hole reappears for the next provider-native tool type, or any vendor
+        # key a proxy tolerates. So fold the residual GENERICALLY — anything on the
+        # tool object we have not already folded — through the same depth+char
+        # budget, which keeps it bounded against a hostile payload.
+        _residual = {k: v for k, v in t.items()
+                     if k not in ("function", "name", "description", "parameters", "type")}
+        if _residual and budget[0] > 0:
+            _rest = _extract_schema_text(_residual, 0, budget)
+            if _rest:
+                _label = name or str(t.get("type") or "tool")
+                parts.append(f"tool_extra[{_label}]: " + " ".join(_rest))
     return "\n".join(parts)
 
 
@@ -1791,6 +1837,48 @@ def _output_redact_redaction_possible(
     return False
 
 
+def _fold_annotation_and_logprob_text(ch: dict, msg: dict, parts: list) -> None:
+    """Fold the two late-discovered client-delivered channels into ``parts``.
+
+    I-01b. Shared by ``_extract_scannable_output_text`` (detection) and
+    ``_client_delivered_output_text`` (the coalescer's delivered-text test) so the
+    two cannot drift — divergence between those lists is precisely what made I-01
+    a silent leak. Both channels are also cleared on enforcement
+    (``_neutralize_secondary_output_channels`` / ``_set_completion_response_text``).
+
+    * ``annotations`` — model-authored url_citation / note objects on the MESSAGE.
+    * ``logprobs`` — CHOICE-level token-by-token echo of the answer. Tokens are
+      joined with NO separator because a tokenizer splits a secret across several
+      tokens ("412-", "55-", "9083"); folding them individually would never contain
+      the secret as a substring. ``top_logprobs`` alternates are substitutions
+      rather than sequential text, so each is folded on its own.
+    """
+    try:
+        if msg.get("annotations"):
+            _v = _tool_arg_to_text(msg.get("annotations"))
+            if _v:
+                parts.append(_v)
+        _lp = ch.get("logprobs")
+        if isinstance(_lp, dict):
+            for _bucket in ("content", "refusal"):
+                _seq: list[str] = []
+                for _ent in (_lp.get(_bucket) or []):
+                    if not isinstance(_ent, dict):
+                        continue
+                    _t = _ent.get("token")
+                    if isinstance(_t, str) and _t:
+                        _seq.append(_t)
+                    for _alt in (_ent.get("top_logprobs") or []):
+                        if isinstance(_alt, dict):
+                            _at = _alt.get("token")
+                            if isinstance(_at, str) and _at:
+                                parts.append(_at)
+                if _seq:
+                    parts.append("".join(_seq))
+    except Exception:  # noqa: BLE001 - never break extraction on a malformed envelope
+        pass
+
+
 def _extract_scannable_output_text(completion) -> str:
     """Output text fed to the OUTPUT guard — folds the PRIMARY content AND the
     secondary text-bearing channels (reasoning_content, tool_calls function
@@ -1852,6 +1940,9 @@ def _extract_scannable_output_text(completion) -> str:
                 _v = _tool_arg_to_text(_fc.get(_k))
                 if _v:
                     parts.append(_v)
+        # I-01b: the scan text must be a SUPERSET of the delivered text, else a
+        # secret living only in annotations/logprobs is never detected and ships raw.
+        _fold_annotation_and_logprob_text(ch, msg, parts)
     return "\n".join(parts)
 
 
@@ -1868,6 +1959,76 @@ def _model_output_scan_text(completion) -> str:
     except ImportError:
         from .output_guard import normalize_output_scan_text
     return normalize_output_scan_text(_extract_scannable_output_text(completion))
+
+
+def _client_delivered_output_text(completion) -> str:
+    """Every model-authored byte the CLIENT actually receives, for the delivered-text
+    test in ``coalesce_output_guard_verdict_for_delivery``.
+
+    I-01: the completion is returned VERBATIM to the caller (only the zeroshield
+    envelope + upstream passthrough are scrubbed, AFTER the guard), so ``content``
+    is NOT the delivered surface — ``reasoning_content``, ``refusal``,
+    ``audio.transcript`` and every ``tool_calls`` / legacy ``function_call``
+    name+arguments ship too, and are first-class fields on the stock OpenAI SDK's
+    ``ChatCompletionMessage``. Passing the content-only
+    ``_extract_response_from_completion`` text as the delivered text let a
+    tool-channel-only PII/credential match be discarded as a false positive: no
+    redaction, no secondary-channel neutralization (``_set_completion_response_text``
+    never ran) and NO incident telemetry — a SILENT leak of raw PII/credentials in
+    ``tool_calls.function.arguments``.
+
+    Deliberately NOT an alias of ``_extract_scannable_output_text``: the scan input
+    may grow sources the client never sees (RAG/classifier metadata), and the
+    coalescer's false-positive suppression depends on THIS list staying
+    delivered-only.
+
+    INVARIANT: every channel enumerated here must also be cleared on enforcement —
+    message-level channels in ``_neutralize_secondary_output_channels``, and the
+    CHOICE-level ``logprobs`` in ``_set_completion_response_text`` (the neutralizer
+    only receives the message and cannot reach it). Detecting a channel without
+    clearing it ships the secret anyway; clearing one without counting it here gets
+    the verdict discarded as a false positive. Add new channels to both sides.
+    """
+    choices = completion.get("choices") or []
+    if not choices:
+        return ""
+    parts: list[str] = []
+    for ch in choices:
+        if not isinstance(ch, dict):
+            continue
+        msg = ch.get("message") or ch.get("delta") or {}
+        if not isinstance(msg, dict):
+            continue
+        for _v in (
+            _content_to_text(msg.get("content")),
+            _tool_arg_to_text(msg.get("reasoning_content")),
+            _tool_arg_to_text(msg.get("refusal")),
+        ):
+            if _v:
+                parts.append(_v)
+        _au = msg.get("audio")
+        if isinstance(_au, dict):
+            _t = _au.get("transcript")
+            if isinstance(_t, str) and _t:
+                parts.append(_t)
+        for tc in (msg.get("tool_calls") or []):
+            if not isinstance(tc, dict):
+                continue
+            fn = tc.get("function") if isinstance(tc.get("function"), dict) else {}
+            for _k in ("name", "arguments"):
+                _v = _tool_arg_to_text(fn.get(_k))
+                if _v:
+                    parts.append(_v)
+        _fc = msg.get("function_call")
+        if isinstance(_fc, dict):
+            for _k in ("name", "arguments"):
+                _v = _tool_arg_to_text(_fc.get(_k))
+                if _v:
+                    parts.append(_v)
+        # I-01b: annotations + choice-level logprobs (shared with the scan-text
+        # extractor so the delivered list and the scanned list cannot drift).
+        _fold_annotation_and_logprob_text(ch, msg, parts)
+    return "\n".join(parts)
 
 
 def _neutralize_secondary_output_channels(msg: dict) -> None:
@@ -1911,6 +2072,10 @@ def _neutralize_secondary_output_channels(msg: dict) -> None:
                 _au["transcript"] = ""
             if isinstance(_au.get("data"), str) and _au.get("data"):
                 _au["data"] = ""
+        # I-01b: blank model-authored ``annotations`` (url_citation / note text) on
+        # enforcement — they ship verbatim and are not covered by the content redactor.
+        if msg.get("annotations"):
+            msg["annotations"] = []
     except Exception:  # noqa: BLE001 - neutralization must never crash the response
         pass
 
@@ -2026,9 +2191,12 @@ async def _apply_output_guard_nonstream(
             from .output_guard import coalesce_output_guard_verdict_for_delivery
         except ImportError:
             from output_guard import coalesce_output_guard_verdict_for_delivery
+        # I-01: the coalescer must test the FULL DELIVERED envelope, not just
+        # content — tool_calls/reasoning_content/refusal/audio ARE returned to the
+        # client, so a match found only there is a REAL leak, not a false positive.
         verdict = coalesce_output_guard_verdict_for_delivery(
             verdict,
-            delivered_text=response_text,
+            delivered_text=_client_delivered_output_text(resp),
         )
     except Exception as _og_exc:  # noqa: BLE001
         LOG.exception("Output guard inspect failed (sync_pre_llm path); failing CLOSED per enforce_output")
@@ -2439,13 +2607,68 @@ def _scrub_upstream_passthrough(body: dict, request_id: str = "") -> None:
                 _slot.pop("provider_specific_fields", None)
 
 
-def _collect_nested_strings(obj, _depth: int = 0) -> list:
-    """Collect every non-empty string anywhere in a nested dict/list tree (depth
-    capped to bound work). Used to fold ALL agent_data values into the scanner so
-    a string buried in a nested dict/list can't bypass Tier-1/Tier-2."""
+# I-22: the recursion cap bounds work against a hostile deeply-nested payload, but
+# 6 was low enough to be a real detection blind spot (an injection nested 10 levels
+# deep in agent_data was never scanned) AND the truncation was completely silent —
+# no log, no metric, no telemetry — so operators could not tell a clean scan from a
+# truncated one. Raised to 24 (still bounded; the node budget below is the real DoS
+# guard, since depth alone does not bound breadth) and made observable.
+_NESTED_SCAN_MAX_DEPTH = 24
+_NESTED_SCAN_MAX_NODES = 5000
+
+
+def _build_ratelimit_headers(
+    *,
+    rate_limit_tpm: int = 0,
+    tokens_used: int = 0,
+    rpm_limit: int = 0,
+    current_rpm: int = 0,
+) -> dict[str, str]:
+    """OpenAI-parity ``x-ratelimit-*`` quota headers (I-16).
+
+    The gateway enforced both ceilings but advertised NEITHER, so a stock-SDK client
+    could only discover its limits by tripping a 429 — reactive backoff worked
+    (``Retry-After`` is correct), proactive pacing was impossible. Emits only the
+    families that are actually configured: advertising a limit the gateway does not
+    enforce would be its own kind of dishonesty.
+    """
+    out: dict[str, str] = {}
+    if rate_limit_tpm > 0:
+        out["x-ratelimit-limit-tokens"] = str(rate_limit_tpm)
+        out["x-ratelimit-remaining-tokens"] = str(max(0, rate_limit_tpm - max(0, tokens_used)))
+        out["x-ratelimit-reset-tokens"] = "60s"
+    if rpm_limit > 0:
+        out["x-ratelimit-limit-requests"] = str(rpm_limit)
+        out["x-ratelimit-remaining-requests"] = str(max(0, rpm_limit - max(0, current_rpm)))
+        out["x-ratelimit-reset-requests"] = "60s"
+    return out
+
+
+def _collect_nested_strings(obj, _depth: int = 0, _budget: list | None = None) -> list:
+    """Collect every non-empty string anywhere in a nested dict/list tree. Used to
+    fold ALL agent_data values into the scanner so a string buried in a nested
+    dict/list can't bypass Tier-1/Tier-2.
+
+    Bounded by BOTH depth and a shared node budget: depth alone does not bound work
+    (a flat 1M-element list is depth 1). On truncation a warning is logged — the cap
+    used to bite silently, which is the worst property for a detection control.
+    """
     out: list = []
-    if _depth > 6:
+    if _budget is None:
+        _budget = [_NESTED_SCAN_MAX_NODES]
+    if _depth > _NESTED_SCAN_MAX_DEPTH:
+        LOG.warning(
+            "agent/MCP context scan truncated at depth %d — content below this "
+            "level was NOT scanned", _NESTED_SCAN_MAX_DEPTH,
+        )
         return out
+    if _budget[0] <= 0:
+        LOG.warning(
+            "agent/MCP context scan truncated at %d nodes — remaining content was "
+            "NOT scanned", _NESTED_SCAN_MAX_NODES,
+        )
+        return out
+    _budget[0] -= 1
     if isinstance(obj, str):
         if obj:
             out.append(obj)
@@ -2458,10 +2681,10 @@ def _collect_nested_strings(obj, _depth: int = 0) -> list:
             # but sailed through as a key.
             if isinstance(k, str) and k:
                 out.append(k)
-            out.extend(_collect_nested_strings(v, _depth + 1))
+            out.extend(_collect_nested_strings(v, _depth + 1, _budget))
     elif isinstance(obj, (list, tuple)):
         for v in obj:
-            out.extend(_collect_nested_strings(v, _depth + 1))
+            out.extend(_collect_nested_strings(v, _depth + 1, _budget))
     return out
 
 
@@ -2723,7 +2946,21 @@ def _extract_chat_routing_preferences(body: dict, org_config: dict, auth_ctx, sc
     except (ValueError, TypeError):
         request_risk_score = 0.0
     token_budget_tpm = getattr(auth_ctx, "rate_limit_tpm", None) if auth_ctx is not None else None
+    # I-18: surface the EFFECTIVE context budget. `0` means unlimited — deliberate
+    # intent, documented in three places, and NOT changed here: flipping the default
+    # would silently start pruning conversation history for every existing tenant,
+    # degrading answer quality, and the finding is a product-defaults question rather
+    # than a vulnerability (the scanner inspects a strict superset either way, so
+    # nothing escapes inspection when minimization is off). What WAS wrong is that
+    # the inertness was invisible: §1.4 advertises least-privilege context assembly
+    # and an operator had no way to see it was doing nothing. Reporting the resolved
+    # value makes "minimization is off" an observable fact instead of a silent one.
+    _ctx_budget = getattr(auth_ctx, "max_context_tokens", 0) if auth_ctx is not None else 0
+    if not _ctx_budget:
+        _ctx_budget = int(org_config.get("default_max_context_tokens", 0) or 0)
     return {
+        "context_budget_tokens": int(_ctx_budget or 0),
+        "context_minimization_active": bool(_ctx_budget),
         "routing_enabled": routing_enabled,
         "routing_override": routing_override,
         "org_routing_enabled": org_routing_enabled,
@@ -3176,6 +3413,9 @@ def _launch_chat_stream_response(
     org_slug: str,
     auth_ctx,
     redacted_prompt: str | None,
+    # I-04: policy redact rules, so a policy mask reaches the wire on the STREAMING
+    # path too (it shares llm_router._apply_redaction with the non-stream path).
+    redaction_hints: list | None = None,
     route_selection=None,
     scan_verdict=None,
     user_id=None,
@@ -3259,6 +3499,7 @@ def _launch_chat_stream_response(
         async for chunk in LLM_ROUTER.acompletion_stream(
             body,
             redacted_prompt,
+            redaction_hints=redaction_hints,
             metrics=stream_metrics,
             echo_model=_stream_echo_model,
             state_check=_midstream_state_check,
@@ -3783,6 +4024,15 @@ def _set_completion_response_text(completion: dict, text: str) -> None:
     for ch in choices:
         if not isinstance(ch, dict):
             continue
+        # I-01b: ``logprobs`` is CHOICE-level, so the message-level neutralizer
+        # cannot reach it. It echoes the ORIGINAL answer token by token, so after
+        # ``content`` is sanitized the raw secret is still reconstructable by
+        # concatenating logprobs[].content[].token (proven: a redacted
+        # '***-**-9083' shipped alongside tokens rebuilding '412-55-9083').
+        # Enforcement means the answer violated policy — its token-level echo must
+        # go with it. Dropped only on enforcement; the allow path never gets here.
+        if ch.get("logprobs"):
+            ch["logprobs"] = None
         if isinstance(ch.get("message"), dict):
             ch["message"]["content"] = text
             ch["message"]["role"] = ch["message"].get("role") or "assistant"
@@ -4040,10 +4290,21 @@ def _is_tier2_degraded_verdict(verdict) -> bool:
     return str(getattr(verdict, "reason_code", "")).startswith("degraded")
 
 
-def _resolve_success_metadata_from_verdict(scan_verdict) -> tuple[str, str, str, float, list[str], str]:
+def _resolve_success_metadata_from_verdict(
+    scan_verdict, enforcement_mode: str = "block",
+) -> tuple[str, str, str, float, list[str], str]:
     """
     Resolve action/reason/threat/confidence from scanner verdict for successful
     (HTTP 200) responses so flagged Tier-2 results are not flattened.
+
+    I-17: ``enforcement_mode`` is required to report monitor mode honestly. This
+    function receives the RAW verdict, whose action for a detected injection is
+    "block"; the clamp below then collapsed anything outside {allow, flag} to
+    "allow". So in enforcement_mode=monitor a 1.0-confidence detection was
+    byte-identical, on the documented ``zeroshield.action`` field, to genuinely
+    clean traffic — the one field a consumer keys on could not distinguish
+    "monitored threat" from "no threat". The enforcement authority had already
+    resolved "monitor" correctly; only this envelope field lied.
     """
     if scan_verdict is None:
         return (
@@ -4055,7 +4316,22 @@ def _resolve_success_metadata_from_verdict(scan_verdict) -> tuple[str, str, str,
             "",
         )
 
-    action = scan_verdict.action if scan_verdict.action in ("allow", "flag") else "allow"
+    # I-17: "monitor" is a REAL client-visible outcome and must survive this clamp.
+    # In enforcement_mode=monitor the enforcement authority correctly returns
+    # ``monitor`` for a detection that is being observed-but-not-blocked, yet this
+    # line read the RAW verdict and collapsed anything outside {allow, flag} to
+    # "allow" — so a 1.0-confidence prompt-injection was byte-identical, on the
+    # documented ``zeroshield.action`` field, to genuinely clean traffic. A consumer
+    # keying on that field could not tell "monitored threat" from "no threat".
+    # (pipeline_trace.final_action was already correct; only this envelope field lied.)
+    _raw_action = str(getattr(scan_verdict, "action", "") or "")
+    if _raw_action in ("allow", "flag", "monitor"):
+        action = _raw_action
+    elif str(enforcement_mode or "block").lower() == "monitor" and _raw_action:
+        # A detection that WOULD have been enforced, deliberately not enforced.
+        action = "monitor"
+    else:
+        action = "allow"
     threat_type = scan_verdict.threat_type or "none"
     confidence = float(scan_verdict.confidence or 0.0)
     matched_patterns = list(scan_verdict.matched_patterns or [])
@@ -4196,6 +4472,9 @@ def _build_block_response(
         detection_tier=detection_tier,
         pipeline_trace=pipeline_trace,
         blocked_by=blocked_stage,
+        # I-19: only the SIZE branch sets reason_code, so the repetition heuristic
+        # (a genuine content judgement) keeps error.code="content_filter".
+        error_code_override=str(getattr(scan_verdict, "reason_code", "") or ""),
     )
 
 
@@ -5188,6 +5467,17 @@ def _detect_rag_request(body: dict, messages: list[dict]) -> bool:
     if body.get("documents") is not None:
         return True
     for msg in messages:
+        # I-15: a ``role=tool`` message IS retrieved, third-party content — the result
+        # of a tool/MCP/retrieval call being fed back to the model. It is the PRIMARY
+        # indirect-injection vector in agentic workloads, and on the stock SDK path it
+        # is how retrieved context actually arrives (the gateway's own rag_context /
+        # documents fields are not in the OpenAI schema, so an SDK caller cannot send
+        # them). Matching none of the branches below, such a request was classified
+        # NON-RAG and got chat-grade scanning, leaving the rag_poisoning detector tier
+        # silently inactive: 5 of 6 probe payloads that RAG-grade scanning blocks were
+        # allowed through. Treat tool results as retrieved context.
+        if msg.get("role") == "tool":
+            return True
         if msg.get("role") == "system":
             content = (msg.get("content") or "").lower()
             if any(
@@ -5326,6 +5616,9 @@ async def proxy_chat(
     from pipeline_trace import PipelineStageTimer, finalize_stage_metrics
 
     _ptimer = PipelineStageTimer(start)
+    # I-20: request parameters the gateway silently rewrote (n, max_tokens). Surfaced
+    # to the caller as X-ZeroShield-Clamped so a mutated request is observable.
+    _request_clamps: list[str] = []
     stage_metrics = {
         "auth_ms": 0.0,
         "policy_ms": 0.0,
@@ -5741,6 +6034,12 @@ async def proxy_chat(
             # _n_int=1) left the RAW float('inf') in body["n"], which then crashed
             # a SECOND int(body["n"]) in _extract_chat_routing_preferences. The
             # output guard is single-choice, so n is always forced to 1 anyway.
+            if _n_int != 1:
+                # I-20: the output guard is single-choice, so n is forced to 1. The
+                # SECURITY half is sound — choices[1..] are never generated and so
+                # cannot leak unscanned — but the clamp was SILENT, so a caller
+                # asking for n=5 got one choice with no indication why.
+                _request_clamps.append(f"n={_n_int}->1")
             body["n"] = 1 if _n_int != 1 else _n_int
 
         # C-5: locally reject non-finite float sampling params (temperature/top_p/
@@ -5811,6 +6110,20 @@ async def proxy_chat(
             raw_agent_data = raw_body.get("agent_data")
             if isinstance(raw_agent_data, (dict, str)):
                 body["agent_data"] = raw_agent_data
+
+            # I-09: restore ``mcp_context`` for the SAME reason. This is the
+            # documented Scenario-4 shape an OpenAI-SDK caller uses
+            # (``extra_body={"mcp_context": {...}}``), and _extract_agent_data
+            # already reads it — but the strict normalizer stripped it one layer
+            # earlier, so the branch was DEAD and the documented MCP-context channel
+            # was never scanned, never telemetered and never delivered. Two in-code
+            # intent statements assert the opposite, and a passing unit test on the
+            # adapter gave false end-to-end confidence in a contract broken here.
+            # Scan-only, exactly like agent_data: mcp_context is not in the router
+            # passthrough, so restoring it cannot leak it to the provider.
+            raw_mcp_context = raw_body.get("mcp_context")
+            if isinstance(raw_mcp_context, (dict, str)):
+                body["mcp_context"] = raw_mcp_context
 
         # ── Identity: prefer auth_context from AuthMiddleware, fall back to legacy headers ──
         auth_ctx = getattr(request.state, "auth_context", None)
@@ -6558,6 +6871,11 @@ async def proxy_chat(
             _mt_clamped = min(_mt_pre, _mt_ceiling, _mt_hard_cap)
             if _mt_clamped != _mt_pre:
                 body["max_tokens"] = _mt_clamped
+                # I-20: record the mutation so it can be SIGNALLED to the caller.
+                # The clamp itself is correct (a cost/DoS control), but it was
+                # silent — the gateway signals many other mutations via
+                # X-ZeroShield-* and this one had no field, no header, nothing.
+                _request_clamps.append(f"max_tokens={_mt_pre}->{_mt_clamped}")
         estimated_request_tokens = _estimate_request_tokens(
             prompt_for_estimate,
             int(body.get("max_tokens") or 0),
@@ -6658,11 +6976,29 @@ async def proxy_chat(
         max_ctx = getattr(auth_ctx, "max_context_tokens", 0) if auth_ctx else 0
         if not max_ctx:
             max_ctx = CONFIG.get("default_max_context_tokens", 0)
+        _ctx_minimized = False
         if max_ctx > 0:
+            _pre_minimization = messages
             messages = minimize_context(messages, max_ctx)
             body["messages"] = messages
+            _ctx_minimized = messages is not _pre_minimization
 
-        prompt = prompt_for_estimate or _extract_prompt_from_messages(messages)
+        # I-13: the SCANNED prompt must be the prompt that EGRESSES.
+        # ``prompt_for_estimate`` is flattened BEFORE minimize_context (it has to be —
+        # the rate limiter charges the caller for what they sent), and being truthy it
+        # always won here, so ``prompt`` described a conversation the model never
+        # received. Detection itself was fail-SAFE (the pre-minimization text is a
+        # strict superset, so nothing escaped scanning), but everything derived from
+        # ``prompt`` was wrong: the prompt hash, pipeline_trace.prompt_in, the
+        # redaction payload and length accounting all attested to bytes that were
+        # pruned before the provider call — an audit-integrity defect.
+        # Re-flatten from the MINIMIZED messages when pruning actually happened.
+        # Scanning the minimized set is also sufficient: content pruned here never
+        # reaches the model, so it cannot be the vehicle for an injection.
+        if _ctx_minimized:
+            prompt = _extract_prompt_from_messages(messages)
+        else:
+            prompt = prompt_for_estimate or _extract_prompt_from_messages(messages)
         # G7: fold top-level tool DEFINITIONS (name + description) into the scanned
         # prompt so an injection smuggled in a tool definition is caught too.
         _tool_defs_text = _extract_tool_definitions_text(body.get("tools"))
@@ -6686,6 +7022,9 @@ async def proxy_chat(
         # so the redact zeroshield reports policy rules instead of a now-clean
         # Tier-2 verdict.
         policy_redacted_prompt = ""
+        # I-04: the policy engine's compiled redact rules, forwarded to the router so
+        # an operator-authored mask reaches the WIRE instead of only the trace.
+        policy_redaction_hints: list = []
         # Input policy-engine result (matched rules / redaction). Defaulted so the
         # redact-attribution branches can always read matched rule names even when
         # the policy check was skipped (gated) for this request.
@@ -6992,12 +7331,55 @@ async def proxy_chat(
                     effective_prompt = _new_redacted
                     redacted_prompt = _new_redacted
                     policy_redacted_prompt = _new_redacted
+                    # I-04: keep the hints that produced this mask so the router can
+                    # reproduce it per-message on the wire. Without them the router
+                    # re-derives with redact_all + a digit-only backstop, silently
+                    # dropping any non-numeric policy mask while still reporting
+                    # action='redact'.
+                    policy_redaction_hints = check_resp.get("redaction_hints") or []
 
             # ── Rewrite action: strip harmful pattern, log original ──
             if action == "rewrite":
                 original_effective = effective_prompt
                 matched_rules = check_resp.get("matched_rules") or []
                 rewrite_detail = check_resp.get("message") or "Content policy applied"
+                # I-05: REWRITE was a no-op on the wire AND a misnomer. It only
+                # PREPENDED this advisory notice to the full original prompt — it
+                # removed nothing, despite §1.2 defining rewrite as "strip harmful
+                # pattern" and the telemetry/audit both recording action='rewrite'.
+                # And even the notice never reached the provider: it was written into
+                # ``redacted_prompt``, which llm_router treats as a SIGNAL and
+                # re-derives from, so the ORIGINAL prompt was forwarded byte-for-byte.
+                #
+                # Fix both halves:
+                #  1. STRIP — run the matched rewrite rules' own conditions through the
+                #     same masking machinery redact uses, so the harmful span is
+                #     actually removed instead of merely annotated.
+                #  2. REACH THE WIRE — route those hints through the I-04
+                #     ``redaction_hints`` channel so the router applies them per
+                #     message, and mutate body["messages"] so the notice egresses too.
+                _rewrite_hints = check_resp.get("rewrite_hints") or []
+                if _rewrite_hints:
+                    try:
+                        try:
+                            from policy_engine import apply_redaction as _rw_apply
+                        except ImportError:
+                            from .policy_engine import apply_redaction as _rw_apply
+                        effective_prompt = _rw_apply(effective_prompt, _rewrite_hints)
+                    except Exception:  # noqa: BLE001 - never fail the request on a bad rule
+                        LOG.warning("rewrite hint application failed", exc_info=True)
+                    # Give the strip a channel to the provider (see I-04).
+                    policy_redaction_hints = list(policy_redaction_hints) + list(_rewrite_hints)
+                # Carry the notice on the wire UNCONDITIONALLY — it is part of the
+                # rewrite action itself, not of the strip. Prepend it to the first
+                # non-system message so the model sees that policy was applied.
+                for _m in (body.get("messages") or []):
+                    if isinstance(_m, dict) and _m.get("role") != "system" \
+                            and isinstance(_m.get("content"), str):
+                        _m["content"] = (
+                            "[Content policy applied: harmful content removed] "
+                            + _m["content"])
+                        break
                 effective_prompt = f"[Content policy applied: harmful content removed] {effective_prompt}"
                 redacted_prompt = effective_prompt
                 _emit_telemetry(
@@ -7560,7 +7942,23 @@ async def proxy_chat(
                         scan_verdict=verdict,
                     )
 
-        if not AGENT_ID or not CONFIG["backend_url"]:
+        # I-02: governance must depend on ROUTING-CATALOGUE AVAILABILITY, not on
+        # whether this worker happened to register an AGENT_ID — the same bug class
+        # the policy path already fixed at ~6846 (`_policy_cache_ready or AGENT_ID`).
+        # ConfigSync loads the model catalogue from Redis INDEPENDENTLY of
+        # control-plane registration, so an unregistered worker holding a warm
+        # catalogue is a real production state — and there, gating this
+        # short-circuit on AGENT_ID silently disabled the ENTIRE governance block
+        # below (dynamic routing, compliance filter, data-sensitivity floor,
+        # per-key model allowlist re-check, per-model rate limits, circuit breaker)
+        # AND the provider-topology scrub, while traffic flowed 200 OK. Take the
+        # standalone short-circuit ONLY when there is no catalogue to govern
+        # against AND the control plane is unusable; with an empty catalogue the
+        # connected branch has nothing to route to anyway
+        # (_validate_org_inference_model 422s on an empty set), so a genuinely
+        # standalone deployment still forwards straight to the LLM.
+        _routing_catalogue_ready = bool(inference_models)
+        if not _routing_catalogue_ready and (not AGENT_ID or not CONFIG["backend_url"]):
             # No backend: forward to LLM (input scanning already done above).
             # #27: if the no-provider 422 was deferred so the input scan could
             # run, re-emit it here for clean prompts on the standalone path
@@ -7600,6 +7998,7 @@ async def proxy_chat(
                     org_slug=org_slug,
                     auth_ctx=auth_ctx,
                     redacted_prompt=redacted_prompt,
+                    redaction_hints=policy_redaction_hints,
                     scan_verdict=scan_verdict,
                     user_id=user_id,
                     project_id=str(project_id or ""),
@@ -7611,7 +8010,8 @@ async def proxy_chat(
                     input_action=_input_decision.action if _input_decision is not None else "allow",
                 )
             upstream_start = time.perf_counter()
-            code, resp = await LLM_ROUTER.acompletion(body, redacted_prompt)
+            code, resp = await LLM_ROUTER.acompletion(
+                body, redacted_prompt, redaction_hints=policy_redaction_hints)
             stage_metrics["upstream_ms"] = round((time.perf_counter() - upstream_start) * 1000, 2)
             METRICS["allowed"] += 1
             if code == 200 and isinstance(resp, dict):
@@ -7689,7 +8089,8 @@ async def proxy_chat(
                         )
                         response_headers["X-ZeroShield-Action"] = "redacted"
                     else:
-                        zs_action, zs_reason, zs_threat, zs_conf, zs_patterns, zs_detail = _resolve_success_metadata_from_verdict(scan_verdict)
+                        zs_action, zs_reason, zs_threat, zs_conf, zs_patterns, zs_detail = _resolve_success_metadata_from_verdict(
+                    scan_verdict, org_config.get('enforcement_mode', 'block'))
                         from pipeline_trace import enrich_zeroshield_from_verdict
 
                         resp["zeroshield"] = enrich_zeroshield_from_verdict(
@@ -8369,6 +8770,7 @@ async def proxy_chat(
                 org_slug=org_slug,
                 auth_ctx=auth_ctx,
                 redacted_prompt=redacted_prompt,
+                redaction_hints=policy_redaction_hints,
                 route_selection=route_selection,
                 scan_verdict=scan_verdict,
                 user_id=user_id,
@@ -8382,7 +8784,8 @@ async def proxy_chat(
             )
         upstream_start = time.perf_counter()
         stage_metrics["model_input_ms"] = round((upstream_start - _model_in_start) * 1000, 1)
-        code, llm_resp = await LLM_ROUTER.acompletion(body, redacted_prompt)
+        code, llm_resp = await LLM_ROUTER.acompletion(
+            body, redacted_prompt, redaction_hints=policy_redaction_hints)
         stage_metrics["upstream_ms"] = round((time.perf_counter() - upstream_start) * 1000, 1)
         stage_metrics["model_output_ms"] = stage_metrics["upstream_ms"]
         if code == 200 and isinstance(llm_resp, dict):
@@ -8507,9 +8910,12 @@ async def proxy_chat(
                 from .output_guard import coalesce_output_guard_verdict_for_delivery
             except ImportError:
                 from output_guard import coalesce_output_guard_verdict_for_delivery
+            # I-01: the coalescer must test the FULL DELIVERED envelope, not just
+            # content — tool_calls/reasoning_content/refusal/audio ARE returned to
+            # the client, so a match found only there is a REAL leak, not an FP.
             output_verdict = coalesce_output_guard_verdict_for_delivery(
                 output_verdict,
-                delivered_text=response_text,
+                delivered_text=_client_delivered_output_text(llm_resp),
             )
             _sync_pipeline_ctx(output_scan_verdict=output_verdict)
             stage_metrics["output_guardrail_ms"] = round((time.perf_counter() - _og_start) * 1000, 1)
@@ -9332,6 +9738,27 @@ async def proxy_chat(
                 },
             )
         response_headers_final: dict[str, str] = {}
+        # I-20: tell the caller which request parameters the gateway rewrote. The
+        # clamps themselves are correct controls; being silent about them was the
+        # defect (a caller asking for n=5 received one choice with no explanation,
+        # while the gateway signalled every OTHER mutation via X-ZeroShield-*).
+        if _request_clamps:
+            response_headers_final["X-ZeroShield-Clamped"] = ",".join(_request_clamps)
+        # I-16: OpenAI-parity quota headers. rate_limit_tpm / current_rpm / rpm_limit
+        # were already computed on the allow path and then DISCARDED, so stock-SDK
+        # clients that pace on x-ratelimit-remaining-* were blind and could only
+        # discover the ceiling by tripping a 429. Reactive backoff (Retry-After on
+        # the 429) was always correct; this adds the PROACTIVE half.
+        try:
+            _rl_headers = _build_ratelimit_headers(
+                rate_limit_tpm=int(rate_limit_tpm or 0),
+                tokens_used=int(estimated_request_tokens or 0),
+                rpm_limit=int(locals().get("rpm_limit") or 0),
+                current_rpm=int(locals().get("current_rpm") or 0),
+            )
+            response_headers_final.update(_rl_headers)
+        except Exception:  # noqa: BLE001 - advisory headers must never fail a response
+            pass
         elapsed_ms = (time.perf_counter() - start) * 1000
         if isinstance(llm_resp, dict):
             if output_enforcement is not None:
@@ -9415,7 +9842,8 @@ async def proxy_chat(
                 response_headers_final["X-ZeroShield-Action"] = "redact"
                 response_headers_final["X-ZeroShield-Redacted-Types"] = ",".join(_red_patterns)
             else:
-                zs_action, zs_reason, zs_threat, zs_conf, zs_patterns, zs_detail = _resolve_success_metadata_from_verdict(scan_verdict)
+                zs_action, zs_reason, zs_threat, zs_conf, zs_patterns, zs_detail = _resolve_success_metadata_from_verdict(
+                    scan_verdict, org_config.get('enforcement_mode', 'block'))
                 from pipeline_trace import enrich_zeroshield_from_verdict
 
                 llm_resp["zeroshield"] = enrich_zeroshield_from_verdict(
@@ -10473,6 +10901,90 @@ async def proxy_embeddings(request: Request):
         if _burst_resp is not None:
             return _burst_resp
 
+        # ── I-06 + I-07: INGRESS-CONTROL PARITY WITH /v1/chat/completions ──
+        # These are one defect, not two. ``proxy_embeddings`` was built by copying a
+        # SUBSET of the chat ingress chain, so every control added to chat since has
+        # to be remembered here by hand — and two were not:
+        #   I-06  per-KEY TPM: the org ceiling above ran, but RATE_LIMITER.check_rate_limit
+        #         (the per-key ceiling guarding chat) was never called. The gap was
+        #         bidirectional — record_usage was absent too, so embeddings never even
+        #         CHARGED the bucket, and /v1/usage read a flat tpm_used while a key
+        #         embedded unbounded tokens. A caller could shift traffic from chat to
+        #         embeddings to evade a spent token budget.
+        #   I-07  blocked_keywords: enforced on chat, absent here — a term the org
+        #         forbids in conversation was still embeddable and indexable. The
+        #         _rag_blocked_keyword_hit docstring already frames chat-only
+        #         enforcement as a defect (fixed for RAG under #21); embeddings were
+        #         the remaining hole.
+        # See test_embeddings_ingress_control_parity_with_chat, which asserts the two
+        # handlers' control lists stay in sync so the NEXT control cannot skip this one.
+        _emb_firewall_disabled = org_config.get("firewall_enabled") is False
+        if not _emb_firewall_disabled:
+            _emb_blocked = org_config.get("blocked_keywords", [])
+            if _emb_blocked and isinstance(_emb_blocked, list):
+                _emb_lower = _emb_text.lower()
+                _emb_matched = [kw for kw in _emb_blocked
+                                if _blocked_keyword_matches(_emb_lower, kw)]
+                if _emb_matched and org_config.get("enforcement_mode", "block") == "block":
+                    METRICS["blocked"] += 1
+                    _emit_telemetry(
+                        status_code=400,
+                        event_type="embedding_blocked",
+                        model=body.get("model", ""),
+                        user_id=user_id,
+                        project_id=str(project_id or ""),
+                        key_prefix=auth_ctx.prefix if auth_ctx else "",
+                        action="block",
+                        risk_score=0.50,
+                        threat_type="blocked_keyword",
+                        metadata={"detail": f"Blocked keyword in embedding input: {_emb_matched[0]}",
+                                  "matched_keywords": _emb_matched},
+                    )
+                    return JSONResponse(status_code=400, content={
+                        "error": {
+                            "message": "Embedding input contains content blocked by your organization's policy.",
+                            "type": "invalid_request_error",
+                            "code": "content_filter",
+                            "param": "input",
+                        },
+                        "code": "blocked_keyword",
+                    })
+
+        # I-06: per-KEY TPM ceiling — the same gate chat applies at main.py:6761.
+        if RATE_LIMITER is not None and auth_ctx is not None and getattr(auth_ctx, "rate_limit_tpm", 0):
+            _emb_allowed, _emb_used = await RATE_LIMITER.check_rate_limit(
+                auth_ctx.key_hash,
+                auth_ctx.rate_limit_tpm,
+                _emb_est_tokens,
+            )
+            if not _emb_allowed:
+                METRICS["blocked"] += 1
+                _emit_telemetry(
+                    status_code=429,
+                    event_type="embedding_blocked",
+                    model=body.get("model", ""),
+                    user_id=user_id,
+                    project_id=str(project_id or ""),
+                    key_prefix=auth_ctx.prefix if auth_ctx else "",
+                    action="block",
+                    risk_score=0.30,
+                    threat_type="rate_limit_tpm",
+                    metadata={"detail": (
+                        f"Token rate limit exceeded ({_emb_used}/{auth_ctx.rate_limit_tpm} TPM, "
+                        f"est {_emb_est_tokens} tokens this request)")},
+                )
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "error": "rate_limited",
+                        "message": (
+                            f"Token rate limit exceeded: {_emb_used}/{auth_ctx.rate_limit_tpm} TPM."
+                        ),
+                        "code": "key_rate_limit_exceeded",
+                    },
+                    headers={"Retry-After": "60"},
+                )
+
         # I3: embeddings were dispatched with NO kill-switch / model-state gate
         # (unlike proxy_chat) — an operator-disabled embedding model still served.
         # Embeddings have no chat fallback, so a kill-switch 'reroute' is
@@ -10564,6 +11076,25 @@ async def proxy_embeddings(request: Request):
         # chat-path model aliasing.
         if status == 200 and isinstance(result, dict) and result.get("model"):
             result["model"] = requested_model
+
+        # I-06 (second half): reconcile the per-KEY TPM bucket with ACTUAL usage.
+        # The gap was bidirectional — embeddings neither checked the ceiling (fixed
+        # above) nor CHARGED it, so /v1/usage reported a flat tpm_used while a key
+        # embedded unbounded tokens. Mirrors the chat reconcile at main.py:9451:
+        # pass the pre-charged estimate so record_usage adjusts by the delta rather
+        # than double-charging. Only reconcile a bucket we actually pre-charged.
+        if (status == 200 and RATE_LIMITER is not None and auth_ctx is not None
+                and getattr(auth_ctx, "rate_limit_tpm", 0)):
+            try:
+                _emb_usage = (result or {}).get("usage") or {} if isinstance(result, dict) else {}
+                _emb_actual = max(0, int(_emb_usage.get("total_tokens", 0) or 0))
+                await RATE_LIMITER.record_usage(
+                    auth_ctx.key_hash,
+                    _emb_actual or _emb_est_tokens,
+                    estimated_tokens=max(0, int(_emb_est_tokens or 0)),
+                )
+            except Exception:  # noqa: BLE001 - accounting must never fail the response
+                LOG.warning("embedding per-key TPM reconcile failed", exc_info=True)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         response_headers = {
@@ -13971,6 +14502,27 @@ async def list_models(request: Request):
     return JSONResponse(content={"object": "list", "data": _resolve_models_for_request(request)})
 
 
+def _catalogue_spans_multiple_orgs() -> bool:
+    """True when the shared LiteLLM catalogue holds deployments for >1 tenant.
+
+    I-11: an org-less key must not enumerate the merged cross-org catalogue that
+    ``config_sync`` builds. But failing closed unconditionally would strip model
+    discovery from a single-tenant / standalone deployment, where every key is
+    legitimately org-less and there is no other tenant to leak — the same trap as the
+    AGENT_ID gate in I-02. Fail closed only when a second tenant actually exists.
+    Conservative on error: if the shape cannot be read, assume multi-tenant.
+    """
+    if CONFIG_SYNC is None:
+        return False
+    try:
+        by_org = getattr(CONFIG_SYNC, "_model_routing_by_org", None)
+        if not isinstance(by_org, dict):
+            return False
+        return len({k for k in by_org if k and k != "default"}) > 1
+    except Exception:  # noqa: BLE001
+        return True
+
+
 def _resolve_models_for_request(request: Request) -> list[dict]:
     """OpenAI-format model list for the request's org. Shared by GET /v1/models and
     GET /v1/models/{model} so a single-model lookup never diverges from the list.
@@ -13996,6 +14548,32 @@ def _resolve_models_for_request(request: Request) -> list[dict]:
             {"id": _n, "object": "model", "created": 1704067200, "owned_by": org_slug}
             for _n in _ordered
         ]
+    elif _catalogue_spans_multiple_orgs():
+        # I-11: FAIL CLOSED on a missing org scope. There was no else-branch here, so a
+        # valid key with an EMPTY org_slug fell through to ``LLM_ROUTER.get_model_list()``
+        # — the SHARED LiteLLM catalogue, which config_sync builds by merging EVERY org's
+        # deployments into one router. That enumerated other tenants' deployment names.
+        # The org-less state is reachable in production: GatewayAPIKey.organization is
+        # null=True and the save() backfill swallows its exception.
+        # Inference containment was never affected (routing_allowed_models hard-filters
+        # before dispatch, and BYOK keys are org-tagged), so this is disclosure only —
+        # but a tenant must never see another tenant's model inventory.
+        #
+        # Gated on CONFIG_SYNC being present rather than applied unconditionally: the
+        # merged multi-org catalogue only EXISTS when config_sync built it. Without it
+        # there is no other tenant to leak, and failing closed would strip model
+        # discovery from a genuinely standalone deployment for no security gain — the
+        # same trap as the AGENT_ID gate in I-02.
+        models = []
+    # I-21: scope the catalogue to the KEY as well as the org. ``allowed_models`` was
+    # never consulted here, so every key saw the org's whole fleet even when entitled to
+    # one model. Containment already held (main.py routing_allowed_models is the hard
+    # filter); this aligns what a key can SEE with what it can USE. Empty = unrestricted,
+    # matching allowed_models semantics everywhere else.
+    _key_allowed = list(getattr(auth_ctx, "allowed_models", None) or []) if auth_ctx else []
+    if _key_allowed:
+        _allowed_set = {str(_a).strip() for _a in _key_allowed if str(_a).strip()}
+        models = [_m for _m in models if str(_m.get("id") or "") in _allowed_set]
     # R8: dedup by id (a model can appear under multiple routing identities/aliases).
     _seen: set = set()
     _deduped = []

@@ -52,6 +52,10 @@ def _apply_stubs():
     lr.acompletion_stream = T._fake_stream
     lr.aembedding = AsyncMock(side_effect=T._fake_embedding)
     lr.get_model_list = MagicMock(return_value=[{"id": "gpt-4o-mini", "object": "model", "owned_by": "openai"}])
+    # Routing governance sizes the prompt + reads fallback chains; a bare MagicMock
+    # returns a non-JSON-serialisable MagicMock once it reaches the zeroshield envelope.
+    lr.estimate_prompt_tokens = MagicMock(return_value=500)
+    cs.get_fallback_chains = MagicMock(return_value={"chains": {}, "per_primary": {}})
     gm.CONFIG = dict(T.TEST_CONFIG); gm.CONFIG_SYNC = cs; gm.LLM_ROUTER = lr
     gm.INPUT_SCANNER = InputScanner(thread_pool_size=2)
     gm.AGENT_ID = None; gm.POLICY_SYNC = None; gm.RATE_LIMITER = None

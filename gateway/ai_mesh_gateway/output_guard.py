@@ -58,7 +58,33 @@ ACTION_PRIORITY = {"allow": 0, "flag": 1, "rewrite": 2, "redact": 3, "block": 4}
 
 # Per-detector output actions an operator may configure. Anything outside this
 # set falls back to the detector's default action.
-_VALID_OUTPUT_ACTIONS = frozenset({"block", "redact", "rewrite", "flag", "allow"})
+#
+# I-25: §1.7 names "human review" as an output-guardrail action, but the vocabulary
+# stopped at {block, redact, rewrite, flag, allow} — so an operator configuring
+# ``human_review`` silently got the detector's DEFAULT action instead. The
+# machinery it needs already exists end to end (``review_required`` flows through
+# _merge_output_enforcement_state, the enforcement telemetry, and the
+# X-ZeroShield-Review-Required response header); only the ACTION NAME was missing.
+# ``human_review`` is accepted here and normalised to ``flag`` + review_required by
+# ``normalize_output_action`` — the answer is still delivered, but it is queued for
+# a human and the client is told so. Shipping a spec-named control that silently
+# no-ops is the same defect class as I-03.
+HUMAN_REVIEW_ACTION = "human_review"
+_VALID_OUTPUT_ACTIONS = frozenset(
+    {"block", "redact", "rewrite", "flag", "allow", HUMAN_REVIEW_ACTION}
+)
+
+
+def normalize_output_action(action: str) -> tuple[str, bool]:
+    """Map a configured action to (enforced_action, review_required).
+
+    Only ``human_review`` sets the review flag; every other action passes through
+    unchanged so existing postures are untouched.
+    """
+    value = str(action or "").lower()
+    if value == HUMAN_REVIEW_ACTION:
+        return "flag", True
+    return value, False
 
 # C-1: output-threat categories that are SURGICALLY REDACTED-and-served (200),
 # never whole-response blocked. The tier-2 guard model emits pci (card numbers)
@@ -638,6 +664,11 @@ class OutputVerdict:
     # (fail-open). Surfaced to telemetry + the client zeroshield metadata so a
     # guard outage is VISIBLE, not silent.
     scan_degraded: bool = False
+    # I-25: True when the operator configured the §1.7 ``human_review`` action for
+    # the detector that fired. The answer is still DELIVERED (the action normalises
+    # to ``flag``), but the request is queued for a human and the client is told via
+    # the existing X-ZeroShield-Review-Required header.
+    review_required: bool = False
 
 
 @dataclass
@@ -746,9 +777,19 @@ class OutputGuard:
         def _enabled(key: str, default: bool = True) -> bool:
             return bool(cfg.get(key, default))
 
+        _review_requested: list = []
+
         def _action(key: str, default: str) -> str:
             value = str(cfg.get(key, default) or default).lower()
-            return value if value in _VALID_OUTPUT_ACTIONS else default
+            if value not in _VALID_OUTPUT_ACTIONS:
+                return default
+            # I-25: normalise ``human_review`` -> ``flag`` + review_required so every
+            # downstream branch keeps seeing the 5 enforcement actions it understands,
+            # while the review intent is preserved rather than silently dropped.
+            enforced, review = normalize_output_action(value)
+            if review:
+                _review_requested.append(key)
+            return enforced
 
         def _operator_action_for_category(threat_type: str) -> str:
             """FULL OPERATOR CONTROL (2026-07-16): map a tier-2 guard-model finding
@@ -1060,6 +1101,14 @@ class OutputGuard:
         # (403) even for redactable categories; "redact" masks in place. The
         # per-detector _action() default remains a sensible value (redact for PII),
         # so orgs with no explicit opinion are unchanged.
+        #
+        # I-25: stamp the §1.7 human-review intent onto the winning verdict. Set only
+        # when the operator configured ``human_review`` for a detector that actually
+        # fired (_action() records it during resolution), so no other posture is
+        # affected. Downstream this rides the existing review_required plumbing to
+        # telemetry and the X-ZeroShield-Review-Required response header.
+        if _review_requested and selected.action != "allow":
+            selected.review_required = True
         return selected
 
     async def _check_pii_secrets(
@@ -1983,9 +2032,22 @@ def coalesce_output_guard_verdict_for_delivery(
 ) -> OutputVerdict | None:
     """Downgrade false-positive redact/flag when detection is outside delivered content.
 
-    The scan input can include reasoning/tool channels that are not returned to the
-    client. A smart-masked echo of already-redacted input there must not mark the
-    visible answer as redacted (noop redact on safety-classifier metadata).
+    ``delivered_text`` MUST be the FULL client-delivered envelope, as produced by
+    ``main._client_delivered_output_text`` — never a content-only string. I-01:
+    ``reasoning_content`` / ``refusal`` / ``audio.transcript`` / ``tool_calls`` +
+    ``function_call`` name+arguments / ``annotations`` / choice-level ``logprobs``
+    tokens ARE returned to the client and ARE surfaced by the stock OpenAI SDK, so
+    the earlier content-only delivered text silently discarded genuine leaks in
+    those channels. Suppression is for matches that exist only in bytes the client
+    never sees — a derived/decoded form, or safety-classifier metadata: a
+    smart-masked echo of already-redacted input must not mark the visible answer as
+    redacted (noop redact).
+
+    INVARIANT: this function's notion of "delivered" must stay in lockstep with
+    ``main._neutralize_secondary_output_channels`` + ``_set_completion_response_text``
+    (which blanks logprobs). A channel counted as delivered HERE but not blanked
+    THERE is detected and then shipped anyway; a channel blanked there but not
+    counted here is discarded as a false positive. Add new channels to both.
     """
     if verdict is None or verdict.action not in ("redact", "flag"):
         return verdict

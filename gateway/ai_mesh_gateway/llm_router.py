@@ -765,7 +765,12 @@ class LLMRouter:
             LOG.exception("Unexpected responses error")
             return 502, {"error": {"message": _sanitize_exception_message(exc, 502), "type": "internal_error"}}
 
-    def _apply_redaction(self, body: dict, redacted_content: str | None) -> dict:
+    def _apply_redaction(
+        self,
+        body: dict,
+        redacted_content: str | None,
+        redaction_hints: list | None = None,
+    ) -> dict:
         """Redact PII/secrets in EVERY conversation message before the upstream call.
 
         Previously this overwrote ONLY the last user message with the whole
@@ -779,14 +784,48 @@ class LLMRouter:
         redactor the input scanner uses (patterns.redact_all), covering str and
         multimodal text parts. System messages (instructions) are left untouched.
         """
-        if redacted_content is None or not body.get("messages"):
+        if (redacted_content is None and not redaction_hints) or not body.get("messages"):
             return body
+
+        # I-04: apply the POLICY engine's own redact rules per message.
+        #
+        # ``redacted_content`` is deliberately only a SIGNAL (see above) and the
+        # re-derivation uses patterns.redact_all + a DIGIT-run backstop. Both are
+        # blind to operator-authored ``redaction_config`` rules that target
+        # non-numeric text: a codename or customer name matched by a policy regex
+        # was masked in ``redacted_prompt`` (what the trace/telemetry reported) but
+        # NEVER on the wire — a phantom redaction that attested success while the
+        # raw value reached the provider. There was no channel for a policy mask to
+        # reach the wire at all; ``redaction_hints`` is that channel.
+        #
+        # policy_engine.apply_redaction is reused verbatim so the wire mask is
+        # byte-identical to the mask the trace reports, and it is already
+        # ReDoS-budgeted (_compile_regex shape rejection + _run_with_timeout per
+        # substitution), so an operator regex cannot pin the worker here either.
+        _policy_redact = None
+        if redaction_hints:
+            try:
+                try:
+                    from policy_engine import apply_redaction as _pol_apply
+                except ImportError:
+                    from .policy_engine import apply_redaction as _pol_apply
+                _policy_redact = _pol_apply
+            except Exception:  # noqa: BLE001 - never break inference on an import slip
+                _policy_redact = None
 
         def _redact_msg_text(text: str) -> str:
             # Shared chat/Responses redactor: redact_all + a fail-closed digit backstop
             # keyed off ``redacted_content`` (the firewall's "what must never reach the
             # model"). See _redact_text_with_backstop for the full rationale.
-            return _redact_text_with_backstop(text, redacted_content)
+            out = text
+            if _policy_redact is not None:
+                try:
+                    out = _policy_redact(out, redaction_hints)
+                except Exception:  # noqa: BLE001 - a bad rule must not drop the mask
+                    LOG.warning("policy redaction hint failed; falling back to redact_all")
+            if redacted_content is None:
+                return out
+            return _redact_text_with_backstop(out, redacted_content)
 
         new_messages = []
         for m in body["messages"]:
@@ -917,9 +956,15 @@ class LLMRouter:
             self,
             body: dict,
             redacted_content: str | None = None,
+            *,
+            redaction_hints: list | None = None,
     ) -> tuple[int, dict]:
-        """Non-streaming completion. Returns (http_status, response_dict)."""
-        body = self._apply_redaction(body, redacted_content)
+        """Non-streaming completion. Returns (http_status, response_dict).
+
+        ``redaction_hints`` (I-04) are the policy engine's compiled redact rules
+        ({regex|keywords, replacement}); see ``_apply_redaction``.
+        """
+        body = self._apply_redaction(body, redacted_content, redaction_hints)
         allowlist = self._pop_inference_allowlist(body)
         compliant_chain = self._pop_compliant_fallback_chain(body)
         kwargs = self._build_kwargs(body, stream=False, inference_allowlist=allowlist)
@@ -1197,6 +1242,7 @@ class LLMRouter:
             metrics: "StreamRunMetrics | None" = None,
             echo_model: str | None = None,
             state_check: "Callable[[], Awaitable[bool]] | None" = None,
+            redaction_hints: list | None = None,
     ) -> AsyncGenerator[str, None]:
         """Streaming completion. Yields SSE-formatted chunks.
 
@@ -1219,7 +1265,7 @@ class LLMRouter:
         local_metrics = metrics if metrics is not None else StreamRunMetrics()
         local_metrics.provider_start_ts = time.perf_counter()
 
-        body = self._apply_redaction(body, redacted_content)
+        body = self._apply_redaction(body, redacted_content, redaction_hints)
         allowlist = self._pop_inference_allowlist(body)
         compliant_chain = self._pop_compliant_fallback_chain(body)
         kwargs = self._build_kwargs(body, stream=True, inference_allowlist=allowlist)
