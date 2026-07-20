@@ -1348,10 +1348,39 @@ def redact_evidence_digit_spans(text: str, evidence_sources: List[str]) -> str:
     return result
 
 
-def _redact_all_raw(text: str) -> str:
-    """Redact PII with smart partial masking; PHI/PCI use placeholder tags (raw text only)."""
+def classify_pattern_key(key: str) -> str:
+    """Map a detection pattern key to the OPERATOR-FACING detector class.
+
+    The §1.7 UI exposes independent detectors, each with its own action:
+    "PII / PD Leakage", "Credential Exposure" and "IP Leakage". Redaction must be
+    able to mask ONLY the classes the operator actually set to "redact", so the key
+    -> class mapping has to be explicit.
+
+    Credential-class is decided by the authoritative ``COMPLIANCE_TAG_MAP`` SECRET
+    tag rather than by which table a key lives in, because ``PII_PATTERNS`` itself
+    contains credential keys (api_key_openai, aws_access_key, github_token, ...).
+    """
+    if key in IP_LEAKAGE_PATTERNS:
+        return "ip_leakage"
+    if "SECRET" in (COMPLIANCE_TAG_MAP.get(key) or []):
+        return "credential"
+    return "pii"
+
+
+def _redact_all_raw(text: str, allowed_classes: set[str] | None = None) -> str:
+    """Redact PII with smart partial masking; PHI/PCI use placeholder tags (raw text only).
+
+    ``allowed_classes`` restricts masking to those operator-facing detector classes
+    (see ``classify_pattern_key``). ``None`` = mask everything, which is the
+    historical behaviour and what every existing caller gets.
+    """
+    def _included(key: str) -> bool:
+        return allowed_classes is None or classify_pattern_key(key) in allowed_classes
+
     result = text
     for pii_type, pattern_str in PII_PATTERNS.items():
+        if not _included(pii_type):
+            continue
         compiled = compile_pattern(pattern_str)
         masker = _PII_MASKERS.get(pii_type)
         if masker:
@@ -1359,12 +1388,18 @@ def _redact_all_raw(text: str) -> str:
         else:
             result = compiled.sub(f"[{pii_type.upper()}_REDACTED]", result)
     for phi_type, pattern_str in PHI_PATTERNS.items():
+        if not _included(phi_type):
+            continue
         compiled = compile_pattern(pattern_str)
         result = compiled.sub(f"[{phi_type.upper()}_REDACTED]", result)
     for pci_type, pattern_str in PCI_PATTERNS.items():
+        if not _included(pci_type):
+            continue
         compiled = compile_pattern(pattern_str)
         result = compiled.sub(f"[{pci_type.upper()}_REDACTED]", result)
     for secret_type, pattern_str in SECRET_PATTERNS.items():
+        if not _included(secret_type):
+            continue
         compiled = compile_pattern(pattern_str)
         masker = _SECRET_MASKERS.get(secret_type)
         if masker:
@@ -1372,6 +1407,8 @@ def _redact_all_raw(text: str) -> str:
         else:
             result = compiled.sub(f"[{secret_type.upper()}_REDACTED]", result)
     for cred_type, pattern_str in CREDENTIAL_EXPOSURE_PATTERNS.items():
+        if not _included(cred_type):
+            continue
         compiled = compile_pattern(pattern_str)
         masker = _CREDENTIAL_MASKERS.get(cred_type)
         if masker:
@@ -1396,7 +1433,7 @@ def _redact_all_raw(text: str) -> str:
         "internal_ipv6", "link_local_ipv4",
     ):
         _infra_pat = IP_LEAKAGE_PATTERNS.get(_infra_type)
-        if not _infra_pat:
+        if not _infra_pat or not _included(_infra_type):
             continue
         _infra_compiled = compile_pattern(_infra_pat)
 
@@ -1635,6 +1672,24 @@ def redact_all(text: str) -> str:
     or encoded PII/secret that survived. A no-op beyond the raw pass on plain ASCII, so the
     frozen golden cases and existing redaction outputs are unchanged."""
     result = _redact_all_raw(text)
+    return _redact_obfuscated(text, result)
+
+
+def redact_all_scoped(text: str, allowed_classes: set[str]) -> str:
+    """``redact_all`` restricted to specific operator-facing detector classes.
+
+    STRICTLY-WHAT-THE-OPERATOR-SELECTED: each §1.7 detector (PII / Credential /
+    IP Leakage) carries its OWN action, but ``redact_all`` masks every class at once.
+    So an output containing both an email and an API key, with PII="flag" and
+    Credential="redact", had the EMAIL masked too — mutating a class the operator
+    explicitly chose not to mutate. This variant masks ONLY ``allowed_classes``
+    (values from ``classify_pattern_key``: "pii", "credential", "ip_leakage").
+
+    The obfuscated/encoded pass is deliberately still applied UNSCOPED: it only fires
+    on obfuscated or transport-encoded content (a no-op on plain ASCII), and there it
+    errs toward over-masking, which is the safe direction for an evasion attempt.
+    """
+    result = _redact_all_raw(text, allowed_classes)
     return _redact_obfuscated(text, result)
 
 

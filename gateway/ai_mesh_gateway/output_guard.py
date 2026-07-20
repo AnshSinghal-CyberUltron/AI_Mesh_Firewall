@@ -33,6 +33,7 @@ try:
         get_compliance_tags,
         is_safety_refusal_output,
         redact_all,
+        redact_all_scoped as _redact_all_scoped,
         _iter_transport_decodes,
         canonicalize_for_detection,
     )
@@ -46,6 +47,7 @@ except ImportError:
         get_compliance_tags,
         is_safety_refusal_output,
         redact_all,
+        redact_all_scoped as _redact_all_scoped,
         _iter_transport_decodes,
         canonicalize_for_detection,
     )
@@ -623,6 +625,14 @@ class OutputVerdict:
     # no-op that egresses raw. Kept OFF the client-facing telemetry surface (never
     # serialized by output_guard_telemetry_meta) so the raw span stays internal.
     redaction_spans: list[str] = field(default_factory=list)
+    # STRICTLY-WHAT-THE-OPERATOR-SELECTED: the detector classes ("pii",
+    # "credential", "ip_leakage") whose configured action is REDACT, i.e. the only
+    # classes sanitization is permitted to mutate. ``redact_all`` masks every class
+    # at once, so with PII="flag" + Credential="redact" the email was masked too —
+    # mutating a class the operator explicitly chose not to mutate. EMPTY means
+    # "unscoped / mask everything", preserving legacy behaviour for verdicts built
+    # outside OutputGuard.inspect (tests, other call sites).
+    redact_classes: list[str] = field(default_factory=list)
     # M11: True when the tier-2 OUTPUT guard model could not scan (outage /
     # breaker-open / parse failure) and the response was passed UNSCANNED
     # (fail-open). Surfaced to telemetry + the client zeroshield metadata so a
@@ -1014,6 +1024,22 @@ class OutputGuard:
 
         selected = self._select_highest_severity(verdicts)
         selected.scan_degraded = selected.scan_degraded or output_scan_degraded
+        # STRICTLY-WHAT-THE-OPERATOR-SELECTED: record which detector classes the
+        # operator actually set to REDACT. Only those may be mutated by the
+        # sanitizer. Without this, one class set to "redact" caused the blanket
+        # redact_all() to mask EVERY class, so a class set to flag/allow was
+        # mutated anyway (measured: PII=flag + Credential=redact masked the email).
+        _redactable_classes: list[str] = []
+        if _enabled("output_pii_enabled", True) and _action("output_pii_action", "redact") == "redact":
+            _redactable_classes.append("pii")
+        if _enabled("output_credential_enabled", True) and _action("output_credential_action", "redact") == "redact":
+            _redactable_classes.append("credential")
+        if _enabled("output_ip_leakage_enabled", True) and _action(
+            "output_ip_leakage_action",
+            "block" if self._config.get("output_block_on_ip_leakage", False) else "redact",
+        ) == "redact":
+            _redactable_classes.append("ip_leakage")
+        selected.redact_classes = _redactable_classes
         # FULL OPERATOR CONTROL (2026-07-16): the configured action is honoured
         # EXACTLY. Previously a redactable category (pii/pci/phi/secret/credential)
         # escalated to "block" was silently downgraded to "redact" (the §1.7
@@ -1882,16 +1908,31 @@ def _sanitize_output_core(
             verdict.detail or None,
             original_text=response_text,
         )
+    # STRICT per-class masking: mutate ONLY the classes the operator set to
+    # "redact" (see OutputVerdict.redact_classes). The blanket redact_all() masks
+    # every class at once, which mutated classes the operator set to flag/allow.
+    # An EMPTY redact_classes keeps the legacy unscoped behaviour.
+    _classes = list(getattr(verdict, "redact_classes", None) or [])
     if threat in _REDACTABLE_OUTPUT_CATEGORIES:
-        base = redact_pii_fn(response_text) if redact_pii_fn is not None else "[REDACTED]"
+        if _classes:
+            base = _redact_all_scoped(response_text, set(_classes))
+        else:
+            base = redact_pii_fn(response_text) if redact_pii_fn is not None else "[REDACTED]"
         spans = list(verdict.redaction_spans or []) + [
             str(v) for v in (verdict.matched_values or {}).values()
         ]
         return _mask_spans_typed(base, spans, threat)
     if threat == "ip_leakage":
+        # Same STRICT per-class scoping as the redactable branch above: an
+        # ip_leakage redact must mask ONLY the infra addresses, never the email /
+        # API key belonging to detectors the operator set to flag/allow.
+        if _classes:
+            return _redact_all_scoped(response_text, set(_classes))
         if redact_pii_fn is not None:
             return redact_pii_fn(response_text)
         return response_text
+    if _classes:
+        return _redact_all_scoped(response_text, set(_classes))
     if redact_pii_fn is not None:
         return redact_pii_fn(response_text)
     return "[REDACTED]"

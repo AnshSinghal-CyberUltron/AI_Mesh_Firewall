@@ -298,3 +298,85 @@ async def test_masked_output_no_action_across_all_pii_cred_combos():
             assert not v.matched_patterns, (p, c)
             out = sanitize_output_for_verdict(MASKED, v, redact_pii_fn=patterns.redact_all)
             assert out == MASKED, (p, c)
+
+
+# ── 6. STRICTLY-WHAT-THE-OPERATOR-SELECTED: per-class masking ──
+#
+# Each detector carries its OWN action, but sanitization used the blanket
+# redact_all(), which masks PII + credential + infra all at once. So an output
+# containing an email AND an API key, with PII="flag" + Credential="redact", had
+# the EMAIL masked too — mutating a class the operator explicitly chose not to
+# mutate. Measured 4 violations across the 9 delivered (redact/flag/allow) cells.
+# Only classes whose action is "redact" may be mutated.
+
+_EMAIL = "john.smith@acme.com"
+_KEY = "sk-proj-AbCdEf0123456789AbCdEf0123456789"
+_IP = "10.0.0.5"
+MIXED3 = f"Contact {_EMAIL} with key {_KEY} on host {_IP} please."
+_DELIVERED = ("redact", "flag", "allow")
+
+
+def _cfg3(pii, cred, ip):
+    return {
+        "output_tier2_enabled": False,
+        "output_pii_enabled": True, "output_pii_action": pii,
+        "output_credential_enabled": True, "output_credential_action": cred,
+        "output_ip_leakage_enabled": True, "output_ip_leakage_action": ip,
+        "output_policy_enabled": False, "output_policy_action": "allow",
+        "hallucination_flag_enabled": False, "factuality_check_enabled": False,
+        "output_hallucination_action": "allow",
+    }
+
+
+async def _deliver(text, cfg):
+    from scanner import InputScanner
+    guard = OutputGuard(scanner=_RealStatic(InputScanner()), config=cfg)
+    verdict = await guard.inspect(text)
+    return sanitize_output_for_verdict(text, verdict, redact_pii_fn=patterns.redact_all)
+
+
+async def test_strict_only_redact_classes_are_mutated_pii_vs_credential():
+    for pii in _DELIVERED:
+        for cred in _DELIVERED:
+            out = await _deliver(MIXED3, _cfg3(pii, cred, "allow"))
+            assert (_EMAIL in out) is (pii in ("flag", "allow")), (pii, cred, "email")
+            assert (_KEY in out) is (cred in ("flag", "allow")), (pii, cred, "key")
+
+
+async def test_strict_ip_redact_does_not_mutate_pii_or_credential():
+    # An ip_leakage redact must mask ONLY the infra address.
+    out = await _deliver(MIXED3, _cfg3("flag", "allow", "redact"))
+    assert _EMAIL in out
+    assert _KEY in out
+    assert _IP not in out
+
+
+async def test_strict_three_way_matrix():
+    for pii in _DELIVERED:
+        for cred in _DELIVERED:
+            for ip in _DELIVERED:
+                out = await _deliver(MIXED3, _cfg3(pii, cred, ip))
+                assert (_EMAIL in out) is (pii in ("flag", "allow")), (pii, cred, ip)
+                assert (_KEY in out) is (cred in ("flag", "allow")), (pii, cred, ip)
+                assert (_IP in out) is (ip in ("flag", "allow")), (pii, cred, ip)
+
+
+def test_classify_pattern_key_maps_each_detector_class():
+    # The partition is tag-driven, so a future SECRET-tagged key routes correctly.
+    for key in ("api_key_openai", "aws_access_key", "github_token", "private_key_header",
+                "password_assignment", "anthropic_key"):
+        assert patterns.classify_pattern_key(key) == "credential", key
+    for key in ("email", "ssn", "credit_card", "phone_us", "mac_address"):
+        assert patterns.classify_pattern_key(key) == "pii", key
+    for key in ("internal_ipv4", "internal_hostname", "internal_url"):
+        assert patterns.classify_pattern_key(key) == "ip_leakage", key
+
+
+def test_redact_all_scoped_masks_only_requested_classes():
+    only_cred = patterns.redact_all_scoped(MIXED3, {"credential"})
+    assert _EMAIL in only_cred and _IP in only_cred and _KEY not in only_cred
+    only_pii = patterns.redact_all_scoped(MIXED3, {"pii"})
+    assert _KEY in only_pii and _IP in only_pii and _EMAIL not in only_pii
+    # Unscoped redact_all is unchanged (all classes masked).
+    every = patterns.redact_all(MIXED3)
+    assert _EMAIL not in every and _KEY not in every and _IP not in every
