@@ -17,10 +17,20 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: true,
     // Docker Desktop on Windows bind-mounts need polling for reliable HMR.
+    // Aggressive 1s polls across the whole tree stampede FSWatcher into EIO and
+    // kill Vite mid-lazy-import; ignore tests/docs and poll less often.
     watch: {
       usePolling: true,
-      interval: 1000,
-      ignored: ["**/node_modules/**", "**/.git/**"],
+      interval: 2000,
+      ignored: [
+        "**/node_modules/**",
+        "**/.git/**",
+        "**/*.{test,spec}.{js,jsx,ts,tsx}",
+        "**/readme.md",
+        "**/README.md",
+        "**/public/**",
+        "**/dist/**",
+      ],
     },
     proxy: {
       "/api": { target: process.env.VITE_CONTROL_PROXY || "http://127.0.0.1:8100", changeOrigin: true, ...noKeepAlive },

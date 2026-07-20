@@ -28,4 +28,10 @@ kill "$PLACEHOLDER_PID" 2>/dev/null || true
 sleep 1
 
 echo "[frontend] Starting Vite on 0.0.0.0:5173 (host :8180)..."
-exec npm run dev
+# Docker Desktop Windows bind-mounts can kill Vite's FSWatcher with EIO; without
+# a restart loop the container stays up while React.lazy() imports hang forever.
+while true; do
+  npm run dev || true
+  echo "[frontend] Vite exited; restarting in 2s..."
+  sleep 2
+done

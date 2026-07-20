@@ -14,40 +14,75 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LazyRouteErrorBoundary } from "./components/LazyRouteErrorBoundary";
 import { RouteFallback } from "./components/module2/RouteFallback";
 import { resolveActiveTab, routeForTab } from "./utils/resolveActiveTab";
+import { lazyImportWithTimeout } from "./utils/lazyImportWithTimeout";
 import { Login } from "./pages/Login";
 import { OAuthCallback } from "./pages/OAuthCallback";
 
 // FirewallHome transitively imports every Module-1 panel + simulator (the heaviest part
 // of the app). Keep it lazy so /login does not pay for it up front.
-const loadFirewallHome = () =>
-  import("./pages/FirewallHome").then((m) => ({ default: m.FirewallHome }));
+const loadFirewallHome = lazyImportWithTimeout(
+  () => import("./pages/FirewallHome").then((m) => ({ default: m.FirewallHome })),
+  { label: "FirewallHome", timeoutMs: 60000, retries: 1 },
+);
 const FirewallHome = lazy(loadFirewallHome);
 
-const DashboardPage = lazy(() =>
-  import("./pages/module2/DashboardPage").then((m) => ({ default: m.DashboardPage }))
+const DashboardPage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/DashboardPage").then((m) => ({ default: m.DashboardPage })),
+    { label: "DashboardPage" },
+  ),
 );
-const UebaApiKeysPage = lazy(() =>
-  import("./pages/module2/UebaApiKeysPage").then((m) => ({ default: m.UebaApiKeysPage }))
+const UebaApiKeysPage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/UebaApiKeysPage").then((m) => ({ default: m.UebaApiKeysPage })),
+    { label: "UebaApiKeysPage", timeoutMs: 60000, retries: 1 },
+  ),
 );
-const ModelExposurePage = lazy(() =>
-  import("./pages/module2/ModelAnalyticsPage").then((m) => ({ default: m.ModelExposurePage }))
+const ModelExposurePage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/ModelAnalyticsPage").then((m) => ({ default: m.ModelExposurePage })),
+    { label: "ModelExposurePage" },
+  ),
 );
-const ThreatIntelPage = lazy(() =>
-  import("./pages/module2/ThreatIntelPage").then((m) => ({ default: m.ThreatIntelPage }))
+const ThreatIntelPage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/ThreatIntelPage").then((m) => ({ default: m.ThreatIntelPage })),
+    { label: "ThreatIntelPage" },
+  ),
 );
-const IncidentsPage = lazy(() =>
-  import("./pages/module2/IncidentsPage").then((m) => ({ default: m.IncidentsPage }))
+const IncidentsPage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/IncidentsPage").then((m) => ({ default: m.IncidentsPage })),
+    { label: "IncidentsPage" },
+  ),
 );
-const IncidentDetailPage = lazy(() =>
-  import("./pages/module2/IncidentDetailPage").then((m) => ({ default: m.IncidentDetailPage }))
+const IncidentDetailPage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/IncidentDetailPage").then((m) => ({ default: m.IncidentDetailPage })),
+    { label: "IncidentDetailPage" },
+  ),
 );
-const McpRiskPage = lazy(() =>
-  import("./pages/module2/McpRiskPage").then((m) => ({ default: m.McpRiskPage }))
+const McpRiskPage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/McpRiskPage").then((m) => ({ default: m.McpRiskPage })),
+    { label: "McpRiskPage" },
+  ),
 );
 
 function FirewallHomeRoute() {
   const { onTabChange } = useOutletContext();
   return <FirewallHome onTabChange={onTabChange} />;
+}
+
+function isModule2Path(pathname) {
+  return (
+    pathname.startsWith("/ueba")
+    || pathname.startsWith("/models")
+    || pathname.startsWith("/mcp")
+    || pathname.startsWith("/threat")
+    || pathname.startsWith("/incidents")
+    || pathname === "/dashboard"
+  );
 }
 
 /**
@@ -61,7 +96,14 @@ function ProtectedShell() {
   const [searchParams] = useSearchParams();
   const activeTab = resolveActiveTab(location.pathname, searchParams);
 
+  // Prefetch FirewallHome only when already on Module 1 home. Prefetching the
+  // heaviest chunk while Module 2 lazy routes compete for Vite transforms on
+  // Docker Desktop Windows bind-mounts wedges FSWatcher (EIO) and leaves
+  // Suspense stuck on "Loading module…".
   useEffect(() => {
+    if (isModule2Path(location.pathname)) {
+      return undefined;
+    }
     const idle = window.requestIdleCallback
       ? window.requestIdleCallback(() => {
           loadFirewallHome().catch(() => {});
@@ -76,7 +118,7 @@ function ProtectedShell() {
         clearTimeout(idle);
       }
     };
-  }, []);
+  }, [location.pathname]);
 
   const handleTabChange = useCallback(
     (tab) => {
