@@ -42,12 +42,18 @@ from litellm.exceptions import (
     BudgetExceededError,
     ContentPolicyViolationError,
     ContextWindowExceededError,
-    InternalServerError,
     NotFoundError,
     RateLimitError,
     ServiceUnavailableError,
     Timeout,
 )
+
+# InternalServerError exists in newer litellm builds but is absent in some
+# installed versions; import defensively so collection/runtime survive drift.
+try:
+    from litellm.exceptions import InternalServerError
+except ImportError:  # pragma: no cover - litellm version drift
+    InternalServerError = None  # type: ignore[misc, assignment]
 
 # C7: litellm's Router raises RouterRateLimitError / RouterRateLimitErrorBasic when
 # no healthy deployment is available (e.g. a model whose only upstream returns 404
@@ -109,10 +115,11 @@ _EXCEPTION_STATUS_MAP = {
     BudgetExceededError: 429,
     Timeout: 504,
     APIConnectionError: 502,
-    InternalServerError: 502,
     ServiceUnavailableError: 503,
     APIError: 502,
 }
+if InternalServerError is not None:
+    _EXCEPTION_STATUS_MAP[InternalServerError] = 502
 
 # OpenAI-compatible params to forward to litellm
 _PASSTHROUGH_PARAMS = (
@@ -325,8 +332,11 @@ class LLMRouter:
 
         #global litellm settings
         litellm.drop_params = config.get("litellm_drop_params", True)
-        litellm.request_timeout = config.get("litellm_request_timeout", 120)
-        litellm.num_retries = config.get("litellm_num_retries", 2)
+        # Fail fast below typical client probes (M2.1 uses 90s). A 120s upstream
+        # budget with retries left the gateway holding allow chats ~97s while the
+        # verifier timed out; return 504 instead of hanging past the client.
+        litellm.request_timeout = config.get("litellm_request_timeout", 55)
+        litellm.num_retries = config.get("litellm_num_retries", 1)
         litellm.ssl_verify = config.get("litellm_ssl_verify", os.environ.get("SSL_VERIFY", "true").lower() not in ("false", "0", "no"))
         
         org_only = bool(config.get("org_only_inference", True))
@@ -1612,8 +1622,8 @@ class LLMRouter:
             fallbacks = self._build_fallbacks(valid_models)
             self._router = LiteLLMRouter(
                 model_list=valid_models,
-                num_retries=self._config.get("litellm_num_retries", 2),
-                timeout=self._config.get("litellm_request_timeout", 120),
+                num_retries=self._config.get("litellm_num_retries", 1),
+                timeout=self._config.get("litellm_request_timeout", 55),
                 fallbacks=fallbacks,
             )
             self._set_active_model_names(valid_models)

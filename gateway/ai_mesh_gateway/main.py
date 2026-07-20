@@ -6551,13 +6551,12 @@ async def proxy_chat(
                     )
                     redacted_prompt = effective_prompt
                 _wire_text = _egress_backstop(_text_before_pii_redact, effective_prompt)
-                if not _prompt_has_raw_sensitive_data(_wire_text):
-                    if redacted_prompt is None and _is_redactable_pii_threat(verdict.threat_type):
-                        redacted_prompt = _wire_text
-                    if _wire_text != _text_before_pii_redact and effective_prompt != _wire_text:
-                        effective_prompt = _wire_text
-                        redacted_prompt = effective_prompt
-                elif (
+                # Check TOTAL no-op FIRST. Natural-language credentials (e.g. a
+                # passphrase) leave ``_prompt_has_raw_sensitive_data`` false because
+                # they are not regex-maskable — but forwarding them raw after a
+                # flagged redaction attempt is still a phantom redaction.
+                # Mirrors embeddings: ``if _detected and redacted == text: block``.
+                if (
                     effective_prompt == _text_before_pii_redact
                     and _wire_text == _text_before_pii_redact
                 ):
@@ -6622,6 +6621,12 @@ async def proxy_chat(
                         requested_model=body.get("model", ""),
                         scan_verdict=verdict,
                     )
+                elif not _prompt_has_raw_sensitive_data(_wire_text):
+                    if redacted_prompt is None and _is_redactable_pii_threat(verdict.threat_type):
+                        redacted_prompt = _wire_text
+                    if _wire_text != _text_before_pii_redact and effective_prompt != _wire_text:
+                        effective_prompt = _wire_text
+                        redacted_prompt = effective_prompt
 
         if not AGENT_ID or not CONFIG["backend_url"]:
             # No backend: forward to LLM (input scanning already done above).

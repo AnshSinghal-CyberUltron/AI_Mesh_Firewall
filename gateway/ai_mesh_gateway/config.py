@@ -150,10 +150,12 @@ def load_config():
     litellm_fallback_models = get_env("LITELLM_FALLBACK_MODELS", "gpt-4o-mini")
     # M-09: clamp request timeout/retries to keep upstream calls from hanging
     # forever or retrying an unbounded number of times.
+    # Fail-fast below typical client probe budgets (M2.1 uses 90s). Prior 120s
+    # with 2 retries left allow chats hanging ~97s while verifiers timed out.
     litellm_request_timeout = _env_int(
-        "LITELLM_REQUEST_TIMEOUT", 120, min_value=1, max_value=3600)
+        "LITELLM_REQUEST_TIMEOUT", 55, min_value=1, max_value=3600)
     litellm_num_retries = _env_int(
-        "LITELLM_NUM_RETRIES", 2, min_value=0, max_value=10)
+        "LITELLM_NUM_RETRIES", 1, min_value=0, max_value=10)
     litellm_drop_params = get_env("LITELLM_DROP_PARAMS", "true").lower() in ("true", "1", "yes")
     rag_enabled = get_env("GATEWAY_RAG_ENABLED", "false").lower() in ("true", "1", "yes")
     # Guardrails-only RAG: the reranker + generator pipeline stages are the
