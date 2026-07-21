@@ -970,8 +970,32 @@ class OutputGuard:
                 # detector to "flag"/"allow" is honoured even when the guard would
                 # have blocked. A category the operator set to "allow" (or disabled)
                 # maps to "allow" here and the finding is dropped.
+                # STRICT PER-CLASS GOVERNANCE (2026-07-21): classify the tier-2 finding
+                # by the SAME authoritative rule _check_pii_secrets uses (a pattern key
+                # tagged "SECRET" in COMPLIANCE_TAG_MAP is CREDENTIAL-class), before
+                # resolving the operator action.
+                #
+                # When tier-2 is unavailable the guard model's verdict falls back to the
+                # STATIC scanner result, which labels every match "pii" — so an AWS key
+                # pair arrived here as threat_type="pii" and was governed by
+                # output_pii_action. Setting Credential=allow/flag while PII=block still
+                # BLOCKED the credential, i.e. the exact cross-class mis-governance the
+                # per-detector contract forbids: each detector's action must apply ONLY
+                # to its own class. Reclassify only when EVERY matched key is
+                # credential-class, so a genuinely mixed finding keeps its original
+                # category rather than silently moving out of the PII operator's control.
+                _t2_type = (getattr(t2, "threat_type", "") or "") if t2 is not None else ""
+                if t2 is not None and _t2_type in ("pii", "secret"):
+                    _t2_keys = [
+                        str(k) for k in (getattr(t2, "matched_patterns", None) or [])
+                        if not str(k).endswith("_smart_masked")
+                    ]
+                    if _t2_keys and all(
+                        "SECRET" in (get_compliance_tags([k]) or []) for k in _t2_keys
+                    ):
+                        _t2_type = "credential"
                 _t2_op_action = (
-                    _operator_action_for_category(t2.threat_type)
+                    _operator_action_for_category(_t2_type)
                     if t2 is not None
                     else "allow"
                 )
@@ -1010,7 +1034,9 @@ class OutputGuard:
                     )
                     verdicts.append(OutputVerdict(
                         action=_t2_op_action,
-                        threat_type=t2.threat_type or "guard_model",
+                        # Attribution must match governance: report the class whose
+                        # operator action was actually applied (see _t2_type above).
+                        threat_type=_t2_type or "guard_model",
                         confidence=float(getattr(t2, "confidence", 0.0) or 0.0),
                         detail=t2_detail,
                         matched_patterns=t2_patterns,
