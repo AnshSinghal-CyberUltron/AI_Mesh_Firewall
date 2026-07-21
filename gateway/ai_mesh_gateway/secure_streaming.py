@@ -387,7 +387,31 @@ class SecureStreamingResponse:
                 self._degraded_emitted = True
                 self._emit_degraded_telemetry(verdict, flush_reason=reason)
 
-            effective_action = verdict.action
+            # FAIL-CLOSED PARITY (2026-07-21): route the streamed verdict through the
+            # SAME enforce_output resolver the non-stream path uses. enforcement.py
+            # already names SecureStreamingResponse._flush_buffer as a caller and
+            # carries an `is_streaming` flag, but streaming never actually called it,
+            # so the fail-closed rules applied ONLY to non-stream responses:
+            #   * scan_degraded (tier-2 guard outage) -> redact. Streaming merely
+            #     emitted an observability event and then honoured verdict.action, so
+            #     an outage FAILED OPEN and the unscanned response streamed out.
+            #   * a guard exception -> block.
+            # rewrite/flag are preserved by the resolver (F-002 / F-003 UI honesty),
+            # and every per-detector action the operator selected is passed through
+            # untouched, so this cannot override a selection — it only adds the
+            # safety floor that non-stream already had.
+            try:
+                from enforcement import enforce_output as _enforce_output  # noqa: PLC0415
+            except ImportError:  # pragma: no cover - packaging fallback
+                from .enforcement import enforce_output as _enforce_output  # noqa: PLC0415
+            _decision = _enforce_output(
+                verdict_action=verdict.action,
+                verdict_threat_type=getattr(verdict, "threat_type", "") or "",
+                scan_degraded=bool(getattr(verdict, "scan_degraded", False)),
+                enforcement_mode=self._enforcement_mode,
+                is_streaming=True,
+            )
+            effective_action = _decision.action
             # F-003: §1.7 Flag means deliver + flag telemetry. Do NOT escalate
             # flag→block when org enforcement_mode is "block" — that made the UI
             # dishonest (Flag looked like Block at runtime).
@@ -456,7 +480,12 @@ class SecureStreamingResponse:
                 self._clear_buffers()
                 return
 
-            if verdict.action == "redact":
+            # H-03: branch on the RESOLVED action, not the raw verdict. A tier-2
+            # guard outage (scan_degraded) resolves allow->redact in enforce_output;
+            # branching on verdict.action here meant that resolved action matched no
+            # branch at all and the raw text fell through to the client — the exact
+            # fail-open this fix exists to close.
+            if effective_action == "redact":
                 # G36: mirror the non-stream sanitize_output_for_verdict defense-in-
                 # depth on the streamed egress — neutralize output-side data-exfil
                 # channels (G13 markdown-image/link beacons) and encoded-PII runs
@@ -522,6 +551,44 @@ class SecureStreamingResponse:
                 # counter, and the StreamRunMetrics terminal trace frame must not
                 # record a phantom redaction for a response delivered unchanged.
                 _redact_noop = redacted_text == full_text
+                # FAIL-CLOSED PARITY: the operator selected redact, but nothing could
+                # be masked. Non-stream resolves this via
+                # enforce_output(redaction_possible=False) -> BLOCK, because
+                # delivering would ship the very bytes the operator asked to remove.
+                # Streaming instead downgraded to "flag" and released the response
+                # verbatim — e.g. a tier-2 semantic PII verdict over free text the
+                # deterministic regexes cannot match ("patient Margarethe
+                # Villanueva-Okonkwo") streamed the raw name. Only escalate for
+                # maskable classes: a class-less/hallucination verdict is sanitized by
+                # whole-response replacement, so a no-op there is not a redaction gap.
+                if _redact_noop and not _whole_response:
+                    _noop_decision = _enforce_output(
+                        verdict_action="redact",
+                        verdict_threat_type=getattr(verdict, "threat_type", "") or "",
+                        redaction_possible=False,
+                        enforcement_mode=self._enforcement_mode,
+                        is_streaming=True,
+                    )
+                    if _noop_decision.action == "block":
+                        LOG.warning(
+                            "Output guard BLOCKED streaming content: redact selected but "
+                            "nothing could be masked (type=%s, flush=%s)",
+                            verdict.threat_type, reason.value,
+                        )
+                        self._stream_blocked = True
+                        if self._stream_metrics is not None:
+                            self._stream_metrics.output_blocked = True
+                            self._stream_metrics.completed = True
+                            self._record_guard_metrics("block", verdict)
+                        self._emit_guard_telemetry(verdict, action="block", flush_reason=reason)
+                        self._audit_output_guard(verdict, action="block")
+                        self._record_metric("block")
+                        yield self._build_error_sse(
+                            f"Response blocked: {verdict.threat_type} detected in output."
+                        )
+                        yield "data: [DONE]\n\n"
+                        self._clear_buffers()
+                        return
                 _emit_action = "flag" if _redact_noop else "redact"
                 self._record_output(redacted_text)
                 LOG.info(
@@ -547,7 +614,7 @@ class SecureStreamingResponse:
                 self._clear_buffers()
                 return
 
-            if verdict.action == "flag":
+            if effective_action == "flag":
                 self._record_guard_metrics("flag", verdict)
                 self._emit_guard_telemetry(verdict, action="flag", flush_reason=reason)
                 self._audit_output_guard(verdict, action="flag")
