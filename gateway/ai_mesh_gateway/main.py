@@ -620,6 +620,21 @@ def _scrub_trace_for_client(trace: dict | None) -> dict | None:
         "guard_findings",
     )
 
+    # A-08 (CRITICAL): the scrubber removed the EVIDENCE of a block but not its
+    # SUBJECT. On a blocked request the generator-side stages carry the full model
+    # completion in ``content`` / ``prompt_in`` / ``prompt_out``, and the trace root
+    # repeats it in ``output_text`` / ``final_response`` — so the 403/400 body handed
+    # the caller exactly the bytes the block existed to withhold. Withholding the
+    # answer and then attaching it to the refusal defeats the control entirely.
+    #
+    # Only OUTPUT-side text is stripped. A stage's inbound prompt echo is the
+    # caller's OWN input, so returning it discloses nothing they did not send, and it
+    # keeps the trace useful for debugging a block. Stage names, actions, categories,
+    # latencies and the withheld-reason all survive.
+    _output_text_stages = ("model_output", "output_guardrail", "generator")
+    _output_text_keys = ("content", "prompt_in", "prompt_out", "prompt_submitted")
+    _root_output_keys = ("output_text", "final_response")
+
     def _scrub_detail(detail):
         """Drop any 'Evidence:'/detail lines from a stage detail string."""
         if not isinstance(detail, str) or not detail:
@@ -647,6 +662,16 @@ def _scrub_trace_for_client(trace: dict | None) -> dict | None:
     if isinstance(_stages, list):
         for _stage in _stages:
             _scrub_stage_dict(_stage)
+            # A-08: blank model-authored text on the output-side stages.
+            if isinstance(_stage, dict) and str(_stage.get("name") or "") in _output_text_stages:
+                for _ok in _output_text_keys:
+                    if _stage.get(_ok):
+                        _stage[_ok] = ""
+
+    # A-08: the trace root repeats the completion outside the per-stage list.
+    for _rk in _root_output_keys:
+        if scrubbed.get(_rk):
+            scrubbed[_rk] = ""
 
     # Top-level guard_summary mirrors a stage guard dict (carries guard_findings).
     if isinstance(scrubbed.get("guard_summary"), dict):
@@ -7828,11 +7853,36 @@ async def proxy_chat(
             # B-ENF: prefer Tier-2 recommended_action over verdict.action (scanner
             # maps model "redact" → action="flag"; the recommendation is authoritative).
             _scan_meta = getattr(verdict, "scan_meta", None) or {}
-            _guard_rec = (
+            # A-09 / A-10: take the MORE RESTRICTIVE of the guard model's
+            # recommendation and the scanner's RESOLVED verdict — never blindly
+            # prefer the recommendation.
+            #
+            # The original intent here is preserved: the scanner maps a model
+            # "redact" onto action="flag", so the recommendation must be able to win.
+            # But preferring it UNCONDITIONALLY discarded the scanner's own
+            # escalations, and two of them are the operator's safety net:
+            #   * degraded Tier-2 (scanner.py:2276-2285 returns 'block' for
+            #     tier2_input_fail_closed) while the guard model's own field reads
+            #     'monitor' (bedrock_scanner.py:418 client_error / :471
+            #     parse_failure) — so the ONLY fail-closed lever for the input path
+            #     did nothing on exactly the path it exists for; and
+            #   * the score threshold (scanner.py:2320-2330 escalates to 'block'
+            #     above BEDROCK_BLOCK_THRESHOLD) while the model still says 'allow'
+            #     — making that block unreachable through the API.
+            # Ranking by the enforcement lattice satisfies all three cases at once:
+            # redact(2) still beats flag(1), and block(3) beats monitor(1)/allow(0).
+            try:
+                from enforcement import action_rank as _action_rank
+            except ImportError:
+                from .enforcement import action_rank as _action_rank
+            _rec_candidate = (
                 (_scan_meta.get("recommended_action") if isinstance(_scan_meta, dict) else None)
-                or verdict.action
-                or "allow"
+                or ""
             )
+            _guard_rec = max(
+                (_rec_candidate, verdict.action or "", "allow"),
+                key=_action_rank,
+            ) or "allow"
 
             _org_policy_action = None
             if check_resp.get("matched_rules") or check_resp.get("matched_policy_names") or check_resp.get("matched_policies"):

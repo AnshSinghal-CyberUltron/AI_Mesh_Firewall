@@ -2312,7 +2312,13 @@ class InputScanner:
                 detail=f"High ZeroShield Tier-2 risk score: {', '.join(bedrock_evidence[:2]) or 'score-based block'}",
                 matched_patterns=bedrock_evidence[:5] or [],
                 tier="tier_2",
-                reason_code=reason_code or "score_threshold_block",
+                # A-10b: attribute the block to what actually caused it. ``reason_code``
+                # is the guard MODEL's own ``decision_reason``, so inheriting it here
+                # labelled a SCORE-THRESHOLD block as e.g. 'model_recommendation' even
+                # when the model recommended ALLOW — telling an operator the model asked
+                # for a block it did not ask for. Keep the model's reason only when the
+                # model itself recommended blocking; otherwise the threshold is the cause.
+                reason_code=(reason_code if recommended == "block" else "score_threshold_block"),
             )
 
         if score >= BEDROCK_FLAG_THRESHOLD:
@@ -2322,7 +2328,7 @@ class InputScanner:
                 confidence=score,
                 detail=f"Moderate ZeroShield Tier-2 risk score: {', '.join(bedrock_evidence[:2]) or 'score-based flag'}",
                 matched_patterns=bedrock_evidence[:5] or [],
-                tier="tier_2",
+                tier="tier_2",  # A-10b: same attribution rule as the block branch.
                 reason_code=reason_code or "score_threshold_flag",
             )
 

@@ -652,16 +652,6 @@ async def test_scanner_layer_does_produce_a_fail_closed_block(gw):
     assert verdict.scan_meta.get("recommended_action") == "monitor", verdict.scan_meta
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "GAP (HIGH, tier-2-only): ``tier2_input_fail_closed`` is a NO-OP end to end. "
-    "scanner.py:2276-2285 correctly returns action='block' on a degraded scan, but "
-    "main.py:7686-7690 recomputes the enforcement input as "
-    "``scan_meta['recommended_action'] or verdict.action`` — and on the degraded "
-    "path that field is the guard model's own 'monitor' "
-    "(bedrock_scanner.py:418 client_error / :471 parse_failure). enforcement.py:284 "
-    "therefore resolves 'monitor', not 'block', so the request is ALLOWED and "
-    "forwarded to the LLM. The operator's only fail-closed lever for the input path "
-    "does nothing on exactly the path it exists for."))
 @pytest.mark.asyncio
 async def test_tier2_input_fail_closed_should_block_through_the_api(gw):
     client, env = await gw(responder=responder_const(BedrockOutage("timeout")))
@@ -672,13 +662,6 @@ async def test_tier2_input_fail_closed_should_block_through_the_api(gw):
     assert not env["cap"].called, "fail-closed still forwarded to the LLM"
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "GAP (HIGH, tier-2-only): same main.py:7686 root cause on a NON-degraded path. "
-    "When the guard model returns recommended_action='allow' but a risk_score above "
-    "BEDROCK_BLOCK_THRESHOLD (0.70), scanner.py:2320-2330 escalates to "
-    "action='block' — and main.py then prefers scan_meta['recommended_action'] "
-    "('allow'), discarding the escalation. The score-threshold block is unreachable "
-    "through the API."))
 @pytest.mark.asyncio
 async def test_score_threshold_block_should_survive_enforcement(gw):
     """Guard model self-rates 'allow' but reports risk_score 0.91."""
@@ -981,13 +964,6 @@ async def test_output_tier2_block_is_enforced_on_the_delivered_response(gw):
     assert env["bed"].count == 2
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "GAP (CRITICAL, pre-existing but reachable via tier-2): the output text the "
-    "guard just BLOCKED is echoed back to the caller inside "
-    "``pipeline_trace``. main.py:800 scrubs per-stage EVIDENCE via "
-    "_scrub_trace_for_client, but the generator stage's ``prompt_out`` / "
-    "``content`` fields carry the full blocked completion, so a 403/400 body "
-    "hands the client exactly the bytes the block existed to withhold."))
 @pytest.mark.asyncio
 async def test_blocked_output_text_should_not_appear_in_the_client_error_body(gw):
     marker = "Here is the confidential rollout plan for the unreleased product."
