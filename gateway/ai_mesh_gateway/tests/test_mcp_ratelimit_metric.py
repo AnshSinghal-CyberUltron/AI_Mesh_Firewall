@@ -47,10 +47,22 @@ def _fake_main(tpm, burst):
     return fm
 
 
+def _as_gateway_main(fm):
+    """Install the fake under BOTH module identities the resolver considers.
+
+    ``main`` is importable as ``main`` and as ``ai_mesh_gateway.main``, and
+    ``mcp_proxy._gateway_app_module()`` prefers the packaged one whose ``CONFIG``
+    is populated. Overriding only the bare ``main`` key leaves the real packaged
+    module in place, the resolver picks IT, and the fake is never consulted —
+    the stub silently no-ops. Bind both so resolution is deterministic.
+    """
+    return patch.dict("sys.modules", {"main": fm, "ai_mesh_gateway.main": fm})
+
+
 @pytest.mark.asyncio
 async def test_tpm_trip_meters_and_short_circuits():
     fm = _fake_main(_SENTINEL, None)
-    with patch.dict("sys.modules", {"main": fm}):
+    with _as_gateway_main(fm):
         before = _cnt()
         resp = await MP._mcp_org_rate_limit_raw(_Auth())
     assert resp == _SENTINEL
@@ -62,7 +74,7 @@ async def test_tpm_trip_meters_and_short_circuits():
 @pytest.mark.asyncio
 async def test_burst_trip_meters():
     fm = _fake_main(None, _SENTINEL)
-    with patch.dict("sys.modules", {"main": fm}):
+    with _as_gateway_main(fm):
         before = _cnt()
         resp = await MP._mcp_org_rate_limit_raw(_Auth())
     assert resp == _SENTINEL
@@ -73,7 +85,7 @@ async def test_burst_trip_meters():
 @pytest.mark.asyncio
 async def test_allowed_does_not_meter():
     fm = _fake_main(None, None)
-    with patch.dict("sys.modules", {"main": fm}):
+    with _as_gateway_main(fm):
         before = _cnt()
         resp = await MP._mcp_org_rate_limit_raw(_Auth())
     assert resp is None

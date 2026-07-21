@@ -26,6 +26,19 @@ import mcp_proxy  # noqa: E402
 from middleware import AuthContext  # noqa: E402
 
 
+def _rl_target():
+    """The module ``mcp_proxy`` will ACTUALLY resolve for the rate-limit helpers.
+
+    ``main`` is importable under two identities (``main`` and
+    ``ai_mesh_gateway.main``) and ``mcp_proxy._gateway_app_module()`` picks between
+    them at call time (preferring the packaged one whose ``CONFIG`` is populated).
+    A hard-coded ``patch("main._enforce_org_tpm_rate_limit")`` therefore binds
+    whichever identity happens to be loaded — it silently no-ops whenever the
+    resolver picks the other one. Patch the module the production code resolves.
+    """
+    return mcp_proxy._gateway_app_module()
+
+
 def _make_request(auth):
     return SimpleNamespace(state=SimpleNamespace(auth_context=auth))
 
@@ -92,12 +105,10 @@ async def test_org_mcp_jsonrpc_tpm_exceeded_returns_jsonrpc_error():
     body = {"jsonrpc": "2.0", "id": 7, "method": "initialize", "params": {}}
     req.json = AsyncMock(return_value=body)
 
-    with patch.object(mcp_proxy, "_validate_org_scope", return_value=None), patch(
-        "main._enforce_org_tpm_rate_limit",
+    with patch.object(mcp_proxy, "_validate_org_scope", return_value=None), patch.object(_rl_target(), "_enforce_org_tpm_rate_limit",
         new_callable=AsyncMock,
         return_value=_tpm_429(),
-    ), patch(
-        "main._enforce_org_burst_rpm",
+    ), patch.object(_rl_target(), "_enforce_org_burst_rpm",
         new_callable=AsyncMock,
         return_value=None,
     ):
@@ -117,12 +128,10 @@ async def test_org_mcp_jsonrpc_burst_exceeded_returns_jsonrpc_error():
     body = {"jsonrpc": "2.0", "id": "req-1", "method": "tools/list", "params": {}}
     req.json = AsyncMock(return_value=body)
 
-    with patch.object(mcp_proxy, "_validate_org_scope", return_value=None), patch(
-        "main._enforce_org_tpm_rate_limit",
+    with patch.object(mcp_proxy, "_validate_org_scope", return_value=None), patch.object(_rl_target(), "_enforce_org_tpm_rate_limit",
         new_callable=AsyncMock,
         return_value=None,
-    ), patch(
-        "main._enforce_org_burst_rpm",
+    ), patch.object(_rl_target(), "_enforce_org_burst_rpm",
         new_callable=AsyncMock,
         return_value=_burst_429(),
     ):
@@ -141,12 +150,10 @@ async def test_org_mcp_jsonrpc_under_limit_proceeds_to_initialize():
     body = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
     req.json = AsyncMock(return_value=body)
 
-    with patch.object(mcp_proxy, "_validate_org_scope", return_value=None), patch(
-        "main._enforce_org_tpm_rate_limit",
+    with patch.object(mcp_proxy, "_validate_org_scope", return_value=None), patch.object(_rl_target(), "_enforce_org_tpm_rate_limit",
         new_callable=AsyncMock,
         return_value=None,
-    ), patch(
-        "main._enforce_org_burst_rpm",
+    ), patch.object(_rl_target(), "_enforce_org_burst_rpm",
         new_callable=AsyncMock,
         return_value=None,
     ):
@@ -167,14 +174,14 @@ async def test_org_mcp_jsonrpc_under_limit_proceeds_to_initialize():
 
 @pytest.mark.asyncio
 async def test_mcp_org_rate_limit_raw_returns_plain_429_and_none_under_limit():
-    with patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=_tpm_429()), \
-         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
+    with patch.object(_rl_target(), "_enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=_tpm_429()), \
+         patch.object(_rl_target(), "_enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
         resp = await mcp_proxy._mcp_org_rate_limit_raw(_auth())
     assert resp.status_code == 429                      # plain 429, NOT a 200 envelope
     assert _decode(resp)["code"] == "org_rate_limit_exceeded"
 
-    with patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=None), \
-         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
+    with patch.object(_rl_target(), "_enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=None), \
+         patch.object(_rl_target(), "_enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
         assert await mcp_proxy._mcp_org_rate_limit_raw(_auth()) is None
 
 
@@ -183,8 +190,8 @@ async def test_org_mcp_tool_call_tpm_exceeded_returns_plain_429():
     req = _make_request(_auth())
     req.body = AsyncMock(return_value=b'{"name": "echo", "arguments": {}}')
     with patch.object(mcp_proxy, "_validate_org_scope", return_value=None), \
-         patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=_tpm_429()), \
-         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
+         patch.object(_rl_target(), "_enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=_tpm_429()), \
+         patch.object(_rl_target(), "_enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
         resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
     assert resp.status_code == 429                      # bare REST 429, not JSON-RPC 200
     assert _decode(resp)["code"] == "org_rate_limit_exceeded"
@@ -195,8 +202,8 @@ async def test_org_mcp_tool_call_burst_exceeded_returns_plain_429():
     req = _make_request(_auth())
     req.body = AsyncMock(return_value=b'{"name": "echo", "arguments": {}}')
     with patch.object(mcp_proxy, "_validate_org_scope", return_value=None), \
-         patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=None), \
-         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=_burst_429()):
+         patch.object(_rl_target(), "_enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=None), \
+         patch.object(_rl_target(), "_enforce_org_burst_rpm", new_callable=AsyncMock, return_value=_burst_429()):
         resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
     assert resp.status_code == 429
     assert _decode(resp)["code"] == "burst_limit_exceeded"
@@ -213,8 +220,8 @@ async def test_ext_mcp_proxy_tpm_exceeded_returns_429_before_forward():
     req.headers = {}
     req.body = AsyncMock(return_value=b"")
     with patch.object(mcp_proxy, "_ALLOWED_MCP_DOMAINS", {"mcp.example.com"}), \
-         patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=_tpm_429()), \
-         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
+         patch.object(_rl_target(), "_enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=_tpm_429()), \
+         patch.object(_rl_target(), "_enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
         resp = await mcp_proxy.ext_mcp_proxy("mcp.example.com/mcp", req)
     assert resp.status_code == 429
     assert _decode(resp)["code"] == "org_rate_limit_exceeded"
@@ -226,8 +233,8 @@ async def test_ext_mcp_proxy_burst_exceeded_returns_429_before_forward():
     req.headers = {}
     req.body = AsyncMock(return_value=b"")
     with patch.object(mcp_proxy, "_ALLOWED_MCP_DOMAINS", {"mcp.example.com"}), \
-         patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=None), \
-         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=_burst_429()):
+         patch.object(_rl_target(), "_enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=None), \
+         patch.object(_rl_target(), "_enforce_org_burst_rpm", new_callable=AsyncMock, return_value=_burst_429()):
         resp = await mcp_proxy.ext_mcp_proxy("mcp.example.com/mcp", req)
     assert resp.status_code == 429
     assert _decode(resp)["code"] == "burst_limit_exceeded"
@@ -240,8 +247,8 @@ async def test_ext_mcp_proxy_disallowed_domain_403_before_rate_limit():
     req.headers = {}
     req.body = AsyncMock(return_value=b"")
     with patch.object(mcp_proxy, "_ALLOWED_MCP_DOMAINS", {"mcp.example.com"}), \
-         patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=_tpm_429()), \
-         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
+         patch.object(_rl_target(), "_enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=_tpm_429()), \
+         patch.object(_rl_target(), "_enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
         resp = await mcp_proxy.ext_mcp_proxy("evil.example.org/mcp", req)
     assert resp.status_code == 403
 
@@ -289,8 +296,8 @@ async def test_ext_mcp_proxy_oversized_body_413():
     req.headers = {"content-length": str(mcp_proxy._MCP_MAX_BODY_BYTES + 1)}
     req.body = AsyncMock(return_value=b"")
     with patch.object(mcp_proxy, "_ALLOWED_MCP_DOMAINS", {"mcp.example.com"}), \
-         patch("main._enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=None), \
-         patch("main._enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
+         patch.object(_rl_target(), "_enforce_org_tpm_rate_limit", new_callable=AsyncMock, return_value=None), \
+         patch.object(_rl_target(), "_enforce_org_burst_rpm", new_callable=AsyncMock, return_value=None):
         resp = await mcp_proxy.ext_mcp_proxy("mcp.example.com/mcp", req)
     assert resp.status_code == 413
     assert _decode(resp)["code"] == "mcp_body_too_large"
