@@ -27,15 +27,25 @@ import mcp_proxy  # noqa: E402
 
 _SECRET = "sk-ant-AAAABBBBCCCCDDDDEEEEFFFFGGGG1234"
 
+_BENIGN_TOOLS = [
+    {"name": "search", "description": "Search the docs and return results"},
+    {"name": "readfile", "description": "Reads a file from /home/user/project (example)"},
+]
+
 
 def _htmlent(s: str) -> str:
     return "".join(f"&#{ord(c)};" for c in s)
 
 
-async def _run(tools):
+async def _run(tools, scan_action="redact"):
+    """``scan_action`` is the posture the OPERATOR selected. Enforcement is strictly
+    operator-selected: with nothing chosen (or an observe-only posture such as
+    tag/monitor) descriptions are still scanned and tagged but never mutated, so the
+    masking assertions below run under an explicitly ENFORCING posture."""
     payload = {"jsonrpc": "2.0", "id": 1, "result": {"tools": tools}}
+    enabled_info = {"default_scan_action": scan_action} if scan_action else None
     resp = await mcp_proxy._scanned_tools_list_response(
-        payload, jsonrpc="2.0", msg_id=1, enabled_info=None,
+        payload, jsonrpc="2.0", msg_id=1, enabled_info=enabled_info,
         org_slug="o", server_slug="s", actor=None)
     return json.loads(resp.body.decode())
 
@@ -62,14 +72,27 @@ async def test_encoded_exfil_in_description_blocks():
 
 @pytest.mark.asyncio
 async def test_benign_tools_list_unchanged():
-    tools = [
-        {"name": "search", "description": "Search the docs and return results"},
-        {"name": "readfile", "description": "Reads a file from /home/user/project (example)"},
-    ]
-    r = await _run(tools)
+    """Benign metadata survives with NO operator selection: nothing was chosen, so
+    nothing is enforced and the payload is never mutated."""
+    r = await _run(_BENIGN_TOOLS, scan_action=None)
     assert "error" not in r
     assert len(r["result"]["tools"]) == 2
     # file paths are flag-tier — preserved (not masked, not blocked)
+    assert "/home/user/project" in json.dumps(r)
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "FALSE POSITIVE (documented, not fixed): under an operator-selected `redact` posture "
+    "a benign home-directory path in a tool description ('/home/user/project') is tagged "
+    "INFRA, is not maskable by redact_all, and therefore trips the unmaskable-survivor "
+    "fail-closed floor — withholding the WHOLE tools/list. The floor cannot distinguish "
+    "it from a real leak such as '/home/bob/.ssh/id_rsa'. Fixing it needs detector/corpus "
+    "tuning in production code, which is out of scope here; this xfail records the gap so "
+    "it is not silently lost and flips to a failure the moment it is fixed."))
+@pytest.mark.asyncio
+async def test_benign_tools_list_unchanged_under_enforcing_posture():
+    r = await _run(_BENIGN_TOOLS, scan_action="redact")
+    assert "error" not in r
     assert "/home/user/project" in json.dumps(r)
 
 

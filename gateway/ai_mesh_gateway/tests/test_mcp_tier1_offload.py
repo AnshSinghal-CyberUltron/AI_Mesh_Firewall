@@ -35,8 +35,12 @@ def _tier1_offloads(mock):
 
 
 async def _floor(result):
+    # Masking only happens under an operator-selected ENFORCING posture (enforcement is
+    # strictly what the operator chose; tag/monitor observe without mutating). These tests
+    # assert the offloaded scan still MASKS correctly, so they select `redact` explicitly.
     return await mcp_proxy._scan_tool_result_floor(
-        result, tool_name="fetch", enabled_info=None, org_slug="o", server_slug="s", actor=None)
+        result, tool_name="fetch", enabled_info={"default_scan_action": "redact"},
+        org_slug="o", server_slug="s", actor=None)
 
 
 @pytest.mark.asyncio

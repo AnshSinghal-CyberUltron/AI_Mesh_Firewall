@@ -60,11 +60,16 @@ def _internal_req():
             "arguments": {"q": "hi"}}))
 
 
-async def _drive_http(upstream_call_json):
+async def _drive_http(upstream_call_json, scan_action="redact"):
     """Drive internal_tools_call on the LEGACY direct-httpx path. ``_is_sandbox_routed``
     is forced False (hermetic — no global env mutation) so the httpx branch that calls
     ``_scan_internal_result`` is exercised. The upstream sees init + notify + tools/call;
-    only the third reply (``upstream_call_json``) carries the result under test."""
+    only the third reply (``upstream_call_json``) carries the result under test.
+
+    ``scan_action`` is the posture the OPERATOR selected for this org. Enforcement is
+    strictly operator-selected: with nothing selected (or an observe-only posture such as
+    ``tag``/``monitor``) detection still runs but the payload is never mutated, so every
+    masking/blocking assertion below explicitly selects an enforcing posture."""
     init = _http_resp({"jsonrpc": "2.0", "id": 1, "result": {}})
     notif = _http_resp({})
     call = _http_resp(upstream_call_json)
@@ -76,7 +81,8 @@ async def _drive_http(upstream_call_json):
         patch.object(mcp_proxy, "_get_server_config",
                      AsyncMock(return_value={"transport": "streamable-http",
                                              "url": "https://safe.example.com/mcp"})),
-        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_get_enabled_tools",
+                     AsyncMock(return_value={"default_scan_action": scan_action})),
         patch.object(mcp_proxy, "_record_gateway_event", audit),
         patch.object(mcp_proxy, "is_safe_outbound_url", return_value=(True, "")),
         patch.object(mcp_proxy, "_mcp_block_on_credential_enabled", return_value=True),

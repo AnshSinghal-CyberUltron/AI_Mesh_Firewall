@@ -33,9 +33,15 @@ def _internal_req():
             "arguments": {"q": "hi"}}))
 
 
-async def _drive_sandbox(adapter_result):
+async def _drive_sandbox(adapter_result, scan_action="redact"):
     """Drive internal_tools_call on the STDIO sandbox path; the adapter returns
-    ``adapter_result`` (a full JSON-RPC reply dict)."""
+    ``adapter_result`` (a full JSON-RPC reply dict).
+
+    ``scan_action`` is the posture the OPERATOR selected for this org. Enforcement is
+    strictly operator-selected: with nothing selected (or an observe-only posture such
+    as ``tag``/``monitor``) detection still runs but the payload is never mutated, so
+    every masking/blocking assertion below explicitly selects an enforcing posture.
+    """
     from fastapi.responses import JSONResponse
     raw = JSONResponse(content=adapter_result, status_code=200)
     audit = AsyncMock()
@@ -43,7 +49,8 @@ async def _drive_sandbox(adapter_result):
         patch.object(mcp_proxy, "_valid_internal_key", return_value=True),
         patch.object(mcp_proxy, "_get_server_config",
                      AsyncMock(return_value={"transport": "stdio", "command": "x"})),
-        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_get_enabled_tools",
+                     AsyncMock(return_value={"default_scan_action": scan_action})),
         patch.object(mcp_proxy, "_record_gateway_event", audit),
         patch.object(mcp_proxy, "_adapter_forward", AsyncMock(return_value=raw)),
     ):

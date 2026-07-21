@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import sys
 import types
+from contextlib import contextmanager
 from pathlib import Path
 
 _GW = Path(__file__).resolve().parents[1]
@@ -34,39 +35,65 @@ def _restore(saved):
             sys.modules[name] = mod
 
 
-def test_resolves_packaged_module_over_bare_main_none():
+@contextmanager
+def _stub_main_identities(pkg, bare):
+    """Install ``pkg``/``bare`` as the two gateway module identities, then restore.
+
+    Stubbing ``sys.modules`` ALONE is not enough. ``_get_input_scanner``'s last-resort
+    branch runs ``import ai_mesh_gateway.main as gateway_main``, and the ``as`` form
+    binds the ``main`` ATTRIBUTE OF THE PARENT PACKAGE, not the ``sys.modules`` entry.
+    So once any earlier test in the suite has imported the packaged identity, that
+    attribute still points at the REAL module — whose ``INPUT_SCANNER`` another test may
+    have populated — and the stub is bypassed. That made the no-scanner-anywhere case
+    pass alone and fail in-suite. Pass ``None`` for either identity to remove it.
+    """
     saved = {n: sys.modules.get(n) for n in ("ai_mesh_gateway.main", "main")}
+    parent = sys.modules.get("ai_mesh_gateway")
+    had_attr = parent is not None and hasattr(parent, "main")
+    saved_attr = getattr(parent, "main", None) if parent is not None else None
     try:
-        pkg = types.ModuleType("ai_mesh_gateway.main"); pkg.INPUT_SCANNER = "SENTINEL"
-        bare = types.ModuleType("main"); bare.INPUT_SCANNER = None
-        sys.modules["ai_mesh_gateway.main"] = pkg
-        sys.modules["main"] = bare
-        assert o._get_input_scanner() == "SENTINEL"
+        for name, mod in (("ai_mesh_gateway.main", pkg), ("main", bare)):
+            if mod is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = mod
+        if parent is not None:
+            if pkg is None:
+                if had_attr:
+                    delattr(parent, "main")
+            else:
+                parent.main = pkg
+        yield
     finally:
         _restore(saved)
+        if parent is not None:
+            if had_attr:
+                parent.main = saved_attr
+            elif hasattr(parent, "main"):
+                delattr(parent, "main")
+
+
+def _mod(name, scanner):
+    m = types.ModuleType(name)
+    m.INPUT_SCANNER = scanner
+    return m
+
+
+def test_resolves_packaged_module_over_bare_main_none():
+    with _stub_main_identities(_mod("ai_mesh_gateway.main", "SENTINEL"),
+                               _mod("main", None)):
+        assert o._get_input_scanner() == "SENTINEL"
 
 
 def test_falls_back_to_bare_main_when_only_it_has_scanner():
-    saved = {n: sys.modules.get(n) for n in ("ai_mesh_gateway.main", "main")}
-    try:
-        sys.modules.pop("ai_mesh_gateway.main", None)
-        bare = types.ModuleType("main"); bare.INPUT_SCANNER = "BAREONLY"
-        sys.modules["main"] = bare
+    with _stub_main_identities(None, _mod("main", "BAREONLY")):
         assert o._get_input_scanner() == "BAREONLY"
-    finally:
-        _restore(saved)
 
 
 def test_returns_none_when_no_scanner_anywhere():
-    saved = {n: sys.modules.get(n) for n in ("ai_mesh_gateway.main", "main")}
-    try:
-        pkg = types.ModuleType("ai_mesh_gateway.main"); pkg.INPUT_SCANNER = None
-        bare = types.ModuleType("main"); bare.INPUT_SCANNER = None
-        sys.modules["ai_mesh_gateway.main"] = pkg
-        sys.modules["main"] = bare
+    with _stub_main_identities(_mod("ai_mesh_gateway.main", None),
+                               _mod("main", None)):
         assert o._get_input_scanner() is None
-    finally:
-        _restore(saved)
 
 
 # ── _gateway_app_module resolution (finding #19: rate-limit + CONFIG flag lookups) ──

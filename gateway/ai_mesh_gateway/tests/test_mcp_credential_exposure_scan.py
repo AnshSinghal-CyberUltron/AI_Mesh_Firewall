@@ -48,22 +48,33 @@ def test_all_credential_exposure_keys_tag_secret():
     assert not missing, f"CREDENTIAL_EXPOSURE keys missing SECRET tag: {missing}"
 
 
+# STRICT OPERATOR CONTROL (2026-07-21): the E12 result-redaction floor and the
+# credential force-block are static hardening floors — they fire only under an
+# operator-selected ENFORCING posture. These helpers used to pass
+# ``enabled_info=None``, which resolves to observe-only ``tag`` (detect + tag, never
+# mutate, never block), so they now select ``redact`` explicitly.
+_ENFORCING = {"default_scan_action": "redact"}
+
+
 async def _floor(text):
     return await mcp_proxy._scan_tool_result_floor(
-        text, tool_name="fetch", enabled_info=None, org_slug="o", server_slug="s", actor=None)
+        text, tool_name="fetch", enabled_info=_ENFORCING, org_slug="o", server_slug="s", actor=None)
 
 
 async def _argblock(args):
     return await mcp_proxy._scan_tool_args_block(
-        args, tool_name="fetch", enabled_info=None, org_slug="o", server_slug="s", actor=None)
+        args, tool_name="fetch", enabled_info=_ENFORCING, org_slug="o", server_slug="s", actor=None)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("name", "text", "raw"), _CRED_CASES)
 async def test_credential_in_result_is_masked_not_raw(name, text, raw):
     scanned, blocked, tags, findings, meta = await _floor(text)
-    assert not (raw in str(scanned) and not blocked), f"{name}: {raw!r} egressed RAW in a tool result"
-    assert meta.get("result_redaction_floor") or blocked
+    # The contract is the EGRESS BYTES. ``meta["result_redaction_floor"]`` marks the
+    # E12 RE-SCAN floor specifically, which fires only when the first pass left the
+    # result unmutated; under an explicit ``redact`` posture the first pass masks
+    # inline, so that flag is legitimately absent.
+    assert blocked or raw not in str(scanned), f"{name}: {raw!r} egressed RAW in a tool result"
     assert "SECRET" in tags
 
 

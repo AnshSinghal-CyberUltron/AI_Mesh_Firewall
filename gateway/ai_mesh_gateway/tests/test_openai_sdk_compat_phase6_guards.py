@@ -12,8 +12,24 @@ import openai
 import pytest
 import pytest_asyncio
 
-import ai_mesh_gateway.main as gm
 from ai_mesh_gateway.tests import test_openai_sdk_compat as T
+
+
+def _resolved_main():
+    """Resolve the SAME ``main`` module object the app under test is built from.
+
+    The gateway file is importable under two identities (``main`` and
+    ``ai_mesh_gateway.main``). A sibling test deletes ``ai_mesh_gateway.main``
+    from ``sys.modules`` during teardown, so a later dotted re-import re-executes
+    main.py into a SECOND module object with its own ``app`` / ``LLM_ROUTER``.
+    A module-level ``import ai_mesh_gateway.main as gm`` binds the FIRST object
+    and then silently patches a module the app no longer uses (passes alone,
+    fails in-suite). ``T._make_sdk_app`` resolves the module via
+    ``from ai_mesh_gateway import main``; mirror that, at call time.
+    """
+    from ai_mesh_gateway import main as gateway_main
+
+    return gateway_main
 
 
 @pytest_asyncio.fixture()
@@ -64,7 +80,7 @@ async def test_stream_upstream_error_emits_error_event_not_clean_empty(appctx):
         raise RuntimeError("upstream boom before first token")
         yield ""  # unreachable; makes this an async generator
 
-    gm.LLM_ROUTER.acompletion_stream = _boom_stream
+    _resolved_main().LLM_ROUTER.acompletion_stream = _boom_stream
     async with _raw(app) as rc:
         async with rc.stream("POST", "/v1/chat/completions",
                              json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}], "stream": True}) as resp:

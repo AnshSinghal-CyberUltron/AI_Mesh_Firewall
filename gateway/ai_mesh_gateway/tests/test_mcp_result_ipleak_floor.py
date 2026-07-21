@@ -4,6 +4,11 @@ result-redaction floor only fired for secret/PII (``_findings_have_secret_or_pii
 never for the ``ip_leakage`` class. That is a fail-OPEN asymmetric with PII/secret:
 an internal / cloud-metadata IP in a tool result is the same infra-disclosure class.
 
+STRICT OPERATOR CONTROL (2026-07-21): the floor is a static hardening floor, so it
+fires only under an operator-selected ENFORCING posture (``redact``/``block``).
+These tests therefore select ``redact`` explicitly instead of relying on the
+unselected default, which resolves to observe-only ``tag``.
+
 These tests drive the REAL proxy floor entrypoint ``_scan_tool_result_floor`` (the
 two-tier scanner runs; nothing is mocked) and assert, on the EGRESS BYTES:
   * internal network addrs (RFC1918 / link-local-metadata / CGNAT / IPv6 / hostname)
@@ -31,10 +36,18 @@ if _SHARED.is_dir() and str(_SHARED) not in sys.path:
 import mcp_proxy  # noqa: E402
 
 
-async def _floor(text):
-    """Run the real result-redaction floor under the DEFAULT (tag) action."""
+async def _floor(text, action="redact"):
+    """Run the real result-redaction floor under an OPERATOR-SELECTED posture.
+
+    These tests used to pass ``enabled_info=None`` (i.e. nothing selected) and
+    still expect masking. Under the strict-operator-control rule that is wrong:
+    with no posture selected the tool resolves to ``tag`` ("Tag only"), which is
+    observe-only — detection and tagging happen, the payload is never mutated.
+    The E12 result-redaction floor is a static hardening floor and fires only
+    under an enforcing posture, so these tests select ``redact`` explicitly.
+    """
     return await mcp_proxy._scan_tool_result_floor(
-        text, tool_name="fetch", enabled_info=None,
+        text, tool_name="fetch", enabled_info={"default_scan_action": action},
         org_slug="o", server_slug="s", actor=None,
     )
 
@@ -53,9 +66,13 @@ _NETWORK_LEAKS = [
 @pytest.mark.parametrize(("name", "text", "raw"), _NETWORK_LEAKS)
 async def test_internal_network_leak_is_floored_not_raw(name, text, raw):
     scanned, blocked, tags, findings, meta = await _floor(text)
-    # masked (floor) — never forwarded raw
-    assert not (raw in str(scanned) and not blocked), f"{name}: {raw!r} egressed RAW"
-    assert meta.get("result_redaction_floor") or blocked
+    # The contract is the EGRESS BYTES: masked or withheld, never forwarded raw.
+    # (``meta["result_redaction_floor"]`` is deliberately NOT asserted: it marks the
+    # E12 re-scan floor, which only fires when the first pass left the result
+    # unmutated. Under an explicit ``redact`` posture the first pass masks inline, so
+    # the flag is legitimately absent — which internal path did the masking is not
+    # the security property.)
+    assert blocked or raw not in str(scanned), f"{name}: {raw!r} egressed RAW"
     assert "INFRA" in tags
 
 
@@ -70,15 +87,24 @@ async def test_internal_network_leak_is_floored_not_raw(name, text, raw):
 async def test_pii_secret_still_floored(text, raw):
     scanned, blocked, tags, findings, meta = await _floor(text)
     assert raw not in str(scanned)
-    assert meta.get("result_redaction_floor") or blocked
 
 
 @pytest.mark.asyncio
-async def test_file_path_only_stays_raw_not_blocked():
-    # File paths are deliberately flag-tier (FP-prone in legit code answers): they
-    # must NOT trigger the floor (which would force-block a benign file/code result).
+async def test_file_path_only_stays_raw_under_observe_only():
+    """A flag-tier file path is neither masked nor blocked under ``tag``.
+
+    Used to be ``test_file_path_only_stays_raw_not_blocked`` and ran with
+    ``enabled_info=None``. It asserted the same three things, but for the wrong
+    reason: it read as "file paths never force-block", when what it actually
+    exercised was the unselected/``tag`` posture. Under an operator-selected
+    ``redact`` posture a file path IS a detected ip_leakage value that redact_all
+    cannot mask, so the scan fails CLOSED (blocks) — see
+    ``test_mixed_unmaskable_fails_closed``. The flag-tier property itself (file
+    paths are not an INFRA network leak, so they never trip the E12 floor) is
+    asserted directly in ``test_findings_have_infra_network_leak_helper``.
+    """
     text = "read /home/alice/project/notes.txt and it worked"
-    scanned, blocked, tags, findings, meta = await _floor(text)
+    scanned, blocked, tags, findings, meta = await _floor(text, "tag")
     assert not blocked, "file-path-only result must not be force-blocked"
     assert "/home/alice/project/notes.txt" in str(scanned)
     assert not meta.get("result_redaction_floor")

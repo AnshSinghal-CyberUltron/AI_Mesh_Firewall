@@ -85,9 +85,23 @@ def _audit_calls(audit_mock):
     return [(c.kwargs.get("decision"), c.kwargs.get("reason")) for c in audit_mock.call_args_list]
 
 
-async def _drive(req, upstream, *, extra_patches=()):
+def _ext_enforcing(action="redact"):
+    """The org owning this ext-proxy call has selected an ENFORCING posture.
+
+    The transparent external proxy has no registered server/tool, so its posture comes
+    from the ORG-level ``FirewallConfig.mcp_ext_scan_action`` knob resolved by
+    ``_ext_proxy_enabled_info``. Unset / "tag" / unreachable resolves to observe-only
+    (detect + tag, never mutate), so the redaction assertions below must state the
+    operator's selection explicitly.
+    """
+    return patch.object(mcp_proxy, "_ext_proxy_enabled_info",
+                        return_value={"default_scan_action": action})
+
+
+async def _drive(req, upstream, *, extra_patches=(), posture=_ext_enforcing):
     audit = AsyncMock()
     mgrs = [
+        posture(),
         patch.object(mcp_proxy, "_record_gateway_event", audit),
         patch.object(mcp_proxy, "is_safe_outbound_url", return_value=(True, "")),
         patch.object(mcp_proxy, "_mcp_org_rate_limit_raw", AsyncMock(return_value=None)),
@@ -160,6 +174,22 @@ async def test_request_too_large_audited():
         extra_patches=[patch.object(mcp_proxy, "_mcp_body_too_large", return_value=True)],
     )
     assert ("block", "request_too_large") in _audit_calls(audit)
+
+
+@pytest.mark.asyncio
+async def test_observe_only_posture_does_not_redact_or_audit_redact():
+    """OPERATOR SOVEREIGNTY twin of ``test_nonjson_text_body_redaction_audited``.
+
+    An org that selected "Tag only" (or has not chosen) gets detection but NO mutation:
+    the text body egresses unchanged and no ``redact`` decision is recorded, because a
+    redaction the operator did not select must never happen.
+    """
+    req = _ext_request(_call_body())
+    upstream = _ext_text_resp("contact jane.doe@corp.example for access", content_type="text/plain")
+    resp, audit = await _drive(req, upstream, posture=lambda: _ext_enforcing("tag"))
+    body = resp.body.decode() if hasattr(resp, "body") else ""
+    assert "jane.doe@corp.example" in body            # observe-only: never mutated
+    assert ("redact", "text_body_redacted") not in _audit_calls(audit)
 
 
 if __name__ == "__main__":

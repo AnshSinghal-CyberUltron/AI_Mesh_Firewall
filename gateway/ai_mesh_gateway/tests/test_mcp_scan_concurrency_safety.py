@@ -33,6 +33,12 @@ import mcp_proxy  # noqa: E402
 
 _N = 300
 
+# Enforcement is STRICTLY operator-selected: with nothing chosen (or an observe-only
+# posture such as tag/monitor) the payload is never mutated, so a concurrency proof about
+# masking/blocking must select an ENFORCING posture explicitly. `redact` is the posture
+# under test here; the guarantee being proven is isolation between concurrent scans.
+_ENFORCING = {"default_scan_action": "redact"}
+
 
 async def _scan_one(i: int):
     canary_secret = f"sk-ant-CANARY{i:04d}AAAABBBBCCCCDDDDEEEE"
@@ -41,7 +47,7 @@ async def _scan_one(i: int):
     text = f"[req {i}] key {canary_secret} email {canary_email} host {canary_ip} done"
     scanned, blocked, tags, findings, meta = await mcp_proxy._scan_tool_result_floor(
         {"content": [{"type": "text", "text": text}]},
-        tool_name="fetch", enabled_info=None, org_slug=f"org{i % 10}", server_slug="s", actor=None)
+        tool_name="fetch", enabled_info=_ENFORCING, org_slug=f"org{i % 10}", server_slug="s", actor=None)
     blob = json.dumps(scanned)
     return i, blob, (canary_secret in blob), (canary_email in blob), (canary_ip in blob)
 
@@ -72,7 +78,7 @@ async def test_benign_concurrent_scans_unchanged():
         txt = f"weather report {i}: sunny, high 21C, low 12C"
         scanned, blocked, _t, _f, _m = await mcp_proxy._scan_tool_result_floor(
             {"content": [{"type": "text", "text": txt}]},
-            tool_name="fetch", enabled_info=None, org_slug="o", server_slug="s", actor=None)
+            tool_name="fetch", enabled_info=_ENFORCING, org_slug="o", server_slug="s", actor=None)
         return blocked, (txt in json.dumps(scanned))
 
     out = await asyncio.gather(*[benign(i) for i in range(100)])
@@ -99,7 +105,7 @@ async def _scan_render_leak(i: int):
             f"and key AKIA**IOSFODNN7**EXAMPLE done")
     scanned, blocked, tags, findings, meta = await mcp_proxy._scan_tool_result_floor(
         {"content": [{"type": "text", "text": text}]},
-        tool_name="fetch", enabled_info=None, org_slug=f"org{i % 10}", server_slug="s", actor=None)
+        tool_name="fetch", enabled_info=_ENFORCING, org_slug=f"org{i % 10}", server_slug="s", actor=None)
     return i, marker, json.dumps(scanned)
 
 
@@ -129,7 +135,7 @@ async def _scan_split(i: int):
     scanned, blocked, tags, findings, meta = await mcp_proxy._scan_tool_result_floor(
         {"content": [{"type": "text", "text": "key " + sec[:10]},
                      {"type": "text", "text": sec[10:] + f" call{i}"}]},
-        tool_name="fetch", enabled_info=None, org_slug=f"org{i % 10}", server_slug="s", actor=None)
+        tool_name="fetch", enabled_info=_ENFORCING, org_slug=f"org{i % 10}", server_slug="s", actor=None)
     return i, blocked, meta.get("cross_block_split_secret")
 
 

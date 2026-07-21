@@ -27,7 +27,15 @@ import mcp_proxy  # noqa: E402
 _SEC = "AKIAIOSFODNN7EXAMPLE"  # aws_access_key (SECRET)
 
 
-async def _floor(result, *, enabled_info=None):
+# STRICT OPERATOR CONTROL (2026-07-21): the cross-block-split fail-closed check and
+# the E12 result-redaction floor are static hardening floors — they fire only under an
+# operator-selected ENFORCING posture. The default here used to be ``None``, which
+# resolves to observe-only ``tag`` (detect + tag, never mutate, never block); that half
+# of the contract is asserted by ``test_monitor_posture_does_not_block_split``.
+_ENFORCING = {"default_scan_action": "redact"}
+
+
+async def _floor(result, *, enabled_info=_ENFORCING):
     return await mcp_proxy._scan_tool_result_floor(
         result, tool_name="fetch", enabled_info=enabled_info,
         org_slug="o", server_slug="s", actor=None)

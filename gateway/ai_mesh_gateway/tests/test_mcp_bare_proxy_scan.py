@@ -67,6 +67,29 @@ _BENIGN_ARG = {"q": "what is the weather in Paris today"}
 _PII_RESULT_TEXT = "reach the owner at john.doe@example.com for access"
 _PII_RESULT = [{"type": "text", "text": _PII_RESULT_TEXT}]
 
+# STRICT OPERATOR CONTROL (2026-07-21): static hardening floors (E12 result
+# redaction, credential force-block, encoded-exfil / cross-block-split fail-closed,
+# exfil-beacon defang) fire ONLY under an operator-selected ENFORCING posture.
+# The org-scoped paths below used to stub ``_get_enabled_tools`` with ``None``, which
+# resolves to the observe-only "tag" action — under which the two-tier scan still
+# detects and tags but never mutates or blocks. Tests that assert masking/blocking
+# therefore state the operator's selection explicitly.
+_ENFORCE_REDACT = {"default_scan_action": "redact"}
+_ENFORCE_BLOCK = {"default_scan_action": "block"}
+
+
+def _ext_enforcing(action="redact"):
+    """The org owning this ext-proxy call has selected an ENFORCING posture.
+
+    The transparent external proxy has no registered server/tool, so its posture comes
+    from the ORG-level ``FirewallConfig.mcp_ext_scan_action`` knob resolved by
+    ``_ext_proxy_enabled_info``. Unset / "tag" / unreachable resolves to observe-only
+    (detect + tag, never mutate), so any test asserting masking or blocking on this
+    surface must state the operator's selection — that is what this patch does.
+    """
+    return patch.object(mcp_proxy, "_ext_proxy_enabled_info",
+                        return_value={"default_scan_action": action})
+
 
 def _decode(resp):
     return json.loads(bytes(resp.body))
@@ -128,7 +151,7 @@ async def test_rest_blocks_credential_in_args():
     # Backend would echo "ok" if reached — it must NOT be reached.
     backend = _http_resp({"result": [{"type": "text", "text": "ok"}]})
     with (
-        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=_ENFORCE_BLOCK)),
         patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
         patch.object(mcp_proxy, "_mcp_block_on_credential_enabled", return_value=True),
         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_fake_client([backend])),
@@ -145,7 +168,7 @@ async def test_rest_redacts_pii_in_result():
     req = _rest_request(_auth(), {"name": "fetch", "arguments": _BENIGN_ARG})
     backend = _http_resp({"result": _PII_RESULT})
     with (
-        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=_ENFORCE_REDACT)),
         patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_fake_client([backend])),
     ):
@@ -248,7 +271,7 @@ def _internal_request(body_obj):
 _SRV_CONFIG = {"transport": "streamable-http", "url": "https://safe.example.com/mcp"}
 
 
-async def _run_internal(body_obj, *, upstream_call_json):
+async def _run_internal(body_obj, *, upstream_call_json, enabled_info=_ENFORCE_REDACT):
     """Drive internal_tools_call with control-plane + upstream stubbed.
 
     The upstream sees three POSTs (initialize, notifications/initialized,
@@ -262,7 +285,7 @@ async def _run_internal(body_obj, *, upstream_call_json):
     with (
         patch.object(mcp_proxy, "_valid_internal_key", return_value=True),
         patch.object(mcp_proxy, "_get_server_config", AsyncMock(return_value=_SRV_CONFIG)),
-        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=enabled_info)),
         patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
         patch.object(mcp_proxy, "is_safe_outbound_url", return_value=(True, "")),
         patch.object(mcp_proxy, "_mcp_block_on_credential_enabled", return_value=True),
@@ -277,7 +300,8 @@ async def test_internal_blocks_credential_in_args():
             "tool_name": "search", "arguments": _CRED_ARG}
     resp, client = await _run_internal(
         body, upstream_call_json={"jsonrpc": "2.0", "id": 1,
-                                  "result": {"content": [{"type": "text", "text": "ok"}]}})
+                                  "result": {"content": [{"type": "text", "text": "ok"}]}},
+        enabled_info=_ENFORCE_BLOCK)
     assert resp.status_code == 200
     data = _decode(resp)
     assert "error" in data
@@ -354,6 +378,7 @@ async def test_ext_blocks_credential_in_args():
                                "result": {"content": [{"type": "text", "text": "ok"}]}})
     client = _ext_client(upstream)
     with (
+        _ext_enforcing("block"),
         patch.object(mcp_proxy, "_mcp_block_on_credential_enabled", return_value=True),
         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client),
     ):
@@ -372,7 +397,7 @@ async def test_ext_redacts_pii_in_result():
     upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 6,
                                "result": {"content": _PII_RESULT}})
     client = _ext_client(upstream)
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 200
     blob = json.dumps(_decode(resp))
@@ -444,7 +469,7 @@ async def test_ext_redacts_pii_in_structured_content():
     upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 11,
                                "result": {"structuredContent": {"owner": _PII_RESULT_TEXT}}})
     client = _ext_client(upstream)
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     blob = json.dumps(_decode(resp))
     assert "john.doe@example.com" not in blob   # structuredContent PII no longer egresses raw
@@ -458,7 +483,7 @@ async def test_ext_redacts_pii_in_string_result():
                         "params": {"name": "fetch", "arguments": _BENIGN_ARG}})
     upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 12, "result": _PII_RESULT_TEXT})
     client = _ext_client(upstream)
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     blob = json.dumps(_decode(resp))
     assert "john.doe@example.com" not in blob
@@ -480,7 +505,7 @@ async def test_ext_scans_completion_complete_values():
     upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 20, "result": {
         "completion": {"values": ["key AKIAIOSFODNN7EXAMPLE", "contact bob@corp.example"],
                        "total": 2}}})
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     blob = json.dumps(_decode(resp))
     assert "AKIAIOSFODNN7EXAMPLE" not in blob   # secret in a suggested value no longer egresses raw
@@ -494,7 +519,7 @@ async def test_ext_scans_resources_templates_list_metadata():
     upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 21, "result": {
         "resourceTemplates": [{"name": "t", "uriTemplate": "file:///{path}",
                                "description": "admin key AKIAIOSFODNN7EXAMPLE host 10.9.8.7"}]}})
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     blob = json.dumps(_decode(resp))
     assert "AKIAIOSFODNN7EXAMPLE" not in blob   # template description metadata scanned
@@ -528,7 +553,7 @@ async def test_ext_completion_input_credential_blocked_before_egress():
                                    "argument": {"name": "a", "value": "my key AKIAIOSFODNN7EXAMPLE"}}})
     upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 23, "result": {"completion": {"values": []}}})
     client = _ext_client(upstream)
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+    with _ext_enforcing("block"), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     blob = json.dumps(_decode(resp))
     assert "AKIAIOSFODNN7EXAMPLE" not in blob      # secret not echoed
@@ -544,7 +569,7 @@ async def test_ext_completion_context_arguments_credential_blocked():
                                    "context": {"arguments": {"prev": "token AKIAIOSFODNN7EXAMPLE"}}}})
     upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 24, "result": {"completion": {"values": []}}})
     client = _ext_client(upstream)
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+    with _ext_enforcing("block"), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert "AKIAIOSFODNN7EXAMPLE" not in json.dumps(_decode(resp))
     client.send.assert_not_awaited()
@@ -568,7 +593,7 @@ async def test_ext_sse_tool_result_redacted():
                         "params": {"name": "fetch", "arguments": _BENIGN_ARG}})
     sse = _sse_resp({"jsonrpc": "2.0", "id": 7, "result": {"content": _PII_RESULT}})
     client = _ext_client(sse)
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 200
     body = bytes(resp.body).decode()
@@ -596,7 +621,7 @@ async def test_ext_finite_sse_scans_interleaved_notification():
     sse.aread = AsyncMock(return_value=frames)
     sse.aiter_bytes = _aiter_bytes_of(frames)
     client = _ext_client(sse)
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     body = bytes(resp.body).decode()
     assert "AKIAIOSFODNN7EXAMPLE" not in body   # interleaved notification secret masked
@@ -639,7 +664,7 @@ async def test_ext_non_toolscall_sse_stream_scanned():
 
     sse.aiter_bytes = _aiter
     client = _ext_client(sse)
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 200
     out = b""
@@ -791,7 +816,7 @@ async def test_ext_sse_resources_read_result_now_scanned():
                      "result": {"contents": [{"uri": "file:///doc.txt",
                                               "text": "reach john.doe@example.com"}]}})
     client = _ext_client(sse)
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 200
     body = bytes(resp.body).decode()
@@ -836,7 +861,7 @@ async def test_ext_error_content_masked_non_streaming():
     upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 3,
                                "error": {"code": -32000, "message": _ERR_SECRET}})
     client = _ext_client(upstream)
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     blob = json.dumps(_decode(resp))
     assert "s3cr3tPass" not in blob                 # secret in the error message masked
@@ -849,7 +874,7 @@ async def test_ext_sse_error_frame_masked():
                         "params": {"name": "db", "arguments": _BENIGN_ARG}})
     sse = _sse_resp({"jsonrpc": "2.0", "id": 4, "error": {"code": -32000, "message": _ERR_SECRET}})
     client = _ext_client(sse)
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     body = bytes(resp.body).decode()
     assert "s3cr3tPass" not in body                 # secret in the SSE error frame masked
@@ -868,6 +893,7 @@ async def test_ext_blocks_credential_in_prompts_get_args():
     upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 6, "result": {"messages": []}})
     client = _ext_client(upstream)
     with (
+        _ext_enforcing("block"),
         patch.object(mcp_proxy, "_mcp_block_on_credential_enabled", return_value=True),
         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client),
     ):
@@ -961,7 +987,7 @@ async def test_ext_non200_json_error_body_redacted():
          "error": {"code": -32000, "message": f"connect failed; reach {_LEAK_EMAIL}"}},
         status=500,
     )
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 500                       # upstream status preserved
     assert _LEAK_EMAIL not in json.dumps(_decode(resp))  # email masked, not leaked
@@ -971,7 +997,7 @@ async def test_ext_non200_json_error_body_redacted():
 async def test_ext_non200_json_detail_body_without_result_or_error_redacted():
     req = _ext_request(_BENIGN_CALL)
     upstream = _ext_send_resp({"detail": f"user {_LEAK_EMAIL} not found"}, status=404)
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 404
     assert _LEAK_EMAIL not in json.dumps(_decode(resp))
@@ -986,7 +1012,7 @@ async def test_ext_non200_json_result_body_redacted():
          "result": {"content": [{"type": "text", "text": f"owner {_LEAK_EMAIL}"}]}},
         status=502,
     )
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 502
     assert _LEAK_EMAIL not in json.dumps(_decode(resp))
@@ -999,7 +1025,7 @@ async def test_ext_non_json_text_body_redacted():
         f"Error page: reach owner at {_LEAK_EMAIL} for access".encode(),
         content_type="text/plain", status=500,
     )
-    with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+    with _ext_enforcing(), patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
     assert resp.status_code == 500
     body_text = bytes(resp.body).decode("utf-8", errors="replace")
@@ -1173,7 +1199,7 @@ async def test_ext_proxy_audits_result_redaction():
     async def _cap(**kw):
         events.append(kw)
 
-    with patch.object(mcp_proxy, "_mcp_org_rate_limit_raw", new_callable=AsyncMock, return_value=None), \
+    with _ext_enforcing(), patch.object(mcp_proxy, "_mcp_org_rate_limit_raw", new_callable=AsyncMock, return_value=None), \
          patch.object(mcp_proxy, "_record_gateway_event", new=_cap), \
          patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
@@ -1211,7 +1237,7 @@ async def test_ext_proxy_audits_credential_block():
     async def _cap(**kw):
         events.append(kw)
 
-    with patch.object(mcp_proxy, "_mcp_org_rate_limit_raw", new_callable=AsyncMock, return_value=None), \
+    with _ext_enforcing("block"), patch.object(mcp_proxy, "_mcp_org_rate_limit_raw", new_callable=AsyncMock, return_value=None), \
          patch.object(mcp_proxy, "_mcp_block_on_credential_enabled", return_value=True), \
          patch.object(mcp_proxy, "_record_gateway_event", new=_cap), \
          patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
@@ -1221,14 +1247,58 @@ async def test_ext_proxy_audits_credential_block():
 
 
 @pytest.mark.asyncio
-async def test_ext_proxy_audit_noop_without_org():
-    # unauthenticated (no org) → _record_gateway_event returns early; audit is a safe no-op
+async def test_ext_proxy_without_org_is_observe_only_and_audit_noop():
+    """No org => no operator selection exists => OBSERVE-ONLY, and audit is a safe no-op.
+
+    Renamed from ``test_ext_proxy_audit_noop_without_org``, which additionally asserted
+    "redaction still applied" on an unauthenticated call. That premise is wrong under
+    STRICT OPERATOR CONTROL: the ext-proxy posture comes from the ORG-level
+    ``FirewallConfig.mcp_ext_scan_action``, so with no org there is nobody to have
+    selected an enforcing action and ``_ext_proxy_enabled_info`` returns None
+    (observe-only). Mutating here would be enforcing something no operator chose.
+
+    The security-relevant half of the original test is UNCHANGED and still asserted:
+    the audit path must not blow up when there is no org to attribute the event to.
+    """
     req = _ext_request(_BENIGN_CALL)  # no .state → no org
     upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 20, "result": {"content": _PII_RESULT}})
     with patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
         resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
-    assert resp.status_code == 200  # still works, redaction still applied
-    assert "john.doe@example.com" not in json.dumps(_decode(resp))
+    assert resp.status_code == 200                    # audit no-op did not break the call
+    assert mcp_proxy._ext_proxy_enabled_info("") is None   # no org -> no selection
+    assert "john.doe@example.com" in json.dumps(_decode(resp))  # observe-only: not mutated
+
+
+@pytest.mark.asyncio
+async def test_ext_observe_only_posture_does_not_redact_result():
+    """OPERATOR SOVEREIGNTY twin of ``test_ext_redacts_pii_in_result``: an org that
+    selected "Tag only" gets detection/tagging but the result is never mutated."""
+    req = _ext_request({"jsonrpc": "2.0", "id": 6, "method": "tools/call",
+                        "params": {"name": "fetch", "arguments": _BENIGN_ARG}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 6, "result": {"content": _PII_RESULT}})
+    with _ext_enforcing("tag"), \
+         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_ext_client(upstream)):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert resp.status_code == 200
+    assert "john.doe@example.com" in json.dumps(_decode(resp))  # never masked under tag
+
+
+@pytest.mark.asyncio
+async def test_ext_observe_only_posture_does_not_block_credential():
+    """Twin of ``test_ext_blocks_credential_in_args``: under an operator-selected
+    "Tag only" posture the credential force-block floor must NOT fire — the call is
+    forwarded and merely tagged."""
+    req = _ext_request({"jsonrpc": "2.0", "id": 5, "method": "tools/call",
+                        "params": {"name": "search", "arguments": _CRED_ARG}})
+    upstream = _ext_send_resp({"jsonrpc": "2.0", "id": 5,
+                               "result": {"content": [{"type": "text", "text": "ok"}]}})
+    client = _ext_client(upstream)
+    with _ext_enforcing("tag"), \
+         patch.object(mcp_proxy, "_mcp_block_on_credential_enabled", return_value=True), \
+         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client):
+        resp = await mcp_proxy.ext_mcp_proxy(f"{_EXT_HOST}/mcp", req)
+    assert "error" not in _decode(resp)   # not blocked under an observe-only selection
+    client.send.assert_awaited()          # the call WAS forwarded
 
 
 # ── CHG-0070: complete the ext_mcp_proxy audit trail — CHG-0068 audited the JSON result

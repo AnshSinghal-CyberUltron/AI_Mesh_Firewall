@@ -110,8 +110,16 @@ def _decode(resp):
 
 
 @pytest.mark.asyncio
-async def test_fix1_credential_in_args_blocked_under_tag_default():
-    """A secret in tool ARGS is BLOCKED even though scan_action defaults to tag."""
+async def test_fix1_credential_in_args_blocked_under_enforcing_posture():
+    """A secret in tool ARGS is hard-BLOCKED under an operator-selected enforcing posture.
+
+    Used to be ``test_fix1_credential_in_args_blocked_under_tag_default`` and ran with
+    ``enabled_info=None`` (→ ``tag``), asserting the block fired anyway. STRICT OPERATOR
+    CONTROL (2026-07-21) makes that premise wrong: ``tag`` is the operator-selectable
+    "Tag only" action, an OBSERVE-ONLY posture — detection and tagging still happen, but
+    the call is never blocked. The credential force-block is a static hardening floor and
+    fires only under ``redact``/``block``, so the posture is now selected explicitly.
+    """
     req = _make_request(_auth())
     body = {"jsonrpc": "2.0", "id": 7, "method": "tools/call",
             "params": {"name": "echo", "arguments": _CRED_ARG}}
@@ -122,7 +130,7 @@ async def test_fix1_credential_in_args_blocked_under_tag_default():
         resp = await _run_jsonrpc(
             req, body,
             server_config={"transport": "streamable-http"},
-            enabled_info=None,  # → default scan_action "tag"
+            enabled_info={"default_scan_action": "redact"},  # operator-selected enforcing
         )
     data = _decode(resp)
     assert data["result"]["isError"] is True
