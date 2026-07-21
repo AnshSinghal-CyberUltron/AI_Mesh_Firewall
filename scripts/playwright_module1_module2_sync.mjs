@@ -75,7 +75,9 @@ async function main() {
     ]);
     assert(typeof dash?.kpis?.total_events === "number", "dashboard returns total_events KPI");
     assert(dash?.lane_summary && typeof dash.lane_summary === "object", "dashboard returns lane_summary");
-    assert("ueba" in dash.lane_summary && "threat_intel" in dash.lane_summary, "lane_summary includes ueba and threat_intel");
+    // UEBA is a separate Module 2 surface (/api/module2/ueba/*), not a dashboard lane.
+    // Lanes are chat/rag/mcp/vector/threat_intel (see build_lane_summary).
+    assert("threat_intel" in dash.lane_summary && "chat" in dash.lane_summary, "lane_summary includes chat and threat_intel");
     const baselineKillSwitches = dash?.kpis?.active_kill_switches ?? dash?.containment?.active_kill_switches ?? 0;
     report.steps.push("m2-dashboard-load");
     await shot(page, "01-dashboard");
