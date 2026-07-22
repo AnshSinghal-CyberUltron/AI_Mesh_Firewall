@@ -118,12 +118,15 @@ async def test_file_path_only_stays_raw_under_observe_only():
         "email a@b.example beside file /home/x/.ssh/key",   # PII + file path
     ],
 )
-async def test_mixed_unmaskable_fails_closed(text):
-    # redact_all masks the IP/PII but CANNOT mask the private file path; the floor
-    # re-scan blocks on the survivor and that block must PROPAGATE (fail-closed),
-    # not be swallowed into a raw forward.
+async def test_mixed_masked_under_redact(text):
+    # STRICT OPERATOR CONTROL (2026-07-22): redact means redact. The class-scoped
+    # redactor masks the IP/PII AND the private file path, so nothing is forwarded raw
+    # and the call is NOT blocked (block is only for the operator's block posture).
     scanned, blocked, tags, findings, meta = await _floor(text)
-    assert blocked, "mixed maskable+unmaskable leak must fail closed (block)"
+    assert not blocked, "redact must mask, not block"
+    blob = str(scanned)
+    for raw in ("/home/bob/.ssh/id_rsa", "/home/x/.ssh/key", "10.10.5.7"):
+        assert raw not in blob, f"{raw!r} must be masked under redact"
 
 
 def test_findings_have_infra_network_leak_helper():

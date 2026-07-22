@@ -136,16 +136,21 @@ async def _scan_split(i: int):
         {"content": [{"type": "text", "text": "key " + sec[:10]},
                      {"type": "text", "text": sec[10:] + f" call{i}"}]},
         tool_name="fetch", enabled_info=_ENFORCING, org_slug=f"org{i % 10}", server_slug="s", actor=None)
-    return i, blocked, meta.get("cross_block_split_secret")
+    # under redact the split is masked, not blocked; also assert it can't reconstruct.
+    _joined = "".join(b.get("text", "") for b in scanned.get("content", []))
+    assert "AKIAIOSFODNN7EXAMPLE" not in _joined
+    return i, blocked, meta.get("cross_block_split_redacted")
 
 
 @pytest.mark.asyncio
-async def test_concurrent_cross_block_split_all_blocked():
+async def test_concurrent_cross_block_split_all_redacted():
+    # STRICT OPERATOR CONTROL: under redact the split is MASKED (not blocked) on every
+    # concurrent request; the split meta is present as cross_block_split_redacted.
     results = await asyncio.gather(*[_scan_split(i) for i in range(_N)])
-    not_blocked = [i for i, blocked, _cs in results if not blocked]
+    blocked_any = [i for i, blocked, _cs in results if blocked]
     missing_meta = [i for i, _b, cs in results if not cs]
-    assert not not_blocked, f"cross-block split secret NOT blocked under concurrency: {not_blocked[:10]}"
-    assert not missing_meta, f"split-block meta missing under concurrency: {missing_meta[:10]}"
+    assert not blocked_any, f"redact must not block the split: {blocked_any[:10]}"
+    assert not missing_meta, f"split meta missing under concurrency: {missing_meta[:10]}"
 
 
 if __name__ == "__main__":

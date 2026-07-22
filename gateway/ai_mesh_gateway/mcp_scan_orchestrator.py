@@ -28,6 +28,7 @@ from patterns import (
     detect_secrets,
     get_compliance_tags,
     redact_all,
+    redact_all_scoped,
 )
 from policy_engine import apply_field_redaction, apply_redaction, evaluate_mcp_policies
 
@@ -286,6 +287,9 @@ def _is_observe_only_posture(enforcement: str | None) -> bool:
     """
     a = (enforcement or "").strip().lower()
     return a in ("monitor", "tag")
+
+
+_MCP_REDACT_CLASSES = frozenset({"pii", "credential", "ip_leakage"})
 
 
 def _enforce_blocks(enforcement: str) -> bool:
@@ -555,25 +559,14 @@ def _scan_text_tier1_sync(
         if _enforce_blocks(enforcement):
             blocked = True
         elif enforcement == "redact":
-            candidate = redact_all(text)
-            # Egress-byte truth / fail-closed: if ANY detected PII/secret/internal
-            # value survives the scrub VERBATIM, do NOT forward a "redacted" result
-            # that still carries it — block instead (a redact-that-leaks is the
-            # A4-class defect). redact_all masks internal IP/host/URL but NOT private
-            # file paths, and a masker bug could leave a detected value un-scrubbed
-            # (cf. CHG-0054 private-key body). CHG-0057: byte-verify ALL detected
-            # categories, not just ip_leak — the "PII/secret always covered" assumption
-            # is now enforced, not assumed. Standard partial-masked PII (email/ssn/card,
-            # whose raw form is always altered) is never a substring of the scrub, so
-            # this does NOT false-block (verified over the full PII/secret battery).
-            _detected_values = (
-                list(pii.values()) + list(secrets.values())
-                + list(ip_leak.values()) + list(cred_exp.values())  # CHG-0075
-            )
-            if any(v and str(v) in candidate for v in _detected_values):
-                blocked = True
-            else:
-                mutated = candidate
+            # TWO-LAYER STRICT OPERATOR CONTROL (2026-07-22): redact means redact —
+            # MASK (never block, never forward raw). This used to byte-verify the scrub
+            # and ESCALATE redact -> block when a detected value survived (e.g. a file
+            # path). Scoped-all masks EVERY detectable class INCLUDING file paths
+            # (round-1/4 scoped file-path masking), so the value the byte-verify used to
+            # block on is now masked in place and forwarded — the operator chose redact,
+            # not block.
+            mutated = redact_all_scoped(text, _MCP_REDACT_CLASSES)
 
     # CHG-0076: obfuscation-bypass parity with the chat output scanner (G33/G35).
     # detect_secrets folds base64/hex transport, but a SECRET / CREDENTIAL / INTERNAL
@@ -662,8 +655,14 @@ def _scan_text_tier1_sync(
                         matched_kinds=list(_hidden),
                     )
                 )
-                if not _encoded_observe_only:
+                # redact means redact: mask the encoded run best-effort (redact_all
+                # masks the transport/text-encoded forms — see patterns._redact_obfuscated)
+                # and FORWARD. Only ``block`` withholds. (2026-07-22: was block under
+                # redact OR block — an escalation the operator did not select.)
+                if _enforce_blocks(enforcement):
                     blocked = True
+                elif enforcement == "redact":
+                    mutated = redact_all_scoped(text, _MCP_REDACT_CLASSES)
                 break
 
     # CHG-0096: defang zero-click auto-render EXFIL BEACONS in the tool RESULT — parity

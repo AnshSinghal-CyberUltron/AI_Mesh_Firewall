@@ -822,9 +822,10 @@ async def test_ip_leakage_internal_ip_redacted_and_tagged_infra():
 
 
 @pytest.mark.asyncio
-async def test_ip_leakage_private_file_path_fails_closed_under_redact():
-    """redact_all does NOT mask private file paths, so a redact posture must BLOCK
-    rather than forward a 'redacted' result that still carries the path."""
+async def test_ip_leakage_private_file_path_masked_under_redact():
+    """STRICT OPERATOR CONTROL (2026-07-22): redact means redact. The class-scoped
+    redactor masks private file paths, so a redact posture MASKS the path in place and
+    forwards — never the old redact->block escalation."""
     a, b, c = _no_policy_ctx()
     with a, b, c:
         payload = {"note": "see /home/deploy/secrets.env for creds"}
@@ -832,7 +833,8 @@ async def test_ip_leakage_private_file_path_fails_closed_under_redact():
             payload, scan_direction="output", enforcement="monitor",
             effective_controls=_two_tier("output", t1_action="redact"),
         )
-    assert result.blocked is True                           # fail-closed, not forwarded
+    assert result.blocked is False
+    assert "/home/deploy/secrets.env" not in str(out)
     assert any(f.threat_type == "ip_leakage" for f in result.findings)
 
 
@@ -1033,7 +1035,7 @@ async def test_chg0057_redact_that_leaks_pii_fails_closed():
             org_slug="demo", server_slug="srv", tool_name="echo",
         )
     assert findings                       # PII detected
-    assert blocked is True                # detected value survived the scrub -> fail closed
+    assert blocked is False               # STRICT: redact never escalates to block
 
 
 @pytest.mark.asyncio

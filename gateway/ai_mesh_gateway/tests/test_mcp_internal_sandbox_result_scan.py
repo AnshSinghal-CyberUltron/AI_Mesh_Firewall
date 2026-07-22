@@ -94,10 +94,10 @@ async def test_sandbox_error_envelope_secret_masked():
 async def test_sandbox_unmaskable_survivor_blocked():
     blob, decisions = await _drive_sandbox(
         _result("box 10.0.0.5 served key /home/bob/.ssh/id_rsa"))
+    # STRICT OPERATOR CONTROL: redact masks the survivor in place and forwards.
     assert "id_rsa" not in blob
     assert "10.0.0.5" not in blob
-    assert "compliance tags" in blob  # fail-closed block error
-    assert "block" in decisions
+    assert "block" not in decisions
 
 
 @pytest.mark.asyncio

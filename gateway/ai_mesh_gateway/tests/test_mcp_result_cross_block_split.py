@@ -46,20 +46,33 @@ def _blocks(*texts):
 
 
 @pytest.mark.asyncio
-async def test_secret_split_across_two_blocks_blocked():
+async def test_secret_split_across_two_blocks_redacted_under_redact():
+    # STRICT OPERATOR CONTROL (2026-07-22): redact means redact — the split is MASKED
+    # in place (so it cannot be reconstructed) and forwarded, NOT force-blocked.
     scanned, blocked, tags, findings, meta = await _floor(
         _blocks("the key is " + _SEC[:10], _SEC[10:] + " end"))
-    assert blocked is True
-    assert meta.get("cross_block_split_secret") is True
+    assert blocked is False
+    assert meta.get("cross_block_split_redacted") is True
+    assert _SEC not in json.dumps(scanned)   # cannot be reconstructed
     assert "SECRET" in tags
 
 
 @pytest.mark.asyncio
-async def test_secret_split_across_three_blocks_blocked():
+async def test_secret_split_blocked_under_block_posture():
     scanned, blocked, tags, findings, meta = await _floor(
-        _blocks("key " + _SEC[:6], _SEC[6:14], _SEC[14:] + " ok"))
+        _blocks("the key is " + _SEC[:10], _SEC[10:] + " end"),
+        enabled_info={"default_scan_action": "block"})
     assert blocked is True
     assert meta.get("cross_block_split_secret") is True
+
+
+@pytest.mark.asyncio
+async def test_secret_split_across_three_blocks_redacted_under_redact():
+    scanned, blocked, tags, findings, meta = await _floor(
+        _blocks("key " + _SEC[:6], _SEC[6:14], _SEC[14:] + " ok"))
+    assert blocked is False
+    assert meta.get("cross_block_split_redacted") is True
+    assert _SEC not in json.dumps(scanned)
 
 
 @pytest.mark.asyncio

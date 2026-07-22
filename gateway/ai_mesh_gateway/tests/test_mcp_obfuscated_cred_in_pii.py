@@ -64,10 +64,24 @@ _CRED_IN_PII = {
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("name", "val"), list(_CRED_IN_PII.items()))
 @pytest.mark.parametrize("obf", ["htmlent", "zerowidth"])
-async def test_obfuscated_cred_in_pii_blocks(name, val, obf):
+async def test_obfuscated_cred_in_pii_masked_under_redact(name, val, obf):
+    # STRICT OPERATOR CONTROL (2026-07-22): redact means redact. An obfuscated
+    # credential is MASKED under redact (raw gone) and forwarded — NOT force-blocked.
     enc = _ent(val) if obf == "htmlent" else _zw(val)
-    _s, blocked, _t, _f, _m = await _floor(f"note {enc} end")
-    assert blocked, f"obfuscated {name} ({obf}) must block (credential misfiled as PII)"
+    scanned, blocked, _t, _f, _m = await _floor(f"note {enc} end")
+    assert not blocked, f"obfuscated {name} ({obf}) must be masked, not blocked, under redact"
+    assert val not in str(scanned), f"obfuscated {name} raw value must be masked"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("name", "val"), list(_CRED_IN_PII.items()))
+@pytest.mark.parametrize("obf", ["htmlent", "zerowidth"])
+async def test_obfuscated_cred_in_pii_blocked_under_block(name, val, obf):
+    enc = _ent(val) if obf == "htmlent" else _zw(val)
+    _s, blocked, _t, _f, _m = await mcp_proxy._scan_tool_result_floor(
+        f"note {enc} end", tool_name="fetch",
+        enabled_info={"default_scan_action": "block"}, org_slug="o", server_slug="s", actor=None)
+    assert blocked, f"obfuscated {name} ({obf}) must block under the operator's block posture"
 
 
 @pytest.mark.asyncio
@@ -114,19 +128,15 @@ async def test_benign_unchanged(benign):
 
 
 @pytest.mark.asyncio
-async def test_unix_file_path_passes_under_tag_and_fails_closed_under_redact():
-    """A private file path is flag-tier under ``tag`` and fail-closed under ``redact``.
+async def test_unix_file_path_observed_under_tag_masked_under_redact():
+    """A private file path (``file_path_unix``, ip_leakage) is observed under ``tag``
+    and MASKED under ``redact`` — never blocked.
 
-    "Reads a file from /home/user/project and returns its size." used to be a
-    ``test_benign_unchanged`` case run with ``enabled_info=None``. That premise was
-    wrong on two counts: with nothing selected the posture is observe-only ``tag``,
-    where NOTHING is ever mutated or blocked (so it proved nothing about false
-    positives), and the string is not detector-benign — it matches
-    ``file_path_unix`` (ip_leakage). Under an operator-selected ``redact`` posture
-    ``redact_all`` deliberately does not mask private file paths, and
-    ``_scan_text_tier1``'s egress-byte verify blocks rather than forward a
-    "redacted" result that still carries the detected value. Both halves are
-    pinned here so neither can regress silently.
+    STRICT OPERATOR CONTROL (2026-07-22): redact means redact. The MCP redact path
+    uses the class-scoped redactor, which DOES mask file paths (round-1/4 scoped
+    file-path masking), so the path is masked in place and forwarded rather than the
+    old egress-byte redact->block escalation the operator did not select. Under
+    observe-only ``tag`` nothing is mutated or blocked.
     """
     text = "Reads a file from /home/user/project and returns its size."
     payload = {"content": [{"type": "text", "text": text}]}
@@ -137,8 +147,9 @@ async def test_unix_file_path_passes_under_tag_and_fails_closed_under_redact():
     assert not blocked, "observe-only tag must never block"
     assert text in json.dumps(scanned), "observe-only tag must never mutate"
 
-    _s, blocked, _t, _f, _m = await _floor(text)
-    assert blocked, "an unmaskable file path must fail CLOSED under redact"
+    scanned, blocked, _t, _f, _m = await _floor(text)
+    assert not blocked, "redact must mask the file path, not block"
+    assert "/home/user/project" not in json.dumps(scanned), "file path must be masked under redact"
 
 
 if __name__ == "__main__":

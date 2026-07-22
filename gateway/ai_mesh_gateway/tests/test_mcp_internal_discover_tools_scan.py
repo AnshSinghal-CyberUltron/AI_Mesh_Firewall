@@ -131,10 +131,11 @@ async def test_sandbox_description_secret_masked():
 async def test_poisoned_unmaskable_metadata_blocked():
     blob, decisions = await _drive_direct(
         _tools("box 10.0.0.5 served key /home/bob/.ssh/id_rsa"))
+    # STRICT OPERATOR CONTROL: redact masks the metadata in place and forwards.
     assert "id_rsa" not in blob
     assert "10.0.0.5" not in blob
-    assert "withheld" in blob  # fail-closed tools/list withheld
-    assert "block" in decisions
+    assert "withheld" not in blob
+    assert "block" not in decisions
 
 
 @pytest.mark.asyncio

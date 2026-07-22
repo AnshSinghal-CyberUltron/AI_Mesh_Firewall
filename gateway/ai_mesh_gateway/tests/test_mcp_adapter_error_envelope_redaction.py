@@ -186,9 +186,10 @@ async def test_error_envelope_explicit_monitor_does_not_force_redact():
 
 
 @pytest.mark.asyncio
-async def test_error_envelope_unmaskable_survivor_fails_closed():
-    """An error message mixing a maskable secret/IP with an UNMASKABLE private file
-    path fails CLOSED (block) on the error-envelope path — never a raw forward."""
+async def test_error_envelope_survivor_masked_under_redact():
+    """STRICT OPERATOR CONTROL (2026-07-22): redact means redact. An error message
+    mixing a maskable secret/IP with a private file path is MASKED in place (the
+    class-scoped redactor masks both) and forwarded — never the old redact->block."""
     req = _make_request(_auth())
     with patch.object(mcp_proxy, "_mcp_redact_result_on_detect_enabled", return_value=True):
         resp = await _run_adapter_error(
@@ -200,9 +201,6 @@ async def test_error_envelope_unmaskable_survivor_fails_closed():
     blob = json.dumps(decoded)
     assert _RAW_IP not in blob
     assert "/home/bob/.ssh/id_rsa" not in blob
-    # fail-closed => a [BLOCKED] result envelope, isError set
-    assert "[BLOCKED]" in blob
-    assert decoded.get("result", {}).get("isError") is True
 
 
 # ── CHG-0092: tools/LIST adapter error-envelope twin ─────────────────────────

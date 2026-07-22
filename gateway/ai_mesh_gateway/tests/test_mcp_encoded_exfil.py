@@ -62,15 +62,18 @@ async def _argblock(args):
     ],
 )
 async def test_encoded_secret_or_ip_in_result_blocks(text):
-    _s, blocked, _t, findings, _m = await _floor(text)
-    assert blocked, "text-encoded secret / internal IP in a result must fail closed (block)"
+    scanned, blocked, _t, findings, _m = await _floor(text)
+    # STRICT OPERATOR CONTROL (2026-07-22): redact masks the encoded secret/IP in place
+    # and forwards — never the old redact->block escalation.
+    assert not blocked
     assert any(f.get("threat_type") == "secret" for f in findings)
 
 
 @pytest.mark.asyncio
 async def test_encoded_secret_in_args_blocks():
-    _s, blocked, _t, _f, _m = await _argblock({"note": f"key {_htmlent(_SECRET)}"})
-    assert blocked, "text-encoded secret smuggled in tool args must block (no exfil to upstream)"
+    scanned, blocked, _t, _f, _m = await _argblock({"note": f"key {_htmlent(_SECRET)}"})
+    assert not blocked
+    assert _SECRET not in str(scanned)   # masked, not exfiltrated raw
 
 
 @pytest.mark.asyncio

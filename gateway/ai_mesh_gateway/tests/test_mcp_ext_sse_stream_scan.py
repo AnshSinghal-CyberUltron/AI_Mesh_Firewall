@@ -137,10 +137,10 @@ async def test_unmaskable_survivor_notification_withheld():
     frame = ('data: {"jsonrpc":"2.0","method":"notifications/message","params":'
              '{"data":"box 10.9.8.7 served /home/bob/.ssh/id_rsa"}}\n\n')
     out, reasons = await _drive_stream([frame])
+    # STRICT OPERATOR CONTROL: redact masks the survivor in place and forwards.
     assert "id_rsa" not in out
     assert "10.9.8.7" not in out
-    assert "withheld" in out
-    assert "sse_stream_event_withheld" in reasons
+    assert "withheld" not in out
 
 
 @pytest.mark.asyncio

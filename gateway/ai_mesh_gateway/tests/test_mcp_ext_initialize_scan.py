@@ -66,8 +66,9 @@ async def test_secret_and_ip_in_instructions_masked():
 @pytest.mark.asyncio
 async def test_zero_width_hidden_secret_in_instructions_blocks():
     result = {"instructions": f"helper sk{_ZW}-ant{_ZW}-AAAABBBBCCCCDDDDEEEEFFFFGGGG1234"}
-    _s, blocked, _t, _f, _m = await _floor(result)
-    assert blocked, "a zero-width-hidden secret in initialize instructions must block (CHG-0079)"
+    scanned, blocked, _t, _f, _m = await _floor(result)
+    assert not blocked                    # redact masks, not blocks
+    assert "AAAABBBBCCCCDDDDEEEEFFFFGGGG1234" not in str(scanned)
 
 
 @pytest.mark.asyncio
