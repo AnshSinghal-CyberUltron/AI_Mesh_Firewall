@@ -138,7 +138,8 @@ def allow_raw(client, model):
     Session-scoped deliberately: each live round-trip costs real provider tokens and
     ~5-15s. Re-running it per test would be wasteful, not more rigorous.
     """
-    return client.chat.completions.with_raw_response.create(
+    return _live(
+        client.chat.completions.with_raw_response.create,
         model=model,
         messages=[{"role": "user", "content": "Say hi in one word."}],
         max_tokens=8,
@@ -170,6 +171,28 @@ def _err_body(exc: openai.APIStatusError) -> dict:
         return exc.response.json()
     except Exception:  # pragma: no cover - defensive
         return {}
+
+
+def _skip_if_rate_limited(exc: BaseException) -> None:
+    """A 429 is an ENVIRONMENT condition, not a product verdict.
+
+    This org's TPM ceiling is shared — a parallel agent driving the same gateway can
+    exhaust the rolling-minute budget and turn an unrelated security assertion red.
+    Observed exactly that: four §1.2 tests failed in one full-suite run and passed on
+    the next with no code change. Treat it as a skip so a live-dependency outage can
+    never masquerade as a defect.
+    """
+    if isinstance(exc, openai.APIStatusError) and exc.status_code == 429:
+        pytest.skip("org TPM/RPM budget exhausted by concurrent live traffic (429)")
+
+
+def _live(fn, *args, **kwargs):
+    """Run a live SDK call, converting a shared-budget 429 into a skip."""
+    try:
+        return fn(*args, **kwargs)
+    except openai.APIStatusError as exc:
+        _skip_if_rate_limited(exc)
+        raise
 
 
 def _err_message(exc: openai.APIStatusError) -> str:
@@ -302,6 +325,7 @@ def test_s11_tenant_binding_model_outside_org_catalogue_is_rejected(client, mode
             model=UNCONFIGURED_MODEL, messages=[{"role": "user", "content": "hi"}],
         )
     exc = ei.value
+    _skip_if_rate_limited(exc)
     assert exc.status_code in (403, 404), exc.status_code
     assert exc.code == "model_not_configured", exc.code
     assert exc.request_id
@@ -374,7 +398,8 @@ def test_s11_rate_limit_rejection_is_typed_and_retryable(api_key, model):
 
 def test_s11_n_greater_than_one_is_clamped_to_a_single_choice(client, model):
     """ENFORCED: ``n>1`` is clamped — the client receives exactly one choice."""
-    resp = client.chat.completions.create(
+    resp = _live(
+        client.chat.completions.create,
         model=model, messages=[{"role": "user", "content": "hi"}], n=5, max_tokens=8,
     )
     assert len(resp.choices) == 1, (
@@ -388,7 +413,8 @@ def test_s11_clamp_is_disclosed_via_header(client, model):
     A silent mutation would be the real defect — the caller asked for 5 completions and
     got 1. Matches ``test_v3_doc_conformance.py:924``'s stubbed expectation exactly.
     """
-    raw = client.chat.completions.with_raw_response.create(
+    raw = _live(
+        client.chat.completions.with_raw_response.create,
         model=model, messages=[{"role": "user", "content": "hi"}], n=5, max_tokens=8,
     )
     assert len(json.loads(raw.text)["choices"]) == 1, "precondition: clamp actually happened"
@@ -400,7 +426,8 @@ def test_s11_clamp_is_disclosed_via_header(client, model):
 def test_s11_multiple_clamps_are_each_disclosed(client, model):
     """Both mutations must be listed, not just the first — a partial disclosure would
     hide the max_tokens truncation that actually changes the completion."""
-    raw = client.chat.completions.with_raw_response.create(
+    raw = _live(
+        client.chat.completions.with_raw_response.create,
         model=model, messages=[{"role": "user", "content": "hi"}], n=5, max_tokens=500_000,
     )
     clamped = raw.headers.get("X-ZeroShield-Clamped") or ""
@@ -420,6 +447,7 @@ def test_s11_absurd_max_tokens_is_rejected_with_typed_param(client, model):
             model=model, messages=[{"role": "user", "content": "hi"}], max_tokens=9_999_999,
         )
     exc = ei.value
+    _skip_if_rate_limited(exc)
     assert exc.status_code == 400
     assert exc.code == "invalid_max_tokens", exc.code
     assert _err_body(exc)["error"]["param"] == "max_tokens", _err_body(exc)
@@ -431,6 +459,7 @@ def test_s11_absurd_max_tokens_is_rejected_with_typed_param(client, model):
 
 
 def _assert_content_filtered(exc: openai.APIStatusError, label: str) -> None:
+    _skip_if_rate_limited(exc)
     assert exc.status_code == 400, f"{label}: expected 400, got {exc.status_code}"
     assert exc.code == "content_filter", f"{label}: expected code content_filter, got {exc.code!r}"
     assert exc.type == "invalid_request_error", f"{label}: type={exc.type!r}"
@@ -501,6 +530,7 @@ def test_s12_oversized_prompt_is_context_length_exceeded_not_content_filter(clie
             model=model, messages=[{"role": "user", "content": filler}], max_tokens=16,
         )
     exc = ei.value
+    _skip_if_rate_limited(exc)
     assert exc.status_code == 400
     assert exc.code == "context_length_exceeded", (
         f"size rejection surfaced as {exc.code!r}; a client cannot tell it apart from an "
@@ -526,6 +556,7 @@ def _pii_outcome(client, model) -> tuple[str, dict]:
         )
         return "deliver", json.loads(raw.text)
     except openai.APIStatusError as exc:
+        _skip_if_rate_limited(exc)
         return "block", _err_body(exc)
 
 
@@ -595,6 +626,7 @@ def test_s12_block_response_does_not_leak_provider_or_internal_credentials(clien
         client.chat.completions.create(
             model=model, messages=[{"role": "user", "content": INJECTION}], max_tokens=16,
         )
+    _skip_if_rate_limited(ei.value)
     raw = ei.value.response.text
     for needle in ("openrouter.ai", "api_key", "Authorization", "sk-or-", "postgres://",
                    "redis://"):
@@ -607,6 +639,7 @@ def test_s12_block_is_terminal_the_client_gets_no_model_content(client, model):
         client.chat.completions.create(
             model=model, messages=[{"role": "user", "content": INJECTION}], max_tokens=16,
         )
+    _skip_if_rate_limited(ei.value)
     body = _err_body(ei.value)
     assert "choices" not in body, "blocked response must not carry choices"
     trace = body.get("pipeline_trace") or {}
@@ -622,7 +655,8 @@ def test_s12_benign_lookalike_is_not_blocked(client, model):
 
     A firewall that blocks the word 'prompt' is not a firewall, it is an outage.
     """
-    resp = client.chat.completions.create(
+    resp = _live(
+        client.chat.completions.create,
         model=model,
         messages=[{"role": "user", "content":
                    "In one sentence, what does the word 'prompt' mean in everyday English?"}],
@@ -721,7 +755,8 @@ def test_s14_hostile_payload_nested_in_agent_data_is_scanned_and_blocked(client,
 def test_s14_benign_agent_data_is_not_echoed_back_to_the_client(client, model):
     """``agent_data`` / ``mcp_context`` are gateway-side control metadata. They must not
     reappear in the response envelope the client receives."""
-    raw = client.chat.completions.with_raw_response.create(
+    raw = _live(
+        client.chat.completions.with_raw_response.create,
         model=model,
         messages=[{"role": "user", "content": "Say ok."}],
         max_tokens=8,
@@ -867,7 +902,8 @@ def test_s17_allow_path_reports_no_unrequested_mutation(allow_body):
 
 def test_proto_streaming_over_real_sse(client, model):
     """Real chunked ``text/event-stream`` over TCP, consumed by the stock SDK iterator."""
-    stream = client.chat.completions.create(
+    stream = _live(
+        client.chat.completions.create,
         model=model, messages=[{"role": "user", "content": "Count to three."}],
         max_tokens=24, stream=True,
     )
@@ -895,6 +931,8 @@ def test_proto_stream_terminates_with_zeroshield_frame_then_done(api_key, model)
               "max_tokens": 24, "stream": True},
         timeout=LIVE_TIMEOUT,
     ) as r:
+        if r.status_code == 429:
+            pytest.skip("org TPM/RPM budget exhausted by concurrent live traffic (429)")
         assert r.status_code == 200, r.read()[:300]
         assert r.headers["content-type"].startswith("text/event-stream"), r.headers
         assert r.headers.get("x-accel-buffering") == "no", "proxy buffering not disabled"
@@ -940,10 +978,14 @@ async def test_proto_async_client_reaches_the_same_verdicts(api_key, model):
         base_url=f"{GATEWAY_URL}/v1", api_key=api_key, max_retries=0, timeout=LIVE_TIMEOUT,
     )
     try:
-        ok = await c.chat.completions.create(
-            model=model, messages=[{"role": "user", "content": "Say hi in one word."}],
-            max_tokens=8,
-        )
+        try:
+            ok = await c.chat.completions.create(
+                model=model, messages=[{"role": "user", "content": "Say hi in one word."}],
+                max_tokens=8,
+            )
+        except openai.APIStatusError as exc:
+            _skip_if_rate_limited(exc)
+            raise
         assert (ok.choices[0].message.content or "").strip()
 
         with pytest.raises(openai.APIStatusError) as ei:
@@ -962,10 +1004,15 @@ async def test_proto_async_streaming_yields_content(api_key, model):
     try:
         text = ""
         n = 0
-        async for ch in await c.chat.completions.create(
-            model=model, messages=[{"role": "user", "content": "Count to three."}],
-            max_tokens=24, stream=True,
-        ):
+        try:
+            stream = await c.chat.completions.create(
+                model=model, messages=[{"role": "user", "content": "Count to three."}],
+                max_tokens=24, stream=True,
+            )
+        except openai.APIStatusError as exc:
+            _skip_if_rate_limited(exc)
+            raise
+        async for ch in stream:
             n += 1
             if ch.choices:
                 text += ch.choices[0].delta.content or ""
@@ -987,6 +1034,7 @@ def test_proto_every_response_carries_a_correlatable_request_id(allow_raw, clien
             model=model, messages=[{"role": "user", "content": INJECTION}], max_tokens=8,
         )
     exc = ei.value
+    _skip_if_rate_limited(exc)
     assert exc.request_id.startswith("zs-")
     assert _err_body(exc)["request_id"] == exc.request_id
     assert exc.request_id != rid, "request ids must be unique per request"
