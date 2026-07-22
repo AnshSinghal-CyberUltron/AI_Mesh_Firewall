@@ -59,13 +59,28 @@ def _ext_client(resp):
     return c
 
 
-async def _drive_stream(frames, *, method="resources/subscribe", extra_patches=()):
+def _ext_enforcing(action="redact"):
+    """The org owning this ext-proxy call has selected an ENFORCING posture.
+
+    The transparent external proxy has no registered server/tool, so its posture comes
+    from the ORG-level ``FirewallConfig.mcp_ext_scan_action`` knob resolved by
+    ``_ext_proxy_enabled_info``. Unset / "tag" / unreachable resolves to observe-only
+    (detect + tag, never mutate), so the masking/withhold assertions below must state
+    the operator's selection explicitly.
+    """
+    return patch.object(mcp_proxy, "_ext_proxy_enabled_info",
+                        return_value={"default_scan_action": action})
+
+
+async def _drive_stream(frames, *, method="resources/subscribe", extra_patches=(),
+                        posture=_ext_enforcing):
     req = SimpleNamespace(
         method="POST", headers={"content-type": "application/json"}, query_params={},
         body=AsyncMock(return_value=json.dumps(
             {"jsonrpc": "2.0", "id": 1, "method": method, "params": {"uri": "x"}}).encode()))
     audit = AsyncMock()
     mgrs = [
+        posture(),
         patch.object(mcp_proxy, "_record_gateway_event", audit),
         patch.object(mcp_proxy, "is_safe_outbound_url", return_value=(True, "")),
         patch.object(mcp_proxy, "_mcp_org_rate_limit_raw", AsyncMock(return_value=None)),
@@ -177,6 +192,25 @@ async def test_under_cap_stream_completes_normally():
     assert "stream closed: resource limit" not in out
     assert "sse_stream_limit_exceeded" not in reasons
     assert out.count("notifications/progress") == 5  # all events streamed
+
+
+@pytest.mark.asyncio
+async def test_observe_only_posture_does_not_mask_stream():
+    """OPERATOR SOVEREIGNTY twin of ``test_notification_with_secret_is_masked_in_stream``.
+
+    An org that selected "Tag only" (or has not chosen) gets per-event detection and the
+    ``sse_stream_scanned`` audit, but the streamed frames are never mutated.
+
+    NOTE: this currently passes vacuously — ``stream_gen()`` does not forward
+    ``_ext_posture`` to ``_scan_reframe_sse_tool_result``, so this path is observe-only
+    under EVERY posture (reported to the team lead). Once that is fixed this test keeps
+    the observe-only half honest.
+    """
+    frame = ('data: {"jsonrpc":"2.0","method":"notifications/message","params":'
+             '{"data":"key AKIAIOSFODNN7EXAMPLE ok"}}\n\n')
+    out, reasons = await _drive_stream([frame], posture=lambda: _ext_enforcing("tag"))
+    assert "AKIAIOSFODNN7EXAMPLE" in out      # observe-only: detected, never masked
+    assert "sse_stream_scanned" in reasons    # ...but the scan still ran and audited
 
 
 if __name__ == "__main__":

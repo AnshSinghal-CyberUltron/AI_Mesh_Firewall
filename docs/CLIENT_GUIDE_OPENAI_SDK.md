@@ -62,7 +62,7 @@ client = openai.AsyncOpenAI(base_url="https://your-zeroshield-host/v1", api_key=
 |---|---|---|
 | `/v1/chat/completions` | `client.chat.completions.create` | Full firewall |
 | `/v1/embeddings` | `client.embeddings.create` | Full firewall |
-| `/v1/responses` | `client.responses.create` / `.retrieve` / `.input_items` | Full firewall (adapts onto the chat pipeline) |
+| `/v1/responses` | `client.responses.create` / `.retrieve` / `.input_items` | Full firewall (adapts onto the chat pipeline). **`.retrieve()` / `.input_items` require `store=True` on create** — see §14 |
 | `/v1/models` | `client.models.list` / `.retrieve` | Org- and key-scoped |
 | `/v1/completions` | `client.completions.create` | Legacy completion |
 | `/v1/moderations` | `client.moderations.create` | Supported |
@@ -89,8 +89,13 @@ Without changing a line beyond the two above, every request is:
 
 ## 3. Reading the ZeroShield verdict
 
-Every successful response carries an extra `zeroshield` object. The OpenAI SDK preserves
-unknown fields on `model_extra`.
+Every successful **chat**, **completion** and **Responses** call carries an extra
+`zeroshield` object. The OpenAI SDK preserves unknown fields on `model_extra`.
+
+> `/v1/embeddings` and `/v1/moderations` return the **stock OpenAI shape with no
+> `zeroshield` key** — they are still fully firewalled (scanning, blocked-keywords and
+> budgets all apply), the verdict simply is not attached to the response body. Use
+> `.get("zeroshield", {})` rather than `["zeroshield"]` if your code path can see them.
 
 ```python
 resp = client.chat.completions.create(model="gpt-4o-mini", messages=[...])
@@ -168,6 +173,8 @@ except openai.NotFoundError:                  # 404 — unknown model or unimple
     ...
 except openai.RateLimitError as e:            # 429 — honour Retry-After
     ...
+except openai.InternalServerError:            # 500 — genuine internal fault
+    ...                                       # incl. a CORRUPT stored credential
 except openai.APITimeoutError:
     ...
 except openai.APIConnectionError:
@@ -376,6 +383,41 @@ your response envelope. Ask your ZeroShield operator if you need the configured 
 Compliance tagging (PII / IP / regulated data) is applied and recorded to your organisation's
 audit trail. Those tags are **operator-side**; they are not returned in the client envelope.
 
+### MCP tool results: what your operator's scan action means
+
+If your application consumes **MCP tool results** through ZeroShield, the amount of
+*mutation* applied to those results is a deliberate operator choice, and the **server
+default does not mutate**. This is a product contract, not an implementation detail, so it
+is worth knowing before you build on it.
+
+| Scan action | Detects & tags | Mutates / blocks the result |
+|---|---|---|
+| `tag` — **the server default** | Yes | **No** |
+| `monitor` | Yes | **No** |
+| `redact` | Yes | Yes — masks the offending span |
+| `block` | Yes | Yes — withholds the result |
+
+Under `tag` / `monitor` the scan still runs and still records findings — your operator sees
+every detection in their audit trail — but the tool result is delivered **exactly as the
+upstream MCP server returned it**. Nothing is masked and nothing is withheld.
+
+The reasoning is that ZeroShield never enforces an action the operator did not select.
+"Tag only" means observe only.
+
+**What this means for you as a client:**
+
+- Do **not** assume MCP tool-result content has been sanitized. On a default deployment it
+  has not been. Treat it as third-party data.
+- In particular, a tool result can contain a **zero-click exfiltration beacon** — a
+  markdown image or `<img>` whose URL smuggles data, which auto-fetches the moment your UI
+  renders it. Under `tag` that beacon is *detected and recorded* but still delivered.
+- If your application renders MCP results as markdown or HTML, either ask your operator to
+  select `redact` / `block`, or defang untrusted markup in your own renderer.
+
+> This is specific to the MCP surface. The ordinary chat path (`/v1/chat/completions`)
+> defangs exfiltration beacons in model output **unconditionally**, under every output
+> posture — the two surfaces have different contracts on purpose.
+
 ---
 
 ## 9. §1.5 Multi-model governance & routing
@@ -456,11 +498,15 @@ violations and hallucination risk — across **every** channel the SDK exposes, 
 
 | Operator action | You observe |
 |---|---|
-| `block` | `openai.BadRequestError`, `code=output_blocked` — nothing delivered |
+| `block` | `openai.BadRequestError` — nothing delivered. `e.code` is `content_filter`; the ZeroShield-specific `output_blocked` is the **top-level** `code` in the body, not `e.code` |
 | `redact` | `200` with the sensitive span masked in place |
 | `rewrite` | `200` with a safe replacement answer |
 | `flag` | `200` delivered, recorded as an incident |
 | `human_review` | `200` delivered, plus `X-ZeroShield-Review-Required: true` (header only — not in the envelope) |
+
+> These headers exist only when your operator has the output guard enabled. If output
+> scanning is turned off the whole family is absent — treat them as present-or-missing,
+> not as always-present.
 
 ```python
 r = client.chat.completions.with_raw_response.create(...)
@@ -524,7 +570,7 @@ Notes:
 | Header | Meaning |
 |---|---|
 | `x-request-id` | Correlation id (matches `zeroshield.request_id`) |
-| `x-ratelimit-limit-tokens` / `-remaining-tokens` / `-reset-tokens` | Token budget |
+| `x-ratelimit-limit-tokens` / `-remaining-tokens` / `-reset-tokens` | Token budget — **only when your key carries a non-zero ceiling** |
 | `x-ratelimit-limit-requests` / `-remaining-requests` / `-reset-requests` | Request budget |
 | `X-ZeroShield-Action` | Output delivery action |
 | `X-ZeroShield-Matched-Patterns` | Detectors that fired |
@@ -533,7 +579,8 @@ Notes:
 | `X-ZeroShield-Factuality-Warning` | Hallucination risk flagged |
 | `X-ZeroShield-Clamped` | Request params rewritten, e.g. `n=5->1` |
 | `X-ZeroShield-Routed-Model` / `-Original-Model` / `-Rerouted` | Routing outcome |
-| `X-ZeroShield-Routing-Reason` / `-Routing-Source` / `-Routing-Policy-Summary` | Why |
+| `X-ZeroShield-Routing-Reason` / `-Routing-Source` | Why a model was chosen |
+| `X-ZeroShield-Routing-Policy-Summary` | **Operator-enabled only** — emitted solely when your operator sets `stream_emit_debug_headers` (default off). Do not depend on it |
 | `X-ZeroShield-RAG-Context-ID` | Correlates a RAG retrieval to its generation |
 
 ### Status codes
@@ -545,6 +592,7 @@ Notes:
 | 403 | Disabled/expired key, denied action or model, unsatisfiable compliance | `PermissionDeniedError` |
 | 404 | Unknown model, unimplemented surface | `NotFoundError` |
 | 429 | Rate/token limit | `RateLimitError` |
+| 500 | Genuine internal fault, incl. a corrupt stored credential | `InternalServerError` |
 | 503 | Kill-switch active, policy cache unavailable | `APIStatusError` |
 
 ---
@@ -563,12 +611,26 @@ Stated so you can design around them rather than discover them.
   forwarded but are **not** subject to ZeroShield's collection ACL. Use `/v1/rag/query` for
   governed retrieval.
 - **Context minimization is off by default** (`0` = unlimited). Set `max_context_tokens` on
-  the key or org to enable it; `zeroshield.routing.context_minimization_active` tells you
-  whether it is on.
+  the key or org to enable it. (The resolved budget is reported on the **operator**
+  telemetry channel, not in your response envelope — see §8.)
 - **Hallucination scoring needs retrieved context.** On a plain chat call with no RAG
   context there is nothing to ground against, so the hallucination action will not fire.
 - **Nested agent/MCP context is bounded** (depth and node count). Oversized context is
   refused rather than partially scanned — send less, or pre-summarise.
+- **MCP tool results are not mutated on a default deployment.** The server-default scan
+  action is `tag` = detect-and-record, never modify. Your operator must select
+  `redact`/`block` for MCP results to be sanitized. See §8 — this includes zero-click
+  exfiltration beacons in tool results. The chat path is unaffected and always defangs.
+- **The Responses API does not persist by default.** OpenAI's Responses API stores
+  server-side unless you opt out; ZeroShield stores only when you pass `store=True`. If you
+  omit it, `client.responses.retrieve(...)` and `.input_items(...)` raise
+  `openai.NotFoundError` (`response_not_found`). Pass `store=True` on `create` if you
+  intend to retrieve later:
+
+  ```python
+  r = client.responses.create(model="gpt-4o-mini", input="hi", store=True)
+  client.responses.retrieve(r.id)      # works
+  ```
 
 ### Getting support
 

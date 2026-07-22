@@ -45,6 +45,22 @@ def _with_snippet(payload: dict, snippet: str) -> dict:
     return out
 
 
+def _with_governance(payload: dict, result: dict) -> dict:
+    """Carry the gateway's response-header governance signals onto a hand-built payload.
+
+    Handlers that return the client result verbatim get these for free; the ones that
+    reshape it (routing, RAG, MCP context, files) used to drop them, so the quota /
+    clamp / review strip went blank on those tabs and read as "nothing to report"
+    rather than "not forwarded".
+    """
+    out = dict(payload)
+    out["governance_headers"] = result.get("governance_headers") or {}
+    for k in ("refusal_kind", "error_code"):
+        if result.get(k):
+            out[k] = result[k]
+    return out
+
+
 def _routing_prefs_for_model(model: str, **extra: Any) -> dict[str, Any]:
     """Gateway requires enable_routing for literal model='auto' to resolve."""
     prefs: dict[str, Any] = dict(extra)
@@ -247,7 +263,9 @@ def route(req: RouteReq, user: dict = Depends(demo_auth.require_user)):
         max_tokens=400,
     )
     return _with_snippet(
-        {"output_text": r["content"], "model": r["model"], "trace": r["trace"]},
+        _with_governance(
+            {"output_text": r["content"], "model": r["model"], "trace": r["trace"]}, r
+        ),
         snippets.route_snippet(req.input, req.model, prefs),
     )
 
@@ -359,7 +377,7 @@ def rag_query(req: RagQueryReq, user: dict = Depends(demo_auth.require_user)):
     ]
     r = zs.chat(client, messages, model=req.model, max_tokens=500, extra_body=extra)
     return _with_snippet(
-        {
+        _with_governance({
             "content": r["content"],
             "model": r["model"],
             "retrieved": [
@@ -377,7 +395,7 @@ def rag_query(req: RagQueryReq, user: dict = Depends(demo_auth.require_user)):
                 "collection": res.get("collection"),
                 "scan_verdict": res.get("scan_verdict"),
             },
-        },
+        }, r),
         snip,
     )
 
@@ -448,6 +466,48 @@ def _control_post(user: dict, path: str, body: dict, *, timeout: float = 90.0) -
     return resp.status_code, data
 
 
+# MCP scan posture is STRICTLY operator-selected. Only these actions cause the
+# firewall to change or refuse a tool result; every other value (including the
+# server default `tag`, and `monitor`) DETECTS and TAGS but passes the payload
+# through untouched. Showing a bare `decision: allow` without this context reads as
+# "the firewall inspected and approved it", which is not what an observe-only
+# posture means — hence the posture travels with every MCP response below.
+_ENFORCING_MCP_ACTIONS = {"redact", "block"}
+
+
+def _mcp_posture(user: dict) -> dict:
+    """The org's MCP scan posture, as configured — never assumed.
+
+    An unreadable/absent setting is reported as observe-only rather than guessed:
+    claiming enforcement we could not confirm is the failure mode that matters.
+    """
+    action = ""
+    try:
+        cfg = _control_get(user, "/api/firewall/config/", timeout=15.0)
+        if isinstance(cfg, dict):
+            action = str(cfg.get("mcp_ext_scan_action") or "").strip().lower()
+    except HTTPException:
+        action = ""
+    enforcing = action in _ENFORCING_MCP_ACTIONS
+    if enforcing:
+        note = (
+            f"MCP scan posture is '{action}' — the firewall ENFORCES on findings: "
+            "a flagged tool result is modified or refused before you see it."
+        )
+    elif action:
+        note = (
+            f"MCP scan posture is '{action}' — detect-and-tag only. Findings are "
+            "recorded and surfaced, but the tool result below is passed through "
+            "UNMODIFIED. Set the posture to 'redact' or 'block' to enforce."
+        )
+    else:
+        note = (
+            "MCP scan posture is not configured — observe-only. Nothing is modified "
+            "or blocked. Set it to 'redact' or 'block' to enforce."
+        )
+    return {"action": action or "unset", "enforcing": enforcing, "note": note}
+
+
 def _sort_mcp_servers(servers: list[dict]) -> list[dict]:
     def _key(s: dict) -> tuple:
         connected = str(s.get("connection_status") or "").lower() == "connected"
@@ -491,7 +551,7 @@ def mcp_query(req: McpReq, user: dict = Depends(demo_auth.require_user)):
         else None
     )
     return _with_snippet(
-        {
+        _with_governance({
             "content": r["content"],
             "model": r["model"],
             "context_used": req.context,
@@ -500,7 +560,7 @@ def mcp_query(req: McpReq, user: dict = Depends(demo_auth.require_user)):
             "context_firewall_action": _act,
             "context_note": _note,
             "trace": r["trace"],
-        },
+        }, r),
         snippets.mcp_snippet(req.input, req.context, req.model, extra_body=extra),
     )
 
@@ -512,7 +572,7 @@ def mcp_servers(user: dict = Depends(demo_auth.require_user)):
     if not isinstance(rows, list):
         rows = []
     servers = _sort_mcp_servers([r for r in rows if isinstance(r, dict)])
-    return {"servers": servers, "count": len(servers)}
+    return {"servers": servers, "count": len(servers), "posture": _mcp_posture(user)}
 
 
 @app.get("/api/mcp/servers/{server_id}/tools")
@@ -540,6 +600,10 @@ def mcp_tools_call(req: McpToolCallReq, user: dict = Depends(demo_auth.require_u
     decision = None
     if isinstance(data, dict):
         decision = data.get("decision") or data.get("action") or (data.get("scan") or {}).get("decision")
+    posture = _mcp_posture(user)
+    # `decision: allow` under an observe-only posture does NOT mean "scanned and
+    # cleared" — it means nothing was going to be enforced either way. Say so.
+    enforced = posture["enforcing"] and str(decision or "").lower() in ("block", "redact")
     return _with_snippet(
         {
             "status_code": status_code,
@@ -547,6 +611,13 @@ def mcp_tools_call(req: McpToolCallReq, user: dict = Depends(demo_auth.require_u
             "tool_name": req.name,
             "arguments": req.arguments,
             "decision": decision,
+            "posture": posture,
+            "result_enforced": enforced,
+            "result_note": (
+                posture["note"] if not posture["enforcing"]
+                else f"Posture '{posture['action']}' enforces; this call's decision was "
+                     f"'{decision or 'allow'}'."
+            ),
             "result": data,
         },
         snip,
@@ -637,7 +708,7 @@ async def files_analyze(
         extra_body=extra,
     )
     return _with_snippet(
-        {
+        _with_governance({
             "filename": file.filename,
             "extracted_chars": len(text),
             "content": r["content"],
@@ -648,7 +719,7 @@ async def files_analyze(
             "message": r.get("message") or (r.get("trace") or {}).get("guard_reason")
                 or (r.get("trace") or {}).get("detail") or "",
             "category": r.get("category") or (r.get("trace") or {}).get("threat_type") or "",
-        },
+        }, r),
         snippets.files_snippet(instruction, model, extra_body=extra),
     )
 

@@ -125,7 +125,8 @@
 
           <div class="mcp-section" data-testid="mcp-tool-section">
             <h3>Tool execution <span class="sub">server + tool via gateway</span></h3>
-            <p class="hint">Pick a registered org MCP server and tool (same control API as the console Guardrail Simulator). Live invoke runs through the gateway sandbox with scan/redact/block.</p>
+            <p class="hint">Pick a registered org MCP server and tool (same control API as the console Guardrail Simulator). Live invoke runs through the gateway sandbox and is scanned; whether a finding is <em>enforced</em> depends on the org's MCP scan posture, shown below.</p>
+            <p class="hint tiny" id="mcp-posture" data-testid="mcp-posture" aria-live="polite"></p>
             <div class="row">
               <label class="field-label">Server
                 <select id="mcp-server" data-testid="mcp-server" aria-label="MCP server"></select>
@@ -218,6 +219,7 @@
       <div id="pipeline-latency" class="pipeline-latency" data-testid="pipeline-latency"></div>
       <div class="vz-meta" id="vz-meta"></div>
       <div class="vz-obs" id="vz-obs" data-testid="vz-obs"></div>
+      <div class="vz-obs" id="vz-gov" data-testid="vz-gov" hidden></div>
     </section>
   </div>
 

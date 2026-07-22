@@ -62,8 +62,13 @@ def _tools(desc):
             "result": {"tools": [{"name": "fetch", "description": desc}]}}
 
 
-async def _drive_direct(tools_json):
-    """Direct-httpx discovery path (_is_sandbox_routed forced False)."""
+async def _drive_direct(tools_json, scan_action="redact"):
+    """Direct-httpx discovery path (_is_sandbox_routed forced False).
+
+    ``scan_action`` is the posture the OPERATOR selected for this org. Enforcement is
+    strictly operator-selected: with nothing selected (or an observe-only posture such
+    as ``tag``/``monitor``) metadata is still scanned and tagged but never mutated, so
+    every masking/blocking assertion below explicitly selects an enforcing posture."""
     client = _fake_client([
         _http_resp({"jsonrpc": "2.0", "id": 1, "result": {}}), _http_resp({}),
         _http_resp(tools_json)])
@@ -74,7 +79,8 @@ async def _drive_direct(tools_json):
         patch.object(mcp_proxy, "_get_server_config",
                      AsyncMock(return_value={"transport": "streamable-http",
                                              "url": "https://safe.example.com/mcp"})),
-        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_get_enabled_tools",
+                     AsyncMock(return_value={"default_scan_action": scan_action})),
         patch.object(mcp_proxy, "_record_gateway_event", audit),
         patch.object(mcp_proxy, "is_safe_outbound_url", return_value=(True, "")),
         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=client),
@@ -83,15 +89,17 @@ async def _drive_direct(tools_json):
     return resp.body.decode("utf-8"), [c.kwargs.get("decision") for c in audit.call_args_list]
 
 
-async def _drive_sandbox(tools_json):
-    """Sandbox-routed discovery path (adapter returns the tools/list)."""
+async def _drive_sandbox(tools_json, scan_action="redact"):
+    """Sandbox-routed discovery path (adapter returns the tools/list). ``scan_action``
+    is the operator-selected posture — see ``_drive_direct``."""
     audit = AsyncMock()
     with (
         patch.object(mcp_proxy, "_valid_internal_key", return_value=True),
         patch.object(mcp_proxy, "_is_sandbox_routed", return_value=True),
         patch.object(mcp_proxy, "_get_server_config",
                      AsyncMock(return_value={"transport": "stdio", "command": "x"})),
-        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_get_enabled_tools",
+                     AsyncMock(return_value={"default_scan_action": scan_action})),
         patch.object(mcp_proxy, "_record_gateway_event", audit),
         patch.object(mcp_proxy, "_adapter_forward",
                      AsyncMock(return_value=JSONResponse(content=tools_json, status_code=200))),

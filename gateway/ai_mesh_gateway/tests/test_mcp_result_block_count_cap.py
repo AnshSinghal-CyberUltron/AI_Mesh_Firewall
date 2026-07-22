@@ -24,7 +24,16 @@ if _SHARED.is_dir() and str(_SHARED) not in sys.path:
 import mcp_proxy  # noqa: E402
 
 
-async def _floor(result, *, enabled_info=None):
+# STRICT OPERATOR CONTROL (2026-07-21): the resource-limit fail-closed guards and the
+# E12 result-redaction floor are static hardening floors — they fire only under an
+# operator-selected ENFORCING posture. The default here used to be ``None``, which
+# resolves to observe-only ``tag`` (detect + tag, never mutate, never block); the
+# observe-only half of the contract is asserted by the tests that pass ``monitor``
+# explicitly. Enforcing cases now select ``redact``.
+_ENFORCING = {"default_scan_action": "redact"}
+
+
+async def _floor(result, *, enabled_info=_ENFORCING):
     return await mcp_proxy._scan_tool_result_floor(
         result, tool_name="fetch", enabled_info=enabled_info,
         org_slug="o", server_slug="s", actor=None)

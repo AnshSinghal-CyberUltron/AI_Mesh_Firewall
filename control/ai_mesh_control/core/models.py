@@ -1123,6 +1123,27 @@ class FirewallConfig(models.Model):
             "None = inherit gateway default; True/False = explicit override."
         ),
     )
+    # Transparent external MCP proxy posture. That surface is transport-level:
+    # the gateway knows the org but there is no per-server scan-control row to
+    # select an action on, so the operator picks the posture here. Default is
+    # "tag" (observe-only) because we never enforce anything the operator did
+    # not explicitly choose.
+    mcp_ext_scan_action = models.CharField(
+        max_length=16,
+        choices=[
+            ("tag", "Tag only (observe, never mutate)"),
+            ("redact", "Redact"),
+            ("block", "Block"),
+        ],
+        default="tag",
+        help_text=(
+            "Action applied to traffic through the transparent external MCP "
+            "proxy (/v1/mcp/ext-proxy/<host>). 'tag' ENFORCES NOTHING: findings "
+            "are detected, tagged and emitted, but the payload is never mutated "
+            "and the call is never blocked. Choose 'redact' or 'block' to "
+            "actually enforce on this surface."
+        ),
+    )
     # tier2_strict controls behavior when Tier-2 is unavailable (circuit
     # breaker OPEN, Bedrock degraded, etc.). Per Security Hawk F5 override,
     # default is True: refuse the request with HTTP 451 reason_code
@@ -1428,6 +1449,7 @@ class FirewallConfig(models.Model):
             # distinguish "no per-org opinion" from "explicit False".
             "tier2_enabled": self.tier2_enabled,
             "mcp_tier2_enabled": self.mcp_tier2_enabled,
+            "mcp_ext_scan_action": self.mcp_ext_scan_action,
             "tier2_strict": self.tier2_strict,
             "prompt_injection_threshold": self.prompt_injection_threshold,
             "output_scan_enabled": self.response_filtering_enabled,

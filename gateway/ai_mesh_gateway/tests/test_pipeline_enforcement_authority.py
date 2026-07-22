@@ -206,11 +206,21 @@ class EnforceOutputTests(unittest.TestCase):
         d = enforce_output(verdict_action="redact")
         self.assertEqual(d.action, "redact")
 
-    def test_pii_block_becomes_redact_d14(self):
-        """PIPELINE-0014: maskable PII block verdict → redact on output path."""
+    def test_pii_block_verdict_stays_block(self):
+        """FULL OPERATOR CONTROL: block means BLOCK, even for maskable PII.
+
+        PREMISE REWRITTEN (was ``test_pii_block_becomes_redact_d14``): it asserted the
+        PIPELINE-0014 "maskable PII block verdict → redact" output-guard floor. That
+        floor was REMOVED (commit 268f0f92) because it silently downgraded an action the
+        operator explicitly selected, making "block" indistinguishable from "redact" in
+        the UI and the pipeline trace. The operator is the sole owner of their org's
+        actions — selecting block whole-response-blocks; selecting redact masks in place.
+        Matches test_pipeline_output_redact.py::test_pii_block_verdict_stays_block.
+        """
         d = enforce_output(verdict_action="block", verdict_threat_type="pii")
-        self.assertEqual(d.action, "redact")
-        self.assertFalse(d.is_terminal_block)
+        self.assertEqual(d.action, "block")
+        self.assertTrue(d.is_terminal_block)
+        self.assertEqual(d.blocked_by, "output_guard")
 
     def test_redact_noop_fails_closed(self):
         d = enforce_output(

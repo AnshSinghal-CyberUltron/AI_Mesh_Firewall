@@ -35,14 +35,21 @@ def _htmlent(s: str) -> str:
     return "".join(f"&#{ord(c)};" for c in s)
 
 
+# STRICT OPERATOR CONTROL (2026-07-21): the encoded-exfil fail-closed block and the
+# E12 result-redaction floor are static hardening floors — they fire only under an
+# operator-selected ENFORCING posture. These helpers used to pass ``enabled_info=None``,
+# which resolves to observe-only ``tag`` (detect + tag, never mutate, never block).
+_ENFORCING = {"default_scan_action": "redact"}
+
+
 async def _floor(text):
     return await mcp_proxy._scan_tool_result_floor(
-        text, tool_name="fetch", enabled_info=None, org_slug="o", server_slug="s", actor=None)
+        text, tool_name="fetch", enabled_info=_ENFORCING, org_slug="o", server_slug="s", actor=None)
 
 
 async def _argblock(args):
     return await mcp_proxy._scan_tool_args_block(
-        args, tool_name="fetch", enabled_info=None, org_slug="o", server_slug="s", actor=None)
+        args, tool_name="fetch", enabled_info=_ENFORCING, org_slug="o", server_slug="s", actor=None)
 
 
 @pytest.mark.asyncio
@@ -80,7 +87,10 @@ async def test_raw_secret_still_masked_not_blocked():
     scanned, blocked, _t, _f, meta = await _floor(f"token {_SECRET}")
     assert not blocked
     assert _SECRET not in str(scanned)
-    assert meta.get("result_redaction_floor")
+    # ``meta["result_redaction_floor"]`` is NOT asserted: it marks the E12 RE-SCAN
+    # floor, which only fires when the first pass left the result unmutated. Under the
+    # explicit ``redact`` posture the first pass masks inline, so the flag is
+    # legitimately absent — the contract is the egress bytes above.
 
 
 @pytest.mark.asyncio

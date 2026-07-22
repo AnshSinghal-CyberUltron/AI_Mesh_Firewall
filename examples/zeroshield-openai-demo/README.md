@@ -49,10 +49,51 @@ uvicorn main:app --port 8770
   proxies MCP **server/tool catalog + tools/call** through control so the UI can
   pick a registered server (keys never leave the demo server)
 
+## What the firewall did — and did not do
+
+The demo reports governance faithfully, including when the answer is "nothing was
+enforced". Two surfaces exist for this:
+
+**Governance signals strip** — the gateway sends some verdicts as *response headers*
+rather than body fields. The demo reads them off the stock SDK's
+`.with_raw_response` accessor (same call, no extra request) and renders only what
+actually arrived:
+
+| Header | Meaning | When it appears |
+|---|---|---|
+| `x-ratelimit-limit-tokens` / `-remaining-tokens` / `-reset-tokens` | token quota | only when the key carries a non-zero ceiling |
+| `x-ratelimit-limit-requests` / `-remaining-requests` / `-reset-requests` | request quota | only when an RPM ceiling is set |
+| `x-zeroshield-clamped` | params the gateway silently rewrote, e.g. `n=5->1,max_tokens=9999->4096` | only when a clamp fired |
+| `x-zeroshield-review-required` | operator configured `human_review`; verdict normalises to `flag` | only when such a detector fired |
+
+An empty strip means *the gateway sent no such header* — never "all clear".
+
+**Refusal kind.** Not every non-2xx is a security verdict. The demo separates them by
+the OpenAI error code, because `context_length_exceeded` and `content_filter` are both
+HTTP 400 with the same `"Request blocked due to security policy"` message:
+
+| `error.code` | shown as | category |
+|---|---|---|
+| `content_filter` | blocked by security policy | `policy_violation` |
+| `context_length_exceeded` | refused on **size**, not content | `dos` |
+| `rate_limit_exceeded` | refused on **quota**, not content | — |
+
 ## MCP: context vs tools
 
 The **MCP Context** tab injects `extra_body.mcp_context` into chat (firewall
 scans structured CRM JSON). That is **not** MCP protocol tool selection.
+
+### MCP scan posture is operator-selected — the demo shows which one is active
+
+MCP enforcement is *strictly* operator-selected. `tag` (the **server default**) and
+`monitor` DETECT and TAG findings but never modify or block; only `redact` and `block`
+enforce. So a tool result marked `decision: allow` under a `tag` posture has **not**
+been sanitized — nothing was going to be enforced either way.
+
+The Tool execution panel states the org's live posture (from control's
+`mcp_ext_scan_action`) and repeats it on every result, rather than letting a bare
+`decision: allow` imply an approval. An unreadable or unset posture is reported as
+observe-only — never assumed to be enforcing.
 
 To pick a **specific MCP server and tool**, use the same tab’s **Tool execution**
 section, the main console Guardrail Simulator, or the gateway JSON-RPC URL

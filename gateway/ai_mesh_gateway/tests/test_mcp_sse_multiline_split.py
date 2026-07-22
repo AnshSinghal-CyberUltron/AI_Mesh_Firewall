@@ -33,9 +33,19 @@ _IP = "10.9.8.7"                     # RFC1918 → INFRA
 _SSN = "123-45-6789"
 
 
-async def _reframe(sse: str):
+# STRICT OPERATOR CONTROL (2026-07-21): static hardening floors (incl. the E12
+# result-redaction floor these tests exercise) fire ONLY under an operator-selected
+# ENFORCING posture. These tests used to pass ``enabled_info=None``, which resolves to
+# the observe-only "tag" posture — under which detection/tagging still happens but the
+# payload is never mutated, so asserting masking there contradicted the product rule.
+# The posture is now stated explicitly: the operator selected ``redact``.
+_ENFORCING = {"default_scan_action": "redact"}
+
+
+async def _reframe(sse: str, enabled_info: dict | None = _ENFORCING):
     return await mcp_proxy._scan_reframe_sse_tool_result(
-        sse, tool_name="fetch", org_slug="", server_slug="", enabled_info=None, actor=None)
+        sse, tool_name="fetch", org_slug="", server_slug="",
+        enabled_info=enabled_info, actor=None)
 
 
 def _client_reassemble(sse: str) -> list[str]:
@@ -149,6 +159,18 @@ async def test_keepalive_and_nonjson_frames_pass_through():
     assert ": keep-alive" in reframed          # comment preserved
     assert "data: not-json-here" in reframed   # non-JSON frame verbatim
     assert _SSN not in reframed                # the real result still masked
+
+
+@pytest.mark.asyncio
+async def test_multiline_split_observe_only_posture_does_not_mutate():
+    """Twin of ``test_multiline_split_two_data_lines_masked`` under the OBSERVE-ONLY
+    posture: the reassembly + scan still runs, but ``tag`` is an operator-selected
+    "Tag only" action, so the frame is neither mutated nor withheld."""
+    sse = ('data: {"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text",\n'
+           f'data: "text":"leak {_SECRET} at {_IP}"}}]}}}}\n\n')
+    reframed, block = await _reframe(sse, enabled_info={"default_scan_action": "tag"})
+    assert block is None
+    assert _client_sees(reframed, _SECRET)  # observe-only: detected + tagged, never masked
 
 
 if __name__ == "__main__":

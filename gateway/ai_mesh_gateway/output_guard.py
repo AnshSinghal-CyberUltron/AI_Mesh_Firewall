@@ -809,12 +809,38 @@ class OutputGuard:
             # ALREADY-MASKED IS NOT A LEAK: a guard "masking-detection" finding
             # (e.g. PII_MASKING_DETECTION) means the value is ALREADY masked in the
             # output — no raw data to protect → no action, mirroring the static
-            # *_smart_masked handling in _check_pii_secrets. Guarded by an evasion
-            # check so an ADVERSARIAL label ('masking_bypass', 'unmasking_attempt')
-            # is NOT silently swallowed into "allow".
-            if (tokens & {"masked", "masking"}) and not (
-                tokens & {"bypass", "attempt", "evasion", "evade", "unmask", "unmasking", "circumvent"}
-            ):
+            # *_smart_masked handling in _check_pii_secrets.
+            #
+            # ALLOWLIST, NOT BLOCKLIST (2026-07-22): this used to swallow to "allow"
+            # ANY label containing 'masked'/'masking' unless it ALSO contained one of
+            # a fixed set of EXACT evasion tokens. That is a blocklist, and it leaked:
+            # every morphological inflection of the cited examples ('masking_bypass'
+            # -> 'masking_bypassed', 'circumvent' -> 'circumvention', 'evade' ->
+            # 'evaded') and every synonym ('masking_defeat', 'masking_stripped',
+            # 'masked_data_leak', 'masking_disabled', 'masked_exfiltration',
+            # 'masking_failure') still satisfied {masked,masking} but missed the exact
+            # set, so an ADVERSARIAL masking-DEFEAT finding was silently dropped to
+            # "allow" and the raw output egressed even with every detector set to block.
+            #
+            # Now: swallow to "allow" ONLY for a POSITIVE benign already-masked
+            # signal (a masking DETECTION / a bare already-masked state) AND only
+            # when NO defeat/negation stem is present. Defeat matching is by SUBSTRING
+            # stem so inflections cannot escape. Anything ambiguous or adversarial
+            # falls through to normal per-class routing (policy fallback => the
+            # operator's block is honoured), never to a silent allow.
+            _defeat = any(stem in t for stem in (
+                "bypass", "circumvent", "evade", "evasion", "defeat", "strip",
+                "remove", "disable", "unmask", "fail", "leak", "exfil", "attempt",
+                "escape", "abuse", "forge", "spoof", "breach", "break", "dodge",
+                "unredact", "reveal", "recover", "reconstruct",
+            ))
+            _benign_masked = bool(tokens & {"masked", "masking", "redacted", "redaction"}) and (
+                bool(tokens & {"detection", "detected", "present", "applied",
+                               "complete", "clean", "ok", "done", "found"})
+                or t in ("masked", "output_masked", "already_masked",
+                         "pii_masked", "value_masked", "content_masked")
+            )
+            if _benign_masked and not _defeat:
                 return "allow"
 
             # ORDER IS LOAD-BEARING: credential and ip_leakage are matched BEFORE
@@ -970,8 +996,32 @@ class OutputGuard:
                 # detector to "flag"/"allow" is honoured even when the guard would
                 # have blocked. A category the operator set to "allow" (or disabled)
                 # maps to "allow" here and the finding is dropped.
+                # STRICT PER-CLASS GOVERNANCE (2026-07-21): classify the tier-2 finding
+                # by the SAME authoritative rule _check_pii_secrets uses (a pattern key
+                # tagged "SECRET" in COMPLIANCE_TAG_MAP is CREDENTIAL-class), before
+                # resolving the operator action.
+                #
+                # When tier-2 is unavailable the guard model's verdict falls back to the
+                # STATIC scanner result, which labels every match "pii" — so an AWS key
+                # pair arrived here as threat_type="pii" and was governed by
+                # output_pii_action. Setting Credential=allow/flag while PII=block still
+                # BLOCKED the credential, i.e. the exact cross-class mis-governance the
+                # per-detector contract forbids: each detector's action must apply ONLY
+                # to its own class. Reclassify only when EVERY matched key is
+                # credential-class, so a genuinely mixed finding keeps its original
+                # category rather than silently moving out of the PII operator's control.
+                _t2_type = (getattr(t2, "threat_type", "") or "") if t2 is not None else ""
+                if t2 is not None and _t2_type in ("pii", "secret"):
+                    _t2_keys = [
+                        str(k) for k in (getattr(t2, "matched_patterns", None) or [])
+                        if not str(k).endswith("_smart_masked")
+                    ]
+                    if _t2_keys and all(
+                        "SECRET" in (get_compliance_tags([k]) or []) for k in _t2_keys
+                    ):
+                        _t2_type = "credential"
                 _t2_op_action = (
-                    _operator_action_for_category(t2.threat_type)
+                    _operator_action_for_category(_t2_type)
                     if t2 is not None
                     else "allow"
                 )
@@ -1010,7 +1060,9 @@ class OutputGuard:
                     )
                     verdicts.append(OutputVerdict(
                         action=_t2_op_action,
-                        threat_type=t2.threat_type or "guard_model",
+                        # Attribution must match governance: report the class whose
+                        # operator action was actually applied (see _t2_type above).
+                        threat_type=_t2_type or "guard_model",
                         confidence=float(getattr(t2, "confidence", 0.0) or 0.0),
                         detail=t2_detail,
                         matched_patterns=t2_patterns,
@@ -1669,7 +1721,16 @@ def _content_preserving_rewrite(
     # behind (so a compliant rewrite is not blanket-masked into "[redacted]" and thus
     # made indistinguishable from the redact action).
     _clean = rewritten.strip()
-    _residual = redact_all(_clean)
+    # For an ip_leakage rewrite the residual net must also cover internal FILE PATHS
+    # (round-1 d46bd2f2 made ip_leakage=redact mask them; the unscoped mask-all
+    # redact_all leaves them raw by design), else a rewrite model that echoes
+    # /home/svc/.ssh/id_rsa ships it verbatim. Scope to all classes + file paths for
+    # ip_leakage; every other class keeps the FP-safe mask-all residual.
+    _tt = (threat_type or "").lower()
+    if "ip_leak" in _tt or "ip_leakage" in _tt or "infrastructure" in _tt:
+        _residual = _redact_all_scoped(_clean, {"pii", "credential", "ip_leakage"})
+    else:
+        _residual = redact_all(_clean)
     return _residual if _residual != _clean else _clean
 
 

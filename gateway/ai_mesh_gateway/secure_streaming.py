@@ -514,8 +514,42 @@ class SecureStreamingResponse:
                 from output_guard import (  # noqa: PLC0415
                     sanitize_output_for_verdict as _sanitize_for_verdict,
                 )
+                # V3-01 (HIGH): hand the sanitizer the RESOLVED action, not the raw
+                # verdict. ``enforce_output`` resolves allow->redact under a guard
+                # outage (scan_degraded) and the branch above correctly keys on
+                # ``effective_action`` — but passing the UNRESOLVED verdict made
+                # ``_sanitize_output_core`` short-circuit on
+                # ``if action != "redact": return response_text`` (verdict.action was
+                # still "allow"), so the scrub was a strict NO-OP and the branch
+                # released the UNSCANNED bytes. Measured on one guard flush, identical
+                # config, verdict=OutputVerdict(action="allow", threat_type="",
+                # scan_degraded=True):
+                #     non-stream -> 'Contact j***@a***.com about SSN ***-**-9083'
+                #     stream     -> 'Contact john.doe@acme.com about SSN 412-55-9083'
+                # i.e. the fail-closed floor for a guard OUTAGE was inert on exactly
+                # the path it exists for.
+                #
+                # Synthesising a verdict (rather than adding an action parameter) keeps
+                # ONE source of truth: _sanitize_output_core reads verdict.action in
+                # several places, and the non-stream path already passes a verdict whose
+                # .action IS the resolved action — so both transports now feed the
+                # sanitizer identically, which is parity by construction.
+                # Duck-typed verdicts reach this path too, so fall back rather than
+                # letting dataclasses.replace raise on a non-dataclass.
+                _sanitize_verdict = verdict
+                if getattr(verdict, "action", None) != effective_action:
+                    try:
+                        import dataclasses as _dc  # noqa: PLC0415
+                        _sanitize_verdict = _dc.replace(verdict, action=effective_action)
+                    except Exception:  # noqa: BLE001 - non-dataclass / frozen-shim verdict
+                        try:
+                            import copy as _copy  # noqa: PLC0415
+                            _sanitize_verdict = _copy.copy(verdict)
+                            _sanitize_verdict.action = effective_action
+                        except Exception:  # noqa: BLE001 - last resort: original verdict
+                            _sanitize_verdict = verdict
                 redacted_text = _sanitize_for_verdict(
-                    full_text, verdict, redact_pii_fn=self._scanner.redact_pii
+                    full_text, _sanitize_verdict, redact_pii_fn=self._scanner.redact_pii
                 )
                 # Threat classes with no spans of their own (hallucination, and the
                 # class-less policy/jailbreak/toxic family) are sanitized by a
@@ -604,13 +638,60 @@ class SecureStreamingResponse:
                 )
                 self._audit_output_guard(verdict, action=_emit_action)
                 self._record_metric(_emit_action)
-                # E14: a real redaction on a NON-final flush whose secret runs to
-                # the buffer edge arms the secret-in-progress anchor so the next
-                # flush masks the un-anchored continuation (long-key split).
+                # STREAM/NON-STREAM REDACT PARITY: on a NON-final real redaction,
+                # retain the lookahead tail and redact+release only the prefix so a
+                # SHORT token straddling this flush boundary is not split and
+                # de-prefixed into a raw egress.
+                # Mutually exclusive with E14 AT THE EDGE: if a >= _SECRET_ANCHOR_MIN
+                # secret-charset run runs to the buffer edge, the split token is a
+                # LONG key and E14 (arm anchor from full_text, emit whole, clear)
+                # already carries it — keep that path untouched. Retention covers the
+                # complementary case the finding exposed: the edge token is SHORT
+                # (an IP head "10", a key prefix "s", an email fragment) so E14's
+                # trailing-run anchor is empty and the head would otherwise stream.
+                # Skip both for _whole_response classes (hallucination / class-less
+                # policy) — they emit a single replacement constant, and for
+                # _redact_noop (nothing masked => no split risk).
+                _e14_run_to_edge = (
+                    reason != FlushReason.DONE and bool(_trailing_secret_run(full_text))
+                )
+                if (
+                    not _redact_noop
+                    and not _whole_response
+                    and reason != FlushReason.DONE
+                    and not _e14_run_to_edge
+                ):
+                    def _guard_redact(_s, _v=_sanitize_verdict):
+                        return _sanitize_for_verdict(
+                            _s, _v, redact_pii_fn=self._scanner.redact_pii
+                        )
+                    for sse in self._release_redacted_with_lookahead_tail(
+                        _guard_redact, arm_anchor=True
+                    ):
+                        yield sse
+                    return
+                # E14: a real redaction on a NON-final flush whose secret runs to the
+                # buffer edge arms the secret-in-progress anchor so the next flush
+                # masks the un-anchored continuation (long-key split).
                 if not _redact_noop and reason != FlushReason.DONE:
                     self._secret_anchor = _trailing_secret_run(full_text)
                 for redacted_chunk in self._yield_redacted(redacted_text):
                     yield redacted_chunk
+                self._clear_buffers()
+                return
+
+            # V3-05 (HIGH): a WHOLE-RESPONSE replacement is a statement about the
+            # WHOLE response, so it must suppress everything that follows — not just
+            # later REDACT segments. ``_response_replaced`` was consulted only inside
+            # the redact branch above, so a later CLEAN/flag flush fell through to the
+            # release path below and appended the ORIGINAL text verbatim, immediately
+            # after the sentence telling the caller the output had been rewritten.
+            # Realistic trigger: a tier-2 breaker OPEN on the first flush and
+            # recovered afterwards. Measured at 24 and 8 chars/delta, the stock SDK
+            # reassembled the replacement sentence followed by the raw SSN and the raw
+            # internal IP. That is strictly worse than a block: the caller is told the
+            # response was sanitized while receiving the unsanitized bytes.
+            if self._response_replaced:
                 self._clear_buffers()
                 return
 
@@ -668,6 +749,29 @@ class SecureStreamingResponse:
             )
             self._record_guard_metrics(_emit_action, verdict)
             self._record_metric(_emit_action)
+            # STREAM/NON-STREAM REDACT PARITY (same fix as the guard path above): on
+            # a non-final real redaction, retain the lookahead tail and redact+release
+            # only the prefix so a SHORT token straddling the flush boundary is
+            # re-scanned whole next flush instead of splitting and egressing raw. E14
+            # (long secret-charset run to the edge) keeps its own path below.
+            _e14_run_to_edge = (
+                reason != FlushReason.DONE and bool(_trailing_secret_run(full_text))
+            )
+            if not _redact_noop and reason != FlushReason.DONE and not _e14_run_to_edge:
+                def _fallback_redact(_s):
+                    from output_guard import (  # noqa: PLC0415
+                        neutralize_encoded_pii,
+                        neutralize_exfil_channels,
+                        neutralize_markdown_split_pii,
+                    )
+                    _n = neutralize_encoded_pii(neutralize_exfil_channels(_s))
+                    _n = neutralize_markdown_split_pii(_n)
+                    return self._scanner.redact_pii(_n)
+                for sse in self._release_redacted_with_lookahead_tail(
+                    _fallback_redact, arm_anchor=True
+                ):
+                    yield sse
+                return
             # E14: arm the secret-in-progress anchor on a non-final real redaction
             # whose secret runs to the buffer edge (long-key split), same as the
             # guard path above.
@@ -978,6 +1082,89 @@ class SecureStreamingResponse:
         self._content_buffer_len = sum(len(c.encode("utf-8")) for _, c in retain)
         for original_sse, _ in release:
             yield original_sse
+
+    def _release_redacted_with_lookahead_tail(self, redact_fn, *, arm_anchor: bool):
+        """Redact-branch counterpart of ``_release_with_lookahead_tail``.
+
+        STREAM/NON-STREAM REDACT PARITY (2026-07-22): the redact branches used to
+        release the ENTIRE redacted buffer and clear on every flush, relying only on
+        the E14 ``_secret_anchor`` (a trailing SECRET-charset run >= 32 chars) to
+        carry a split token across the boundary. That left a hole the non-stream
+        path does not have: a NON-final flush fires as soon as ANY token in the
+        buffer is maskable (e.g. an email), and then releases up to the buffer edge —
+        splitting a DIFFERENT token that straddles that edge. Its head streams (raw
+        or masked), its tail lands in the next buffer DE-PREFIXED, matches no
+        pattern (the deterministic regexes are prefix-anchored: ``sk-…``, ``10.…``)
+        and egresses verbatim. Measured: an internal IP ``10.0.0.5`` and a
+        ``sk-proj-…`` key streamed raw across SSE frames while non-stream on the same
+        bytes masked both. E14 missed them because ``10`` / ``s`` are not >= 32-char
+        secret runs.
+
+        Fix: on a non-final redact flush, release only a WHITESPACE-DELIMITED
+        prefix (redacted whole) and retain a >= STREAM_LOOKAHEAD_BYTES raw tail for a
+        whole re-scan next flush.
+
+        WHY WHITESPACE, NOT CHUNK BOUNDARIES (2026-07-23): the first version of this
+        helper released ``_chunk_queue[:keep_from]`` and redacted that raw fragment in
+        isolation. Under token-by-token streaming (1-8 chars/delta) the default
+        ``max_buffer_chunks`` forces repeated flushes, ``keep_from`` advances one tiny
+        chunk at a time, and ``redact_fn("j")`` / ``redact_fn("o")`` on a single
+        character matches no pattern — so an email/SSN/key was released one RAW char at
+        a time and egressed verbatim while non-stream masked it. A sensitive token
+        (email, key, IP, SSN) contains NO whitespace, so cutting the release at a
+        whitespace boundary guarantees no token straddles the cut: every token in the
+        released prefix is COMPLETE and is masked by the re-scanning redactor, and the
+        retained tail always begins after a whitespace. A run with no whitespace in the
+        releasable region (a single long token) retains everything until a whitespace
+        arrives or DONE — the E14 long-secret path is handled by the caller before this
+        helper, and a pathological > MAX_OPEN_MEDIA_HOLDBACK no-whitespace run fails
+        closed by redacting and releasing the whole buffer (never raw).
+        """
+        full_text = "".join(c for _, c in self._chunk_queue)
+        if len(full_text.encode("utf-8")) <= STREAM_LOOKAHEAD_BYTES:
+            # Whole buffer within the lookahead window: retain everything, release
+            # nothing now. Delivered whole at a later flush / DONE. No split possible.
+            return
+        # Walk left from the end until >= STREAM_LOOKAHEAD_BYTES of raw tail is held.
+        tail_start = len(full_text)
+        acc = 0
+        while tail_start > 0 and acc < STREAM_LOOKAHEAD_BYTES:
+            tail_start -= 1
+            acc += len(full_text[tail_start].encode("utf-8"))
+        # Snap the cut LEFT to the last whitespace at or before tail_start so no
+        # sensitive token (which never contains whitespace) can straddle it.
+        cut = tail_start
+        while cut > 0 and not full_text[cut - 1].isspace():
+            cut -= 1
+        if cut == 0:
+            # No safe whitespace boundary in the releasable region.
+            if len(full_text.encode("utf-8")) > MAX_OPEN_MEDIA_HOLDBACK:
+                # Pathological single long run: fail closed — redact the WHOLE buffer
+                # and release it (masked), never hold unboundedly nor ship raw.
+                first_sse, _ = self._chunk_queue[0]
+                yield self._rebuild_sse_content(first_sse, redact_fn(full_text))
+                for original_sse, _ in self._chunk_queue[1:]:
+                    yield self._rebuild_sse_content(original_sse, "")
+                self._clear_buffers()
+                return
+            # Otherwise retain everything and wait for a whitespace boundary / DONE.
+            return
+        released = full_text[:cut]
+        retained = full_text[cut:]
+        redacted_release = redact_fn(released)
+        # Arm the E14 anchor from the released prefix so a > lookahead secret whose
+        # head just streamed has its retained continuation masked next flush.
+        if arm_anchor:
+            self._secret_anchor = _trailing_secret_run(released) or self._secret_anchor
+        # Rebuild the buffer as a single synthetic chunk carrying the retained raw tail
+        # (re-scanned whole next flush), reusing the last original frame as carrier.
+        first_sse, _ = self._chunk_queue[0]
+        carrier_sse, _ = self._chunk_queue[-1]
+        self._chunk_queue = [(carrier_sse, retained)]
+        self._content_buffer = [retained]
+        self._content_buffer_len = len(retained.encode("utf-8"))
+        # Emit the redacted released prefix as a single rebuilt frame.
+        yield self._rebuild_sse_content(first_sse, redacted_release)
 
     def _extract_content_delta(self, chunk_data: dict) -> str:
         """Concatenate every text-bearing field of the delta into a single str

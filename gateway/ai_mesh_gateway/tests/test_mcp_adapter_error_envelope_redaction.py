@@ -16,6 +16,13 @@ both redact-swap branches write the redacted output back to the WHOLE envelope w
 there is no ``result`` key (and keep the audited ``reason`` in sync with the masked
 message). Symmetric with the streamable-http path, which already swaps unconditionally.
 
+POSTURE NOTE (2026-07-21): enforcement is STRICTLY what the operator selected for the
+org. ``tag``/``monitor`` are OBSERVE-ONLY — the envelope is detected and tagged but
+NEVER mutated — and the static hardening floors (including this error-envelope masker)
+fire only under an operator-selected ENFORCING posture (``redact``/``block``). The
+masking tests below therefore select ``{"default_scan_action": "redact"}`` explicitly;
+the observe-only tests assert the raw envelope survives, which is the correct contract.
+
 These tests drive the REAL ``org_mcp_jsonrpc`` handler end-to-end (only the transport
 boundary ``_adapter_forward`` / config / audit are faked) and assert on the EGRESS
 BYTES — the only source of truth.
@@ -74,7 +81,7 @@ def _decode(resp):
     return json.loads(resp.body.decode("utf-8"))
 
 
-async def _run_adapter_error(request, body, *, enabled_info, error_obj):
+async def _run_adapter_error(request, body, *, enabled_info, error_obj):  # noqa: D401
     """Drive org_mcp_jsonrpc on the stdio adapter path where the upstream returns a
     BARE JSON-RPC ERROR envelope (no ``result`` key)."""
     from fastapi.responses import JSONResponse
@@ -100,13 +107,20 @@ def _call_body(msg_id):
 
 
 @pytest.mark.asyncio
-async def test_error_envelope_secret_and_ip_redacted_under_tag_default():
+async def test_error_envelope_secret_and_ip_redacted_under_redact_posture():
     """The bug: a secret + internal IP inside error.message must be MASKED on egress,
-    not returned raw, on the stdio adapter path under the default "tag" posture."""
+    not returned raw, on the stdio adapter path.
+
+    PREMISE REWRITTEN (was ``test_error_envelope_secret_and_ip_redacted_under_tag_default``):
+    it used to drive this with NO operator selection and assert masking anyway, i.e. it
+    asserted that the "tag" default silently enforced redaction. That contradicts the
+    product rule — ``tag`` is OBSERVE-ONLY and nothing the operator did not select is
+    enforced. The security property under test (the error envelope is masked, not
+    forwarded raw) is unchanged and just as strong; only the posture is now explicit."""
     req = _make_request(_auth())
     with patch.object(mcp_proxy, "_mcp_redact_result_on_detect_enabled", return_value=True):
         resp = await _run_adapter_error(
-            req, _call_body(31), enabled_info=None,
+            req, _call_body(31), enabled_info={"default_scan_action": "redact"},
             error_obj={"code": -32000, "message": _LEAKY_ERR_MSG},
         )
     decoded = _decode(resp)
@@ -134,17 +148,26 @@ async def test_error_envelope_benign_passes_through_unchanged():
 
 
 @pytest.mark.asyncio
-async def test_error_envelope_flag_disabled_leaves_raw():
-    """With GATEWAY_MCP_REDACT_RESULT_ON_DETECT OFF the raw secret survives — proves
-    the floor (not some unrelated path) is what masks the error envelope."""
+async def test_error_envelope_no_operator_selection_leaves_raw():
+    """Negative control: with NO enforcing posture selected by the operator the error
+    envelope is NOT mutated, even with GATEWAY_MCP_REDACT_RESULT_ON_DETECT ON.
+
+    PREMISE REWRITTEN (was ``test_error_envelope_flag_disabled_leaves_raw``): it turned
+    the env flag OFF while leaving the posture unselected, to "prove the floor is the
+    masker". Under the product rule the floor is gated on the OPERATOR-selected posture,
+    so with an enforcing posture selected the envelope is masked whatever that env flag
+    says, and with nothing selected it is never masked — the flag is not the axis that
+    decides. This version tests the axis that actually decides, and keeps the same
+    non-vacuity role: it proves the masking assertions above come from enforcement being
+    switched on, not from some unrelated path that always mutates."""
     req = _make_request(_auth())
-    with patch.object(mcp_proxy, "_mcp_redact_result_on_detect_enabled", return_value=False):
+    with patch.object(mcp_proxy, "_mcp_redact_result_on_detect_enabled", return_value=True):
         resp = await _run_adapter_error(
             req, _call_body(33), enabled_info=None,
             error_obj={"code": -32000, "message": _LEAKY_ERR_MSG},
         )
     blob = json.dumps(_decode(resp))
-    assert _RAW_SECRET in blob  # flag OFF → not force-redacted → raw present
+    assert _RAW_SECRET in blob  # nothing selected → nothing enforced → raw passes through
 
 
 @pytest.mark.asyncio
@@ -169,7 +192,7 @@ async def test_error_envelope_unmaskable_survivor_fails_closed():
     req = _make_request(_auth())
     with patch.object(mcp_proxy, "_mcp_redact_result_on_detect_enabled", return_value=True):
         resp = await _run_adapter_error(
-            req, _call_body(35), enabled_info=None,
+            req, _call_body(35), enabled_info={"default_scan_action": "redact"},
             error_obj={"code": -32000,
                        "message": f"box {_RAW_IP} served key /home/bob/.ssh/id_rsa"},
         )
@@ -218,7 +241,7 @@ async def test_toolslist_error_envelope_secret_and_ip_redacted():
     on the stdio adapter path, not returned raw."""
     req = _make_request(_auth())
     resp = await _run_adapter_toolslist_error(
-        req, _list_body(51), enabled_info=None,
+        req, _list_body(51), enabled_info={"default_scan_action": "redact"},
         error_obj={"code": -32001, "message": f"auth failed for key {_RAW_SECRET_STANDALONE} at {_RAW_IP}"},
     )
     blob = json.dumps(_decode(resp))
@@ -258,7 +281,8 @@ async def test_toolslist_tools_shaped_still_scanned_not_regressed():
         patch.object(mcp_proxy, "_validate_org_scope", return_value=None),
         patch.object(mcp_proxy, "_get_server_config",
                      AsyncMock(return_value={"transport": "stdio", "command": "x"})),
-        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_get_enabled_tools",
+                     AsyncMock(return_value={"default_scan_action": "redact"})),
         patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
         patch.object(mcp_proxy, "_adapter_forward", AsyncMock(return_value=raw)),
     ):

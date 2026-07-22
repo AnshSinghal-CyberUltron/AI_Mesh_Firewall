@@ -52,7 +52,49 @@ async function api(path, opts = {}) {
   }
   if (!r.ok) throw new Error(d.detail || d.error || `HTTP ${r.status}`);
   if (d.sdk_snippet) setSdk(d.sdk_snippet);
+  if ("governance_headers" in d) setGovHeaders(d.governance_headers, d);
   return d;
+}
+
+// Governance signals the gateway sends as RESPONSE HEADERS rather than body fields:
+// quota (x-ratelimit-*), silently-rewritten request params (x-zeroshield-clamped),
+// and human-review escalation (x-zeroshield-review-required). Rendered only when the
+// gateway actually sent them — an empty strip means "not sent", never "all clear".
+const GOV_LABELS = {
+  "x-zeroshield-clamped": "params rewritten",
+  "x-zeroshield-review-required": "human review required",
+  "x-zeroshield-action": "output action",
+  "x-zeroshield-matched-patterns": "matched",
+  "x-zeroshield-redacted-types": "redacted",
+  "x-zeroshield-factuality-warning": "factuality warning",
+  "x-ratelimit-limit-tokens": "token limit",
+  "x-ratelimit-remaining-tokens": "tokens left",
+  "x-ratelimit-reset-tokens": "token reset",
+  "x-ratelimit-limit-requests": "request limit",
+  "x-ratelimit-remaining-requests": "requests left",
+  "x-ratelimit-reset-requests": "request reset",
+};
+
+function setGovHeaders(headers, result = {}) {
+  const el = $("#vz-gov");
+  if (!el) return;
+  const rows = Object.entries(headers || {})
+    .filter(([, v]) => v !== "" && v != null)
+    .map(([k, v]) => `<div class="obs-line"><b>${escapeHtml(GOV_LABELS[k] || k)}</b>: ${escapeHtml(String(v))}</div>`);
+  // A refusal that is NOT a security verdict must not be shown as one.
+  if (result.refusal_kind && result.refusal_kind !== "security") {
+    rows.unshift(
+      `<div class="obs-line warn"><b>refused on ${escapeHtml(result.refusal_kind)}</b>: ` +
+      `${escapeHtml(result.error_code || "")} — not a content verdict</div>`
+    );
+  }
+  if (!rows.length) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML = `<h4>Governance signals <small>(response headers)</small></h4>` + rows.join("");
 }
 
 function setSdk(code) {
@@ -334,6 +376,22 @@ function serverOptionLabel(s) {
   return `${name} · ${s.transport || "?"} · ${status} · ${tools} tools`;
 }
 
+// MCP posture banner. The tool panel used to show a bare `decision: allow`, which a
+// reader takes as "the firewall inspected this and approved it". Under the default
+// `tag` posture nothing is enforced at all, so the posture is stated up front and
+// repeated on every result.
+function renderMcpPosture(posture) {
+  const el = $("#mcp-posture");
+  if (!el) return;
+  if (!posture) {
+    el.textContent = "";
+    el.className = "hint tiny";
+    return;
+  }
+  el.className = "hint tiny " + (posture.enforcing ? "ok" : "warn");
+  el.textContent = `MCP posture: ${posture.action}${posture.enforcing ? " (enforcing)" : " (detect-only)"} — ${posture.note}`;
+}
+
 async function loadMcpServers() {
   const sel = $("#mcp-server");
   const hint = $("#mcp-tool-hint");
@@ -341,6 +399,7 @@ async function loadMcpServers() {
   try {
     const d = await api("/api/mcp/servers");
     MCP_SERVERS = d.servers || [];
+    renderMcpPosture(d.posture);
     if (!MCP_SERVERS.length) {
       sel.innerHTML = `<option value="">No MCP servers registered</option>`;
       $("#mcp-tool").innerHTML = "";
@@ -692,12 +751,22 @@ $("#mcp-tool-run")?.addEventListener("click", async () => {
     });
     const decision = d.decision || (d.result && (d.result.decision || d.result.action));
     const pretty = JSON.stringify(d.result ?? d, null, 2);
-    $("#mcp-tool-answer").textContent =
-      (decision ? `decision: ${decision}\n\n` : "") + pretty.slice(0, 6000);
+    renderMcpPosture(d.posture);
+    // Lead with what the firewall actually did. `allow` under a detect-only posture
+    // is not an approval, and the result below is the server's raw output.
+    const header = [
+      decision ? `decision: ${decision}` : null,
+      d.result_note || null,
+      d.posture && !d.posture.enforcing
+        ? "→ The result below is the MCP server's UNMODIFIED output."
+        : null,
+    ].filter(Boolean).join("\n");
+    $("#mcp-tool-answer").textContent = (header ? header + "\n\n" : "") + pretty.slice(0, 6000);
     renderVisualizer(null, {
       blocked: String(decision || "").toLowerCase() === "block",
       blockMessage: decision
-        ? `MCP tool ${tool} on ${srv.server_slug} → ${decision}`
+        ? `MCP tool ${tool} on ${srv.server_slug} → ${decision}` +
+          (d.posture && !d.posture.enforcing ? ` (posture ${d.posture.action}: detect-only)` : "")
         : `MCP tool ${tool} on ${srv.server_slug} completed (see result panel).`,
       gen,
     });

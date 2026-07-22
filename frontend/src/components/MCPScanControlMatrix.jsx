@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Globe,
   Pencil,
   Plus,
   RefreshCw,
@@ -349,6 +350,19 @@ const TIER2_OPTIONS = [
   { value: "disabled", label: "Disabled", payload: false },
 ];
 
+/**
+ * Posture for the transparent external MCP proxy (/v1/mcp/ext-proxy/<host>) —
+ * traffic to THIRD-PARTY MCP servers. "tag" is the value when nothing is chosen
+ * and enforces NOTHING on that surface: findings are detected and tagged, but
+ * content is never masked and the call is never blocked (UI honesty — same rule
+ * as the server default_scan_action badges).
+ */
+const EXT_ACTION_OPTIONS = [
+  { value: "tag", label: "Tag only" },
+  { value: "redact", label: "Redact" },
+  { value: "block", label: "Block" },
+];
+
 export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsChanged }) {
   const { toast } = useToast();
 
@@ -364,6 +378,8 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
   const [mcpTier2, setMcpTier2] = useState(null);
   const [firewallConfig, setFirewallConfig] = useState(null);
   const [tier2Saving, setTier2Saving] = useState(false);
+  const [extScanAction, setExtScanAction] = useState("tag");
+  const [extSaving, setExtSaving] = useState(false);
 
   const loadControls = useCallback(async () => {
     setLoading(true);
@@ -391,6 +407,9 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
       const data = await res.json();
       setFirewallConfig(data);
       setMcpTier2(data.mcp_tier2_enabled);
+      // Absent field (older gateway/control-plane) reads as the non-enforcing
+      // default rather than crashing the card.
+      setExtScanAction(data.mcp_ext_scan_action || "tag");
     } catch {
       /* optional */
     }
@@ -556,6 +575,48 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
     }
   };
 
+  const saveExtScanAction = async (value) => {
+    const previous = extScanAction;
+    setExtSaving(true);
+    setError(null);
+    setExtScanAction(value);
+    try {
+      // Same partial-update contract as the Tier-2 toggle above (CP28): send ONLY
+      // the changed field so unrelated siblings are not re-validated.
+      const res = await fetchWithAuth("/api/firewall/config/", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mcp_ext_scan_action: value }),
+      });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const err = await res.json();
+          detail = err?.mcp_ext_scan_action?.[0] || err?.detail || detail;
+        } catch { /* keep status */ }
+        throw new Error(detail);
+      }
+      const updated = await res.json().catch(() => ({ mcp_ext_scan_action: value }));
+      setFirewallConfig((prev) => ({ ...(prev || {}), ...updated }));
+      setExtScanAction(updated.mcp_ext_scan_action || value);
+      toast(
+        value === "tag"
+          ? "External MCP proxy set to tag only — nothing is enforced on that surface"
+          : `External MCP proxy set to ${value}`,
+        { tone: value === "tag" ? "info" : "success" },
+      );
+    } catch (e) {
+      setExtScanAction(previous);
+      setError(e.message);
+      toast(e.message || "Failed to save external MCP proxy posture", { tone: "error" });
+    } finally {
+      setExtSaving(false);
+    }
+  };
+
+  const extNotEnforcing = extScanAction === "tag";
+  const extActionInfo = actionInfo(extScanAction);
+
   const tier2State = mcpTier2 === null ? "inherit" : mcpTier2 ? "enabled" : "disabled";
   const tier2StateLabel =
     mcpTier2 === null ? "Inherit (org default)" : mcpTier2 ? "Enabled" : "Disabled";
@@ -631,6 +692,64 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
                 if (opt) saveMcpTier2(opt.payload);
               }}
               options={TIER2_OPTIONS.map(({ value, label }) => ({ value, label }))}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* External MCP proxy posture — third-party servers via /v1/mcp/ext-proxy */}
+      <Card
+        className={cn(
+          extNotEnforcing
+            && "border-amber-200 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-900/20",
+        )}
+      >
+        <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div
+              className={cn(
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                extNotEnforcing
+                  ? "bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300"
+                  : "bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-300",
+              )}
+            >
+              <Globe className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  External MCP proxy posture
+                </h3>
+                <Badge variant={extNotEnforcing ? "warning" : extActionInfo.badge}>
+                  {extNotEnforcing ? "Tag only — not enforced" : extActionInfo.label}
+                </Badge>
+                <InfoHint content={"Applies to the transparent external MCP proxy (/v1/mcp/ext-proxy/<host>) — traffic to third-party MCP servers you did not register. Tag only detects and tags findings; Redact masks matched content; Block rejects the call."} />
+              </div>
+              {extNotEnforcing ? (
+                <p className="mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                  <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  Nothing is enforced on third-party MCP traffic — findings are tagged, but content
+                  is never masked and calls are never blocked. Choose Redact or Block to enforce.
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Findings on third-party MCP traffic are{" "}
+                  {extScanAction === "block" ? "blocked" : "masked before delivery"}.
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            {extSaving && <Spinner className="h-4 w-4 text-teal-500" />}
+            <SegmentedControl
+              aria-label="External MCP proxy scan action"
+              value={extScanAction}
+              onChange={(v) => {
+                if (extSaving || v === extScanAction) return;
+                saveExtScanAction(v);
+              }}
+              options={EXT_ACTION_OPTIONS}
             />
           </div>
         </CardContent>

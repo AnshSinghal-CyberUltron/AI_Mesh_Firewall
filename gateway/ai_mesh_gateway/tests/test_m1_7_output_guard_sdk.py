@@ -206,30 +206,45 @@ async def test_pii_action_matrix(monkeypatch, action, expect_status, expect_mask
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("action", ["block", "redact", "rewrite", "flag", "allow"])
-async def test_credential_action_is_ignored_and_always_collapses_to_redact(
+async def test_credential_action_is_honoured_per_operator_selection(
         monkeypatch, action):
-    """FINDING M17-02 — ``output_credential_action`` is a dead knob on this path.
+    """``output_credential_action`` governs the credential class — all five actions.
 
-    An AWS key pair in model output is claimed by the static PII/secret detector
-    FIRST (verdict.threat_type == "pii", matched_patterns == ["aws_access_key"]),
-    so ``_action("output_credential_action", ...)`` never selects the action.
-    Every one of the five configured actions — including ``block`` and ``allow`` —
-    produces the same 200 + masked-in-place result.
+    Was ``test_credential_action_is_ignored_and_always_collapses_to_redact``, which
+    recorded FINDING M17-02: an AWS key pair was claimed by the static PII detector
+    first, so every credential action — including ``block`` and ``allow`` — collapsed
+    to the same masked-in-place 200 and the knob was dead. That was fixed in 98ff7206:
+    ``_check_pii_secrets`` now partitions matches by the ``SECRET`` compliance tag and
+    emits a separate credential verdict, so the operator's selection is authoritative.
 
-    This FAILS SAFE (the secret is always masked, ``allow`` cannot leak it), so it
-    is recorded as an operator-control gap, not a data-exposure bug.
+    The operator is the sole owner of their org's actions: ``allow``/``flag`` deliver
+    the credential UNMASKED because that is what was selected.
+
+    The credential DETECTOR must be enabled for its action to be consulted — with it
+    off, an AWS key is still matched by the PII patterns and governed by
+    ``output_pii_action``, which is correct per-detector routing, not a dead knob.
     """
     app, auth_redis = await _guard_app(
-        monkeypatch, guard_cfg={"output_credential_action": action})
+        monkeypatch,
+        guard_cfg={"output_credential_enabled": True,
+                   "output_credential_action": action})
     _set_upstream(_completion(
         f"aws_access_key_id={AKIA} aws_secret_access_key={AWS_SECRET}"))
     resp = await _raw_post(app, {"model": "gpt-4o-mini",
                                  "messages": [{"role": "user", "content": "creds"}]})
+    if action == "block":
+        assert resp.status_code == 400, resp.text
+        # a hard block must not echo the raw credential back in the block envelope
+        assert AKIA not in resp.text and AWS_SECRET not in resp.text
+        await auth_redis.aclose()
+        return
+
     assert resp.status_code == 200, resp.text
     delivered = resp.json()["choices"][0]["message"]["content"]
-    assert AKIA not in delivered and AWS_SECRET not in delivered, delivered
-    assert "AKIA****MPLE" in delivered, delivered
-    assert _canaries_in(resp.text) == [], _canaries_in(resp.text)
+    if action in ("allow", "flag"):
+        assert AKIA in delivered, f"{action} must deliver unchanged: {delivered}"
+    else:  # redact / rewrite mutate the egress
+        assert AKIA not in delivered and AWS_SECRET not in delivered, delivered
     await auth_redis.aclose()
 
 

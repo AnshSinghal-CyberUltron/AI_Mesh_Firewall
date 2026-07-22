@@ -45,6 +45,50 @@ def _zs(d: dict) -> dict:
     return d.get("zeroshield") or {}
 
 
+# Governance signals the gateway puts on the RESPONSE HEADERS rather than the body.
+# Read via the stock SDK's `.with_raw_response` accessor (same call, no extra request).
+# Only headers the gateway actually sent are reported — an absent header means the
+# gateway did not send it, and the UI must not imply otherwise.
+_GOV_HEADER_PREFIXES = ("x-ratelimit-", "x-zeroshield-")
+# Routing headers are already rendered from the pipeline trace; repeating them in the
+# governance strip would be noise.
+_GOV_HEADER_SKIP = {
+    "x-zeroshield-original-model",
+    "x-zeroshield-routed-model",
+    "x-zeroshield-routing-source",
+    "x-zeroshield-rerouted",
+    "x-zeroshield-routing-reason",
+    "x-zeroshield-routing-policy-summary",
+}
+
+
+def _gov_headers(raw: Any) -> dict:
+    """Governance/quota headers off the raw HTTP response, lowercased.
+
+    Notable members, each present only under its own condition:
+      * ``x-ratelimit-limit-tokens`` / ``-remaining-tokens`` / ``-reset-tokens`` —
+        emitted only when the key carries a NON-ZERO ceiling, so a key with no
+        configured ceiling legitimately shows none.
+      * ``x-zeroshield-clamped`` — request params the gateway silently rewrote
+        (e.g. ``n=5->1``, ``max_tokens=9999->4096``).
+      * ``x-zeroshield-review-required`` — the operator configured ``human_review``
+        for a detector that fired; the verdict normalises to ``flag``.
+    """
+    try:
+        headers = getattr(raw, "headers", None) or {}
+        items = headers.items()
+    except Exception:
+        return {}
+    out = {}
+    for k, v in items:
+        lk = str(k).lower()
+        if lk in _GOV_HEADER_SKIP:
+            continue
+        if lk.startswith(_GOV_HEADER_PREFIXES):
+            out[lk] = v
+    return out
+
+
 def _error_body(e: APIStatusError) -> dict:
     """The gateway's firewall-block envelope (carries pipeline_trace + verdict).
 
@@ -63,6 +107,22 @@ def _error_body(e: APIStatusError) -> dict:
     if isinstance(body, dict):
         return body
     return {"message": str(e)}
+
+
+# Why the gateway refused, by OpenAI error code. Anything unlisted is a security
+# verdict — the safe default, since an unrecognised refusal from a firewall should
+# not be presented to the reader as a benign limit.
+_REFUSAL_KINDS = {
+    "context_length_exceeded": "size",
+    "rate_limit_exceeded": "quota",
+    "content_filter": "security",
+}
+
+_REFUSAL_LABELS = {
+    "size": "Request too large — rejected on size, not on content.",
+    "quota": "Rate/quota ceiling reached — not a security verdict.",
+    "security": "Blocked by security policy.",
+}
 
 
 def _blocked_result(e: APIStatusError) -> dict:
@@ -96,14 +156,22 @@ def _blocked_result(e: APIStatusError) -> dict:
         },
         "pipeline_trace": pt,
     }
+    # Not every non-2xx is a SECURITY verdict. A size rejection reports
+    # `context_length_exceeded` and a quota rejection `rate_limit_exceeded`; calling
+    # either "blocked by the firewall" would overstate what the firewall did.
+    err_code = str(nested.get("code") or body.get("code") or "")
+    kind = _REFUSAL_KINDS.get(err_code, "security")
     return {
         "content": "",
         "model": None,
         "blocked": True,
+        "refusal_kind": kind,
+        "error_code": err_code,
         "status": e.status_code,
         "message": message,
         "category": body.get("category") or threat,
         "trace": summarize_trace(synth),
+        "governance_headers": _gov_headers(getattr(e, "response", None)),
         "raw": body,
     }
 
@@ -231,7 +299,8 @@ def chat(client: OpenAI, messages: list[dict], model: str = "auto",
         content = (body.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
     except Exception:
         content = ""
-    return {"content": content, "model": body.get("model"), "trace": summarize_trace(body), "raw": body}
+    return {"content": content, "model": body.get("model"), "trace": summarize_trace(body),
+            "governance_headers": _gov_headers(raw), "raw": body}
 
 
 def chat_stream(client: OpenAI, messages: list[dict], model: str = "auto",
@@ -280,10 +349,12 @@ def responses_create(client: OpenAI, input_text: str, model: str = "auto",
     except APIStatusError as e:
         r = _blocked_result(e)
         return {"output_text": "", "model": None, "trace": r["trace"], "blocked": True,
-                "status": r["status"], "message": r["message"], "raw": r["raw"]}
+                "status": r["status"], "message": r["message"],
+                "refusal_kind": r["refusal_kind"], "error_code": r["error_code"],
+                "governance_headers": r["governance_headers"], "raw": r["raw"]}
     body = json.loads(raw.text)
     return {"output_text": body.get("output_text", ""), "model": body.get("model"),
-            "trace": summarize_trace(body), "raw": body}
+            "trace": summarize_trace(body), "governance_headers": _gov_headers(raw), "raw": body}
 
 
 def list_models(client: OpenAI) -> list[str]:

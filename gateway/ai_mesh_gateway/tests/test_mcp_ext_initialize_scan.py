@@ -35,9 +35,16 @@ def test_initialize_is_now_scanned_on_ext_path():
     assert "initialize" in mcp_proxy._EXT_FINITE_RESULT_METHODS
 
 
-async def _floor(result):
+# STRICT OPERATOR CONTROL (2026-07-21): the E12 result-redaction floor fires only
+# under an operator-selected ENFORCING posture. ``enabled_info=None`` resolves to the
+# observe-only "tag" posture (detect + tag, never mutate), so the masking assertions
+# below need the posture stated explicitly.
+_ENFORCING = {"default_scan_action": "redact"}
+
+
+async def _floor(result, enabled_info: dict | None = _ENFORCING):
     return await mcp_proxy._scan_tool_result_floor(
-        result, tool_name="initialize", enabled_info=None,
+        result, tool_name="initialize", enabled_info=enabled_info,
         org_slug="", server_slug="", actor=None)
 
 

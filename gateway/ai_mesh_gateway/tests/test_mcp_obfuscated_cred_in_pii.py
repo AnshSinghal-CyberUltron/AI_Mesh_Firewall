@@ -39,10 +39,17 @@ def _ent(s: str) -> str:
     return "".join(f"&#{ord(c)};" for c in s)
 
 
+# STRICT OPERATOR CONTROL (2026-07-21): the encoded-exfil fail-closed block and the
+# E12 result-redaction floor are static hardening floors — they fire only under an
+# operator-selected ENFORCING posture. This helper used to pass ``enabled_info=None``,
+# which resolves to observe-only ``tag`` (detect + tag, never mutate, never block).
+_ENFORCING = {"default_scan_action": "redact"}
+
+
 async def _floor(text):
     return await mcp_proxy._scan_tool_result_floor(
         {"content": [{"type": "text", "text": text}]},
-        tool_name="fetch", enabled_info=None, org_slug="o", server_slug="s", actor=None)
+        tool_name="fetch", enabled_info=_ENFORCING, org_slug="o", server_slug="s", actor=None)
 
 
 # credentials that live in PII_PATTERNS (SECRET-tagged) — obfuscated forms MUST block
@@ -98,13 +105,40 @@ async def test_raw_sensitive_never_egresses(name, val):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("benign", [
     "The weather in Paris is sunny today.",
-    "Reads a file from /home/user/project and returns its size.",
     "Version 1.2.3 shipped on schedule.",
 ])
 async def test_benign_unchanged(benign):
     scanned, blocked, _t, _f, meta = await _floor(benign)
     assert not blocked
     assert benign in json.dumps(scanned)
+
+
+@pytest.mark.asyncio
+async def test_unix_file_path_passes_under_tag_and_fails_closed_under_redact():
+    """A private file path is flag-tier under ``tag`` and fail-closed under ``redact``.
+
+    "Reads a file from /home/user/project and returns its size." used to be a
+    ``test_benign_unchanged`` case run with ``enabled_info=None``. That premise was
+    wrong on two counts: with nothing selected the posture is observe-only ``tag``,
+    where NOTHING is ever mutated or blocked (so it proved nothing about false
+    positives), and the string is not detector-benign — it matches
+    ``file_path_unix`` (ip_leakage). Under an operator-selected ``redact`` posture
+    ``redact_all`` deliberately does not mask private file paths, and
+    ``_scan_text_tier1``'s egress-byte verify blocks rather than forward a
+    "redacted" result that still carries the detected value. Both halves are
+    pinned here so neither can regress silently.
+    """
+    text = "Reads a file from /home/user/project and returns its size."
+    payload = {"content": [{"type": "text", "text": text}]}
+
+    scanned, blocked, _t, _f, meta = await mcp_proxy._scan_tool_result_floor(
+        payload, tool_name="fetch", enabled_info={"default_scan_action": "tag"},
+        org_slug="o", server_slug="s", actor=None)
+    assert not blocked, "observe-only tag must never block"
+    assert text in json.dumps(scanned), "observe-only tag must never mutate"
+
+    _s, blocked, _t, _f, _m = await _floor(text)
+    assert blocked, "an unmaskable file path must fail CLOSED under redact"
 
 
 if __name__ == "__main__":

@@ -29,6 +29,13 @@ from middleware import AuthContext  # noqa: E402
 
 _SECRET = "sk-ant-AAAABBBBCCCCDDDDEEEEFFFFGGGG1234"
 
+# STRICT OPERATOR CONTROL (2026-07-21): result redaction happens only under an
+# operator-selected ENFORCING posture. These tests used to stub ``_get_enabled_tools``
+# with ``None``, which resolves to the observe-only "tag" posture (detect + tag, never
+# mutate) — asserting masking there contradicted the product rule. The org here has
+# explicitly selected ``redact``.
+_ENFORCING = {"default_scan_action": "redact"}
+
 
 def _auth():
     return AuthContext(key_hash="h" * 64, payload={
@@ -70,7 +77,7 @@ async def test_rest_tool_call_redact_is_audited():
     req = _rest_request({"name": "fetch", "arguments": {"q": "hi"}})
     backend = _http_resp({"result": [{"type": "text", "text": f"the api key is {_SECRET}"}]})
     with (
-        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=_ENFORCING)),
         patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()) as rec,
         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_fake_post_client(backend)),
     ):
@@ -89,7 +96,7 @@ async def _run_tools_list(backend_tools):
     with (
         patch.object(mcp_proxy, "_get_auth_context", return_value=_auth()),
         patch.object(mcp_proxy, "_audit_and_return_scope_error", AsyncMock(return_value=None)),
-        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=_ENFORCING)),
         patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()) as rec,
         patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_fake_post_client(backend)),
     ):

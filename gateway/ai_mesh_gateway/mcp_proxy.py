@@ -1064,6 +1064,49 @@ def _effective_scan_action(tool_name: str, enabled_info: dict | None) -> str:
     )
 
 
+def _ext_proxy_enabled_info(org_slug: str) -> dict | None:
+    """Resolve the OPERATOR-SELECTED scan posture for the transparent external proxy.
+
+    STRICT OPERATOR CONTROL (2026-07-21). The ext proxy (/v1/mcp/ext-proxy/<host>) is
+    transport-level: it authenticates an org but has no registered server/tool, so there
+    is no MCPScanControl row and every call site passed ``enabled_info=None``. That used
+    to be harmless only because an unresolved posture fell through to ``tag`` while the
+    static hardening floors still fired regardless of posture. Now that floors fire ONLY
+    under an operator-selected enforcing posture, ``None`` would silently disable ALL
+    scanning on this surface — the one that talks to THIRD-PARTY MCP servers.
+
+    So the operator now selects it explicitly, per organization, via
+    ``FirewallConfig.mcp_ext_scan_action`` (tag/redact/block), which reaches the gateway
+    over the existing org config sync. This is a SELECTION, never an assumption:
+
+      * operator chose redact/block -> that action governs this surface
+      * operator chose "tag", or has not chosen, or the config is unreachable
+        -> observe-only: detect, tag and emit findings, but NEVER mutate or block
+
+    The unreachable/unset case deliberately resolves to observe-only rather than to an
+    enforcing default: enforcing something the operator did not choose is exactly what
+    this rule forbids. Returns None when there is no org (unauthenticated transport),
+    which the callers already treat as observe-only.
+    """
+    if not org_slug:
+        return None
+    action = "tag"
+    try:
+        mod = _gateway_app_module()
+        sync = getattr(mod, "CONFIG_SYNC", None) if mod is not None else None
+        if sync is not None:
+            cfg = sync.get_config(org_slug) or {}
+            action = (cfg.get("mcp_ext_scan_action") or "tag").strip().lower()
+    except Exception as exc:  # pragma: no cover - defensive; never 500 the proxy
+        LOG.warning(
+            "mcp_proxy.ext_posture_lookup_failed org=%s: %s (observe-only)", org_slug, exc
+        )
+        action = "tag"
+    if action not in ("tag", "monitor", "redact", "block"):
+        action = "tag"
+    return {"default_scan_action": action}
+
+
 def _gateway_app_module():
     """Resolve the RUNNING gateway app module whose startup handler set the live
     singletons (CONFIG, RATE_LIMITER, CONFIG_SYNC, INPUT_SCANNER, POLICY_SYNC ...).
@@ -1800,20 +1843,28 @@ def _explicit_monitor_posture(
     enabled_info: dict | None,
     scan_direction: str,
 ) -> bool:
-    """True only when the org scan-control matrix explicitly resolved to monitor/tag.
+    """True when the RESOLVED posture for this tool is observe-only (tag/monitor).
 
-    Transport-level paths (``ext_mcp_proxy``, etc.) pass ``enabled_info=None`` and
-    inherit a default ``tag`` scan_action — that is NOT an operator opt-out of
-    static hardening floors.  At 0 configured scan controls the two-tier scan is
-    skipped separately in ``_mcp_security_scan``; this helper does not re-enable it.
+    OPERATOR SOVEREIGNTY (2026-07-21): this used to return False whenever
+    ``enabled_info`` was absent or the org had no scan-control rows, on the theory
+    that an inherited default ``tag`` was not "an operator opt-out". That made
+    static hardening floors mutate and block tool traffic under a posture the
+    product presents as observe-only: ``tag`` is the operator-selectable "Tag only"
+    action (``MCPServerRegistration.default_scan_action`` choices are
+    tag/redact/block, default ``tag``) and ``_effective_scan_action`` documents it
+    as "observe only, never mutate".
+
+    Now it keys purely off the resolved action, matching the orchestrator's
+    ``_is_observe_only_posture``, so ONE posture rule governs every static floor
+    (E12 result redaction, credential force-block, encoded-exfil fail-closed,
+    cross-block-split fail-closed, CHG-0096 exfil defang) instead of two that
+    disagreed. Under tag/monitor the two-tier scan still runs and still detects,
+    tags, and emits findings — only the MUTATION and BLOCKING are withheld.
+    Selecting ``redact`` or ``block`` re-enables the floors.
     """
-    if not enabled_info:
-        return False
-    effective = _effective_scan_controls_for_tool(enabled_info, tool_name)
-    if not effective.get("scan_controls_configured"):
-        return False
-    action = _resolved_tier1_action(tool_name, enabled_info, scan_direction)
-    return _is_observe_only_posture(action)
+    return _is_observe_only_posture(
+        _resolved_tier1_action(tool_name, enabled_info, scan_direction)
+    )
 
 
 def _static_hardening_floors_enabled(
@@ -1821,7 +1872,21 @@ def _static_hardening_floors_enabled(
     enabled_info: dict | None,
     scan_direction: str,
 ) -> bool:
-    """E12 credential force-block + result-redaction floor apply unless explicit monitor."""
+    """Static floors apply unless the RESOLVED posture is observe-only (tag/monitor).
+
+    OPERATOR SOVEREIGNTY (2026-07-21): this used to delegate to
+    ``_explicit_monitor_posture``, which returns False when ``enabled_info`` is
+    None — so a tool resolving to the default ``tag`` posture still had the E12
+    result-redaction floor and credential force-block applied to it, and the tool
+    RESULT was mutated. ``tag`` is not an internal placeholder: it is the
+    operator-selectable "Tag only" action (``MCPServerRegistration.default_scan_action``
+    choices are tag/redact/block) AND the server default, and
+    ``_effective_scan_action`` documents it as "observe only, never mutate".
+    Mutating egress under it contradicted the selection.
+
+    See ``_explicit_monitor_posture`` for the full rationale — this is its negation
+    and the two must never diverge again.
+    """
     return not _explicit_monitor_posture(tool_name, enabled_info, scan_direction)
 
 
@@ -2088,6 +2153,7 @@ async def ext_mcp_proxy(path: str, request: Request):
     # returns early on an empty org). server_slug is ``ext:<host>`` since the external
     # host is not a registered org server.
     _ext_org = getattr(_get_auth_context(request), "org_slug", "") or ""
+    _ext_posture = _ext_proxy_enabled_info(_ext_org)
     _ext_t0 = time.time()
 
     async def _ext_audit(decision, reason, *, tool="", tags=None, findings=None):
@@ -2146,6 +2212,7 @@ async def ext_mcp_proxy(path: str, request: Request):
     try:
         from mcp_oauth_proxy import get_stored_token
         _ext_org = getattr(_get_auth_context(request), "org_slug", "") or ""
+        _ext_posture = _ext_proxy_enabled_info(_ext_org)
         if _ext_org:
             _ext_oauth = await get_stored_token(_ext_org, target_url)
     except Exception:  # noqa: BLE001 — no token store / not authed → no injection
@@ -2159,11 +2226,14 @@ async def ext_mcp_proxy(path: str, request: Request):
         return _mcp_body_too_large_response()
 
     # ── Inbound credential hard-block on the transparent external proxy.
-    # This path is transport-level (no org/server/tool scoping), so the
-    # resolved scan_action defaults to "tag" (enabled_info=None) and the E12
-    # credential force-block still fires: a credential in tools/call arguments
-    # is blocked before it egresses to the external MCP server. Best-effort —
-    # if the body is not a tools/call JSON-RPC, this is a no-op. ──
+    # This path is transport-level (no org/server/tool scoping), so the posture is
+    # the ORG-LEVEL operator selection resolved by ``_ext_proxy_enabled_info``
+    # (FirewallConfig.mcp_ext_scan_action). Under an operator-selected enforcing
+    # posture the E12 credential force-block fires and a credential in tools/call
+    # arguments is blocked before it egresses to the external MCP server; under the
+    # observe-only "tag"/"monitor" selection it is detected and tagged but NOT
+    # blocked. Best-effort — if the body is not a tools/call JSON-RPC, this is a
+    # no-op. ──
     _ext_tool_name = ""
     # CHG-0039: True when the response should be result-scanned (finite methods:
     # tools/call + resources/* + prompts/*), so the SSE branch buffers+scans them
@@ -2188,7 +2258,7 @@ async def ext_mcp_proxy(path: str, request: Request):
                         await _scan_tool_args_block(
                             _ext_args,
                             tool_name=_ext_tool_name,
-                            enabled_info=None,
+                            enabled_info=_ext_posture,
                             org_slug="",
                             server_slug="",
                             actor=None,
@@ -2247,7 +2317,7 @@ async def ext_mcp_proxy(path: str, request: Request):
                     _cin["context_arguments"] = _cctx.get("arguments")
                 if _cin:
                     _cs, _cblk, _ctags, _cfind, _cmeta = await _scan_tool_args_block(
-                        _cin, tool_name="completion/complete", enabled_info=None,
+                        _cin, tool_name="completion/complete", enabled_info=_ext_posture,
                         org_slug="", server_slug="", actor=None,
                     )
                     if _cblk:
@@ -2328,7 +2398,7 @@ async def ext_mcp_proxy(path: str, request: Request):
                     tool_name=_ext_tool_name,
                     org_slug="",
                     server_slug="",
-                    enabled_info=None,
+                    enabled_info=_ext_posture,
                     actor=None,
                     # CHG-0122: a finite tools/call (or resources/* / prompts/*) SSE can
                     # INTERLEAVE server-pushed notification frames (notifications/progress,
@@ -2399,6 +2469,7 @@ async def ext_mcp_proxy(path: str, request: Request):
                             event_count += 1
                             reframed, block = await _scan_reframe_sse_tool_result(
                                 raw_event, tool_name=_ext_tool_name, scan_notifications=True,
+                                enabled_info=_ext_posture,
                             )
                             if block is not None:
                                 LOG.warning(
@@ -2438,6 +2509,7 @@ async def ext_mcp_proxy(path: str, request: Request):
                     if buf.strip():
                         reframed, block = await _scan_reframe_sse_tool_result(
                             buf, tool_name=_ext_tool_name, scan_notifications=True,
+                            enabled_info=_ext_posture,
                         )
                         if block is None:
                             yield reframed.encode("utf-8")
@@ -2494,7 +2566,7 @@ async def ext_mcp_proxy(path: str, request: Request):
                 (
                     _txt_scanned, _txt_blocked, _txt_tags, _tf, _tm
                 ) = await _scan_tool_result_floor(
-                    _raw_text, tool_name=_ext_tool_name, enabled_info=None,
+                    _raw_text, tool_name=_ext_tool_name, enabled_info=_ext_posture,
                     org_slug="", server_slug="", actor=None,
                 )
                 if _txt_blocked:
@@ -2532,7 +2604,9 @@ async def ext_mcp_proxy(path: str, request: Request):
         # ── Outbound result scan + redaction floor on NON-streaming JSON
         # responses (parity with org_mcp_jsonrpc). Scans result.content; on an
         # output block returns a JSON-RPC error, otherwise swaps masked content
-        # in. enabled_info=None → action defaults to "tag", so the floor applies
+        # in. The posture is the org-level operator selection (see
+        # _ext_proxy_enabled_info), so the floor applies only when the operator
+        # selected an enforcing action
         # (never "monitor"). Best-effort — only when a tools/call result is
         # present; never raises (the scan helper is fail-safe). ──
         # Scan the ENTIRE ``result`` (whatever shape) — not just dict
@@ -2551,7 +2625,7 @@ async def ext_mcp_proxy(path: str, request: Request):
             ) = await _scan_tool_result_floor(
                 _ext_result,
                 tool_name=_ext_tool_name,
-                enabled_info=None,
+                enabled_info=_ext_posture,
                 org_slug="",
                 server_slug="",
                 actor=None,
@@ -2602,7 +2676,7 @@ async def ext_mcp_proxy(path: str, request: Request):
             ) = await _scan_tool_result_floor(
                 _ext_err,
                 tool_name=_ext_tool_name,
-                enabled_info=None,
+                enabled_info=_ext_posture,
                 org_slug="",
                 server_slug="",
                 actor=None,
@@ -2644,7 +2718,7 @@ async def ext_mcp_proxy(path: str, request: Request):
             (
                 _whole_scanned, _whole_blocked, _whole_tags, _wf, _wm
             ) = await _scan_tool_result_floor(
-                data, tool_name=_ext_tool_name, enabled_info=None,
+                data, tool_name=_ext_tool_name, enabled_info=_ext_posture,
                 org_slug="", server_slug="", actor=None,
             )
             if _whole_blocked:

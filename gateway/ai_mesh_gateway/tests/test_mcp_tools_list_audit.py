@@ -28,11 +28,15 @@ _SECRET = "sk-ant-AAAABBBBCCCCDDDDEEEEFFFFGGGG1234"
 _ZW = "​"  # zero-width space
 
 
-async def _run(tools):
+async def _run(tools, scan_action="redact"):
+    """``scan_action`` is the posture the OPERATOR selected. Enforcement is strictly
+    operator-selected, so a test that expects a redact/block DECISION must select an
+    enforcing posture; under tag/monitor the payload is never mutated."""
     payload = {"jsonrpc": "2.0", "id": 1, "result": {"tools": tools}}
+    enabled_info = {"default_scan_action": scan_action} if scan_action else None
     with patch.object(mcp_proxy, "_record_gateway_event", new=AsyncMock()) as rec:
         await mcp_proxy._scanned_tools_list_response(
-            payload, jsonrpc="2.0", msg_id=1, enabled_info=None,
+            payload, jsonrpc="2.0", msg_id=1, enabled_info=enabled_info,
             org_slug="o", server_slug="s", actor=None, request_id="req-123")
     return rec
 
