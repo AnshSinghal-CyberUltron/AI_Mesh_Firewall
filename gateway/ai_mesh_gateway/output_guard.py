@@ -809,12 +809,38 @@ class OutputGuard:
             # ALREADY-MASKED IS NOT A LEAK: a guard "masking-detection" finding
             # (e.g. PII_MASKING_DETECTION) means the value is ALREADY masked in the
             # output — no raw data to protect → no action, mirroring the static
-            # *_smart_masked handling in _check_pii_secrets. Guarded by an evasion
-            # check so an ADVERSARIAL label ('masking_bypass', 'unmasking_attempt')
-            # is NOT silently swallowed into "allow".
-            if (tokens & {"masked", "masking"}) and not (
-                tokens & {"bypass", "attempt", "evasion", "evade", "unmask", "unmasking", "circumvent"}
-            ):
+            # *_smart_masked handling in _check_pii_secrets.
+            #
+            # ALLOWLIST, NOT BLOCKLIST (2026-07-22): this used to swallow to "allow"
+            # ANY label containing 'masked'/'masking' unless it ALSO contained one of
+            # a fixed set of EXACT evasion tokens. That is a blocklist, and it leaked:
+            # every morphological inflection of the cited examples ('masking_bypass'
+            # -> 'masking_bypassed', 'circumvent' -> 'circumvention', 'evade' ->
+            # 'evaded') and every synonym ('masking_defeat', 'masking_stripped',
+            # 'masked_data_leak', 'masking_disabled', 'masked_exfiltration',
+            # 'masking_failure') still satisfied {masked,masking} but missed the exact
+            # set, so an ADVERSARIAL masking-DEFEAT finding was silently dropped to
+            # "allow" and the raw output egressed even with every detector set to block.
+            #
+            # Now: swallow to "allow" ONLY for a POSITIVE benign already-masked
+            # signal (a masking DETECTION / a bare already-masked state) AND only
+            # when NO defeat/negation stem is present. Defeat matching is by SUBSTRING
+            # stem so inflections cannot escape. Anything ambiguous or adversarial
+            # falls through to normal per-class routing (policy fallback => the
+            # operator's block is honoured), never to a silent allow.
+            _defeat = any(stem in t for stem in (
+                "bypass", "circumvent", "evade", "evasion", "defeat", "strip",
+                "remove", "disable", "unmask", "fail", "leak", "exfil", "attempt",
+                "escape", "abuse", "forge", "spoof", "breach", "break", "dodge",
+                "unredact", "reveal", "recover", "reconstruct",
+            ))
+            _benign_masked = bool(tokens & {"masked", "masking", "redacted", "redaction"}) and (
+                bool(tokens & {"detection", "detected", "present", "applied",
+                               "complete", "clean", "ok", "done", "found"})
+                or t in ("masked", "output_masked", "already_masked",
+                         "pii_masked", "value_masked", "content_masked")
+            )
+            if _benign_masked and not _defeat:
                 return "allow"
 
             # ORDER IS LOAD-BEARING: credential and ip_leakage are matched BEFORE

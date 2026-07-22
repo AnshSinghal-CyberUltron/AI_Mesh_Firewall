@@ -1446,6 +1446,28 @@ def _redact_all_raw(text: str, allowed_classes: set[str] | None = None) -> str:
             return f"[{lt.upper()}_REDACTED]"
 
         result = _infra_compiled.sub(_infra_sub, result)
+
+    # STRICT OPERATOR CONTROL (2026-07-22): file paths are detected as ip_leakage
+    # spans by ``detect_ip_leakage`` (file_path_unix / file_path_windows) but the
+    # E15 loop above deliberately excludes them from mask-ALL because they are
+    # FP-prone in benign code answers (the "softer flag tier" the comment names).
+    # That created the exact flagged-yet-forwarded-raw fail-open the comment warns
+    # about: when an operator EXPLICITLY selects ip_leakage=redact, ``_check_ip_leakage``
+    # fires the verdict on the detected path, the maskable IP/hostname make the
+    # redaction non-empty (so the redact->block "nothing maskable" floor never
+    # fires), and the file path egresses verbatim in the 200 body — violating the
+    # redact contract ("raw gone"). When (and ONLY when) redaction is scoped to the
+    # ip_leakage class the operator chose, mask the detected file path too. The
+    # historical mask-ALL path (allowed_classes is None) is untouched, so every
+    # existing caller keeps its FP-avoiding behaviour byte-for-byte.
+    if allowed_classes is not None and "ip_leakage" in allowed_classes:
+        for _fp_type in ("file_path_unix", "file_path_windows"):
+            _fp_pat = IP_LEAKAGE_PATTERNS.get(_fp_type)
+            if not _fp_pat:
+                continue
+            result = compile_pattern(_fp_pat).sub(
+                lambda m, lt=_fp_type: f"[{lt.upper()}_REDACTED]", result
+            )
     return result
 
 
