@@ -38,8 +38,15 @@ import pytest
 
 GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://127.0.0.1:8300").rstrip("/")
 CONTROL_URL = os.environ.get("CONTROL_URL", "http://127.0.0.1:8100").rstrip("/")
-EMAIL = os.environ.get("TEST_EMAIL", "admin@zeroshield.io")
-PASSWORD = os.environ.get("TEST_PASSWORD", "Adm1n!Pass#2024")
+# SECURITY: no credential defaults. This file previously carried a WORKING control-plane
+# admin password as a fallback default, which put a live credential into source control.
+# Credentials must come from the environment; without them the suite SKIPS rather than
+# authenticating with anything baked into the repo.
+#
+#   export TEST_EMAIL=...  TEST_PASSWORD=...     # control-plane login, or
+#   export GATEWAY_API_KEY=zs_...                # a pre-minted key (preferred in CI)
+EMAIL = os.environ.get("TEST_EMAIL", "").strip()
+PASSWORD = os.environ.get("TEST_PASSWORD", "").strip()
 
 # A live inference round-trip through routing + tier-2 scan + output guard is slow
 # (observed 5-15s). Generous, but bounded: a hang must fail, not wedge the suite.
@@ -72,6 +79,11 @@ def _mint_key() -> str:
     preset = os.environ.get("GATEWAY_API_KEY", "").strip()
     if preset:
         return preset
+    if not EMAIL or not PASSWORD:
+        pytest.skip(
+            "no live credential in the environment: set GATEWAY_API_KEY, or "
+            "TEST_EMAIL + TEST_PASSWORD. This suite will NOT fall back to a "
+            "credential committed in the repository.")
     try:
         with httpx.Client(timeout=60.0) as c:
             tok = c.post(
