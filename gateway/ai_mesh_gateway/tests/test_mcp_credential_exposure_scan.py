@@ -61,9 +61,10 @@ async def _floor(text):
         text, tool_name="fetch", enabled_info=_ENFORCING, org_slug="o", server_slug="s", actor=None)
 
 
-async def _argblock(args):
+async def _argblock(args, posture="redact"):
     return await mcp_proxy._scan_tool_args_block(
-        args, tool_name="fetch", enabled_info=_ENFORCING, org_slug="o", server_slug="s", actor=None)
+        args, tool_name="fetch", enabled_info={"default_scan_action": posture},
+        org_slug="o", server_slug="s", actor=None)
 
 
 @pytest.mark.asyncio
@@ -80,10 +81,35 @@ async def test_credential_in_result_is_masked_not_raw(name, text, raw):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("name", "text", "raw"), _CRED_CASES)
-async def test_credential_in_args_force_blocks(name, text, raw):
+async def test_credential_in_args_redacted_not_blocked(name, text, raw):
+    """STRICT OPERATOR CONTROL (2026-07-22): redact means redact. A credential in tool
+    ARGS is MASKED in place and forwarded under ``redact`` — NOT force-blocked. The
+    old credential force-block escalated redact -> block regardless of the selected
+    posture (a real incident: an operator selected redact and got HTTP 400). It is now
+    off by default; an operator who wants a credential to hard-block the call selects
+    the ``block`` posture (below) or opts the floor back in."""
+    scanned, blocked, _t, _f, meta = await _argblock({"value": text})
+    assert not blocked, f"{name}: redact must mask, not block"
+    assert not meta.get("credential_force_block")
+    assert raw not in str(scanned), f"{name}: {raw!r} must be masked under redact"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("name", "text", "raw"), _CRED_CASES)
+async def test_credential_in_args_blocked_under_block_posture(name, text, raw):
+    """The operator's ``block`` selection blocks a credential-bearing tool call."""
+    _s, blocked, _t, _f, _meta = await _argblock({"value": text}, posture="block")
+    assert blocked, f"{name}: block posture must block"
+
+
+@pytest.mark.asyncio
+async def test_credential_force_block_opt_in_still_available(monkeypatch):
+    """The force-block remains available as an explicit opt-in for operators who want
+    a credential to hard-block even under redact."""
+    monkeypatch.setenv("GATEWAY_MCP_BLOCK_ON_CREDENTIAL", "true")
+    name, text, raw = _CRED_CASES[0]
     _s, blocked, _t, _f, meta = await _argblock({"value": text})
-    assert blocked, f"{name}: credential in tool args must force-block"
-    assert meta.get("credential_force_block")
+    assert blocked and meta.get("credential_force_block")
 
 
 @pytest.mark.asyncio

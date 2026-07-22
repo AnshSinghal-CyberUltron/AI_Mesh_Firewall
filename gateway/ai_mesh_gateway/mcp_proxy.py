@@ -1145,11 +1145,19 @@ def _gateway_app_module():
 
 
 def _mcp_block_on_credential_enabled() -> bool:
-    """E12 FIX 1: whether a credential in tool ARGS force-blocks the call.
+    """Whether a credential in tool ARGS force-blocks the call.
 
-    Prefers the live gateway CONFIG (populated from ``load_config``); falls back
-    to reading the env var directly so the gate still resolves in unit tests /
-    early startup before ``main.CONFIG`` is set. Default ON.
+    STRICTLY-WHAT-THE-OPERATOR-SELECTED (2026-07-22): default OFF. This was a
+    built-in floor that escalated a detected credential redact -> BLOCK regardless of
+    the operator's selected posture — so a server on ``redact`` HARD-BLOCKED a tool
+    call (HTTP 400) instead of masking the credential and forwarding, which is not
+    "redact". Under strict operator control the delivered action must be exactly what
+    the operator selected: ``redact`` masks the credential in place (``AKIA****MPLE``)
+    and forwards; an operator who wants a credential to hard-BLOCK the call selects
+    the ``block`` posture (or a policy rule with action=block), which already blocks.
+    The force-block therefore only ever ADDED an override under ``redact`` — off by
+    default removes that override. Still opt-in via CONFIG/env for anyone who wants
+    the belt-and-suspenders.
     """
     try:
         gateway_main = _gateway_app_module()
@@ -1159,7 +1167,7 @@ def _mcp_block_on_credential_enabled() -> bool:
             return bool(cfg.get("mcp_block_on_credential"))
     except Exception:
         pass
-    return os.environ.get("GATEWAY_MCP_BLOCK_ON_CREDENTIAL", "true").lower() in (
+    return os.environ.get("GATEWAY_MCP_BLOCK_ON_CREDENTIAL", "false").lower() in (
         "true", "1", "yes",
     )
 

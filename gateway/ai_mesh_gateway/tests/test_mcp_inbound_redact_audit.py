@@ -90,12 +90,15 @@ async def test_internal_benign_args_not_audited():
 
 
 @pytest.mark.asyncio
-async def test_internal_credential_still_blocks_not_redacts():
-    # A credential force-blocks inbound; it must record a block, NOT a redact.
+async def test_internal_credential_redacted_under_redact_posture():
+    # STRICT OPERATOR CONTROL (2026-07-22): redact means redact. A credential in
+    # inbound args is MASKED under the operator's ``redact`` posture — NOT
+    # force-blocked. The credential force-block escalation (redact -> block) is now
+    # off by default; the operator selects ``block`` to hard-block a credential.
     events = await _drive_internal(_CRED_ARGS)
     decisions = [d for d, _ in events]
-    assert "block" in decisions
-    assert "redact" not in decisions  # no double / mislabeled audit
+    assert "block" not in decisions      # no force-block escalation under redact
+    assert "redact" in decisions         # the credential was masked in place
 
 
 # ── org_mcp_tool_call (bare REST route) ──────────────────────────────────────
