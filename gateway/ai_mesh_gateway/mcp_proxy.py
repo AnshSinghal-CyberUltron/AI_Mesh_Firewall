@@ -1408,6 +1408,33 @@ def _boundary_concat(texts: list[str]) -> str:
     return "".join(parts)
 
 
+def _mask_text_content_blocks(result_content):
+    """Replace every text content block's text with a redaction marker.
+
+    Used to REDACT (not block) a cross-block-split secret: each half is individually
+    benign and lives in a different content item, so it cannot be masked in place —
+    but a client that concatenates the blocks reconstructs it. Replacing the text
+    blocks removes the reconstructable secret while keeping the JSON-RPC result shape
+    (redact means redact: the sensitive data is gone, the call still returns). Deep
+    copy so the original upstream object is not mutated.
+    """
+    import copy as _copy
+    masked = _copy.deepcopy(result_content)
+    _blocks = None
+    if isinstance(masked, dict):
+        _res = masked.get("result")
+        if isinstance(_res, dict) and isinstance(_res.get("content"), list):
+            _blocks = _res["content"]
+        elif isinstance(masked.get("content"), list):
+            _blocks = masked["content"]
+    if _blocks is None:
+        return masked
+    for _b in _blocks:
+        if isinstance(_b, dict) and isinstance(_b.get("text"), str) and _b["text"]:
+            _b["text"] = "[SECRET_REDACTED]"
+    return masked
+
+
 def _result_has_split_secret(result_content) -> tuple[bool, list[str]]:
     """CHG-0100: detect a HIGH-CONFIDENCE secret SPLIT across content-array items.
 
@@ -1564,17 +1591,31 @@ async def _scan_tool_result_floor(
     # CHG-0100: a HIGH-CONFIDENCE secret SPLIT ACROSS content-array items (each half a
     # benign sub-pattern) evades the scan above — the items are separated by JSON
     # structure so the value is never contiguous — but a client that concatenates the
-    # text blocks reconstructs it. Fail CLOSED (a cross-block split cannot be masked in
-    # place). A per-tool "monitor" still wins (observe-only), like the redaction floor.
+    # text blocks reconstructs it. STRICT OPERATOR CONTROL (2026-07-22):
+    #   * block   -> withhold the whole result (the operator selected block).
+    #   * redact  -> redact means redact, never block AND never forward the raw
+    #     reconstructable secret: mask the text content blocks in place so the split
+    #     can no longer be reassembled, then forward.
+    #   * tag/mon -> observe-only (unchanged).
     if not _explicit_monitor_posture(tool_name, enabled_info, "output"):
         _split, _split_kinds = _result_has_split_secret(result_content)
-        if _split:
+        if _split and _mcp_operator_selected_block(tool_name, enabled_info, "output"):
             LOG.warning(
-                "mcp_proxy.cross_block_split_secret org=%s server=%s tool=%s kinds=%s (FAIL-CLOSED)",
+                "mcp_proxy.cross_block_split_secret org=%s server=%s tool=%s kinds=%s (operator selected block)",
                 org_slug, server_slug, tool_name, _split_kinds,
             )
             return result_content, True, list(dict.fromkeys(list(tags) + ["SECRET"])), findings, {
                 **meta, "cross_block_split_secret": True,
+            }
+        if _split:
+            # redact: mask the text blocks so the split cannot be reconstructed.
+            _masked = _mask_text_content_blocks(result_content)
+            LOG.info(
+                "mcp_proxy.cross_block_split_redacted org=%s server=%s tool=%s kinds=%s",
+                org_slug, server_slug, tool_name, _split_kinds,
+            )
+            return _masked, False, list(dict.fromkeys(list(tags) + ["SECRET"])), findings, {
+                **meta, "cross_block_split_redacted": True,
             }
 
     # E12 result-REDACTION floor: detected secret/PII but the resolved action did
@@ -1600,18 +1641,15 @@ async def _scan_tool_result_floor(
                 actor=actor,
                 enforcement_override="redact",
             )
-            if _fb:
-                # CHG-0074: the redact re-scan itself BLOCKED — a detected value
-                # redact_all cannot mask survived the scrub (e.g. a private file path
-                # alongside the network/PII leak, caught by the orchestrator's
-                # egress-byte verify). Forwarding here would egress that value RAW, so
-                # fail CLOSED (block) — consistent with the except-handler below and
-                # the "mask, else block; never forward raw" invariant. Previously this
-                # block was swallowed and the raw result was returned.
+            if _fb and _mcp_operator_selected_block(tool_name, enabled_info, "output"):
+                # The redact re-scan reports a value redact_all cannot mask survived the
+                # scrub. Withholding is only valid when the operator selected ``block``.
                 return result_content, True, (_ft or tags), (_ff or findings), {
                     **meta, "result_redaction_floor_block": True,
                 }
             if floor_content is not result_content:
+                # redact means redact: forward the best-effort masked result (2026-07-22
+                # — was a redact->block escalation the operator did not select).
                 scanned = floor_content
                 meta = {**meta, "result_redaction_floor": True}
         except Exception as exc:  # pragma: no cover - defensive
@@ -1896,6 +1934,27 @@ def _static_hardening_floors_enabled(
     and the two must never diverge again.
     """
     return not _explicit_monitor_posture(tool_name, enabled_info, scan_direction)
+
+
+def _mcp_operator_selected_block(
+    tool_name: str,
+    enabled_info: dict | None,
+    scan_direction: str,
+) -> bool:
+    """True ONLY when the operator's resolved action for this tool/direction is ``block``.
+
+    TWO-LAYER STRICT OPERATOR CONTROL (2026-07-22): the delivered action MUST equal the
+    action the operator selected on the posture / policy — nothing may ESCALATE it. A
+    built-in floor may WITHHOLD (block) a result ONLY when the operator selected
+    ``block``; under ``redact`` the floor masks best-effort and forwards (redact means
+    redact), under ``tag``/``monitor`` it observes. This is stricter than
+    ``_static_hardening_floors_enabled`` (which is True for redact AND block): the
+    block-ESCALATION floors (cross-block-split, result-redaction-floor block-when-
+    unmaskable) gate on THIS so they can no longer turn a ``redact`` selection into a
+    hard block. The masking machinery (redact_all, encoded-form + exfil-beacon
+    neutralization) is unchanged — that is HOW redact works, not an escalation.
+    """
+    return _resolved_tier1_action(tool_name, enabled_info, scan_direction) == "block"
 
 
 async def _mcp_security_scan(

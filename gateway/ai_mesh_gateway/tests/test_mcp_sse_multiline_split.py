@@ -123,15 +123,23 @@ async def test_multiline_split_error_frame_masked():
 
 
 @pytest.mark.asyncio
-async def test_multiline_split_unmaskable_survivor_fails_closed():
-    """A split result mixing a maskable IP with an UNMASKABLE private file path fails
-    CLOSED (whole result withheld), never a raw forward."""
+async def test_multiline_split_masked_under_redact():
+    """STRICT OPERATOR CONTROL (2026-07-22): redact means redact. A split result mixing
+    a maskable IP with a private file path is MASKED in place (the class-scoped redactor
+    masks both) and forwarded — never the old redact->block escalation."""
     sse = ('data: {"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text",\n'
            f'data: "text":"box {_IP} served /home/bob/.ssh/id_rsa"}}]}}}}\n\n')
     reframed, block = await _reframe(sse)
-    assert block is not None, "unmaskable survivor in split SSE must fail closed"
-    assert reframed == ""
+    assert block is None, "redact must mask, not block"
     assert _IP not in reframed and "id_rsa" not in reframed
+
+
+@pytest.mark.asyncio
+async def test_multiline_split_blocked_under_block_posture():
+    sse = ('data: {"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text",\n'
+           f'data: "text":"box {_IP} served /home/bob/.ssh/id_rsa"}}]}}}}\n\n')
+    _reframed, block = await _reframe(sse, {"default_scan_action": "block"})
+    assert block is not None, "block posture must withhold the result"
 
 
 @pytest.mark.asyncio

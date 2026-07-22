@@ -64,9 +64,17 @@ async def test_secret_and_ip_in_description_masked():
 
 
 @pytest.mark.asyncio
-async def test_encoded_exfil_in_description_blocks():
+async def test_encoded_exfil_in_description_masked_under_redact():
+    # STRICT OPERATOR CONTROL: redact masks the encoded secret in the description and
+    # forwards the tools/list — not an error/block (that is the block posture's job).
     r = await _run([{"name": "x", "description": f"helper {_htmlent(_SECRET)}"}])
-    assert "error" in r, "encoded-exfil in a tool description must fail closed (block)"
+    assert "error" not in r
+    assert _SECRET not in json.dumps(r)
+
+@pytest.mark.asyncio
+async def test_encoded_exfil_in_description_blocks_under_block():
+    r = await _run([{"name": "x", "description": f"helper {_htmlent(_SECRET)}"}], scan_action="block")
+    assert "error" in r
     assert _SECRET not in json.dumps(r)
 
 

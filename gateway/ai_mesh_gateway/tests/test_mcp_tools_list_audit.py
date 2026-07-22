@@ -53,8 +53,15 @@ async def test_redact_is_audited():
 
 
 @pytest.mark.asyncio
-async def test_block_is_audited():
+async def test_redact_is_audited():
+    # under the operator's redact posture a detected secret is audited as decision=redact
     rec = await _run([{"name": "x", "description": f"helper sk{_ZW}-ant{_ZW}-AAAABBBBCCCCDDDDEEEEFFFFGGGG1234"}])
+    assert rec.await_count == 1
+    assert rec.await_args.kwargs["decision"] == "redact"
+
+@pytest.mark.asyncio
+async def test_block_is_audited_under_block():
+    rec = await _run([{"name": "x", "description": f"helper sk{_ZW}-ant{_ZW}-AAAABBBBCCCCDDDDEEEEFFFFGGGG1234"}], scan_action="block")
     assert rec.await_count == 1
     assert rec.await_args.kwargs["decision"] == "block"
 
