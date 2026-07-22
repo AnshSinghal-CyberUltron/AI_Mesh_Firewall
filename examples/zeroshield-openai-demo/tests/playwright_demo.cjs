@@ -6,7 +6,11 @@
  * Or as a @playwright/test spec: see tests/README.md.
  */
 const { chromium } = require("playwright");
-const BASE = process.env.DEMO_URL || "http://127.0.0.1:8800";
+const BASE = process.env.DEMO_URL || "http://127.0.0.1:8770";
+// Every data route is behind a control-plane login, so the suite must sign in the
+// way a customer does. Credentials come from the environment — never hardcoded.
+const EMAIL = process.env.DEMO_EMAIL || process.env.TEST_EMAIL || "";
+const PASSWORD = process.env.DEMO_PASSWORD || process.env.TEST_PASSWORD || "";
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log("  ✅ " + m); } else { fail++; console.log("  ❌ " + m); } };
@@ -17,8 +21,25 @@ const ok = (c, m) => { if (c) { pass++; console.log("  ✅ " + m); } else { fail
   const errors = [];
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text().slice(0, 120)); });
   try {
-    // 1) Load + gateway connection
+    // 0) Sign in — the demo binds to the logged-in org's key, policies and models.
+    if (!EMAIL || !PASSWORD) {
+      throw new Error(
+        "DEMO_EMAIL / DEMO_PASSWORD (or TEST_EMAIL / TEST_PASSWORD) must be set — " +
+        "every demo data route requires a control-plane login."
+      );
+    }
     await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForSelector('[data-testid="login-screen"]', { timeout: 20000 });
+    await page.fill('[data-testid="login-email"]', EMAIL);
+    await page.fill('[data-testid="login-password"]', PASSWORD);
+    await page.click('[data-testid="login-submit"]');
+    await page.waitForFunction(
+      () => document.querySelector('[data-testid="login-screen"]')?.hidden === true,
+      { timeout: 30000 }
+    );
+    ok(true, `signed in as ${EMAIL}`);
+
+    // 1) Gateway connection
     await page.waitForFunction(() => /\d+\s*models/.test(document.querySelector("#conn")?.textContent || ""), { timeout: 20000 });
     const conn = await page.textContent("#conn");
     ok(/\d+\s*models/.test(conn), `gateway connected: "${conn.trim()}"`);
@@ -91,6 +112,24 @@ const ok = (c, m) => { if (c) { pass++; console.log("  ✅ " + m); } else { fail
     await page.waitForFunction(() => (document.querySelector('[data-testid="vz-selected"]')?.textContent || "").length > 0, { timeout: 40000 });
     const served = await page.textContent('[data-testid="vz-selected"]');
     ok(served && served.length > 0, `routing visualizer shows served model: "${served}"`);
+
+    // 7b) Governance signals strip — the gateway sends quota / clamp / review state
+    // as RESPONSE HEADERS. Assert it renders whatever arrived, and stays silent when
+    // nothing did (an empty strip must never read as "all clear").
+    const gov = await page.$eval('[data-testid="vz-gov"]',
+      (e) => ({ hidden: e.hidden, text: (e.textContent || "").replace(/\s+/g, " ").trim() }));
+    ok(gov.hidden || /token limit|tokens left|params rewritten|human review/i.test(gov.text),
+      gov.hidden ? "governance strip hidden (no headers sent)" : `governance strip: "${gov.text.slice(0, 80)}"`);
+
+    // 7c) MCP scan posture is stated, not implied. Under the default `tag` posture the
+    // firewall detects but does NOT modify or block, and the UI must say so.
+    await page.click('[data-testid="tab-mcp"]');
+    await page.waitForFunction(
+      () => (document.querySelector('[data-testid="mcp-posture"]')?.textContent || "").length > 0,
+      { timeout: 20000 });
+    const posture = await page.textContent('[data-testid="mcp-posture"]');
+    ok(/MCP posture:/.test(posture) && /(enforcing|detect-only)/.test(posture),
+      `MCP posture disclosed: "${posture.replace(/\s+/g, " ").slice(0, 90)}"`);
 
     // 8) Refresh persistence (page reloads cleanly, reconnects)
     await page.reload({ waitUntil: "domcontentloaded" });

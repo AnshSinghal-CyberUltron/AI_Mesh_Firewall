@@ -383,6 +383,41 @@ your response envelope. Ask your ZeroShield operator if you need the configured 
 Compliance tagging (PII / IP / regulated data) is applied and recorded to your organisation's
 audit trail. Those tags are **operator-side**; they are not returned in the client envelope.
 
+### MCP tool results: what your operator's scan action means
+
+If your application consumes **MCP tool results** through ZeroShield, the amount of
+*mutation* applied to those results is a deliberate operator choice, and the **server
+default does not mutate**. This is a product contract, not an implementation detail, so it
+is worth knowing before you build on it.
+
+| Scan action | Detects & tags | Mutates / blocks the result |
+|---|---|---|
+| `tag` — **the server default** | Yes | **No** |
+| `monitor` | Yes | **No** |
+| `redact` | Yes | Yes — masks the offending span |
+| `block` | Yes | Yes — withholds the result |
+
+Under `tag` / `monitor` the scan still runs and still records findings — your operator sees
+every detection in their audit trail — but the tool result is delivered **exactly as the
+upstream MCP server returned it**. Nothing is masked and nothing is withheld.
+
+The reasoning is that ZeroShield never enforces an action the operator did not select.
+"Tag only" means observe only.
+
+**What this means for you as a client:**
+
+- Do **not** assume MCP tool-result content has been sanitized. On a default deployment it
+  has not been. Treat it as third-party data.
+- In particular, a tool result can contain a **zero-click exfiltration beacon** — a
+  markdown image or `<img>` whose URL smuggles data, which auto-fetches the moment your UI
+  renders it. Under `tag` that beacon is *detected and recorded* but still delivered.
+- If your application renders MCP results as markdown or HTML, either ask your operator to
+  select `redact` / `block`, or defang untrusted markup in your own renderer.
+
+> This is specific to the MCP surface. The ordinary chat path (`/v1/chat/completions`)
+> defangs exfiltration beacons in model output **unconditionally**, under every output
+> posture — the two surfaces have different contracts on purpose.
+
 ---
 
 ## 9. §1.5 Multi-model governance & routing
@@ -582,6 +617,10 @@ Stated so you can design around them rather than discover them.
   context there is nothing to ground against, so the hallucination action will not fire.
 - **Nested agent/MCP context is bounded** (depth and node count). Oversized context is
   refused rather than partially scanned — send less, or pre-summarise.
+- **MCP tool results are not mutated on a default deployment.** The server-default scan
+  action is `tag` = detect-and-record, never modify. Your operator must select
+  `redact`/`block` for MCP results to be sanitized. See §8 — this includes zero-click
+  exfiltration beacons in tool results. The chat path is unaffected and always defangs.
 - **The Responses API does not persist by default.** OpenAI's Responses API stores
   server-side unless you opt out; ZeroShield stores only when you pass `store=True`. If you
   omit it, `client.responses.retrieve(...)` and `.input_items(...)` raise
