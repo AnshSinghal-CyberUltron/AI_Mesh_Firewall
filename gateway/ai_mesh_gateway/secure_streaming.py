@@ -514,8 +514,42 @@ class SecureStreamingResponse:
                 from output_guard import (  # noqa: PLC0415
                     sanitize_output_for_verdict as _sanitize_for_verdict,
                 )
+                # V3-01 (HIGH): hand the sanitizer the RESOLVED action, not the raw
+                # verdict. ``enforce_output`` resolves allow->redact under a guard
+                # outage (scan_degraded) and the branch above correctly keys on
+                # ``effective_action`` — but passing the UNRESOLVED verdict made
+                # ``_sanitize_output_core`` short-circuit on
+                # ``if action != "redact": return response_text`` (verdict.action was
+                # still "allow"), so the scrub was a strict NO-OP and the branch
+                # released the UNSCANNED bytes. Measured on one guard flush, identical
+                # config, verdict=OutputVerdict(action="allow", threat_type="",
+                # scan_degraded=True):
+                #     non-stream -> 'Contact j***@a***.com about SSN ***-**-9083'
+                #     stream     -> 'Contact john.doe@acme.com about SSN 412-55-9083'
+                # i.e. the fail-closed floor for a guard OUTAGE was inert on exactly
+                # the path it exists for.
+                #
+                # Synthesising a verdict (rather than adding an action parameter) keeps
+                # ONE source of truth: _sanitize_output_core reads verdict.action in
+                # several places, and the non-stream path already passes a verdict whose
+                # .action IS the resolved action — so both transports now feed the
+                # sanitizer identically, which is parity by construction.
+                # Duck-typed verdicts reach this path too, so fall back rather than
+                # letting dataclasses.replace raise on a non-dataclass.
+                _sanitize_verdict = verdict
+                if getattr(verdict, "action", None) != effective_action:
+                    try:
+                        import dataclasses as _dc  # noqa: PLC0415
+                        _sanitize_verdict = _dc.replace(verdict, action=effective_action)
+                    except Exception:  # noqa: BLE001 - non-dataclass / frozen-shim verdict
+                        try:
+                            import copy as _copy  # noqa: PLC0415
+                            _sanitize_verdict = _copy.copy(verdict)
+                            _sanitize_verdict.action = effective_action
+                        except Exception:  # noqa: BLE001 - last resort: original verdict
+                            _sanitize_verdict = verdict
                 redacted_text = _sanitize_for_verdict(
-                    full_text, verdict, redact_pii_fn=self._scanner.redact_pii
+                    full_text, _sanitize_verdict, redact_pii_fn=self._scanner.redact_pii
                 )
                 # Threat classes with no spans of their own (hallucination, and the
                 # class-less policy/jailbreak/toxic family) are sanitized by a
@@ -611,6 +645,21 @@ class SecureStreamingResponse:
                     self._secret_anchor = _trailing_secret_run(full_text)
                 for redacted_chunk in self._yield_redacted(redacted_text):
                     yield redacted_chunk
+                self._clear_buffers()
+                return
+
+            # V3-05 (HIGH): a WHOLE-RESPONSE replacement is a statement about the
+            # WHOLE response, so it must suppress everything that follows — not just
+            # later REDACT segments. ``_response_replaced`` was consulted only inside
+            # the redact branch above, so a later CLEAN/flag flush fell through to the
+            # release path below and appended the ORIGINAL text verbatim, immediately
+            # after the sentence telling the caller the output had been rewritten.
+            # Realistic trigger: a tier-2 breaker OPEN on the first flush and
+            # recovered afterwards. Measured at 24 and 8 chars/delta, the stock SDK
+            # reassembled the replacement sentence followed by the raw SSN and the raw
+            # internal IP. That is strictly worse than a block: the caller is told the
+            # response was sanitized while receiving the unsanitized bytes.
+            if self._response_replaced:
                 self._clear_buffers()
                 return
 

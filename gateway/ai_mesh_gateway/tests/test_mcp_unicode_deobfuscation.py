@@ -59,10 +59,35 @@ async def test_obfuscated_injection_detected(text):
 
 @pytest.mark.asyncio
 async def test_zero_width_hidden_secret_in_result_blocks():
+    """A zero-width-hidden secret must fail closed — UNDER AN ENFORCING POSTURE.
+
+    Re-pointed for a3714946 ("enforcement is strictly operator-selected"). This used to
+    drive ``_floor`` with ``enabled_info=None``, i.e. the server-default ``tag``, and
+    assert a BLOCK. Under the decided contract tag/monitor are observe-only: they detect
+    and tag, they never block or mutate. Asserting a block under ``tag`` therefore encodes
+    the pre-decision behaviour.
+
+    The test's real intent — deobfuscation catches a zero-width-smuggled secret and it
+    does not egress — is preserved by selecting an enforcing action, and the observe-only
+    half is asserted explicitly below so BOTH sides of the contract are locked.
+    """
     text = f"api key sk{_ZW}-ant{_ZW}-AAAABBBBCCCCDDDDEEEEFFFFGGGG1234 here"
-    scanned, blocked, _t, _f, _m = await _floor(text)
-    assert blocked, "a zero-width-hidden secret in a tool result must fail closed (block)"
+    scanned, blocked, _t, _f, _m = await mcp_proxy._scan_tool_result_floor(
+        text, tool_name="fetch", enabled_info={"default_scan_action": "block"},
+        org_slug="o", server_slug="s", actor=None)
+    assert blocked, "a zero-width-hidden secret must fail closed under an ENFORCING posture"
     assert _SECRET not in str(scanned)
+
+
+@pytest.mark.asyncio
+async def test_zero_width_hidden_secret_is_detected_but_not_blocked_under_observe_only():
+    """The other half of the same contract: under the server default the secret is still
+    DETECTED (a finding is emitted, so the operator can see it) but NOT blocked — because
+    blocking is an action this organization did not select."""
+    text = f"api key sk{_ZW}-ant{_ZW}-AAAABBBBCCCCDDDDEEEEFFFFGGGG1234 here"
+    _scanned, blocked, _t, findings, _m = await _floor(text)
+    assert not blocked, "observe-only must never block"
+    assert findings, "observe-only must still emit a finding — otherwise 'tag' is 'off'"
 
 
 @pytest.mark.asyncio

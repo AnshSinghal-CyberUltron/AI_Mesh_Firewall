@@ -586,7 +586,14 @@ def _scan_text_tier1_sync(
     # posture stays observe-only. SCOPED to secret/credential/internal-NETWORK-IP (no
     # legit reason to text-encode those); generic PII is EXCLUDED so a scraped HTML page's
     # entity-encoded contact email does not false-block a legitimate web/HTML tool result.
-    if not blocked and not _is_observe_only_posture(enforcement):
+    # OPERATOR SOVEREIGNTY, IMPLEMENTED FAITHFULLY (a3714946 follow-up) — same shape as
+    # the render-leak gate below. a3714946 promises "under tag/monitor the scan still
+    # DETECTS, TAGS and EMITS FINDINGS; only MUTATION and BLOCKING are withheld", but this
+    # gate wrapped ``findings.append`` too, so an HTML-entity- or zero-width-encoded
+    # secret produced NO finding under the default posture. Detect always; withhold only
+    # the BLOCK. tag/monitor still never block — the decision is unchanged.
+    if not blocked:
+        _encoded_observe_only = _is_observe_only_posture(enforcement)
         from scanner import _decode_text_encoding_variants  # local: avoid import cycle
         _variants = list(_decode_text_encoding_variants(text))
         # CHG-0079: also probe the INVISIBLE/CONFUSABLE-unicode-deobfuscated view
@@ -645,11 +652,18 @@ def _scan_text_tier1_sync(
                         direction=mcp_dir,
                         tier="tier1",
                         threat_type="secret",
-                        detail=f"Encoded exfil (text-encoding) hides: {', '.join(_hidden)}",
+                        detail=(
+                            # Honest per posture (see the render-leak twin below).
+                            f"Encoded exfil (text-encoding) hides: {', '.join(_hidden)}"
+                            + ("" if not _encoded_observe_only else
+                               " — NOT blocked: this organization's scan action is "
+                               "observe-only")
+                        ),
                         matched_kinds=list(_hidden),
                     )
                 )
-                blocked = True
+                if not _encoded_observe_only:
+                    blocked = True
                 break
 
     # CHG-0096: defang zero-click auto-render EXFIL BEACONS in the tool RESULT — parity
@@ -664,7 +678,17 @@ def _scan_text_tier1_sync(
     # to run unconditionally under any enforcing posture. Applied to ``mutated`` so it
     # composes on top of any PII/secret redaction above; a 'monitor' posture stays
     # observe-only (matches the encoded-exfil block's gate).
-    if not blocked and not _is_observe_only_posture(enforcement):
+    # OPERATOR SOVEREIGNTY, IMPLEMENTED FAITHFULLY (a3714946 follow-up): that commit
+    # states the contract as "under tag/monitor the scan still DETECTS, TAGS and EMITS
+    # FINDINGS; only MUTATION and BLOCKING are withheld". The gate below withheld
+    # DETECTION too — it wrapped ``findings.append`` as well as the mutation — so under
+    # the default ``tag`` posture a zero-click exfil beacon produced NO finding, NO tag
+    # and nothing in the audit trail. The operator could not see the risk they had
+    # chosen to observe rather than block, which makes "Tag only" indistinguishable
+    # from "off". Detection now always runs; only the MUTATION honours the posture.
+    # This does not re-open the decision — tag/monitor still never mutate.
+    if not blocked:
+        _observe_only = _is_observe_only_posture(enforcement)
         # Run on the RAW text (not the already-redacted ``mutated``): the beacon's
         # smuggled payload must be VISIBLE for ``_url_smuggles_data`` to trip — if
         # redact_all masked the URL's PII first, the neutralizer would see a masked tail
@@ -685,12 +709,20 @@ def _scan_text_tier1_sync(
                     tier="tier1",
                     threat_type="exfil",
                     detail=(
-                        "Neutralized a render-time reconstruction leak (zero-click exfil "
-                        "beacon / encoded-PII / markdown-split PII-secret)"
+                        # Honest per posture: under observe-only nothing was
+                        # neutralized, so claiming otherwise would misreport the
+                        # operator's own selection back to them.
+                        ("Detected a render-time reconstruction leak (zero-click exfil "
+                         "beacon / encoded-PII / markdown-split PII-secret) — NOT "
+                         "neutralized: this organization's scan action is observe-only")
+                        if _observe_only else
+                        ("Neutralized a render-time reconstruction leak (zero-click exfil "
+                         "beacon / encoded-PII / markdown-split PII-secret)")
                     ),
                 )
             )
-            mutated = redact_all(_neu) if (pii or secrets or ip_leak or cred_exp) else _neu
+            if not _observe_only:
+                mutated = redact_all(_neu) if (pii or secrets or ip_leak or cred_exp) else _neu
     return mutated, findings, blocked, []
 
 
