@@ -99,19 +99,26 @@ class RAGFirewallPipeline:
         user_id: int | str | None = None,
         vector_client_override: Any = None,
         actor: dict[str, Any] | None = None,
+        telemetry_enabled: bool = True,
     ) -> PipelineResult:
         effective_policy = policy or {}
         ctx = PipelineContext(
             project_id=project_id,
             collection_name=collection_name,
             query_text=query_text,
+            # Honor the caller's per-org audit gate for per-stage telemetry
+            # (mirrors the chat path). The handler resolves this from the org's
+            # telemetry_enabled/audit_logging_enabled config.
+            telemetry_enabled=telemetry_enabled,
         )
 
-        # Hot-update compiled policies from sync cache (org-scoped)
+        # Resolve org-scoped compiled policies for THIS request. Passed
+        # per-request into RankerStageInput (below) instead of mutating the
+        # shared singleton ranker via update_policies() — the latter races
+        # across the pipeline's await points and let one org's request apply
+        # another org's policies (cross-tenant contamination) under concurrency.
         org_slug = (effective_policy or {}).get("_org_slug") or ""
         compiled_policies = self._get_compiled_policies(org_slug)
-        if compiled_policies:
-            self._ranker.update_policies(compiled_policies)
 
         # ──────── Stage 1: Query ────────
         t0 = time.perf_counter()
@@ -140,11 +147,7 @@ class RAGFirewallPipeline:
                 "original_query": q_out.original_query,
             },
         ))
-        self._emit_stage_telemetry(
-            ctx, "query", q_out.verdict, project_id, key_hash, collection_name, q_out.latency_ms,
-            organization_id=organization_id, user_id=user_id, namespace=namespace,
-            query_text=query_text,
-        )
+        self._emit_stage_telemetry(ctx, "query", q_out.verdict, project_id, key_hash, collection_name, q_out.latency_ms, organization_id=organization_id, user_id=user_id, namespace=namespace)
         if q_out.verdict.action == "block":
             ctx.final_action = "block"
             return self._build_result(ctx, 0, blocked=True)
@@ -239,6 +242,7 @@ class RAGFirewallPipeline:
             policy=effective_policy,
             escalation_level=ctx.escalation_level,
             actor=actor,
+            compiled_policies=compiled_policies,
         ))
         t2_end = time.perf_counter()
         ctx.add_stage(StageRecord(
@@ -393,17 +397,19 @@ class RAGFirewallPipeline:
         organization_id: int | None = None,
         user_id: int | str | None = None,
         namespace: str = "",
-        query_text: str = "",
     ) -> None:
-        if self._telemetry is None:
+        # Global sink absent OR the caller's org disabled telemetry/audit logging
+        # (telemetry_enabled=False) → suppress. Without the ctx gate, per-stage
+        # rag_pipeline events (carrying verdict detail, collection, namespace)
+        # leaked to the audit sink for orgs that turned audit logging OFF, while
+        # the chat path (_emit_telemetry) correctly dropped them — a config→
+        # runtime asymmetry. (#16)
+        if self._telemetry is None or not ctx.telemetry_enabled:
             return
         try:
             from telemetry import build_telemetry_event
         except ImportError:
             from gateway.telemetry import build_telemetry_event
-
-        _prompt = (query_text or getattr(ctx, "query_text", "") or "")[:500]
-        _prompt_full = (query_text or getattr(ctx, "query_text", "") or "")[:2000]
 
         self._telemetry.emit(build_telemetry_event(
             event_type="rag_pipeline",
@@ -416,14 +422,12 @@ class RAGFirewallPipeline:
             latency_ms=latency_ms,
             organization_id=organization_id,
             user_id=user_id,
-            prompt_snippet=_prompt,
             metadata={
                 "request_id": ctx.request_id,
                 "collection": collection_name,
                 "namespace": namespace,
                 "escalation_level": ctx.escalation_level,
                 "detail": verdict.detail,
-                "prompt_submitted": _prompt_full,
                 "module": "1.3",
                 "module_id": "1.3",
             },

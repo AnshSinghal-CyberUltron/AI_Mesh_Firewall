@@ -28,7 +28,7 @@ import redis
 from ai_mesh_shared.redis_pool import connection_pool_kwargs
 from django.conf import settings
 from django.db import transaction
-from django.db.models.signals import post_delete, post_save, pre_save
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 from core.models import (
@@ -38,7 +38,6 @@ from core.models import (
     LLMModelConfig,
     ModelState,
     is_platform_managed_llm_model_name,
-    is_reserved_inference_model_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -73,23 +72,6 @@ def _get_redis_client() -> redis.Redis:
 def _build_redis_key(key_hash: str) -> str:
     """Construct the Redis key for a given API key hash."""
     return f"{REDIS_KEY_PREFIX}{key_hash}"
-
-
-@receiver(pre_save, sender=GatewayAPIKey)
-def ensure_gateway_apikey_organization(
-    sender: type,
-    instance: GatewayAPIKey,
-    **kwargs: Any,
-) -> None:
-    """Assign tenant org from key owner when missing (prevents Module 2 org mismatch)."""
-    if instance.organization_id or not instance.owner_id:
-        return
-    try:
-        org_id = instance.owner.profile.organization_id
-    except Exception:
-        return
-    if org_id:
-        instance.organization_id = org_id
 
 
 @receiver(post_save, sender=GatewayAPIKey)
@@ -459,6 +441,19 @@ def sync_firewall_config_to_redis(
 
     transaction.on_commit(_do_sync)
 
+    # Gateway embeds mcp_tier2_enabled in _get_enabled_tools; bump scan_ver so the
+    # tier-2 org gate invalidates that cache without waiting for TTL.
+    if org_slug:
+        try:
+            from mcp_connector.signals import bump_scan_version
+
+            bump_scan_version(org_slug)
+        except Exception:
+            logger.exception(
+                "Failed to schedule MCP scan-version bump after FirewallConfig save for org=%s",
+                org_slug,
+            )
+
 
 # -- LLMModelConfig Redis sync --
 
@@ -493,18 +488,8 @@ def _sync_all_llm_models(instance: LLMModelConfig | None = None) -> None:
             qs = LLMModelConfig.queryset_user_managed(
                 LLMModelConfig.objects.filter(is_active=True, organization=org)
             )
-            entries = []
-            routing_entries = []
-            for m in qs:
-                if is_reserved_inference_model_name(m.model_name, m.model_id):
-                    logger.info(
-                        "Excluding reserved inference model %r from Redis sync for org=%s",
-                        m.model_name,
-                        slug,
-                    )
-                    continue
-                entries.append(m.build_litellm_entry())
-                routing_entries.append(m.build_routing_payload())
+            entries = [m.build_litellm_entry() for m in qs]
+            routing_entries = [m.build_routing_payload() for m in qs]
             from core.routing_fallback import build_compliant_fallback_chains
 
             fallback_chains = build_compliant_fallback_chains(routing_entries)

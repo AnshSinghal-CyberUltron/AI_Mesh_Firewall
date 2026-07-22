@@ -6,7 +6,9 @@ import {
   preferSameOriginGateway,
   probeSameOriginGatewayProxy,
   resolveBrowserGatewayBaseUrl,
-  resolveWebSocketBaseUrl,
+  resolveGatewayBaseUrl,
+  resolveMcpGatewayBaseUrl,
+  toAbsoluteGatewayUrl,
 } from "./environmentUrls.js";
 
 test("probeSameOriginGatewayProxy returns true when GET /gw-health returns status ok", async () => {
@@ -72,47 +74,78 @@ test("probeSameOriginGatewayProxy returns false on network error", async () => {
   assert.equal(ok, false);
 });
 
-test("resolveWebSocketBaseUrl uses same-origin on localhost even when prod backend URL is baked in", () => {
+test("resolveMcpGatewayBaseUrl uses the local gateway port on a local dev host", () => {
   const original = globalThis.window;
-  const originalEnv = import.meta.env;
   globalThis.window = {
     location: {
-      hostname: "127.0.0.1",
-      host: "127.0.0.1:8180",
-      origin: "http://127.0.0.1:8180",
+      hostname: "localhost",
+      origin: "http://localhost:8180",
       protocol: "http:",
-      port: "8180",
     },
     localStorage: { getItem: () => "", setItem: () => {}, removeItem: () => {} },
   };
-  import.meta.env = {
-    ...originalEnv,
-    VITE_BACKEND_BASE_URL: "https://aimeshbackend.zeroshield.ai",
-    VITE_WS_BASE_URL: "",
-  };
   try {
-    assert.equal(resolveWebSocketBaseUrl(), "ws://127.0.0.1:8180");
+    // Regression guard for the MCP gateway URL mismatch bug: a local dev
+    // browser must NEVER resolve to the production dedicated gateway host,
+    // even if VITE_GATEWAY_BASE_URL is baked in as a prod value from a
+    // shared .env (not settable here since import.meta.env is unavailable
+    // under node:test, which conveniently also proves the local branch wins
+    // unconditionally over any explicit env value).
+    assert.equal(resolveMcpGatewayBaseUrl(), "http://localhost:8300");
   } finally {
     globalThis.window = original;
-    import.meta.env = originalEnv;
   }
 });
 
-test("resolveWebSocketBaseUrl uses same-origin wss on prod firewall host", () => {
+test("resolveMcpGatewayBaseUrl never prefers same-origin on the prod firewall host (unlike resolveBrowserGatewayBaseUrl)", () => {
   const original = globalThis.window;
   globalThis.window = {
     location: {
       hostname: "aimeshfirewall.zeroshield.ai",
-      host: "aimeshfirewall.zeroshield.ai",
       origin: "https://aimeshfirewall.zeroshield.ai",
       protocol: "https:",
-      port: "",
     },
     localStorage: { getItem: () => "", setItem: () => {}, removeItem: () => {} },
   };
   try {
-    assert.equal(resolveWebSocketBaseUrl(), "wss://aimeshfirewall.zeroshield.ai");
+    // MCP config URLs must point at the real gateway host, not the firewall
+    // UI's same-origin proxy — a pasted mcp.json entry has to work from an
+    // external tool (VS Code / Cursor), not just from inside the browser.
+    assert.notEqual(resolveMcpGatewayBaseUrl(), "https://aimeshfirewall.zeroshield.ai");
+    assert.equal(resolveMcpGatewayBaseUrl(), resolveGatewayBaseUrl());
   } finally {
     globalThis.window = original;
   }
+});
+
+test("toAbsoluteGatewayUrl resolves a relative gateway_endpoint path against the local gateway on a dev host", () => {
+  const original = globalThis.window;
+  globalThis.window = {
+    location: {
+      hostname: "127.0.0.1",
+      origin: "http://127.0.0.1:8180",
+      protocol: "http:",
+    },
+    localStorage: { getItem: () => "", setItem: () => {}, removeItem: () => {} },
+  };
+  try {
+    assert.equal(
+      toAbsoluteGatewayUrl("/gateway/zeroshield/mcp/my-server"),
+      "http://127.0.0.1:8300/gateway/zeroshield/mcp/my-server",
+    );
+  } finally {
+    globalThis.window = original;
+  }
+});
+
+test("toAbsoluteGatewayUrl passes an already-absolute URL through unchanged", () => {
+  assert.equal(
+    toAbsoluteGatewayUrl("https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/my-server"),
+    "https://aimeshgateway.zeroshield.ai/gateway/zeroshield/mcp/my-server",
+  );
+});
+
+test("toAbsoluteGatewayUrl returns empty string for an empty/undefined path", () => {
+  assert.equal(toAbsoluteGatewayUrl(""), "");
+  assert.equal(toAbsoluteGatewayUrl(undefined), "");
 });

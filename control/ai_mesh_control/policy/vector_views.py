@@ -155,6 +155,34 @@ class VectorCollectionPolicyViewSet(ModelViewSet):
     def _scoped_org(self):
         return get_request_organization(self.request)
 
+    def _recompile_and_push_sync(self, *, trigger: str) -> None:
+        """Synchronously compile all enabled vector policies and push to Redis.
+
+        The post_save/post_delete signal (policy.vector_signals) schedules a
+        DEBOUNCED Celery recompile (``compile_vector_policies_task.apply_async``).
+        That task is consumed only by the optional ``workers`` compose profile,
+        which is not running in the default deployment — so a policy created /
+        edited / deleted through this API would never reach the gateway's Redis
+        bundle, and every request to that collection then 403s with
+        ``rag_access_denied`` (or keeps enforcing a stale bundle). Provider-config
+        sync is already synchronous (vector_provider_signals); mirror that here so
+        vector-policy CRUD is self-sufficient regardless of the worker.
+
+        Best-effort: a compile/push failure must NOT fail the CRUD response — the
+        change is already persisted and the async signal remains as a backstop.
+        """
+        try:
+            from policy.vector_compiler import VectorPolicyCompiler
+
+            VectorPolicyCompiler().compile_and_push(trigger=trigger)
+        except Exception:
+            logger.exception(
+                "Synchronous vector-policy recompile failed (trigger=%s); "
+                "policy persisted but gateway bundle may be stale until the next "
+                "compile.",
+                trigger,
+            )
+
     def get_queryset(self):
         org = self._scoped_org()
         qs = VectorCollectionPolicy.objects.filter(organization=org) if org else VectorCollectionPolicy.objects.none()
@@ -195,6 +223,7 @@ class VectorCollectionPolicyViewSet(ModelViewSet):
             instance.collection_name,
             instance.pk,
         )
+        self._recompile_and_push_sync(trigger="api-create")
         read_serializer = VectorCollectionPolicySerializer(instance)
         return Response(read_serializer.data, status=status.HTTP_201_CREATED)
 
@@ -210,8 +239,29 @@ class VectorCollectionPolicyViewSet(ModelViewSet):
             instance.collection_name,
             instance.pk,
         )
+        self._recompile_and_push_sync(trigger="api-update")
         read_serializer = VectorCollectionPolicySerializer(instance)
         return Response(read_serializer.data)
+
+    def destroy(self, request: Request, *args, **kwargs) -> Response:
+        instance = self.get_object()
+        project_id, collection_name, pk = (
+            instance.project_id,
+            instance.collection_name,
+            instance.pk,
+        )
+        self.perform_destroy(instance)
+        logger.info(
+            "Deleted VectorCollectionPolicy %s/%s (id=%s)",
+            project_id,
+            collection_name,
+            pk,
+        )
+        # Recompile so the gateway drops the deleted collection's policy
+        # immediately (otherwise it keeps enforcing the stale bundle until a
+        # worker that isn't running fires).
+        self._recompile_and_push_sync(trigger="api-delete")
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class VectorPolicyCompileView(APIView):

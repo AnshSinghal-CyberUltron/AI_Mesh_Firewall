@@ -33,7 +33,11 @@ class TestNoEarlyTruncation:
     async def test_secret_deep_in_long_document_is_flagged(self, guard):
         text = BENIGN_FILLER * 2000 + 'db password: "hunter2secret"'
         verdict = await guard.scan_single_document(text)
-        assert verdict.action == "flag"
+        # NoEarlyTruncation invariant: the secret deep in the doc is still detected
+        # (not lost to a scan-window cap). The ingest contract is now fail-CLOSED —
+        # a detected secret is BLOCKED (RAG-C5/C4-CRED-INGEST), stronger than the
+        # earlier "flag", so nothing raw is embedded/stored.
+        assert verdict.action == "block"
         assert verdict.threat_type == "secret"
 
     @pytest.mark.asyncio

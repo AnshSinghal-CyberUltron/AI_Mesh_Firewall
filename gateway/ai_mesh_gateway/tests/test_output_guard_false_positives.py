@@ -8,9 +8,10 @@ import pytest
 from ai_mesh_gateway.output_guard import (
     OutputGuard,
     OutputVerdict,
+    coalesce_output_guard_verdict_for_delivery,
     sanitize_output_for_verdict,
 )
-from ai_mesh_gateway.patterns import detect_pii, detect_secrets, is_safety_refusal_output
+from ai_mesh_gateway.patterns import detect_pii, detect_secrets, is_safety_classifier_output, is_safety_refusal_output
 
 
 AADHAAR_REFUSAL = (
@@ -89,6 +90,32 @@ async def test_pii_category_labels_only_not_detected() -> None:
     assert verdict.action == "allow"
 
 
+SAFETY_CLASSIFIER_OUTPUT = "User Safety: unsafe\nSafety Categories: PII/Privacy"
+
+
+def test_safety_classifier_output_shape() -> None:
+    assert is_safety_classifier_output(SAFETY_CLASSIFIER_OUTPUT)
+    assert detect_pii(SAFETY_CLASSIFIER_OUTPUT) == {}
+
+
+@pytest.mark.asyncio
+async def test_safety_classifier_downgrades_off_primary_smart_mask() -> None:
+    """Masked email in scan channels must not redact safety-classifier metadata."""
+    delivered = SAFETY_CLASSIFIER_OUTPUT
+    verdict = OutputVerdict(
+        action="redact",
+        threat_type="pii",
+        confidence=0.85,
+        detail="PII/secret detected in output: email_smart_masked",
+        matched_patterns=["email_smart_masked"],
+        matched_values={"email_smart_masked": "j***@a***.com"},
+    )
+    coalesced = coalesce_output_guard_verdict_for_delivery(verdict, delivered_text=delivered)
+    assert coalesced is not None
+    assert coalesced.action == "allow"
+    assert "Safety classifier metadata" in (coalesced.detail or "")
+
+
 @pytest.mark.asyncio
 async def test_pii_echo_detected_with_matched_values(guard: OutputGuard) -> None:
     matched = detect_pii(PII_ECHO)
@@ -119,12 +146,19 @@ async def test_secret_echo_detail_masks_raw_value() -> None:
     matched = detect_secrets(secret_echo)
     assert "password_assignment" in matched
     scanner = _StubScanner(matched=matched, threat_type="secret")
-    # Disable the credential-exposure detector (it also fires on password
-    # assignments and its block action would win) to isolate the secrets path.
-    og = OutputGuard(scanner=scanner, config={"output_credential_enabled": False})
+    # password_assignment is SECRET-tagged => CREDENTIAL-class, so it is governed by
+    # output_credential_action (not output_pii_action). Previously this test disabled
+    # the credential detector and still expected the password to be redacted — i.e. the
+    # operator turned Credential Exposure OFF yet credentials were still acted on via
+    # the PII action. That was the mis-governance bug; disabling the detector now
+    # correctly yields NO action. Configure the credential detector explicitly instead.
+    og = OutputGuard(
+        scanner=scanner,
+        config={"output_credential_enabled": True, "output_credential_action": "redact"},
+    )
     verdict = await og.inspect(secret_echo, context_chunks=[])
     assert verdict.action == "redact"
-    assert verdict.threat_type == "secret"
+    assert verdict.threat_type == "credential"
     # Raw secret stays in matched_values (operator telemetry)...
     assert "hunter2secret" in verdict.matched_values.get("password_assignment", "")
     # ...but never in the client-facing detail string.

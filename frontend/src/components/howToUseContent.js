@@ -14,10 +14,10 @@
 import {
   resolveBackendBaseUrl,
   resolveFrontendBaseUrl,
-  resolveGatewayBaseUrl,
+  resolveMcpGatewayBaseUrl,
 } from "../utils/environmentUrls";
 
-const GATEWAY_BASE_URL = resolveGatewayBaseUrl() || "https://aisecshieldgateway.zeroshield.ai";
+const GATEWAY_BASE_URL = resolveMcpGatewayBaseUrl() || "https://aisecshieldgateway.zeroshield.ai";
 const BACKEND_BASE_URL = resolveBackendBaseUrl() || "http://127.0.0.1:8100";
 const FRONTEND_BASE_URL = resolveFrontendBaseUrl() || "http://localhost:5173";
 
@@ -802,7 +802,7 @@ print(response.choices[0].message.content)`,
       },
       {
         icon: "info",
-        text: "Governance settings from the Routing Governance panel (toggle, weights, sensitivity, presets) are applied to every request. You can override per-request via `routing_preferences` including `enable_routing`.",
+        text: "Governance settings from the Routing Governance panel (toggle, weights, sensitivity, presets) are applied to every request. Set `routing_preferences.enable_routing: false` in `extra_body` to pin `model` exactly; omit it (or set `true`) to use org dynamic routing.",
       },
     ],
   },

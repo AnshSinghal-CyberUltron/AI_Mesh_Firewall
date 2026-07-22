@@ -75,8 +75,17 @@ def _pick_control(
     scan_direction: str,
     server_id: str | None,
     tool_name: str,
+    configured: bool = False,
 ) -> dict[str, Any]:
-    """Pick the best matching control for tier + scan direction (input|output)."""
+    """Pick the best matching control for tier + scan direction (input|output).
+
+    When ``configured`` is True (the org has at least one scan-control row) but
+    no row matches this tier+direction, Tier-1/Tier-2 for that direction is
+    **disabled** — an output-only row must not imply a baseline input scan (and
+    vice versa). When ``configured`` is False (zero rows), built-in defaults
+    still expose enabled tier-1 slots; the gateway skips the two-tier pipeline
+    entirely via ``scan_controls_configured is False``.
+    """
     candidates: list[dict[str, Any]] = []
     for row in rows:
         if row.get("tier") != tier:
@@ -97,6 +106,8 @@ def _pick_control(
         base = DEFAULT_TIER1 if tier == "tier1" else DEFAULT_TIER2
         out = dict(base)
         out["direction"] = scan_direction
+        if configured:
+            out["enabled"] = False
         return out
 
     def sort_key(r: dict[str, Any]) -> tuple[int, int]:
@@ -144,18 +155,39 @@ def resolve_effective_controls(
 ) -> dict[str, Any]:
     """Resolve per-tier, per-direction effective controls for a tool call."""
     # Always use the two-tier pipeline; empty rows resolve to built-in defaults.
+    configured = bool(rows)
     return {
-        "scan_controls_configured": True,
+        "scan_controls_configured": configured,
         "tier1_input": _pick_control(
-            rows, tier="tier1", scan_direction="input", server_id=server_id, tool_name=tool_name
+            rows,
+            tier="tier1",
+            scan_direction="input",
+            server_id=server_id,
+            tool_name=tool_name,
+            configured=configured,
         ),
         "tier1_output": _pick_control(
-            rows, tier="tier1", scan_direction="output", server_id=server_id, tool_name=tool_name
+            rows,
+            tier="tier1",
+            scan_direction="output",
+            server_id=server_id,
+            tool_name=tool_name,
+            configured=configured,
         ),
         "tier2_input": _pick_control(
-            rows, tier="tier2", scan_direction="input", server_id=server_id, tool_name=tool_name
+            rows,
+            tier="tier2",
+            scan_direction="input",
+            server_id=server_id,
+            tool_name=tool_name,
+            configured=configured,
         ),
         "tier2_output": _pick_control(
-            rows, tier="tier2", scan_direction="output", server_id=server_id, tool_name=tool_name
+            rows,
+            tier="tier2",
+            scan_direction="output",
+            server_id=server_id,
+            tool_name=tool_name,
+            configured=configured,
         ),
     }

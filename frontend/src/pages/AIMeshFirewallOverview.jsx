@@ -17,23 +17,6 @@ import {
   ShieldCheck,
   RefreshCw,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
 import { useAuth } from "../context/AuthContext";
 import { useRealtimeNotifications } from "../hooks/useRealtimeNotifications";
 import { OWASPStatsPanel } from "../components/OWASPStatsPanel";
@@ -229,17 +212,20 @@ function SubModuleCard({ id, title, icon: Icon, color, summary, metrics, chartDa
             <span>Pressure Curve</span>
             <span>{curveSubtitle}</span>
           </div>
-          <SafeResponsiveChart className="h-[72px] w-full">
-            <AreaChart data={chartData} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id={`mesh-card-${id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={tone.hex} stopOpacity={0.28} />
-                  <stop offset="95%" stopColor={tone.hex} stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <Area type="monotone" dataKey="value" stroke={tone.hex} strokeWidth={2.2} fill={`url(#mesh-card-${id})`} dot={false} />
-            </AreaChart>
-          </SafeResponsiveChart>
+          {/* Dense time-series sparkline via uPlot (canvas, fast) — index x keeps
+              recharts' even spacing; single area series in the module tone. */}
+          <SafeResponsiveChart
+            className="h-[72px] w-full"
+            uplot={{
+              sparkline: true,
+              time: false,
+              data: [
+                (chartData || []).map((_, i) => i),
+                (chartData || []).map((d) => Number(d?.value) || 0),
+              ],
+              series: [{ label: "Pressure", stroke: tone.hex, area: true, width: 2.2 }],
+            }}
+          />
         </div>
       </div>
     </button>
@@ -257,26 +243,6 @@ const VECTOR_COLORS = {
 const VECTOR_KEYS = ["Prompt Injection", "Data Leakage", "Jailbreak", "Goal Hijacking", "Tool Overreach"];
 
 // ─── Shared tooltip ──────────────────────────────────────────────────────────
-function ChartTooltip({ active, payload, label, unit = "" }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-2xl border border-slate-700/80 bg-slate-900/95 px-4 py-3 shadow-2xl backdrop-blur-sm">
-      {label != null ? (
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-      ) : null}
-      {payload.map((p) => (
-        <div key={p.dataKey ?? p.name} className="flex items-center gap-2.5 py-0.5 text-sm">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: p.color ?? p.fill }} />
-          <span className="text-slate-300">{p.name}</span>
-          <span className="ml-auto pl-4 font-semibold tabular-nums text-white">
-            {typeof p.value === "number" ? p.value.toLocaleString() : p.value}{unit}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── Shared chart card wrapper ────────────────────────────────────────────────
 function OverviewChartCard({ eyebrow, title, action, children }) {
   return (
@@ -314,51 +280,21 @@ function AttackVectorTrendChart({ data, compact = false }) {
       {empty ? (
         <div className="flex h-[300px] items-center justify-center text-sm text-slate-400">No attack events recorded in this period</div>
       ) : (
-        <SafeResponsiveChart className={`${compact ? "h-[240px]" : "h-[300px]"} w-full`}>
-          <AreaChart data={data} margin={{ top: 4, right: compact ? 0 : 4, bottom: 0, left: compact ? -14 : -8 }}>
-            <defs>
-              {VECTOR_KEYS.map((k) => (
-                <linearGradient key={k} id={`vgrad-${k.replace(/\s+/g, "")}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={VECTOR_COLORS[k]} stopOpacity={0.28} />
-                  <stop offset="95%" stopColor={VECTOR_COLORS[k]} stopOpacity={0.02} />
-                </linearGradient>
-              ))}
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" strokeOpacity={0.15} />
-            <XAxis
-              dataKey="time"
-              stroke="#94a3b8"
-              tick={{ fontSize: 11, fill: "#94a3b8" }}
-              tickLine={false}
-              axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }}
-              interval={compact ? 1 : 0}
-              minTickGap={compact ? 18 : 8}
-              label={compact ? undefined : { value: "Time (UTC)", position: "insideBottom", offset: -2, fontSize: 10, fill: "#64748b" }}
-            />
-            <YAxis
-              stroke="#94a3b8"
-              tick={{ fontSize: 11, fill: "#94a3b8" }}
-              tickLine={false}
-              axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }}
-              width={compact ? 28 : 40}
-              label={compact ? undefined : { value: "Events", angle: -90, position: "insideLeft", offset: 12, fontSize: 10, fill: "#64748b" }}
-            />
-            <Tooltip content={<ChartTooltip />} />
-            {VECTOR_KEYS.map((k) => (
-              <Area
-                key={k}
-                type="monotone"
-                dataKey={k}
-                stroke={VECTOR_COLORS[k]}
-                strokeWidth={2}
-                fill={`url(#vgrad-${k.replace(/\s+/g, "")})`}
-                dot={false}
-                activeDot={{ r: 4, strokeWidth: 0 }}
-                name={k}
-              />
-            ))}
-          </AreaChart>
-        </SafeResponsiveChart>
+        // Overlapping (non-stacked) multi-series threat areas via uPlot — canvas,
+        // drag-to-zoom; index x + xLabels preserve the time axis; hover shows each
+        // vector's raw value (data-identical to the prior recharts areas).
+        <SafeResponsiveChart
+          className={`${compact ? "h-[240px]" : "h-[300px]"} w-full`}
+          uplot={{
+            time: false,
+            xLabels: data.map((d) => d.time),
+            data: [
+              data.map((_, i) => i),
+              ...VECTOR_KEYS.map((k) => data.map((d) => Number(d[k]) || 0)),
+            ],
+            series: VECTOR_KEYS.map((k) => ({ label: k, stroke: VECTOR_COLORS[k], area: true, width: 2 })),
+          }}
+        />
       )}
     </OverviewChartCard>
   );
@@ -369,44 +305,25 @@ function AttackVectorDistributionChart({ data }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   const hasData = total > 0;
 
-  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-    if (percent < 0.05) return null;
-    const RADIAN = Math.PI / 180;
-    const r = innerRadius + (outerRadius - innerRadius) * 0.5;
-    const x = cx + r * Math.cos(-midAngle * RADIAN);
-    const y = cy + r * Math.sin(-midAngle * RADIAN);
-    return (
-      <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600}>
-        {`${(percent * 100).toFixed(0)}%`}
-      </text>
-    );
-  };
+  // ECharts donut (theme-aware via the registered zs-light/zs-dark theme); the
+  // in-slice % label mirrors the prior recharts custom label (hidden under 5%).
+  const donutOption = useMemo(() => ({
+    tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+    series: [{
+      type: "pie", radius: ["55%", "86%"], center: ["50%", "50%"], padAngle: 3,
+      avoidLabelOverlap: true,
+      label: { show: true, position: "inside", formatter: (p) => (p.percent >= 5 ? `${Math.round(p.percent)}%` : ""), color: "#fff", fontSize: 11, fontWeight: 600 },
+      labelLine: { show: false },
+      data: data.map((d) => ({ name: d.name, value: d.value, itemStyle: { color: d.fill } })),
+    }],
+  }), [data]);
 
   return (
     <OverviewChartCard eyebrow="Threat mix" title="Attack vector distribution">
       <div className="flex flex-col gap-5 md:flex-row md:items-center">
         <div className="mx-auto shrink-0">
           {hasData ? (
-            <ResponsiveContainer width={220} height={220}>
-              <PieChart>
-                <Pie
-                  data={data}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={95}
-                  dataKey="value"
-                  paddingAngle={3}
-                  labelLine={false}
-                  label={renderCustomLabel}
-                >
-                  {data.map((entry, i) => (
-                    <Cell key={i} fill={entry.fill} stroke="transparent" />
-                  ))}
-                </Pie>
-                <Tooltip content={<ChartTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
+            <SafeResponsiveChart className="h-[220px] w-[220px]" option={donutOption} />
           ) : (
             <div className="flex h-[220px] w-[220px] items-center justify-center text-sm text-slate-400">No data yet</div>
           )}
@@ -443,6 +360,17 @@ function AttackVectorDistributionChart({ data }) {
 
 // ─── Module comparison grouped bar chart ──────────────────────────────────────
 function ModuleComparisonChart({ data, compact = false }) {
+  // Grouped bar (ECharts; theme-aware). Total events (teal) vs Interventions (rose).
+  const barOption = useMemo(() => ({
+    grid: { top: 10, right: 8, bottom: compact ? 6 : 30, left: 4, containLabel: true },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    xAxis: { type: "category", data: data.map((d) => d.module), axisLabel: { fontSize: 10, interval: 0, rotate: compact ? 0 : 15 } },
+    yAxis: { type: "value", name: compact ? "" : "Events", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 11 } },
+    series: [
+      { name: "Total events", type: "bar", barMaxWidth: 40, itemStyle: { color: "#14b8a6", borderRadius: [6, 6, 0, 0] }, data: data.map((d) => d.requests) },
+      { name: "Interventions", type: "bar", barMaxWidth: 40, itemStyle: { color: "#f43f5e", borderRadius: [6, 6, 0, 0] }, data: data.map((d) => d.interventions) },
+    ],
+  }), [data, compact]);
   return (
     <OverviewChartCard
       eyebrow="Cross-module"
@@ -454,42 +382,7 @@ function ModuleComparisonChart({ data, compact = false }) {
         </div>
       }
     >
-      <SafeResponsiveChart className={`${compact ? "h-[260px]" : "h-[300px]"} w-full`}>
-        <BarChart data={data} margin={{ top: 4, right: 4, bottom: compact ? 12 : 24, left: compact ? -14 : -8 }} barGap={3} barCategoryGap={compact ? "18%" : "28%"}>
-          <defs>
-            <linearGradient id="bargrad-teal" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#14b8a6" stopOpacity={1} />
-              <stop offset="100%" stopColor="#0d9488" stopOpacity={0.8} />
-            </linearGradient>
-            <linearGradient id="bargrad-rose" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f43f5e" stopOpacity={1} />
-              <stop offset="100%" stopColor="#e11d48" stopOpacity={0.8} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" strokeOpacity={0.15} vertical={false} />
-          <XAxis
-            dataKey="module"
-            stroke="#94a3b8"
-            tick={{ fontSize: 10, fill: "#94a3b8" }}
-            tickLine={false}
-            axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }}
-            angle={compact ? 0 : -15}
-            textAnchor={compact ? "middle" : "end"}
-            height={compact ? 28 : 54}
-          />
-          <YAxis
-            stroke="#94a3b8"
-            tick={{ fontSize: 11, fill: "#94a3b8" }}
-            tickLine={false}
-            axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }}
-            width={compact ? 28 : 40}
-            label={compact ? undefined : { value: "Events", angle: -90, position: "insideLeft", offset: 12, fontSize: 10, fill: "#64748b" }}
-          />
-          <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(148, 163, 184, 0.08)" }} />
-          <Bar dataKey="requests" fill="url(#bargrad-teal)" radius={[6, 6, 0, 0]} name="Total events" maxBarSize={40} />
-          <Bar dataKey="interventions" fill="url(#bargrad-rose)" radius={[6, 6, 0, 0]} name="Interventions" maxBarSize={40} />
-        </BarChart>
-      </SafeResponsiveChart>
+      <SafeResponsiveChart className={`${compact ? "h-[260px]" : "h-[300px]"} w-full`} option={barOption} />
     </OverviewChartCard>
   );
 }
@@ -560,6 +453,18 @@ function GlobalTrafficOverview({ socKpis, enforcementSeries = [], intakeTotal = 
     { key: "redacted", name: "Redacted", color: "#f59e0b" },
   ];
 
+  // Enforcement-posture donut (ECharts; theme-aware). In-slice % label hidden under 6%.
+  const actionDonutOption = useMemo(() => ({
+    tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+    series: [{
+      type: "pie", radius: ["52%", "82%"], center: ["50%", "50%"], padAngle: 4,
+      avoidLabelOverlap: true,
+      label: { show: true, position: "inside", formatter: (p) => (p.percent >= 6 ? `${Math.round(p.percent)}%` : ""), color: "#fff", fontSize: 11, fontWeight: 700 },
+      labelLine: { show: false },
+      data: actionData.map((d) => ({ name: d.name, value: d.value, itemStyle: { color: d.color } })),
+    }],
+  }), [actionData]);
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1.45fr,0.8fr]">
       <div className="ai-mesh-card rounded-[28px] p-6">
@@ -580,31 +485,30 @@ function GlobalTrafficOverview({ socKpis, enforcementSeries = [], intakeTotal = 
           <div className="flex h-[280px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 px-6 text-center dark:border-slate-700">
             <Activity className="h-6 w-6 text-slate-300 dark:text-slate-600" />
             <p className="text-sm text-slate-500 dark:text-slate-400">No enforcement events in this window — the chart populates as traffic flows.</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">Try a wider lens (7d / 30d) using the time selector above.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Try a wider lens (7d / 30d) using the time selector above.</p>
           </div>
         ) : (
-          <SafeResponsiveChart className="h-[280px]">
-            <AreaChart data={enforcementSeries} margin={{ top: 4, right: 4, bottom: 4, left: compact ? -14 : -8 }}>
-              <defs>
-                {ENF_SERIES.map((s) => (
-                  <linearGradient key={s.key} id={`mesh-enf-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={s.color} stopOpacity={0.4} />
-                    <stop offset="95%" stopColor={s.color} stopOpacity={0.04} />
-                  </linearGradient>
-                ))}
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" strokeOpacity={0.15} vertical={false} />
-              <XAxis dataKey="time" stroke="#94a3b8" tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }} interval="preserveStartEnd" minTickGap={compact ? 24 : 44} />
-              <YAxis stroke="#94a3b8" tick={{ fontSize: 11, fill: "#94a3b8" }} tickLine={false} axisLine={{ stroke: "#94a3b8", strokeOpacity: 0.3 }} width={compact ? 26 : 34} allowDecimals={false} />
-              <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#94a3b8", strokeWidth: 1, strokeDasharray: "4 4" }} />
-              {ENF_SERIES.map((s) => (
-                <Area key={s.key} type="monotone" dataKey={s.key} stackId="1" stroke={s.color} strokeWidth={1.8} fill={`url(#mesh-enf-${s.key})`} name={s.name} dot={sparse ? { r: 2.5, strokeWidth: 0 } : false} activeDot={{ r: 4, strokeWidth: 0 }} isAnimationActive={false} />
-              ))}
-            </AreaChart>
-          </SafeResponsiveChart>
+          // Dense stacked telemetry via uPlot (canvas, fast, drag-to-zoom).
+          // index x + xLabels keeps the bucket-label axis; tooltip shows raw
+          // per-series values (data-identical to the prior recharts stack).
+          <SafeResponsiveChart
+            className="h-[280px]"
+            uplot={{
+              stacked: true,
+              time: false,
+              xLabels: enforcementSeries.map((d) => d.time),
+              data: [
+                enforcementSeries.map((_, i) => i),
+                enforcementSeries.map((d) => Number(d.allowed) || 0),
+                enforcementSeries.map((d) => Number(d.blocked) || 0),
+                enforcementSeries.map((d) => Number(d.redacted) || 0),
+              ],
+              series: ENF_SERIES.map((s) => ({ label: s.name, stroke: s.color, area: true, width: 1.8 })),
+            }}
+          />
         )}
         {sparse && (
-          <p className="mt-2 text-center text-[11px] text-slate-400 dark:text-slate-500">Sparse window — {nonZeroBuckets} active interval{nonZeroBuckets === 1 ? "" : "s"}. Widen the lens for more context.</p>
+          <p className="mt-2 text-center text-[11px] text-slate-500 dark:text-slate-400">Sparse window — {nonZeroBuckets} active interval{nonZeroBuckets === 1 ? "" : "s"}. Widen the lens for more context.</p>
         )}
       </div>
 
@@ -614,35 +518,7 @@ function GlobalTrafficOverview({ socKpis, enforcementSeries = [], intakeTotal = 
           <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">Breakdown of how the firewall responds to every request — allow, block, or sanitise.</p>
 
           <div className="mt-5 flex items-center justify-center rounded-[24px] border border-slate-200/80 bg-white/75 p-4 dark:border-slate-700 dark:bg-slate-950/40">
-            <SafeResponsiveChart className="h-[200px] w-full">
-              <PieChart>
-                <Pie
-                  data={actionData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  dataKey="value"
-                  paddingAngle={4}
-                  labelLine={false}
-                  label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                    if (percent < 0.06) return null;
-                    const R = Math.PI / 180;
-                    const r = innerRadius + (outerRadius - innerRadius) * 0.5;
-                    const x = cx + r * Math.cos(-midAngle * R);
-                    const y = cy + r * Math.sin(-midAngle * R);
-                    return (
-                      <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={700}>
-                        {`${(percent * 100).toFixed(0)}%`}
-                      </text>
-                    );
-                  }}
-                >
-                  {actionData.map((entry, index) => <Cell key={`action-${index}`} fill={entry.color} stroke="transparent" />)}
-                </Pie>
-                <Tooltip content={<ChartTooltip />} />
-              </PieChart>
-            </SafeResponsiveChart>
+            <SafeResponsiveChart className="h-[200px] w-full" option={actionDonutOption} />
           </div>
 
           <div className="mt-4 space-y-2.5">
@@ -721,37 +597,38 @@ export function AIMeshFirewallOverview({ onTabChange }) {
     if (showLoader) setLoading(true);
     setFetchError(null);
     try {
-      const results = await Promise.allSettled([
-        fetchWithAuth(`/api/security/soc-kpis/?period=${period}`),
-        fetchWithAuth(`/api/security/attack-vector-trends/?period=${period}`),
-        fetchWithAuth(`/api/security/module-kpis/?period=${period}`),
-        fetchWithAuth(`/api/security/module-trends/?period=${period}`),
-      ]);
-
       const errors = [];
+      // Apply each endpoint's result to state AS SOON AS IT RESOLVES — do NOT batch
+      // behind Promise.allSettled. Otherwise the slowest/hanging endpoint blocks every
+      // KPI from rendering: module-trends is explicitly non-critical yet, when it stalls
+      // (slow query / backend pressure), it would keep the whole dashboard on "--".
+      const apply = async (promise, errorName, onData) => {
+        try {
+          const res = await promise;
+          if (res && res.ok) onData(await res.json());
+          else if (errorName) errors.push(errorName);
+        } catch {
+          if (errorName) errors.push(errorName);
+        }
+      };
+      // Critical endpoints — the dashboard's readiness gates on these three only.
+      const critical = [
+        apply(fetchWithAuth(`/api/security/soc-kpis/?period=${period}`), "SOC KPIs", setSocKpis),
+        apply(fetchWithAuth(`/api/security/attack-vector-trends/?period=${period}`), "Attack Trends", (d) => setAttackTrends(Array.isArray(d) ? d : [])),
+        apply(fetchWithAuth(`/api/security/module-kpis/?period=${period}`), "Module KPIs", setModuleKpis),
+      ];
+      // Non-critical: applies whenever it arrives; never blocks the dashboard.
+      (async () => {
+        try {
+          const res = await fetchWithAuth(`/api/security/module-trends/?period=${period}`);
+          if (res && res.ok) setModuleTrends(await res.json());
+          else console.warn("Module trends endpoint unavailable, using global chart data");
+        } catch {
+          console.warn("Module trends endpoint unavailable, using global chart data");
+        }
+      })();
 
-      if (results[0].status === "fulfilled" && results[0].value.ok) {
-        setSocKpis(await results[0].value.json());
-      } else {
-        errors.push("SOC KPIs");
-      }
-      if (results[1].status === "fulfilled" && results[1].value.ok) {
-        const data = await results[1].value.json();
-        setAttackTrends(Array.isArray(data) ? data : []);
-      } else {
-        errors.push("Attack Trends");
-      }
-      if (results[2].status === "fulfilled" && results[2].value.ok) {
-        setModuleKpis(await results[2].value.json());
-      } else {
-        errors.push("Module KPIs");
-      }
-      if (results[3].status === "fulfilled" && results[3].value.ok) {
-        setModuleTrends(await results[3].value.json());
-      } else {
-        // Non-critical: fallback to global chart data if module-trends unavailable
-        console.warn("Module trends endpoint unavailable, using global chart data");
-      }
+      await Promise.allSettled(critical);
 
       if (errors.length > 0) {
         setFetchError(`Failed to load: ${errors.join(", ")}`);

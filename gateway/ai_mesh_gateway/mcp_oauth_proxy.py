@@ -108,13 +108,62 @@ def _token_redis_key(org_slug: str, server_url: str) -> str:
     return f"mcp:oauth:token:{org_slug}|{server_url}"
 
 
+# ── CHG-0042: at-rest encryption for OAuth flow state + tokens in Redis ──────
+# OAuth access/refresh tokens (and client secrets in the flow record) were stored
+# as plaintext JSON in Redis. Redis is internal, but a compromise would expose
+# every org's upstream MCP credentials. Enable encryption by setting
+# MCP_OAUTH_ENCRYPTION_KEY (a urlsafe-base64 32-byte Fernet key). Default OFF =
+# plaintext (UNCHANGED behaviour). ``_enc_loads`` transparently reads encrypted
+# values, cipher-absent plaintext, AND legacy plaintext written before the key was
+# set (Fernet tokens are prefix-detectable), so enabling the key never orphans
+# existing tokens.
+_FERNET_PREFIX = "gAAAAA"  # urlsafe-b64 of the Fernet version byte (0x80)
+
+
+def _oauth_cipher():
+    key = os.environ.get("MCP_OAUTH_ENCRYPTION_KEY", "").strip()
+    if not key:
+        return None
+    try:
+        from cryptography.fernet import Fernet
+        return Fernet(key.encode())
+    except Exception as exc:  # noqa: BLE001 — bad key must never break token storage
+        LOG.warning(
+            "mcp_oauth_proxy: MCP_OAUTH_ENCRYPTION_KEY invalid (%s); storing plaintext", exc
+        )
+        return None
+
+
+def _enc_dumps(obj) -> str:
+    """JSON-serialize + encrypt at rest when a cipher is configured (else plaintext)."""
+    raw = json.dumps(obj)
+    cipher = _oauth_cipher()
+    if cipher is None:
+        return raw
+    return cipher.encrypt(raw.encode()).decode()
+
+
+def _enc_loads(raw):
+    """Inverse of ``_enc_dumps``: decrypt encrypted values; pass plaintext (incl.
+    legacy, pre-key) through. Never raises on a decrypt miss — falls back to JSON."""
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", "replace")
+    cipher = _oauth_cipher()
+    if cipher is not None and raw.startswith(_FERNET_PREFIX):
+        try:
+            return json.loads(cipher.decrypt(raw.encode()).decode())
+        except Exception:  # noqa: BLE001 — key rotated / not actually encrypted
+            pass
+    return json.loads(raw)
+
+
 async def _flow_save(state: str, flow: dict) -> None:
     _oauth_flows[state] = flow
     rc = await _get_redis()
     if rc is None:
         return
     try:
-        await rc.setex(_flow_key(state), _FLOW_TTL, json.dumps(flow))
+        await rc.setex(_flow_key(state), _FLOW_TTL, _enc_dumps(flow))
     except Exception as exc:  # pragma: no cover
         LOG.warning("mcp_oauth_proxy: flow save failed: %s", exc)
 
@@ -128,7 +177,7 @@ async def _flow_pop(state: str) -> dict | None:
         raw = await rc.get(_flow_key(state))
         await rc.delete(_flow_key(state))
         if raw:
-            return json.loads(raw)
+            return _enc_loads(raw)
     except Exception as exc:  # pragma: no cover
         LOG.warning("mcp_oauth_proxy: flow pop failed: %s", exc)
     return flow
@@ -152,7 +201,7 @@ async def _token_save(org_slug: str, server_url: str, data: dict) -> None:
         await rc.setex(
             _token_redis_key(org_slug, server_url),
             ttl,
-            json.dumps(data),
+            _enc_dumps(data),
         )
     except Exception as exc:  # pragma: no cover
         LOG.warning("mcp_oauth_proxy: token save failed: %s", exc)
@@ -164,7 +213,7 @@ async def _token_load(org_slug: str, server_url: str) -> dict | None:
         try:
             raw = await rc.get(_token_redis_key(org_slug, server_url))
             if raw:
-                data = json.loads(raw)
+                data = _enc_loads(raw)
                 _oauth_tokens[_token_key(org_slug, server_url)] = data
                 return data
         except Exception as exc:  # pragma: no cover
@@ -355,6 +404,22 @@ async def _discover_oauth_metadata(server_url: str) -> dict:
         }
 
 
+def _write_secure_text(path: Path, content: str) -> None:
+    """CHG-0085: write ``content`` with owner-only (0600) perms — the file is created
+    with the restrictive mode at open() time (no world-readable window), and re-chmod'd
+    in case it pre-existed with looser perms. 0600 is umask-proof (umask only clears
+    bits; 600 already has no group/other bits)."""
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, content.encode("utf-8"))
+    finally:
+        os.close(fd)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
 def _write_mcp_remote_tokens(
     org_slug: str,
     server_url: str,
@@ -365,27 +430,43 @@ def _write_mcp_remote_tokens(
 
     Writes to several version sub-directories so the files are found
     regardless of which mcp-remote version npx resolves.
+
+    CHG-0085: these files hold OAuth access/refresh tokens + client_secret + the PKCE
+    code_verifier. They were written with ``Path.write_text`` / ``mkdir`` defaults
+    (0644 world-readable files, 0755 world-traversable dirs), so a co-located process /
+    tenant on the shared host could read another org's OAuth credentials at rest. The
+    whole org tree is now owner-only (0700 dirs, 0600 files).
     """
-    config_dir = Path(f"/tmp/mcp-orgs/{org_slug}/mcp-auth")
+    org_dir = Path(f"/tmp/mcp-orgs/{org_slug}")
+    config_dir = org_dir / "mcp-auth"
     server_hash = hashlib.md5(server_url.encode()).hexdigest()
 
     for ver in ("0.1.37", "0.1.38", "0.1.39", "0.1.40", "0.1.41", "0.1.42", "0.1.43"):
         vdir = config_dir / f"mcp-remote-{ver}"
         vdir.mkdir(parents=True, exist_ok=True)
+        # Lock down the org credential tree (idempotent; also fixes pre-existing dirs
+        # that mkdir(exist_ok=True) would leave at their old looser mode). 0700 on the
+        # org dir blocks another user from traversing in to the token files.
+        for _d in (org_dir, config_dir, vdir):
+            try:
+                os.chmod(_d, 0o700)
+            except OSError:
+                pass
 
-        (vdir / f"{server_hash}_tokens.json").write_text(json.dumps({
+        _write_secure_text(vdir / f"{server_hash}_tokens.json", json.dumps({
             "access_token": token_data.get("access_token"),
             "refresh_token": token_data.get("refresh_token"),
             "token_type": token_data.get("token_type", "bearer"),
         }))
-        (vdir / f"{server_hash}_client_info.json").write_text(json.dumps({
+        _write_secure_text(vdir / f"{server_hash}_client_info.json", json.dumps({
             "clientId": flow.get("client_id"),
             "clientSecret": flow.get("client_secret", ""),
             "redirectUrl": flow.get("callback_url"),
             "redirectUris": [flow.get("callback_url")],
         }))
-        (vdir / f"{server_hash}_code_verifier.txt").write_text(
-            flow.get("code_verifier", "")
+        _write_secure_text(
+            vdir / f"{server_hash}_code_verifier.txt",
+            flow.get("code_verifier", ""),
         )
 
     LOG.info(

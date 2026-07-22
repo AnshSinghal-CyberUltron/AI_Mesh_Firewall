@@ -11,6 +11,8 @@ import {
   getRoutingExtra,
   getEventMetadata,
 } from "../utils/routingEventFields";
+import { summarizeRoutingDecision } from "../utils/routingExplain";
+import { RoutingTechnicalDetails } from "./RoutingTechnicalDetails";
 
 const SENSITIVITY_COLORS = {
   restricted: "bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300",
@@ -31,6 +33,7 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
   const [localLoading, setLocalLoading] = useState(!eventsProp);
   const [expandedId, setExpandedId] = useState(null);
   const [hours, setHours] = useState(48);
+  const [loadError, setLoadError] = useState("");
 
   const usesParentFeed = eventsProp !== undefined;
 
@@ -47,11 +50,13 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
       if (res.ok) {
         const data = await res.json();
         setLocalEvents(filterRoutingEvents(data.results || []));
+        setLoadError("");
       } else {
-        setLocalEvents([]);
+        // A failed fetch must not masquerade as "no routing events yet".
+        setLoadError(`Failed to load routing audit (HTTP ${res.status}).`);
       }
     } catch {
-      setLocalEvents([]);
+      setLoadError("Failed to load the routing audit trail.");
     } finally {
       setLocalLoading(false);
     }
@@ -120,11 +125,25 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
           <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
           <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading routing events...</span>
         </div>
+      ) : loadError && events.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+            <GitBranch className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>{loadError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={fetchRoutingEvents}
+            className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            Retry
+          </button>
+        </div>
       ) : events.length === 0 ? (
         <div className="text-center py-8">
           <GitBranch className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
           <p className="text-sm text-slate-500 dark:text-slate-400">No routing events recorded yet.</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-md mx-auto">
+          <p className="text-xs text-slate-400 dark:text-slate-400 mt-1 max-w-md mx-auto">
             Run a chat completion through the mesh gateway with routing enabled, or use the Routing exercises simulator above to generate the first audit entry.
           </p>
         </div>
@@ -147,6 +166,20 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
               ? extra.rerouted
               : (originalModel !== "auto" && originalModel !== routedModel);
             const isExpanded = expandedId === ev.id;
+            const routingExplain = summarizeRoutingDecision({
+              requested_model: originalModel,
+              selected_model: routedModel,
+              routed_model: routedModel,
+              routing_reason: reason !== "—" ? reason : "",
+              decision_source: decisionSource,
+              policy_summary: policySummary,
+              decision_factors: decisionFactors,
+              weights,
+              routing_score: score,
+              candidate_count: extra.candidate_count ?? meta.candidate_count,
+              fallback_chain: fallbacks,
+              rerouted,
+            });
 
             return (
               <div
@@ -164,7 +197,7 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
                     <ChevronRight className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                   )}
 
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1 min-w-[110px]">
+                  <span className="text-[10px] text-slate-400 dark:text-slate-400 flex items-center gap-1 min-w-[110px]">
                     <Clock className="w-3 h-3" />
                     {ev.timestamp ? new Date(ev.timestamp).toLocaleString(undefined, {
                       month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
@@ -203,60 +236,13 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
                 {isExpanded && (
                   <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 space-y-3">
                     <div>
-                      <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Routing Reason</span>
-                      <p className="text-xs text-slate-700 dark:text-slate-300 mt-0.5">{reason}</p>
-                      {policySummary && (
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{policySummary}</p>
-                      )}
+                      <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Why</span>
+                      <p className="text-xs text-slate-700 dark:text-slate-300 mt-0.5 leading-relaxed">
+                        {routingExplain.summary}
+                      </p>
                     </div>
 
-                    {decisionSource && (
-                      <div className="flex gap-4 text-[10px] text-slate-500 dark:text-slate-400">
-                        <span>Decision source: {decisionSource}</span>
-                      </div>
-                    )}
-
-                    {Array.isArray(decisionFactors) && decisionFactors.length > 0 && (
-                      <div>
-                        <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Decision Factors</span>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          {decisionFactors.map((factor, i) => (
-                            <span key={i} className="px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-800/30 text-[10px] font-mono text-indigo-700 dark:text-indigo-300">
-                              {String(factor)}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {Object.keys(weights).length > 0 && (
-                      <div>
-                        <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Applied Weights</span>
-                        <div className="flex gap-3 mt-1">
-                          {Object.entries(weights).map(([k, v]) => (
-                            <div key={k} className="flex items-center gap-1">
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400 capitalize">{k}:</span>
-                              <span className="text-[10px] font-mono font-semibold text-slate-700 dark:text-slate-300">
-                                {(v * 100).toFixed(0)}%
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {fallbacks.length > 0 && (
-                      <div>
-                        <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Fallback Chain</span>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          {fallbacks.map((fb, i) => (
-                            <span key={i} className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-[10px] font-mono text-slate-600 dark:text-slate-400">
-                              {fb}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    <RoutingTechnicalDetails technical={routingExplain.technical} />
 
                     <div className="flex gap-4 text-[10px] text-slate-500 dark:text-slate-400">
                       {ev.user_id && <span>User: {ev.user_display || ev.user_id}</span>}

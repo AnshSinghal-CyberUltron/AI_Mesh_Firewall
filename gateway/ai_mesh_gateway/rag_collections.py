@@ -76,6 +76,9 @@ def client_from_provider_config(cfg: dict[str, Any]) -> tuple[Any | None, str]:
                 embedding_model=cfg.get("embedding_model", "text-embedding-3-small"),
                 embedding_api_key=cfg.get("embedding_api_key", ""),
                 reranker_model=cfg.get("reranker_model", ""),
+                # Per-org BYOK: list_collections returns ALL indexes on the org's
+                # own Pinecone account (no namespace-scoping — see _list_indexes_sync).
+                is_org_byok=True,
             ), "pinecone"
         # Chroma is now a per-org BYOK provider (the client connects their own
         # Chroma server via connection_url) — NOT a gateway built-in. api_key, if

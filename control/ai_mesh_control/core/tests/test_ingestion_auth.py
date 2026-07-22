@@ -41,8 +41,8 @@ class IngestionAuthTests(TestCase):
         with mock.patch("core.ingestion_views._get_redis_client") as get_client:
             resp = self._client().post("/api/ingestion/events/", _valid_event(), format="json")
         self.assertEqual(resp.status_code, 202, resp.content)
-        self.assertIn(resp.json().get("status"), ("queued", "queued_unscoped"))
-        get_client.return_value.rpush.assert_called_once()
+        self.assertEqual(resp.json().get("status"), "queued")
+        get_client.return_value.xadd.assert_called_once()
 
     def test_x_agent_key_header_accepted(self):
         client = APIClient()
@@ -54,7 +54,7 @@ class IngestionAuthTests(TestCase):
                 HTTP_X_AGENT_KEY=AGENT_KEY,
             )
         self.assertEqual(resp.status_code, 202, resp.content)
-        get_client.return_value.rpush.assert_called_once()
+        get_client.return_value.xadd.assert_called_once()
 
     def test_invalid_key_rejected(self):
         with mock.patch("core.ingestion_views._get_redis_client") as get_client:
@@ -62,7 +62,7 @@ class IngestionAuthTests(TestCase):
                 "/api/ingestion/events/", _valid_event(), format="json"
             )
         self.assertEqual(resp.status_code, 401)
-        get_client.return_value.rpush.assert_not_called()
+        get_client.return_value.xadd.assert_not_called()
 
     def test_missing_key_rejected_when_key_configured(self):
         with mock.patch("core.ingestion_views._get_redis_client") as get_client:
@@ -70,7 +70,7 @@ class IngestionAuthTests(TestCase):
                 "/api/ingestion/events/", _valid_event(), format="json"
             )
         self.assertEqual(resp.status_code, 401)
-        get_client.return_value.rpush.assert_not_called()
+        get_client.return_value.xadd.assert_not_called()
 
     def test_bearer_agent_key_accepted_on_batch(self):
         with mock.patch("core.ingestion_views._get_redis_client") as get_client:
@@ -82,7 +82,7 @@ class IngestionAuthTests(TestCase):
         self.assertEqual(resp.status_code, 202, resp.content)
         body = resp.json()
         self.assertEqual(body["successful"], 2)
-        self.assertEqual(get_client.return_value.rpush.call_count, 2)
+        self.assertEqual(get_client.return_value.xadd.call_count, 2)
 
     def test_batch_rejects_invalid_key(self):
         resp = self._client("wrong-key").post(

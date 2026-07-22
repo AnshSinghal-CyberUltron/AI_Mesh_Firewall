@@ -55,13 +55,6 @@ class ModelStateBootstrapTests(TestCase):
         LLMModelConfig.objects.create(
             organization=org,
             provider="openai",
-            model_name="has-state",
-            model_id="openai/gpt-4o",
-            is_active=True,
-        )
-        LLMModelConfig.objects.create(
-            organization=org,
-            provider="openai",
             model_name="only-config",
             model_id="openai/gpt-4o-mini",
             is_active=True,

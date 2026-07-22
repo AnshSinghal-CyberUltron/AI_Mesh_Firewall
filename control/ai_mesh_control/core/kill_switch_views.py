@@ -167,18 +167,7 @@ class KillSwitchViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         org = self.request.user.profile.organization
-        data = serializer.validated_data
-        instance, _created = KillSwitch.objects.update_or_create(
-            organization=org,
-            model_name=data["model_name"],
-            api_key_prefix=(data.get("api_key_prefix") or "").strip(),
-            defaults={
-                "action": data.get("action", "disable"),
-                "fallback_model": data.get("fallback_model", ""),
-                "reason": data.get("reason", ""),
-            },
-        )
-        serializer.instance = instance
+        instance = serializer.save(organization=org)
         if instance.is_active:
             write_kill_switch_audit(
                 instance=instance,

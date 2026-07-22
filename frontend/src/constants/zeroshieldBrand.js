@@ -35,6 +35,14 @@ const DECISION_SOURCE_LABELS = {
   policy_adjudicator: ZEROSHIELD_ADJUDICATOR_LABEL,
   routing_disabled: "Routing disabled",
   no_routing_models: "No routing models",
+  policy_engine: "Policy engine",
+  gateway_auth: "Gateway authentication",
+  org_rate_limit: "Org rate limit",
+  zeroshield_guard_model: ZEROSHIELD_GUARD_MODEL_LABEL,
+  pattern_engine: ZEROSHIELD_TIER1_LABEL,
+  output_guard: "ZeroShield Output Guard",
+  llm_request: "LLM request",
+  llm_provider: "LLM provider",
 };
 
 /** Sanitize routing reason text for operator-facing UI (never show Bedrock). */
@@ -59,33 +67,12 @@ export function formatDecisionSource(source) {
   return DECISION_SOURCE_LABELS[key] || key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Routing sources that pick a model without operator intervention reroute. */
-const ROUTINE_ROUTING_SOURCES = new Set([
-  "policy_adjudicator",
-  "weighted",
-  "weighted_fastpath",
-  "weighted_fallback",
-  "routing_disabled",
-  "no_routing_models",
-  "simulator_bedrock_boto3_global",
-]);
-
-/** True when Model Routing should show REROUTE (forced intervention), not routine selection. */
+/** True when requested and selected models differ (non-auto). */
 export function isRoutingReroute(requested, selected, routing = {}) {
-  const source = String(routing.decision_source || routing.trigger_source || "").toLowerCase();
-  // Kill-switch / isolation reroutes are rendered on the kill_switch stage.
-  if (["kill_switch", "model_state", "isolation"].includes(source)) {
-    return false;
-  }
+  if (routing.rerouted) return true;
   const req = String(requested || "").trim();
   const sel = String(selected || "").trim();
-  if (!req || !sel || req.toLowerCase() === "auto" || req === sel) {
-    return false;
-  }
-  if (!source || ROUTINE_ROUTING_SOURCES.has(source)) {
-    return false;
-  }
-  return Boolean(routing.rerouted);
+  return Boolean(req && sel && req.toLowerCase() !== "auto" && req !== sel);
 }
 
 /** Log viewer service filter label (maps to gateway log service name internally).
@@ -165,14 +152,7 @@ export function filterUserManagedModels(models) {
  * "API key missing" / "No inference model connected".
  */
 export function modelHasUsableKey(m) {
-  if (!m) return false;
-  const provider = String(m.provider || "").toLowerCase();
-  // Mirror gateway inference eligibility: Ollama and Bedrock can run without a
-  // stored encrypted key (local daemon / gateway AWS credential chain).
-  if (provider === "ollama" || provider === "aws_bedrock" || provider === "bedrock") {
-    return true;
-  }
-  return Boolean(m.api_key_set || m.api_key_env_var);
+  return Boolean(m && (m.api_key_set || m.api_key_env_var));
 }
 
 /** Substrings of any reserved platform/guard/BYOK upstream id or codename. A

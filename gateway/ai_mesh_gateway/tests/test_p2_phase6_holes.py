@@ -19,8 +19,24 @@ import openai
 import pytest
 import pytest_asyncio
 
-import ai_mesh_gateway.main as gm
 from ai_mesh_gateway.tests import test_openai_sdk_compat as T
+
+
+def _resolved_main():
+    """Resolve the SAME ``main`` module object the app under test is built from.
+
+    The gateway file is importable under two identities (``main`` and
+    ``ai_mesh_gateway.main``). A sibling test deletes ``ai_mesh_gateway.main``
+    from ``sys.modules`` during teardown, so a later dotted re-import re-executes
+    main.py into a SECOND module object with its own ``app`` / ``LLM_ROUTER``.
+    A module-level ``import ai_mesh_gateway.main as gm`` binds the FIRST object
+    and then silently patches a module the app no longer uses (passes alone,
+    fails in-suite). ``T._make_sdk_app`` resolves the module via
+    ``from ai_mesh_gateway import main``; mirror that, at call time.
+    """
+    from ai_mesh_gateway import main as gateway_main
+
+    return gateway_main
 
 
 def _raw500_client(app):
@@ -37,7 +53,7 @@ def _raw500_client(app):
 async def test_embeddings_unhandled_exception_is_nested_500_with_request_id(monkeypatch):
     rc = fakeredis.aioredis.FakeRedis(decode_responses=True)
     app, auth = await T._make_sdk_app(monkeypatch, redis_client=rc)
-    gm.LLM_ROUTER.aembedding = AsyncMock(side_effect=RuntimeError("embedding provider connection failed"))
+    _resolved_main().LLM_ROUTER.aembedding = AsyncMock(side_effect=RuntimeError("embedding provider connection failed"))
     try:
         async with _raw500_client(app) as c:
             r = await c.post("/v1/embeddings", json={"model": "zs-embed", "input": "hi"})
@@ -83,7 +99,7 @@ async def test_responses_stream_zeroshield_error_emits_failed_not_completed(monk
             "model": "gpt-4o-mini", "choices": [], "zeroshield": {"action": "error", "reason": "upstream drop"}}) + "\n\n"
         yield "data: [DONE]\n\n"
 
-    gm.LLM_ROUTER.acompletion_stream = _err_stream
+    _resolved_main().LLM_ROUTER.acompletion_stream = _err_stream
     client = openai.AsyncOpenAI(
         base_url="http://testserver/v1", api_key=T.API_KEY,
         http_client=httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver"),

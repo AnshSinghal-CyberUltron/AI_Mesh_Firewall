@@ -19,12 +19,13 @@ from functools import lru_cache
 import jsonschema
 import requests
 from django.conf import settings
+from django.core.cache import cache
 from django.db import IntegrityError
 from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import AllowAny, BasePermission
+from rest_framework.permissions import AllowAny, BasePermission, IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -326,6 +327,107 @@ def _store_oauth_tokens(server, tok: dict) -> None:
     server.auth_type = "oauth"
     update_fields.append("auth_type")
     server.save(update_fields=update_fields)
+    _mirror_oauth_token_to_gateway(server, tok)
+
+
+def _mirror_oauth_token_to_gateway(server, tok: dict) -> None:
+    """Best-effort mirror of control-plane OAuth tokens into gateway Redis.
+
+    HTTP OAuth servers route through the sandbox; ``get_stored_token(org, url)``
+    must find the token after control ``_store_oauth_tokens`` or refresh.
+    Failures are logged and swallowed — the control DB row remains authoritative.
+    """
+    org = getattr(server, "organization", None)
+    org_slug = getattr(org, "slug", "") if org else ""
+    server_url = (getattr(server, "url", "") or "").strip()
+    access = (tok.get("access_token") or getattr(server, "auth_token", "") or "").strip()
+    if not org_slug or not server_url or not access:
+        return
+    gateway_url = (
+        (getattr(settings, "GATEWAY_URL", "") or "").strip().rstrip("/")
+        or os.environ.get("GATEWAY_URL", "").strip().rstrip("/")
+        or "http://gateway:8300"
+    )
+    internal_key = (
+        (getattr(settings, "GATEWAY_INTERNAL_API_KEY", "") or "").strip()
+        or os.environ.get("GATEWAY_INTERNAL_API_KEY", "").strip()
+    )
+    if not internal_key:
+        logger.warning(
+            "OAuth token mirror skipped for %s: GATEWAY_INTERNAL_API_KEY not configured",
+            getattr(server, "server_slug", "?"),
+        )
+        return
+    payload = {
+        "org_slug": org_slug,
+        "server_url": server_url,
+        "access_token": access,
+        "refresh_token": tok.get("refresh_token") or getattr(server, "oauth_refresh_token", "") or "",
+        "expires_in": tok.get("expires_in"),
+        "token_type": tok.get("token_type") or "bearer",
+        "token_endpoint": getattr(server, "oauth_token_endpoint", "") or "",
+        "client_id": getattr(server, "oauth_client_id", "") or "",
+        "client_secret": getattr(server, "oauth_client_secret", "") or "",
+        "resource": getattr(server, "oauth_resource", "") or "",
+        "scope": tok.get("scope") or getattr(server, "oauth_scope", "") or "",
+    }
+    try:
+        resp = requests.post(
+            f"{gateway_url}/v1/mcp/internal/oauth-token-mirror",
+            json=payload,
+            headers={
+                "Content-Type": "application/json",
+                "X-Gateway-Internal-Key": internal_key,
+            },
+            timeout=5,
+        )
+        if resp.status_code >= 400:
+            logger.warning(
+                "OAuth token mirror HTTP %s for %s/%s: %s",
+                resp.status_code,
+                org_slug,
+                getattr(server, "server_slug", "?"),
+                resp.text[:300],
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "OAuth token mirror failed for %s/%s: %s",
+            org_slug,
+            getattr(server, "server_slug", "?"),
+            exc,
+        )
+
+
+def _oauth_token_present_and_unexpired(server) -> bool:
+    """True when the server currently holds a usable OAuth access token that has
+    not expired — so a fresh re-authorization would just re-mint the same kind of
+    token the upstream may already be rejecting."""
+    if getattr(server, "auth_type", "") != "oauth" or not getattr(server, "auth_token", ""):
+        return False
+    exp = getattr(server, "oauth_token_expires_at", None)
+    return exp is None or exp > timezone.now()
+
+
+def _is_auth_rejection_message(msg: str) -> bool:
+    """True when a sanitized sync error indicates the UPSTREAM rejected auth
+    (401/403), as opposed to a missing / expired local token."""
+    low = (msg or "").lower()
+    return any(
+        k in low
+        for k in (
+            "rejected authentication", "rejected the oauth", "re-authorize",
+            "re-authenticate", "needs re-authentication", " 401", " 403",
+            "unauthorized", "forbidden",
+        )
+    )
+
+
+def _oauth_pending_initial_authorization(server) -> bool:
+    """True when OAuth is configured but the operator has never completed authorize."""
+    return (
+        getattr(server, "auth_type", "") == "oauth"
+        and not getattr(server, "auth_token", None)
+    )
 
 
 def _ensure_oauth_token_fresh(server) -> bool:
@@ -343,6 +445,9 @@ def _ensure_oauth_token_fresh(server) -> bool:
     """
     if getattr(server, "auth_type", "") != "oauth":
         return True
+    if _oauth_pending_initial_authorization(server):
+        # Never completed OAuth — pending authorization, not a re-auth failure.
+        return False
     expires_at = getattr(server, "oauth_token_expires_at", None)
     has_token = bool(server.auth_token)
     near_expiry = bool(expires_at) and expires_at <= timezone.now() + timedelta(seconds=60)
@@ -374,9 +479,16 @@ def _ensure_oauth_token_fresh(server) -> bool:
         return True
     except Exception as exc:  # noqa: BLE001
         logger.error("OAuth token refresh failed for %s: %s", server.server_slug, exc)
+        # Do NOT interpolate the raw exception into the client-facing message
+        # (it can leak token-endpoint URLs / provider error bodies). Route it
+        # through the sanitizer for a clean auth message + correlation ref. (CP17)
         _mark_needs_reauth(
             server,
-            f"OAuth token refresh failed ({exc}) — re-authenticate this server.",
+            _sanitize_sync_error(
+                f"oauth token refresh failed: {exc}",
+                org_slug=getattr(getattr(server, "organization", None), "slug", ""),
+                server_slug=getattr(server, "server_slug", ""),
+            ),
         )
         return False
 
@@ -402,6 +514,191 @@ def _clear_needs_reauth(server) -> None:
         server.save(update_fields=["needs_reauth", "last_sync_error"])
     except Exception as exc:  # noqa: BLE001
         logger.error("Failed to clear needs_reauth for %s: %s", server.server_slug, exc)
+
+
+# Stable, client-facing MCP sync error codes. These are part of the public
+# contract (documented, referenced by support): the wording of a message may
+# change, the CODE does not. Keep in sync with docs/mcp/HARDENING_CHANGELOG.md
+# and the frontend inline-error renderer.
+MCP_ERR_AUTH = "MCP_AUTH_FAILED"
+MCP_ERR_EGRESS = "MCP_EGRESS_DENIED"
+MCP_ERR_OOM = "MCP_OUT_OF_MEMORY"
+MCP_ERR_STORAGE = "MCP_INSUFFICIENT_STORAGE"
+MCP_ERR_CRASH = "MCP_SERVER_CRASHED"
+MCP_ERR_IMAGE = "MCP_IMAGE_UNAVAILABLE"
+MCP_ERR_TIMEOUT = "MCP_TIMEOUT"
+MCP_ERR_START = "MCP_START_FAILED"
+MCP_ERR_HOST_TOOL = "MCP_HOST_TOOL_FAILED"
+MCP_ERR_PROTOCOL = "MCP_PROTOCOL_FAILED"
+MCP_ERR_UNAVAILABLE = "MCP_UNAVAILABLE"
+
+
+class SyncError(str):
+    """A sanitized, client-facing sync-error string that also carries a stable
+    error ``code`` and a correlation ``ref``.
+
+    It subclasses ``str`` so every existing consumer keeps working unchanged —
+    the ``last_sync_error`` CharField stores the human message, the
+    ``needs_reauth`` ``.lower()`` heuristics scan the message, ``sync_error or ""``
+    is truthy, and DRF/``json`` serialize it as the plain message. New consumers
+    (the sync API response, the dev debug view) read ``.code`` / ``.ref``.
+    """
+
+    code: str
+    ref: str
+
+    def __new__(cls, message: str, code: str, ref: str):
+        obj = super().__new__(cls, message)
+        obj.code = code
+        obj.ref = ref
+        return obj
+
+
+def _classify_sync_error(low: str) -> tuple[str, str]:
+    """Map a lower-cased raw error to a (stable code, branded summary).
+
+    Order matters: the specific internal-failure fingerprints (OOM, crash,
+    image-missing) are checked BEFORE the generic "exited with code" branch,
+    because those raw messages also contain "exited with code".
+    """
+    if any(k in low for k in ("re-authenticate", "re-authentication",
+                              "unauthorized", "invalid token", "invalid_token",
+                              "forbidden", " 401", " 403", "auth")):
+        return MCP_ERR_AUTH, ("The MCP server rejected authentication. Check the "
+                              "credentials or re-authorize the connection, then retry.")
+    if "egress denied" in low or "allowlist" in low or "not permitted" in low:
+        return MCP_ERR_EGRESS, ("The MCP server host is not permitted by your "
+                                "organization's egress policy.")
+    # Disk/storage: the server's install overflowed the sandbox tmpfs (ENOSPC).
+    if any(k in low for k in ("no space left", "enospc", "exceeded the sandbox storage",
+                              "storage limit")):
+        return MCP_ERR_STORAGE, ("The MCP server is too large to install within the "
+                                 "current sandbox storage limit. Increase the limit for "
+                                 "heavy servers or use a lighter server, then retry.")
+    # OOM: SIGKILL (exit -9 / signal 9) or container OOM-kill (exit 137 = 128+9).
+    if any(k in low for k in ("code -9", "signal 9", "sigkill", "out of memory",
+                              "oom", "code 137", "exit 137", "exitcode 137")):
+        return MCP_ERR_OOM, ("The MCP server ran out of memory while starting. It "
+                             "may be too resource-intensive for the current limits; "
+                             "try a lighter configuration or contact support.")
+    # Hard crash: SIGABRT (exit -6 / signal 6) or container abort (exit 134 = 128+6).
+    if any(k in low for k in ("code -6", "signal 6", "sigabrt", "aborted",
+                              "code 134", "exit 134", "core dumped")):
+        return MCP_ERR_CRASH, ("The MCP server crashed while starting. Verify the "
+                               "command and package are compatible, then retry.")
+    # Container image not available (pull failure / missing image / manifest).
+    if any(k in low for k in ("no such image", "image not found", "not found: image",
+                              "manifest unknown", "pull access denied",
+                              "imagepullbackoff", "no such file or directory: image",
+                              "unable to find image")):
+        return MCP_ERR_IMAGE, ("The MCP server's runtime image is not available. "
+                               "Please retry shortly or contact support.")
+    if any(k in low for k in ("timeout", "timed out", "did not respond",
+                              "not ready", "provisioning", "starting up")):
+        return MCP_ERR_TIMEOUT, ("The MCP server did not respond in time. Please "
+                                 "retry in a moment.")
+    if any(k in low for k in ("host tool install failed", "mcp_host_tools",
+                              "host tool not in allowlist", "host tool manager")):
+        return MCP_ERR_HOST_TOOL, ("A required CLI tool could not be installed in the "
+                                   "sandbox. Verify the Host CLI tools declaration and "
+                                   "retry, or contact support.")
+    if "mcp_protocol_handshake_failed" in low or "host_cli_tools_installed" in low:
+        return MCP_ERR_PROTOCOL, (
+            "The command exited without speaking MCP JSON-RPC. Verify it launches an MCP "
+            "server (not a one-off script). Host CLI tools were installed successfully."
+        )
+    if any(k in low for k in ("exited with code", "failed to start", "process exited",
+                              "missing host dependency", "wrong package",
+                              "stdout stream closed", "did not start")):
+        return MCP_ERR_START, ("The MCP server could not be started — it stopped "
+                               "immediately during startup. Verify the command and package "
+                               "name; if the server shells out to a required CLI binary, "
+                               "declare it in the server's Host CLI tools / MCP_HOST_TOOLS.")
+    return MCP_ERR_UNAVAILABLE, ("The MCP server could not be reached or returned an "
+                                 "error. Verify the configuration and retry.")
+
+
+# Developer diagnostic channel (CP18). The raw cause behind a sanitized client
+# error is written here keyed by the correlation ref, so a developer/staff user
+# can retrieve it via MCPDiagnosticDetailView WITHOUT it ever reaching a client.
+MCP_DIAG_CACHE_PREFIX = "mcp:diag:"
+MCP_DIAG_TTL_SECONDS = 7 * 24 * 3600  # 7 days
+
+
+def _diag_cache_key(ref: str) -> str:
+    return f"{MCP_DIAG_CACHE_PREFIX}{ref}"
+
+
+def _read_gateway_diagnostic(ref: str) -> dict | None:
+    """CLEANUP-05: read a GATEWAY-originated diagnostic by correlation ref.
+
+    The gateway's ``mcp_error_classifier.sanitize_mcp_error`` records the REAL cause
+    (exit code, upstream body, internal host, raw exc) to Redis under the PLAIN key
+    ``mcp:diag:<ref>`` as JSON — which is NOT the django_redis cache key
+    (``<KEY_PREFIX>:<version>:mcp:diag:<ref>``, pickled). Read it directly off the
+    shared Redis so this ONE staff-only endpoint surfaces BOTH control- and
+    gateway-originated diagnostics. Best-effort: any failure → None (falls through
+    to a 404), never an error.
+    """
+    try:
+        import redis as _redis
+        url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
+        client = _redis.Redis.from_url(url, decode_responses=True)
+        raw = client.get(_diag_cache_key(ref))
+        try:
+            client.close()
+        except Exception:  # noqa: BLE001
+            pass
+        return json.loads(raw) if raw else None
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("gateway diagnostic read failed [ref=%s]: %s", ref, exc)
+        return None
+
+
+def _store_sync_diagnostic(ref, code, raw, *, org_slug="", server_slug="") -> None:
+    """Persist the REAL cause behind a sanitized client error, keyed by ``ref``.
+
+    Best-effort (a cache outage must never break the sync path): the client has
+    already been given the sanitized message + code + ref; this only powers the
+    staff-only debug view. Raw is truncated to a safe bound.
+    """
+    try:
+        cache.set(
+            _diag_cache_key(ref),
+            {
+                "ref": ref,
+                "code": code,
+                "kind": "mcp_sync_error",
+                "org_slug": org_slug,
+                "server_slug": server_slug,
+                "raw_cause": str(raw)[:4000],
+                "created_at": timezone.now().isoformat(),
+            },
+            timeout=MCP_DIAG_TTL_SECONDS,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to persist MCP diagnostic [ref=%s]: %s", ref, exc)
+
+
+def _sanitize_sync_error(raw, *, org_slug: str = "", server_slug: str = "") -> "SyncError":
+    """Map a raw internal MCP error to a clean, branded, NON-revealing client error.
+
+    The raw detail (exit codes, upstream response bodies, sandbox-agent internals,
+    host-dependency hints, server keys) is kept ONLY server-side under a short
+    correlation ``ref`` — in the structured logs AND the staff-only diagnostic
+    channel (:func:`_store_sync_diagnostic`); the client sees an actionable,
+    brand-safe summary, a stable error ``code``, and the ``ref``. Returns a
+    :class:`SyncError` (a ``str`` carrying ``.code`` + ``.ref``). (CP16 sanitize +
+    CP17 code/mapping + CP18 dev diagnostic channel keyed by ref.)
+    """
+    ref = uuid_mod.uuid4().hex[:12]
+    code, summary = _classify_sync_error(str(raw).lower())
+    logger.warning(
+        "MCP sync error [ref=%s code=%s] org=%s server=%s: %s",
+        ref, code, org_slug, server_slug, str(raw)[:1000],
+    )
+    _store_sync_diagnostic(ref, code, raw, org_slug=org_slug, server_slug=server_slug)
+    return SyncError(f"{summary} (Ref: {ref})", code, ref)
 
 
 def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
@@ -440,6 +737,11 @@ def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
     if server.transport in ("streamable-http", "sse") and hasattr(server, "auth_type"):
         auth_type = getattr(server, "auth_type", "none") or "none"
         if auth_type == "oauth":
+            # Defer discovery until the operator completes OAuth — background
+            # sync on a freshly registered HTTP OAuth server must NOT mark
+            # needs_reauth or surface "token expired" before first authorize.
+            if _oauth_pending_initial_authorization(server):
+                return [], None
             # Refresh if needed, then forward the OAuth access token as a
             # normal bearer so the gateway needs no OAuth awareness. Only
             # forward when the token is usable; an expired/unrefreshable token
@@ -477,7 +779,7 @@ def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
                 resp.status_code, org.slug, server.server_slug,
                 resp.text[:500],
             )
-            return [], f"Gateway returned HTTP {resp.status_code}: {resp.text[:200]}"
+            return [], _sanitize_sync_error(f"gateway HTTP {resp.status_code}: {resp.text[:500]}", org_slug=org.slug, server_slug=server.server_slug)
 
         data = resp.json()
         # JSON-RPC response: {"jsonrpc":"2.0","id":1,"result":{"tools":[...]}}
@@ -486,7 +788,7 @@ def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
         if isinstance(data, dict) and data.get("error"):
             err = data["error"]
             msg = err.get("message") if isinstance(err, dict) else str(err)
-            return [], f"Upstream MCP error: {msg}"
+            return [], _sanitize_sync_error(msg, org_slug=org.slug, server_slug=server.server_slug)
         result = data.get("result", {})
         tools = result.get("tools", [])
         if isinstance(tools, list):
@@ -495,13 +797,13 @@ def _discover_tools_via_gateway(server, org) -> tuple[list[dict], str | None]:
                 len(tools), org.slug, server.server_slug,
             )
             return tools, None
-        return [], "Malformed tools/list response from gateway."
+        return [], _sanitize_sync_error("malformed tools/list response from gateway", org_slug=org.slug, server_slug=server.server_slug)
     except Exception as exc:
         logger.warning(
             "Gateway discover-tools failed for %s/%s: %s",
             org.slug, server.server_slug, exc,
         )
-        return [], f"Discovery request failed: {exc}"
+        return [], _sanitize_sync_error(f"discovery request failed: {exc}", org_slug=org.slug, server_slug=server.server_slug)
 
 
 def _resync_server_tools(server, org) -> dict:
@@ -539,10 +841,32 @@ def _resync_server_tools(server, org) -> dict:
         stale.delete()
     server.tools_count = MCPToolRegistration.objects.filter(server=server).count()
     server.last_sync_at = timezone.now()
-    server.connection_status = "connected" if (sync_error is None) else "failed"
+    oauth_pending = _oauth_pending_initial_authorization(server) and sync_error is None
+    if oauth_pending:
+        server.connection_status = "unknown"
+    else:
+        server.connection_status = "connected" if (sync_error is None) else "failed"
     update_fields = ["tools_count", "last_sync_at", "connection_status", "updated_at"]
+    # OAuth token PRESENT + UNEXPIRED but the upstream STILL rejected it (401/403):
+    # re-authorizing just re-mints a token of the same kind the server already
+    # refused, so the generic "re-authorize the connection" message sends the operator
+    # in a loop ("even though I clicked re-authorize"). Replace it with an honest,
+    # non-looping message and leave needs_reauth False — re-auth cannot fix an OAuth
+    # config / audience / account-access mismatch on an otherwise-valid token.
+    if (
+        sync_error is not None
+        and _oauth_token_present_and_unexpired(server)
+        and _is_auth_rejection_message(sync_error)
+    ):
+        _ref = re.search(r"\(Ref: [0-9a-fA-F]{6,}\)", sync_error or "")
+        sync_error = (
+            "The MCP server rejected your OAuth token even though it is valid and "
+            "unexpired — re-authorizing will not help. Check this server's OAuth "
+            "configuration (scopes, resource/audience) and that your account has "
+            "access to it." + (f" {_ref.group(0)}" if _ref else "")
+        )
     if hasattr(server, "last_sync_error"):
-        server.last_sync_error = sync_error or ""
+        server.last_sync_error = "" if oauth_pending else (sync_error or "")
         update_fields.append("last_sync_error")
     # Map an interactive-auth / BYOK-OAuth failure (e.g. a stdio `mcp-remote`
     # server whose headless OAuth login the gateway detected and short-circuited)
@@ -550,24 +874,29 @@ def _resync_server_tools(server, org) -> dict:
     # the operator sees "re-authenticate" rather than an opaque error. Cleared
     # on success or any non-auth failure.
     if hasattr(server, "needs_reauth"):
-        _err_l = (sync_error or "").lower()
-        server.needs_reauth = sync_error is not None and any(
-            h in _err_l
-            for h in (
-                "interactive authentication",
-                "requires re-authentication",
-                "re-authentication",
-                "re-authenticate",
-                "byok / oauth",
-                "needs_reauth",
-                # Bearer-token BYOK failures: an invalid/expired token the
-                # client supplied at runtime — actionable as "provide valid
-                # credentials" rather than an opaque generic failure.
-                "invalid_token",
-                "invalid token",
-                "unauthorized",
+        if oauth_pending:
+            server.needs_reauth = False
+        else:
+            _err_l = (sync_error or "").lower()
+            server.needs_reauth = sync_error is not None and any(
+                h in _err_l
+                for h in (
+                    "interactive authentication",
+                    "requires re-authentication",
+                    "re-authentication",
+                    "re-authenticate",
+                    "re-authorize",
+                    "byok / oauth",
+                    "needs_reauth",
+                    # HTTP OAuth via sandbox (-32001 / upstream 401)
+                    "upstream returned 401",
+                    "401;",
+                    " 401",
+                    "invalid_token",
+                    "invalid token",
+                    "unauthorized",
+                )
             )
-        )
         update_fields.append("needs_reauth")
     if hasattr(server, "last_sync_attempt_at"):
         server.last_sync_attempt_at = timezone.now()
@@ -577,6 +906,10 @@ def _resync_server_tools(server, org) -> dict:
         "synced": len(server_tool_names),
         "pruned": pruned,
         "error": sync_error,
+        # Stable, client-facing error code + correlation id (present only on a
+        # sanitized failure; a raw string or None carries neither). (CP17)
+        "error_code": getattr(sync_error, "code", None),
+        "correlation_id": getattr(sync_error, "ref", None),
         "connection_status": server.connection_status,
     }
 
@@ -594,12 +927,24 @@ class _MCPToolCallError(requests.RequestException):
         self.http_status = http_status
 
 
-def _call_tool_via_gateway(server, org, tool_name: str, arguments: dict) -> dict:
+def _call_tool_via_gateway(
+    server,
+    org,
+    tool_name: str,
+    arguments: dict,
+    *,
+    actor: dict | None = None,
+) -> dict:
     """Execute a tool through the gateway's internal MCP route.
 
     This is used for all MCP server transports (stdio, websocket,
     streamable-http, sse). The gateway proxies directly to the upstream
     URL (or spawns the stdio process) and enforces policy in-band.
+
+    ``actor`` is optional ``{user_id, agent_id, roles}`` so the gateway
+    adapter scan path can honor actor-scoped MCP policies / field RBAC
+    (parity with org_mcp_jsonrpc). Control already evaluated policies
+    with the same actor; the gateway re-uses it for field projection.
     """
     gateway_url = (
         (getattr(settings, "GATEWAY_URL", "") or "").strip().rstrip("/")
@@ -621,6 +966,17 @@ def _call_tool_via_gateway(server, org, tool_name: str, arguments: dict) -> dict
         "url": server.url or "",
         "transport": server.transport or "streamable-http",
     }
+    if actor:
+        # Only forward non-empty identity fields (gateway treats missing as None).
+        _actor_out: dict = {}
+        if actor.get("user_id") is not None:
+            _actor_out["user_id"] = actor["user_id"]
+        if actor.get("agent_id"):
+            _actor_out["agent_id"] = str(actor["agent_id"])[:64]
+        if actor.get("roles"):
+            _actor_out["roles"] = [str(r)[:64] for r in list(actor["roles"])[:16]]
+        if _actor_out:
+            payload["actor"] = _actor_out
 
     if server.transport in ("streamable-http", "sse") and hasattr(server, "auth_type"):
         auth_type = getattr(server, "auth_type", "none") or "none"
@@ -751,6 +1107,35 @@ class MCPServicesHealthView(APIView):
 # ── MCP Servers ───────────────────────────────────────────────────
 
 
+def _trigger_background_sync(server, org) -> None:
+    """CLEANUP-07: kick off discovery/sync for a freshly-registered server in a
+    daemon thread so registration returns immediately while the state resolves
+    (unknown → syncing → connected/failed) — it must NEVER linger at "unknown".
+
+    ``_resync_server_tools`` does the gateway ``discover-tools`` round-trip + the
+    status/tool update; running it off-thread keeps the POST /servers/ response
+    fast (and covers non-UI registrations that never call POST /servers/<id>/tools/).
+    The thread gets its own DB connection, so close old connections at both ends to
+    avoid leaking one. Any failure is swallowed + logged — a background sync hiccup
+    must never surface as a registration error.
+    """
+    import threading
+
+    from django.db import close_old_connections
+
+    def _run():
+        close_old_connections()
+        try:
+            _resync_server_tools(server, org)
+        except Exception:  # noqa: BLE001
+            logger.exception("background sync failed for %s/%s",
+                             getattr(org, "slug", "?"), getattr(server, "server_slug", "?"))
+        finally:
+            close_old_connections()
+
+    threading.Thread(target=_run, name=f"mcp-sync-{server.pk}", daemon=True).start()
+
+
 class MCPServerListCreateView(APIView):
     """List all registered MCP servers or register a new one."""
 
@@ -834,6 +1219,14 @@ class MCPServerListCreateView(APIView):
                     )
         except Exception:
             logger.exception("Failed to auto-provision MCP gateway key for org %s", org.id)
+
+        # CLEANUP-07: registration triggers discovery/sync so the state resolves
+        # (unknown → syncing → connected/failed) and NEVER lingers at "unknown".
+        # Mark "syncing" now (the response reflects it) and resolve off-thread; the
+        # UI's own inline sync (POST /tools/) still runs and is idempotent.
+        registration.connection_status = "syncing"
+        registration.save(update_fields=["connection_status", "updated_at"])
+        _trigger_background_sync(registration, org)
 
         response_data = MCPServerRegistrationSerializer(registration).data
         response_data.update(gw_key_info)
@@ -1326,7 +1719,17 @@ class MCPToolCallView(APIView):
                 resolved_server.server_slug,
                 (resolved_server.transport or "").strip().lower(),
             )
-            result = _call_tool_via_gateway(resolved_server, org, tool_name, arguments)
+            result = _call_tool_via_gateway(
+                resolved_server,
+                org,
+                tool_name,
+                arguments,
+                actor={
+                    "user_id": actor_user_id,
+                    "agent_id": agent_id,
+                    "roles": list(actor_roles),
+                },
+            )
         except requests.RequestException as exc:
             latency_ms = int((time.time() - t0) * 1000)
             mcp_firewall_client.postflight_audit(
@@ -1550,10 +1953,18 @@ class MCPToolCallView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        # 'monitor' posture: detect + audit but DO NOT mutate (observe-only).
-        # Anything else (redact / tag / inherit-fallback) applies the prior
-        # output redaction (output-direction hints then G7 field redaction).
-        _output_monitor = _scan_action == "monitor" and _output_pii_detected
+        # Observe-only: monitor (and tag without a policy redact verdict) detect + audit,
+        # no output mutation. Policy-authored redact still applies under tag.
+        _policy_output_redact = (
+            eval_out is not None
+            and eval_out.action == "redact"
+            and bool(eval_out.redaction_hints)
+        )
+        _output_monitor = (
+            _scan_action in ("monitor", "tag")
+            and _output_pii_detected
+            and not _policy_output_redact
+        )
         if eval_out is not None and eval_out.redaction_hints and not _output_monitor:
             try:
                 result = redact_structured(result, eval_out.redaction_hints, "output")
@@ -1685,7 +2096,18 @@ def _record_event(
         # scalar-field sanitisation above cannot be bypassed via the metadata /
         # compliance_tags / scan_findings channels (stored-XSS + NUL + deep-nest).
         ev_metadata = _sanitize_event_structure(ev_metadata)
-        safe_compliance_tags = _sanitize_event_structure(compliance_tags or [])
+        # CHG-0059: normalize onto the ComplianceTag catalog vocabulary so every
+        # MCPEvent write site upholds the documented ``compliance_tags = list of
+        # ComplianceTag.code`` contract. Idempotent (this path already emits catalog
+        # codes via _mcp_compliance_tags); never raises (audit must not break).
+        try:
+            from ai_mesh_shared.mcp_compliance_tags import to_catalog_codes
+
+            safe_compliance_tags = to_catalog_codes(
+                _sanitize_event_structure(compliance_tags or [])
+            )
+        except Exception:  # pragma: no cover - defensive, never break recording
+            safe_compliance_tags = _sanitize_event_structure(compliance_tags or [])
         safe_scan_findings = _sanitize_event_structure(scan_findings or [])
 
         MCPEvent.objects.create(
@@ -1730,6 +2152,7 @@ def _record_event(
                     "redact": 200,
                     "monitor": 200,
                     "allow": 200,
+                    "scan_skipped": 200,
                     "error": 502,
                 }
                 _status_code = _status_code_map.get(decision, 200)
@@ -1738,11 +2161,14 @@ def _record_event(
                 # 'allow' is recorded as 'monitor' so success traffic still
                 # appears on dashboard timelines without being mis-tagged
                 # as a block. 'error' is also recorded as 'monitor'.
+                # 'scan_skipped' = zero scan controls (no Tier-1/Tier-2) —
+                # observably distinct in MCPEvent, mapped to monitor for SOC.
                 _action_map = {
                     "block": "block",
                     "redact": "redact",
                     "monitor": "monitor",
                     "allow": "monitor",
+                    "scan_skipped": "monitor",
                     "error": "monitor",
                 }
                 _action = _action_map.get(decision, "monitor")
@@ -1752,6 +2178,7 @@ def _record_event(
                     "redact": 55,
                     "monitor": 25,
                     "allow": 10,
+                    "scan_skipped": 5,
                     "error": 40,
                 }
                 _risk = _risk_map.get(decision, 10)
@@ -1911,10 +2338,48 @@ class MCPServerToolListView(APIView):
         return Response({
             "synced": result["synced"],
             "pruned": pruned,
-            "error": sync_error,
+            "error": str(sync_error) if sync_error else sync_error,
+            # Stable client-facing error code + correlation id for support/dev
+            # cross-reference (CP17). None on success. The message wording may
+            # change; the code is the stable contract.
+            "error_code": result.get("error_code"),
+            "correlation_id": result.get("correlation_id"),
             "connection_status": server.connection_status,
             "tools": MCPToolRegistrationSerializer(tools, many=True).data,
         })
+
+
+class MCPDiagnosticDetailView(APIView):
+    """DEV-ONLY diagnostic lookup by correlation ref (CP18).
+
+    Staff/superuser ONLY (``IsAdminUser`` → ``request.user.is_staff``); an org
+    client — even an org *admin* — is never staff, so this is never exposed to
+    clients. Returns the REAL cause (stable code, raw error text, org/server)
+    that the sanitized client message + ``(Ref: …)`` deliberately withholds, so
+    a developer can debug the exact failure (exit code, upstream body, sandbox
+    reason) using only the correlation id the client reported.
+    """
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, ref):
+        if not re.fullmatch(r"[0-9a-f]{6,32}", ref or ""):
+            return Response(
+                {"error": "Invalid correlation ref."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Control-originated diagnostics (django_redis cache), then GATEWAY-originated
+        # (raw Redis key written by the gateway classifier — CLEANUP-05) so this one
+        # staff-only endpoint resolves any correlation ref regardless of which service
+        # sanitized the error.
+        record = cache.get(_diag_cache_key(ref)) or _read_gateway_diagnostic(ref)
+        if not record:
+            return Response(
+                {"error": "No diagnostic for this correlation ref (expired or unknown).",
+                 "ref": ref},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(record)
 
 
 class MCPToolControlView(APIView):
@@ -2141,7 +2606,7 @@ class MCPGatewayEnabledToolsView(APIView):
             "default_presidio_action": server.default_scan_action,
             "tool_presidio_actions": tool_actions,
             "scan_controls": scan_rows,
-            "scan_controls_configured": True,
+            "scan_controls_configured": bool(scan_rows),
             "effective_scan_controls": org_effective,
             "effective_scan_controls_by_tool": effective_by_tool,
             "mcp_tier2_enabled": mcp_tier2_enabled,
@@ -2160,7 +2625,7 @@ class MCPGatewayRecordEventView(APIView):
         Body: {
             "server_slug": "<slug>",
             "tool_name": "<name>",
-            "decision": "allow|block|redact|error",
+            "decision": "allow|block|redact|monitor|scan_skipped|error",
             "reason": "<text>",
             "request_id": "<id>",
             "latency_ms": <int>,
@@ -2500,6 +2965,41 @@ def _oauth_frontend_return_url(ok: bool, server_name: str = "", error: str = "")
     return base
 
 
+# OAuth 2.1 authorization-code (PKCE) is HTTP-only: the control-plane flow runs
+# RFC 9728/8414 discovery + token exchange against an HTTP MCP endpoint URL.
+_OAUTH_HTTP_TRANSPORTS = ("streamable-http", "sse")
+
+
+def oauth_http_transport_error(server) -> str | None:
+    """Return an error string iff ``server`` is INELIGIBLE for the control-plane
+    HTTP OAuth flow, else ``None`` (B1 / MCP OAuth bug #1/#2 root fix).
+
+    The registration serializer already rejects ``auth_type="oauth"`` on non-HTTP
+    transports (``serializers.py`` transport guard). This is the matching
+    server-side invariant for the *authorize* endpoint — enforcing it here makes
+    the dup/broken control authorize path structurally unreachable:
+      * a stdio / websocket row can never reach discovery (it authorizes upstream
+        inside the gateway sandbox, not via this endpoint), so the misleading
+        "Server has no URL" 400 is unreachable for the transport that actually
+        triggered it; and
+      * because the transport is validated BEFORE ``auth_type`` is persisted, the
+        endpoint can no longer flip a stdio/websocket row to ``auth_type="oauth"``
+        (the old guard-bypass that created an invalid oauth+stdio row).
+    Order matters: check transport first so stdio gets the clear transport error,
+    not the confusing "no URL" one.
+    """
+    if getattr(server, "transport", None) not in _OAUTH_HTTP_TRANSPORTS:
+        return (
+            "OAuth 2.1 (authorize via provider) requires an HTTP MCP transport "
+            "(streamable-http or sse). stdio servers such as Linear via mcp-remote "
+            "authorize upstream inside the gateway sandbox — this endpoint does not "
+            "apply; leave the auth type as 'none'."
+        )
+    if not server.url:
+        return "Server has no URL; OAuth is only for HTTP transports."
+    return None
+
+
 class MCPServerOAuthStartView(APIView):
     """Begin the OAuth 2.1 authorization-code (PKCE) flow for a server.
 
@@ -2521,9 +3021,14 @@ class MCPServerOAuthStartView(APIView):
         except MCPServerRegistration.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        if not server.url:
+        # B1 root fix: enforce the HTTP-transport invariant BEFORE any discovery
+        # or auth_type mutation, so oauth+stdio is unreachable here (matches the
+        # registration serializer's transport guard) and the auth_type="oauth"
+        # persisted below can never land on a non-HTTP row.
+        oauth_transport_err = oauth_http_transport_error(server)
+        if oauth_transport_err:
             return Response(
-                {"error": "Server has no URL; OAuth is only for HTTP transports."},
+                {"error": oauth_transport_err},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -2699,6 +3204,13 @@ p{{margin:6px 0;line-height:1.5}} a{{color:#60a5fa}}</style></head>
         server.oauth_state = ""
         server.oauth_code_verifier = ""
         server.save(update_fields=["oauth_state", "oauth_code_verifier", "updated_at"])
+        _clear_needs_reauth(server)
+        if hasattr(server, "last_sync_error"):
+            server.last_sync_error = ""
+            server.save(update_fields=["last_sync_error", "updated_at"])
+        org = getattr(server, "organization", None)
+        if org is not None:
+            _trigger_background_sync(server, org)
 
         return self._html(
             True,

@@ -7,16 +7,28 @@ import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
 import { OutputPipelineTimeline } from "./OutputPipelineTimeline";
 import { TIME_RANGE_TO_HOURS } from "../hooks/useFirewallData";
+import { isRedactNoop, selectOutputGovernanceEvents } from "../utils/outputGovernanceFeed";
+
+// Extracted so each state carries its own bg+text pair (not a ternary
+// cross-product) — keeps the detector's gray-on-color heuristic honest and
+// lifts the muted OFF state to an AA-legible slate.
+const AUTO_REFRESH_STYLES = {
+  on: "bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-300",
+  off: "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
+};
 
 const ACTION_STYLES = {
   block: { bg: "bg-red-100 dark:bg-red-900/30", text: "text-red-700 dark:text-red-300", icon: ShieldX, label: "Blocked" },
   redact: { bg: "bg-amber-100 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-300", icon: EyeOff, label: "Redacted" },
+  // rewrite was MISSING here, so a rewritten response fell back to ACTION_STYLES.allow
+  // and rendered the badge as "Allowed" in the Output Governance Log (2026-07-16).
+  rewrite: { bg: "bg-blue-100 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-300", icon: RefreshCw, label: "Rewritten" },
   flag: { bg: "bg-orange-100 dark:bg-orange-900/30", text: "text-orange-700 dark:text-orange-300", icon: ShieldAlert, label: "Flagged" },
   allow: { bg: "bg-emerald-100 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-300", icon: ShieldCheck, label: "Allowed" },
 };
 
 function ActionBadge({ action }) {
-  const style = ACTION_STYLES[action] || ACTION_STYLES.allow;
+  const style = ACTION_STYLES[String(action || "").toLowerCase()] || ACTION_STYLES.allow;
   const Icon = style.icon;
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${style.bg} ${style.text}`}>
@@ -50,6 +62,7 @@ function EventRow({ event, isExpanded, onToggle }) {
   const rawOutput = extra.raw_output || meta.raw_output || responseSnippet;
   const sanitizedOutput = extra.sanitized_output || meta.sanitized_output || "";
   const guardrailReasoning = extra.guardrail_reasoning || meta.guardrail_reasoning || detail;
+  const redactNoop = isRedactNoop(event);
   const confidence = meta.risk_score || meta.security_risk_score || 0;
   const model = meta.model || "--";
   const latency = meta.latency_ms || extra.latency_ms || 0;
@@ -67,10 +80,15 @@ function EventRow({ event, isExpanded, onToggle }) {
         aria-expanded={isExpanded}
       >
         <ActionBadge action={action} />
+        {redactNoop && (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+            No bytes changed
+          </span>
+        )}
         <span className="text-xs font-medium text-slate-700 dark:text-slate-300 capitalize truncate max-w-[120px]">{threatType.replace(/_/g, " ")}</span>
         <ConfidenceMeter confidence={typeof confidence === "number" && confidence <= 1 ? confidence : (confidence / 100)} />
         <span className="text-xs text-slate-500 dark:text-slate-400 ml-auto tabular-nums">{ts}</span>
-        <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:inline">{model}</span>
+        <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">{model}</span>
         {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
       </button>
 
@@ -78,19 +96,19 @@ function EventRow({ event, isExpanded, onToggle }) {
       <div className="px-3 pb-2 space-y-1">
         {promptSnippet && (
           <div className="flex items-start gap-1.5">
-            <span className="text-[10px] font-semibold text-blue-500 dark:text-blue-400 shrink-0 mt-0.5">PROMPT</span>
+            <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 shrink-0 mt-0.5">PROMPT</span>
             <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate">{promptSnippet.length > 120 ? promptSnippet.slice(0, 120) + "…" : promptSnippet}</span>
           </div>
         )}
         {rawOutput && (
           <div className="flex items-start gap-1.5">
-            <span className="text-[10px] font-semibold text-purple-500 dark:text-purple-400 shrink-0 mt-0.5">OUTPUT</span>
+            <span className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 shrink-0 mt-0.5">OUTPUT</span>
             <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate">{rawOutput.length > 120 ? rawOutput.slice(0, 120) + "…" : rawOutput}</span>
           </div>
         )}
         {guardrailReasoning && (
           <div className="flex items-start gap-1.5">
-            <span className="text-[10px] font-semibold text-amber-500 dark:text-amber-400 shrink-0 mt-0.5">REASON</span>
+            <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">REASON</span>
             <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate">{guardrailReasoning.length > 120 ? guardrailReasoning.slice(0, 120) + "…" : guardrailReasoning}</span>
           </div>
         )}
@@ -129,15 +147,11 @@ export function OutputGovernancePanel({ timeRange = "24h" }) {
       // limit=500 (not 50): the feed is filtered to output events client-side, so
       // a small page can be entirely crowded out by recent non-output traffic.
       const res = await fetchWithAuth(
-        `/api/security/threat-feed/?hours=${hours}&limit=500&source=security_scan`
+        `/api/security/threat-feed/?hours=${hours}&limit=500&source=security_scan&collapse=false`
       );
       if (res.ok) {
         const data = await res.json();
-        const outputEvents = (data.results || []).filter((ev) => {
-          const et = (ev.metadata?.event_type || "").toLowerCase();
-          return et === "output_guard" || et === "output_scan";
-        });
-        setEvents(outputEvents);
+        setEvents(selectOutputGovernanceEvents(data.results || []));
       }
     } finally {
       setLoading(false);
@@ -174,8 +188,8 @@ export function OutputGovernancePanel({ timeRange = "24h" }) {
 
   return (
     <div className="ai-mesh-card ai-mesh-grid-bg rounded-3xl p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="min-w-0">
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center">
             Output Governance Log
             <InfoTooltip title="Output Governance">
@@ -186,7 +200,7 @@ export function OutputGovernancePanel({ timeRange = "24h" }) {
             Real-time output-governance evidence — prompt, raw output, detected risks, action, final output
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex gap-1.5 text-[11px]">
             <span className="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 tabular-nums">{blocked} blocked</span>
             <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 tabular-nums">{redacted} redacted</span>
@@ -194,7 +208,7 @@ export function OutputGovernancePanel({ timeRange = "24h" }) {
           </div>
           <button
             onClick={() => { setAutoRefresh((p) => !p); if (!autoRefresh) fetchEvents(); }}
-            className={`p-1.5 rounded-lg transition-colors ${autoRefresh ? "bg-teal-100 dark:bg-teal-900/30 text-teal-600" : "bg-slate-100 dark:bg-slate-800 text-slate-400"}`}
+            className={`p-1.5 rounded-lg transition-colors ${autoRefresh ? AUTO_REFRESH_STYLES.on : AUTO_REFRESH_STYLES.off}`}
             aria-label={autoRefresh ? "Turn off output event auto-refresh" : "Turn on output event auto-refresh"}
             title={autoRefresh ? "Auto-refresh ON (10s)" : "Auto-refresh OFF"}
           >

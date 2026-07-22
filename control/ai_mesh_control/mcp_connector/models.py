@@ -1,6 +1,6 @@
 import uuid
 
-from django.conf import settings
+from django.core.validators import MaxLengthValidator
 from django.db import models
 from django.utils.text import slugify
 
@@ -38,10 +38,12 @@ class MCPServerRegistration(models.Model):
         default="",
         help_text="URL-safe identifier for gateway endpoint; auto-generated from name",
     )
-    url = models.URLField(
-        help_text="MCP server endpoint URL (required for http/sse/websocket, blank for stdio)",
+    url = models.CharField(
+        max_length=2048,
         blank=True,
         default="",
+        validators=[MaxLengthValidator(2048)],
+        help_text="MCP server endpoint URL (http/https/ws/wss for remote; blank for stdio)",
     )
     transport = models.CharField(
         max_length=32,
@@ -195,19 +197,49 @@ class MCPServerRegistration(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.server_slug:
-            self.server_slug = slugify(self.name)
+            # Derive a UNIQUE slug from the name. The slug drives the export URL
+            # (gateway_endpoint = /gateway/<org>/mcp/<slug>), which must never collide.
+            # A distinctly-named server whose name merely slugifies to a taken slug
+            # (e.g. "Playwright!!!" -> "playwright") is auto-suffixed to "playwright-2"
+            # so it registers cleanly with its own export URL, instead of failing with
+            # a misleading "name already exists". Same-NAME duplicates are still
+            # rejected upstream by the (organization, name) unique constraint.
+            base = slugify(self.name) or "mcp-server"
+            slug = base
+            if self.organization_id:
+                taken = set(
+                    type(self).objects
+                    .filter(organization_id=self.organization_id)
+                    .exclude(pk=self.pk)
+                    .values_list("server_slug", flat=True)
+                )
+                n = 2
+                while slug in taken:
+                    slug = f"{base}-{n}"
+                    n += 1
+            self.server_slug = slug
         super().save(*args, **kwargs)
 
     @property
     def gateway_endpoint(self):
-        """Deterministic external gateway endpoint for this server."""
+        """Deterministic gateway endpoint PATH for this server (never host-qualified).
+
+        Intentionally relative. This field is read straight off the API by the
+        frontend (MCPConnectorPanel "Copy MCP Config" / server-card URL / OAuth
+        start), which resolves it to an absolute URL itself based on where the
+        BROWSER is actually running (resolveMcpGatewayBaseUrl() in
+        environmentUrls.js) — local dev vs. production. Prepending
+        settings.GATEWAY_PUBLIC_URL here would bake in whatever that env var
+        happens to be for the WHOLE deployment (often the production gateway
+        domain even on a local dev stack sharing the same .env) and, since the
+        frontend short-circuits on an already-absolute URL, permanently defeat
+        that per-browser local/production detection. Non-browser consumers of
+        this API that need a fully-qualified URL should combine this path with
+        their own known GATEWAY_PUBLIC_URL.
+        """
         org = self.organization
         if org and self.server_slug:
-            endpoint_path = f"/gateway/{org.slug}/mcp/{self.server_slug}"
-            gateway_base = (getattr(settings, "GATEWAY_PUBLIC_URL", "") or "").strip().rstrip("/")
-            if gateway_base:
-                return f"{gateway_base}{endpoint_path}"
-            return endpoint_path
+            return f"/gateway/{org.slug}/mcp/{self.server_slug}"
         return ""
 
     def __str__(self):
@@ -282,6 +314,9 @@ class MCPEvent(models.Model):
         ("redact", "Redact"),
         ("monitor", "Monitor"),
         ("error", "Error"),
+        # Zero scan-control rows → gateway skips Tier-1/Tier-2 entirely
+        # (distinct from ``allow`` = scanned and clean).
+        ("scan_skipped", "Scan Skipped"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

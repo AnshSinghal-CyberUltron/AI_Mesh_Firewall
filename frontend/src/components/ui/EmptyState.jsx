@@ -4,7 +4,7 @@ export function EmptyState({ icon: Icon, title, description, action, className }
   return (
     <div className={cn("flex flex-col items-center justify-center px-6 py-12 text-center", className)}>
       {Icon ? (
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500">
+        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
           <Icon className="h-6 w-6" aria-hidden="true" />
         </div>
       ) : null}

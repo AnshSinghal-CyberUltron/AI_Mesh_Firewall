@@ -26,11 +26,18 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 
+from ai_mesh_shared.mcp_host_tools_runtime import ensure_host_tools
 from ai_mesh_shared.mcp_stdio_common import (
     _args_have_oauth_header,
     _build_child_env,
     _looks_like_oauth_prompt,
+    _safe_args_for_log,
 )
+
+try:  # CLEANUP-03: route stdio-start failures through the gateway classifier
+    from .mcp_error_classifier import mint_ref, sanitize_mcp_error
+except ImportError:  # pragma: no cover - flat-module deployment
+    from mcp_error_classifier import mint_ref, sanitize_mcp_error
 
 LOG = logging.getLogger("gateway.mcp_stdio_adapter")
 
@@ -82,8 +89,14 @@ _PACKAGE_ALLOWLIST = {
 _REQUIRE_PINNED_PACKAGES = os.environ.get(
     "MCP_STDIO_REQUIRE_PINNED_PACKAGES", "false"
 ).lower() in ("1", "true", "yes")
-# Dev default true (in-gateway spawn); compose/prod sets MCP_STDIO_IN_PROCESS=false.
-_STDIO_IN_PROCESS_DEFAULT = "true"
+# CHG-0141: default FALSE = route stdio through the per-org sandbox (no unknown npm on
+# the gateway host; ALL transports in the sandbox — a core 1.4/architecture invariant).
+# The old default was "true" (spawn npm/uvx IN the gateway process), so a prod deployment
+# that FORGOT to set MCP_STDIO_IN_PROCESS=false silently ran untrusted stdio servers on
+# the host with cross-tenant process/fs sharing — a fail-OPEN default on a security-
+# critical toggle. Now secure-by-default; set MCP_STDIO_IN_PROCESS=true to opt INTO the
+# in-gateway spawn (dev only / single-tenant, when no broker is running).
+_STDIO_IN_PROCESS_DEFAULT = "false"
 
 
 def _stdio_in_process() -> bool:
@@ -118,26 +131,64 @@ def _command_basename(command: str) -> str:
     return os.path.basename(command).lower()
 
 
-def _extract_package_spec(command: str, args: list[str]) -> str | None:
-    """Best-effort extraction of the package spec an npx/uvx call will fetch.
+_PKG_FLAGS = ("--from", "--with", "--package", "-p")
 
-    npx  ["-y", "mcp-remote", "https://.."]   -> "mcp-remote"
-    npx  ["-y", "ruflo@latest", "mcp"]         -> "ruflo@latest"
-    uvx  ["semgrep-mcp"]                        -> "semgrep-mcp"
-    uvx  ["--from", "semgrep-mcp==1.0", ".."]  -> "semgrep-mcp==1.0"
-    Returns None for runtimes we don't fetch packages with (node/python).
-    """
+
+def _extract_package_specs(command: str, args: list[str]) -> list[str]:
+    """ALL package specs an npx/uvx invocation would FETCH.
+
+    npx  ["-y", "mcp-remote", "https://.."]        -> ["mcp-remote"]
+    npx  ["-y", "ruflo@latest", "mcp"]              -> ["ruflo@latest"]
+    npx  ["--package=evil", "safe-cmd"]             -> ["evil"]         (=-form)
+    npx  ["-p", "a", "-p", "evil", "cmd"]           -> ["a", "evil"]    (multiple)
+    uvx  ["--from", "semgrep-mcp==1.0", "semgrep"]  -> ["semgrep-mcp==1.0"]
+    Returns [] for runtimes we don't fetch packages with (node/python).
+
+    CHG-0126: covers the ``--flag=value`` form and MULTIPLE package flags, which
+    the old single-spec extractor missed — an attacker could smuggle an
+    unlisted/unpinned package past the allowlist via ``--package=evil`` (skipped as
+    a flag, so the check ran against the wrong token) or a 2nd ``-p``. Enforcement
+    checks EVERY returned spec. When a package flag is present the bare positional
+    is the COMMAND to run (not a package), so it is only taken as a package when NO
+    package flag supplied one (``npx <pkg>`` / ``uvx <tool>``)."""
     if _command_basename(command) not in ("npx", "uvx", "uv"):
-        return None
+        return []
     skip = {"-y", "--yes", "-q", "--quiet", "tool", "run"}
+    specs: list[str] = []
+    saw_pkg_flag = False
+    positional_taken = False
     it = iter(args)
     for tok in it:
-        if tok in ("--from", "--with", "--package", "-p"):
-            return next(it, None)
+        matched = False
+        for fn in _PKG_FLAGS:
+            if tok == fn:                       # "--package", "evil"
+                val = next(it, None)
+                if val:
+                    specs.append(val)
+                    saw_pkg_flag = True
+                matched = True
+                break
+            if tok.startswith(fn + "="):        # "--package=evil"
+                val = tok[len(fn) + 1:]
+                if val:
+                    specs.append(val)
+                    saw_pkg_flag = True
+                matched = True
+                break
+        if matched:
+            continue
         if tok.startswith("-") or tok in skip:
             continue
-        return tok
-    return None
+        if not saw_pkg_flag and not positional_taken:
+            specs.append(tok)
+            positional_taken = True
+    return specs
+
+
+def _extract_package_spec(command: str, args: list[str]) -> str | None:
+    """Back-compat single-spec helper — the FIRST fetched spec (or None)."""
+    specs = _extract_package_specs(command, args)
+    return specs[0] if specs else None
 
 
 def _package_name(spec: str) -> str:
@@ -231,6 +282,46 @@ def _flag_needs_reauth(proc: StdioProcess, evidence: str) -> None:
     asyncio.create_task(_kill_process(proc.key))
 
 
+async def _stdio_failure_message(proc, rc, stderr_tail: str) -> str:
+    """CLEANUP-03: clean, non-revealing CLIENT message for a stdio server that died.
+
+    Routes the cause through the shared gateway classifier so the message set on the
+    pending futures is exit-code-free, env-var-free, brand-safe, and carries no server
+    key. The raw exit code, stderr tail, and operator env-var tuning hints stay in the
+    WARNING logs + the dev-only diagnostic keyed by ref — never in the client message.
+    A V8 heap OOM aborts with SIGABRT (134) but is really OOM, so the stderr signature
+    is checked BEFORE the exit code (134 alone would misclassify as a crash)."""
+    low = (stderr_tail or "").lower()
+    oom = any(s in low for s in ("heap out of memory", "out of memory",
+                                 "fatal error: reached heap limit"))
+    disk_full = any(s in low for s in ("enospc", "no space left on device"))
+    org_slug, _, srv_slug = (proc.key or "").partition("/")
+    if getattr(proc, "oversized_line", False):
+        LOG.warning("Stdio %s failed [ref=%s cause=oversized_line rc=%s] — raise "
+                    "MCP_STDIO_MAX_LINE_BYTES (%s) for very large tool catalogs",
+                    proc.key, mint_ref(), rc, _MAX_LINE_BYTES)
+        return ("The MCP server sent a response too large for the gateway to process. "
+                "Contact support if this persists.")
+    if disk_full:
+        clean = await sanitize_mcp_error(raw="no space left on device",
+                                         org_slug=org_slug, server_slug=srv_slug)
+    elif oom or rc in (-9, 137):
+        clean = await sanitize_mcp_error(raw="out of memory",
+                                         org_slug=org_slug, server_slug=srv_slug)
+    elif rc is None:
+        clean = await sanitize_mcp_error(raw="stdout stream closed",
+                                         org_slug=org_slug, server_slug=srv_slug)
+    elif rc == 0:
+        clean = await sanitize_mcp_error(
+            raw="server exited immediately, likely a missing host dependency or wrong package name",
+            org_slug=org_slug, server_slug=srv_slug)
+    else:
+        clean = await sanitize_mcp_error(exit_code=rc, org_slug=org_slug, server_slug=srv_slug)
+    LOG.warning("Stdio %s failed [ref=%s code=%s rc=%s oom=%s disk_full=%s]",
+                proc.key, clean["ref"], clean["code"], rc, oom, disk_full)
+    return clean["error"]
+
+
 async def _start_reader(proc: StdioProcess):
     """Background task that reads stdout lines and resolves pending futures."""
     assert proc.process and proc.process.stdout
@@ -290,23 +381,11 @@ async def _start_reader(proc: StdioProcess):
         if stderr_tail:
             LOG.warning("Stdio %s stderr tail (rc=%s):\n%s",
                         proc.key, rc, stderr_tail[-2000:])
-        if proc.oversized_line:
-            reason = (
-                "the MCP server sent a response larger than the gateway's "
-                f"{_MAX_LINE_BYTES}-byte line buffer (raise "
-                "MCP_STDIO_MAX_LINE_BYTES for servers with very large tool "
-                "catalogs)"
-            )
-        elif rc is None:
-            reason = "stdout stream closed unexpectedly"
-        elif rc == 0:
-            reason = ("the MCP server exited immediately without responding "
-                      "(likely a missing host dependency or wrong package name)")
-        else:
-            reason = (f"the MCP server process exited with code {rc} "
-                      "(check the command and its host dependencies)")
-        safe_msg = (f"Stdio MCP server '{proc.key}' failed to start: {reason}. "
-                    "See gateway logs for details.")
+        # CLEANUP-03: the CLIENT-facing message is built by the shared classifier
+        # (see _stdio_failure_message) — exit-code-free, env-var-free, brand-safe,
+        # no server key. The raw exit code / stderr / operator env-var hints stay in
+        # the WARNING logs + the dev-only diagnostic keyed by ref.
+        safe_msg = await _stdio_failure_message(proc, rc, stderr_tail)
         # Mark all pending futures as failed with the secret-free message.
         for fut in proc._pending.values():
             if not fut.done():
@@ -356,8 +435,9 @@ async def _ensure_process(key: str, command: str, args: list[str],
     # On-demand package gating: server packages are pulled from npm/PyPI at
     # connect time, so (optionally) restrict which names the shared gateway may
     # fetch and (optionally) require pinned versions for reproducible fetches.
-    spec = _extract_package_spec(command, args)
-    if spec is not None:
+    # CHG-0126: check EVERY fetched spec (multiple -p/--package/--with flags and the
+    # --flag=value form), not just the first — parity with the sandbox agent.
+    for spec in _extract_package_specs(command, args):
         name = _package_name(spec)
         if _PACKAGE_ALLOWLIST and name not in _PACKAGE_ALLOWLIST:
             raise RuntimeError(
@@ -400,9 +480,18 @@ async def _ensure_process(key: str, command: str, args: list[str],
                 "connection and retry."
             )
 
+        # Install operator-declared host CLI tools (MCP_HOST_TOOLS) before spawn —
+        # parity with the sandbox agent path (production default).
+        await ensure_host_tools(requested_env)
+
         proc_env = _build_child_env(requested_env, org_slug, log=LOG)
 
-        LOG.info("Starting stdio MCP process: %s %s (key=%s)", command, args, key)
+        # CHG-0107: mask secret-flag values + URL-embedded creds before logging
+        # (was RAW — a credential in args/URL landed in operator logs plaintext).
+        LOG.info(
+            "Starting stdio MCP process: %s %s (key=%s)",
+            command, _safe_args_for_log(args), key,
+        )
         try:
             process = await asyncio.create_subprocess_exec(
                 command, *args,
@@ -588,6 +677,12 @@ def _server_config_for_broker(
     return effective_org, cfg
 
 
+# B3 item#19: orgs whose per-org sandbox we've already eagerly warmed this
+# process, so the readiness-blocking warm runs once (on the first stdio op /
+# first-sync) rather than on every RPC.
+_WARMED_ORGS: set[str] = set()
+
+
 async def _send_jsonrpc_broker(
     org_slug: str,
     server_slug: str,
@@ -599,11 +694,23 @@ async def _send_jsonrpc_broker(
     msg_id: int | str | None,
     server_config: dict | None,
 ) -> dict:
-    from ai_mesh_gateway.mcp_sandbox_client import broker_send_jsonrpc
+    from ai_mesh_gateway.mcp_sandbox_client import broker_send_jsonrpc, ensure_sandbox
 
     effective_org, cfg = _server_config_for_broker(
         org_slug, server_slug, command, args, env, server_config,
     )
+    # Eagerly provision + warm the per-org sandbox on the first broker
+    # interaction (first-sync / first tool call) so it hits a READY agent
+    # instead of racing the cold start (B3: "MCP sandbox is temporarily
+    # unavailable"). Best-effort: on failure fall through to broker_send_jsonrpc,
+    # whose stdio_rpc still ensures + retries lazily.
+    if effective_org not in _WARMED_ORGS:
+        try:
+            await ensure_sandbox(effective_org)
+        except Exception as exc:  # noqa: BLE001 — non-fatal warm, lazy path still applies
+            LOG.warning("eager sandbox warm failed for org=%s: %s", effective_org, exc)
+        else:
+            _WARMED_ORGS.add(effective_org)
     return await broker_send_jsonrpc(
         effective_org,
         cfg,

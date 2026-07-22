@@ -10,6 +10,12 @@ export const CONNECTION_STATUS = {
   healthy: { label: "Healthy", badge: "success", dot: "bg-teal-500" },
   failed: { label: "Failed", badge: "danger", dot: "bg-red-500" },
   error: { label: "Error", badge: "danger", dot: "bg-red-500" },
+  // CLEANUP-09: registration/re-sync sets connection_status="syncing" (item 07).
+  // Without this entry it fell through to `unknown` and rendered as "Unknown" — the
+  // very stuck state we're eliminating. Now the transient shows "Syncing" (amber,
+  // pulsing) so the state reads unknown→syncing→connected/failed, never stuck-Unknown.
+  syncing: { label: "Syncing", badge: "warning", dot: "bg-amber-500 animate-pulse" },
+  connecting: { label: "Connecting", badge: "warning", dot: "bg-amber-500 animate-pulse" },
   unreachable: { label: "Unreachable", badge: "danger", dot: "bg-red-500" },
   pending: { label: "Pending", badge: "warning", dot: "bg-amber-500" },
   needs_reauth: { label: "Needs re-auth", badge: "warning", dot: "bg-amber-500" },

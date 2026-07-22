@@ -331,7 +331,7 @@ export function DatabaseConnectionPanel({ embedded = false }) {
             <span className={`text-sm font-bold ${result.success ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}`}>
               {result.success ? "Connection Successful" : "Connection Failed"}
             </span>
-            <span className="text-[10px] text-slate-400">{result.latency}ms</span>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400">{result.latency}ms</span>
           </div>
           <div className="text-sm text-slate-700 dark:text-slate-300 mb-2">{result.details}</div>
 
@@ -401,7 +401,7 @@ export function DatabaseConnectionPanel({ embedded = false }) {
                     aria-label={field.label}
                     className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 focus:border-transparent"
                   />
-                  {field.helpText && <p className="text-[10px] text-slate-400 mt-0.5">{field.helpText}</p>}
+                  {field.helpText && <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{field.helpText}</p>}
                 </div>
               ))}
 
@@ -430,9 +430,9 @@ export function DatabaseConnectionPanel({ embedded = false }) {
                     <span className="text-xs text-slate-500 font-mono">{simResult.elapsed}ms</span>
                     {simResult.pipelineAudit?.final_action && (
                       <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold ${
-                        simResult.pipelineAudit.final_action === "allow" ? "bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700" :
-                        simResult.pipelineAudit.final_action === "block" ? "bg-red-100 dark:bg-red-800/30 text-red-700" :
-                        "bg-amber-100 dark:bg-amber-800/30 text-amber-700"
+                        simResult.pipelineAudit.final_action === "allow" ? "bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700 dark:text-emerald-300" :
+                        simResult.pipelineAudit.final_action === "block" ? "bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300" :
+                        "bg-amber-100 dark:bg-amber-800/30 text-amber-700 dark:text-amber-300"
                       }`}>
                         {simResult.pipelineAudit.final_action.toUpperCase()}
                       </span>
@@ -462,7 +462,7 @@ export function DatabaseConnectionPanel({ embedded = false }) {
                   {simResult.pipelineAudit?.stages?.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
                       <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Pipeline Stage Trace</div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 overflow-x-auto pb-1">
                         {simResult.pipelineAudit.stages.map((stage, i) => {
                           const actionColor = stage.action === "allow" ? "bg-emerald-500" : stage.action === "block" ? "bg-red-500" : stage.action === "rewrite" ? "bg-blue-500" : "bg-amber-500";
                           return (
@@ -472,7 +472,7 @@ export function DatabaseConnectionPanel({ embedded = false }) {
                                   <span className="text-[10px] text-white font-bold">{(stage.name || "?").charAt(0).toUpperCase()}</span>
                                 </div>
                                 <div className="text-[10px] text-slate-500 mt-0.5">{stage.name}</div>
-                                <div className="text-[10px] text-slate-400">{stage.latency_ms?.toFixed(0) || 0}ms</div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400">{stage.latency_ms?.toFixed(0) || 0}ms</div>
                               </div>
                               {i < simResult.pipelineAudit.stages.length - 1 && (
                                 <div className="w-3 h-px bg-slate-300 dark:bg-slate-600" />

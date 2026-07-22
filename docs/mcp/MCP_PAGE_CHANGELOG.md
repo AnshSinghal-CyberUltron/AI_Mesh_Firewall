@@ -1,0 +1,183 @@
+# MCP Page (firewall-1-4) Cleanup Changelog
+
+Program `claude-mcp-page-cleanup` — fixing the still-broken Context Assembly & MCP page:
+clean non-revealing errors at every leak site, resolve stuck "Unknown" servers, count
+context-assembly redactions, correct the System-Status banner, and make the 1.4 page
+aligned + responsive (impeccable). One item per iteration; every change four-memory logged
+(Ruflo `mcp-page/changes` + this file + `.cursor/rules/mcp-page-changelog.mdc` + AGENTS.md).
+Format: id | files | WHAT | WHY | NOW DOES | AFFECTS | VERIFY.
+
+## MCP-PAGE-CLEANUP-00 — PAGE OWNERSHIP
+- **files:** mcp-parallel/claims/claude-mcp-page-cleanup-C0.claim; docs/mcp/MCP_PAGE_CHANGELOG.md; .cursor/rules/mcp-page-changelog.mdc; AGENTS.md
+- **WHAT:** claim the MCP page (?tab=firewall-1-4) frontend files (MCPConnectorPanel/MCPScanControlMatrix/PolicyManagementPanel + module-1.4 slices of useFirewallData/firewall-module-utils/firewall-submodules) and the MCP error/state backend (mcp_proxy.py discovery+transport error paths, mcp_stdio_adapter.py stdio-start, mcp_connector/views.py sync-error classifier).
+- **WHY:** coordinate with parallel sessions so MCP-page fixes don't collide; Cursor's broader frontend/** and the chat-pipeline carve-out (ModelConnectionPanel/OutputPipelineTimeline) are respected.
+- **NOW DOES:** other MCP-frontend sessions stand down on these files; this program logs to a distinct trail (Ruflo namespace mcp-page + MCP_PAGE_CHANGELOG.md).
+- **AFFECTS:** coordination only; no code change.
+- **VERIFY:** claim file present; ledger row appended to docs/mcp/PARALLEL_CLAIMS.md; on branch main HEAD.
+
+## MCP-PAGE-CLEANUP-01 — gateway failure classifier
+- **files:** gateway/ai_mesh_gateway/mcp_error_classifier.py (new); gateway/ai_mesh_gateway/tests/test_mcp_error_classifier.py (new)
+- **WHAT:** a gateway-side failure classifier `classify_mcp_failure(exc=/status=/exit_code=/raw=)` → (stable client CODE, clean branded MESSAGE); `sanitize_mcp_error(...)` returns `{error,code,ref}` and records the raw cause dev-only.
+- **WHY:** the gateway proxies discovery/tool-calls to sandboxes + external MCP hosts; its raw failures (exit codes, upstream HTML, hostnames in exceptions, stderr/'sandbox-agent logs') must never reach clients. The control plane already sanitizes its own sync path; the gateway needed the same at its transport boundary.
+- **NOW DOES:** priority exit-code→HTTP-status→exception→raw-text. Covers OOM(-9/137), CRASH(-6/134/-11/139), START, AUTH(401/403), UPSTREAM_HTTP_ERROR (405→"error page (HTTP 405) — check the endpoint URL", 4xx/5xx echo the NUMBER only), TIMEOUT, DNS_FAILURE, CONNECTION_REFUSED, EGRESS/STORAGE/IMAGE/UNAVAILABLE. Codes mirror control's D-codes + 3 transport additions. Raw cause → structured WARNING log keyed by ref + best-effort shared-Redis mcp:diag:<ref> (7d).
+- **AFFECTS:** building block only (no leak site routed yet — items 02-04). Imports httpx (present); redis.asyncio lazy + failure-swallowed.
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_error_classifier.py -q` → 33 passed (all named cases + leak-prevention asserts: no raw exc/host/HTML/'sandbox-agent'/exit-number in message; sanitize survives Redis-down).
+
+## MCP-PAGE-CLEANUP-03 — stdio-start failures routed through the classifier
+- **files:** gateway/ai_mesh_gateway/mcp_stdio_adapter.py; gateway/ai_mesh_gateway/tests/test_stdio_failure_message.py (new)
+- **WHAT:** extracted `_stdio_failure_message(proc, rc, stderr_tail)` (async, testable) called from `_start_reader`'s finally; it builds the CLIENT-facing message via `sanitize_mcp_error`.
+- **WHY:** the old `safe_msg` leaked the raw exit code `{rc}`, internal env-var names (MCP_SANDBOX_MEMORY_MB, MCP_STDIO_MAX_LINE_BYTES), the server key `'{proc.key}'`, and a "See gateway logs for details" pointer — all set on the pending futures → surfaced to the client / stored as last_sync_error.
+- **NOW DOES:** message is exit-code-free, env-var-free, brand-safe, no server key. OOM (rc -9/137 or stderr 'heap out of memory' incl. V8-heap-SIGABRT-134, checked before the exit code)→'exceeded its memory limit'; crash(-6/134/-11/139)→'crashed while starting'; ENOSPC→storage; oversized-line→'response too large'; rc 0→missing-dependency; rc None→stdout-closed. Raw exit code/stderr/env-var hints stay in the WARNING logs + dev diagnostic keyed by ref.
+- **AFFECTS:** the stdio (sandbox) transport error path; the message shown for a failing stdio server (ruflo OOM / cp08 / cp09 / stub bearer). Not yet deployed live (parallel session using the gateway; item 06 does the coordinated live verify).
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_stdio_failure_message.py -q` → 11 passed (leak-prevention: no exit-code numbers / 'sandbox-agent'/'gateway logs' / MCP_SANDBOX* / stderr / secret / server key in the message); full suite 1770 passed.
+
+## MCP-PAGE-CLEANUP-02 — discovery path routed through the classifier
+- **files:** gateway/ai_mesh_gateway/mcp_proxy.py; gateway/ai_mesh_gateway/tests/test_mcp_discovery_clean_errors.py (new)
+- **WHAT:** `internal_discover_tools` now returns CLEAN discovery errors via `sanitize_mcp_error` + the new `_discovery_error_response(clean)` helper (JSON-RPC message + top-level code + ref).
+- **WHY:** the outer `except` returned `error.message = f"Upstream discovery failed: {exc}"` — dumping the raw exception (an internal hostname or a full upstream HTML error page) to the backend/client; and the non-SSE branch called `tools_resp.json()` which raises on an HTML page.
+- **NOW DOES:** non-SSE branch checks `tools_resp.status_code >= 400` → clean "HTTP <status> — check the endpoint URL" (405 case) and guards `.json()`; the outer except classifies the exc (DNS/refused/timeout) into a branded message. Raw exc/HTML/hostname → log + dev diagnostic keyed by ref only.
+- **AFFECTS:** the streamable-http/sse discovery path (backend tool-sync). Not yet deployed live (item 06 coordinated verify).
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_discovery_clean_errors.py -q` → 3 passed (405 HTML→"HTTP 405"+code+ref, no raw HTML; DNS→MCP_DNS_FAILURE no host; refused→MCP_CONNECTION_REFUSED no IP); discovery-scan regression 5 passed; full suite 1773 passed.
+
+## MCP-PAGE-CLEANUP-04 — transport (HTTP/SSE/WS) + OAuth 401 clean errors
+- **files:** gateway/ai_mesh_gateway/mcp_proxy.py; gateway/ai_mesh_gateway/tests/test_mcp_ext_transport_clean_errors.py (new)
+- **WHAT:** the external-passthrough transport failures + upstream 401/403 now route through the classifier.
+- **WHY:** ext_mcp_proxy's `except` returned `f"DNS resolution failed for '{hostname}'"` + `detail=str(exc)` (leaks the operator hostname + raw exception) and `detail=str(exc)` on generic unreachable; the control-proxy `except` also leaked `str(exc)`; an upstream 401 was passed through (its body can hint at tokens/endpoints).
+- **NOW DOES:** ext + control transport `except` → `sanitize_mcp_error(exc=exc)` → clean DNS/refused/timeout `{error,code,ref}` at 502 (hostname/exc → log+diag by ref only). NEW upstream 401/403 intercept → `sanitize_mcp_error(status=401)` → "needs re-authentication — re-authorize the connection" (raw upstream body not echoed).
+- **AFFECTS:** the external HTTP/SSE passthrough + the control-proxy error path. Not yet deployed live (item 06).
+- **VERIFY:** `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_ext_transport_clean_errors.py -q` → 3 passed (DNS→MCP_DNS_FAILURE no host/Errno/no detail field; refused→MCP_CONNECTION_REFUSED no IP; 401→MCP_AUTH_FAILED re-auth, no token hint); ext regression 57 passed; full suite 1776 passed.
+
+## MCP-PAGE-CLEANUP-05 — dev-only correlation-id → full-cause diagnostic (unified endpoint)
+- **files:** control/ai_mesh_control/mcp_connector/views.py; gateway/ai_mesh_gateway/tests/test_mcp_error_classifier.py
+- **WHAT:** control's staff-only `MCPDiagnosticDetailView` now resolves BOTH control- and gateway-originated diagnostics by ref, via new `_read_gateway_diagnostic(ref)`.
+- **WHY:** the gateway classifier writes the full cause to the raw Redis key `mcp:diag:<ref>` (JSON), but django_redis prefixes keys (`cache:1:mcp:diag:<ref>`, pickled), so `cache.get` missed gateway diags — the staff endpoint could not surface them.
+- **NOW DOES:** `cache.get(_diag_cache_key(ref)) or _read_gateway_diagnostic(ref)` — the fallback does a raw Redis read of `mcp:diag:<ref>` off the shared Redis. Plus the always-on structured-log channel (`sanitize_mcp_error` logs ref→full cause at WARNING). Both dev-only, never client-facing (IsAdminUser + internal logs).
+- **AFFECTS:** the staff-only diagnostics endpoint. Control change goes live on the next control restart (item 06 coordinated deploy).
+- **VERIFY:** write side pytest — `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_error_classifier.py -q` → 34 passed (writes key `mcp:diag:<ref>`, 7d TTL, JSON full cause with host, host absent from client body). Read side LIVE (docker exec control shell): raw read returned the code; `cache.get` returned None; django key was `cache:1:mcp:diag:probekey` (prefix mismatch confirmed).
+
+## MCP-PAGE-CLEANUP-06 — live verify failing servers show clean errors (+ SSRF-reason leak fix)
+- **files:** scripts/ralph/mcp_page_cleanup_item06_verify.py (new); gateway/ai_mesh_gateway/mcp_proxy.py (SSRF-reason fix — commit deferred, see note); tests updated.
+- **WHAT:** deployed items 01-05 to the running gateway + live-verified that every failing server shows a clean, non-revealing error; fixed a bonus SSRF-reason leak found during verification.
+- **NOW DOES:** re-syncing the real failing servers (cp08 was raw 405 HTML, Linear 401, bogus stdio) yields clean branded messages + correlation refs (no HTML/exc/exit-code/hostname). The SSRF-guard rejection (3 sites) no longer echoes the raw reason (DNS errno / resolved internal or 169.254.169.254 metadata IP) — routed through sanitize_mcp_error; raw → log+diag by ref.
+- **AFFECTS:** the live gateway (deployed via docker cp + kill -HUP 1; healthy). Dev retrieves the full cause by ref (item 05).
+- **VERIFY:** live re-sync via control API → clean errors w/ refs; `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q` → 1782 passed 0 failed (test_ssrf_reject_dns_reason_is_clean + 2 ext-SSRF tests updated to assert no IP/reason leak).
+- **NOTE:** mcp_proxy.py + its 2 test files' COMMIT is DEFERRED — a parallel session has an uncommitted SSE hunk in the same mcp_proxy.py; git add -p is blocked so selective staging isn't possible. The fix is deployed + test-green + live; source commits land when the file settles.
+
+## MCP-PAGE-CLEANUP-07 — registration triggers discovery/sync (no more stuck "Unknown")
+- **files:** control/ai_mesh_control/mcp_connector/views.py
+- **WHAT:** the registration create (MCPServerListCreateView.post) now sets connection_status="syncing" + fires a background sync so the state resolves; new `_trigger_background_sync(server, org)` helper.
+- **WHY:** connection_status only transitioned (connected/failed) via `_resync_server_tools` on POST /servers/<id>/tools/. The UI calls it, but non-UI/bulk registrations never did → servers lingered at "unknown, 0 tools, never synced".
+- **NOW DOES:** register → status "syncing" (never "unknown") → daemon thread runs `_resync_server_tools` (gateway discover-tools + status/tool update) → connected/failed. Any registration (UI or script) auto-syncs. Thread manages its own DB connection (close_old_connections); failures swallowed+logged.
+- **AFFECTS:** POST /api/mcp-connector/servers/ (registration). The UI's own inline /tools/ sync still runs (idempotent).
+- **VERIFY:** LIVE (control gunicorn 16 uvicorn workers; deployed docker cp + kill -HUP 1, graceful; healthy + login 200): registered a stdio everything-server via API WITHOUT /tools/ → response connection_status="syncing" → resolved to "connected" 13 tools in ~2s. Never lingered at unknown.
+
+## MCP-PAGE-CLEANUP-08 — per-server re-sync resolves the stuck "Unknown" servers
+- **files:** (verification only — the re-sync action already exists) frontend/src/components/MCPConnectorPanel.jsx (syncServerTools); backend _resync_server_tools.
+- **WHAT:** verified the per-server re-sync action works + used it to resolve every stuck "unknown" server.
+- **WHY:** 12 servers (Everything 1-5, Linear Remote/MCP, Filesystem Canary, Stub Bearer/OAuth, probe) lingered at "unknown, 0 tools, never synced" from pre-item-07 bulk registration.
+- **NOW DOES:** syncServerTools(id) → POST /servers/<id>/tools/ (buttons: aria-label "Sync tools from server" :1396, :1443; auto after retry/register). Re-syncing all 12 → every one left "unknown": 6 connected (Everything 1-5 + Filesystem Canary), 6 failed-with-CLEAN-errors (probe/Stub Bearer→unreachable, Stub OAuth→re-auth, Linear×3→rejected auth). 0 remain unknown.
+- **AFFECTS:** server state resolution. With item 07 (registration auto-sync) + this re-sync button, no server can stay stuck at unknown.
+- **VERIFY:** LIVE bulk re-sync via API → "STILL UNKNOWN: NONE"; failed servers show clean branded errors.
+
+## MCP-PAGE-CLEANUP-09 — "Syncing" state renders (no fall-through to "Unknown") + page verify
+- **files:** frontend/src/lib/mcpColors.js; scripts/ralph/mcp_page_cleanup_item09_verify.mjs (new)
+- **WHAT:** added the "syncing"/"connecting" entries to CONNECTION_STATUS + Playwright page-level verification that no server sits at "Unknown".
+- **WHY:** item 07 sets connection_status="syncing", but the frontend map had no such key → connectionInfo("syncing") fell through to `unknown` → rendered "Unknown" (the stuck state we're removing).
+- **NOW DOES:** syncing→"Syncing" (amber, pulsing), connecting→"Connecting"; the state reads unknown→Syncing→Connected/Failed. Live page shows all servers resolved.
+- **AFFECTS:** the connection-status badge on every MCP surface using connectionInfo.
+- **VERIFY:** node connectionInfo("syncing")==="Syncing"; frontend build green; LIVE Playwright (both themes @1440+375) → cleanup09Pass:true (Connected=12 Failed=9 Unknown=0; hasNeverSynced=false; 0 console errors; no overflow).
+
+## MCP-PAGE-CLEANUP-10 — impeccable audit of the 1.4 page layout
+- **files:** docs/mcp/IMPECCABLE_AUDIT_cleanup_1-4.md (new)
+- **WHAT:** /impeccable audit of the 1.4 page (stat-card grid, server list, simulator, traffic-path, evidence table) → health 14/16.
+- **WHY:** Section C requires an audit before the alignment/responsiveness fixes.
+- **NOW DOES:** documents the layout state — detector clean (0 anti-patterns), responsive (no overflow at 4 widths/2 themes, cards stack at 375), cards equal-height + aligned. Finding: stat-card secondary labels truncate mid-word at 1440; minor spacing variance.
+- **AFFECTS:** documentation only. Backlog feeds items 11–14.
+- **VERIFY:** detect.mjs exit 0; item-09 Playwright sweep noOverflow:true; read rendered PNGs (light-1440, dark-375). Report: docs/mcp/IMPECCABLE_AUDIT_cleanup_1-4.md.
+
+## MCP-PAGE-CLEANUP-11 — stat-card truncation + equal-height alignment fix
+- **files:** frontend/src/components/MCPConnectorPanel.jsx (StatCard)
+- **WHAT:** stat-card labels no longer clip mid-word; cards are equal-height with values top-aligned.
+- **WHY:** the audit (item 10) found "Servers connected"→"Servers connec…" and "244 redact · 0 monitor"→"…0 m…" clipping (truncate); items-center misaligned values across cards of different label lengths.
+- **NOW DOES:** label/sub use leading-tight (wrap, no clip); CardContent items-start (values line up across cards); Card h-full → fills the stretch grid cell → equal heights.
+- **AFFECTS:** the 6-card stat grid at the top of the 1.4 page.
+- **VERIFY:** build green; LIVE Playwright (both themes @1440+375) 0 console errors / no overflow; read light-1440 PNG → labels wrap (no clip), 6 cards equal-height, values top-aligned.
+
+## MCP-PAGE-CLEANUP-12 — responsiveness verified (both tabs, 4 widths) + touch-target bump
+- **files:** frontend/src/components/MCPConnectorPanel.jsx; scripts/ralph/mcp_page_cleanup_item12_verify.mjs (new)
+- **WHAT:** verified server list + evidence table reflow at all 4 widths/2 themes; bumped 4 on-page icon buttons to 36px.
+- **WHY:** item 12 requires no overflow/clipping/overlap + mobile touch targets; 4 icon buttons were 28px (h-7 w-7).
+- **NOW DOES:** h-7 w-7 → h-9 w-9 (gateway-key reveal/copy, copy-URL, dismiss-error). Harness sweeps servers + observability tabs; excludes the decorative hero-glow + global nav + inline text links (WCAG exempt).
+- **AFFECTS:** the 1.4 page icon buttons; responsiveness verification.
+- **VERIFY:** build green; LIVE Playwright cleanup12Pass:true (noOverflow, noBleed on both tabs all 8 combos, touchOk 24px WCAG 2.5.8 AA, 0 console errors). Evidence list = reflowing cards, stacks at 375.
+
+## MCP-PAGE-CLEANUP-13 — impeccable state confirmed + (unnamed) tool polish
+- **files:** frontend/src/components/MCPConnectorPanel.jsx
+- **WHAT:** confirmed the 1.4 page is impeccable (detector clean, both themes) after items 10-12; fixed a blank-name row in Top Tools.
+- **WHY:** the page is already aligned+responsive (CP43/44 + 10-12) — a from-scratch revamp would regress verified behavior (CP44 discipline). The one blemish: a tool with an empty name rendered as a blank row with a floating count.
+- **NOW DOES:** Top Tools empty name → "(unnamed)" (italic muted) + stable key + tabular-nums; detector stays clean.
+- **AFFECTS:** the Observability Top Tools list.
+- **VERIFY:** build green; detect.mjs exit 0 (0 anti-patterns), 0 hard-coded hex + 111 dark: variants; LIVE Playwright regression cleanup12Pass:true; read observability PNG → "(unnamed) 125" (was blank).
+
+## MCP-PAGE-CLEANUP-14 — Section-C snapshot gate + before/after (Playwright)
+- **files:** scripts/ralph/mcp_page_cleanup_item12_verify.mjs (the reusable gate)
+- **WHAT:** formalized the alignment+responsiveness Playwright snapshot gate + before/after evidence.
+- **NOW DOES:** the gate sweeps Servers + Observability tabs at 1440/1024/768/375 × light/dark, asserting no overflow, no content bleed, touch≥24px (WCAG AA), 0 console errors (16 screenshots/run). Before: cleanup09 (truncated "Servers connec…"); After: cleanup11/cleanup14-after (wraps, equal heights, "(unnamed)" label).
+- **AFFECTS:** verification only — the gate guards against alignment/responsive regressions.
+- **VERIFY:** cleanup12Pass:true (all 8 combos clean, 0 console errors). Section C (10–14) complete.
+
+## MCP-PAGE-CLEANUP-15 — diagnose context-assembly "redactions = 0"
+- **files:** (diagnosis) control/ai_mesh_control/policy/security_views.py; frontend/src/components/firewall-module-utils.js
+- **WHAT:** diagnosed why the 1.4 "PII Redaction: 0 sanitized" reads 0 despite ~4000 fields.
+- **WHY (root cause):** redaction IS running (LIVE: 244 redact MCPEvent + 244 redact EnforcementEvent source=mcp_scan). The page maps sanitized=threatFeedActionCounts.redact from /api/security/threat-feed/?source=mcp_scan (collapse=true default). The collapse path scans only ordered[:_THREAT_FEED_DEDUP_SCAN_CAP=4000] (most-recent 4000 events); under 108k monitor events (stress testing), the 244 redacts fall outside the window → action_counts {monitor:3971, block:27}, redact=0. collapse=false correctly returns redact:244.
+- **NOW DOES:** documents the exact cause; fix is item 16 (compute block/redact/total from full DB queries, not the 4000-capped scan).
+- **AFFECTS:** diagnosis only.
+- **VERIFY:** DB counts (MCPEvent/EnforcementEvent) + threat-feed collapse vs collapse=false action_counts.
+
+## MCP-PAGE-CLEANUP-16 — fix context-assembly "redactions = 0" (full-DB collapse counts)
+- **files:** control/ai_mesh_control/policy/security_views.py (ThreatFeedView.get collapse branch, ~503-538)
+- **WHAT:** the collapse=true threat-feed action_counts (block/redact) + total are now computed from FULL DB queries, not the recent `_THREAT_FEED_DEDUP_SCAN_CAP=4000` scan window.
+- **WHY:** under ~108k monitor events the 244 older redacts fell OUTSIDE the 4000-event window, so the §1.4-default collapse view reported redact=0 ("0 sanitized"). CLEANUP-15 root cause.
+- **NOW DOES:** distinct-request partition by STRONGEST outcome (block > redact > monitor) from full-DB rid-sets; `_redacted_only = redact_rids − block_rids`; `total = distinct request_ids + standalone(no-rid)`; `block + redact + monitor == count`. The feed `items` page still comes from the recent scanned window (that is just what the operator scrolls). Verified NO block/redact event has a NULL request_id, so nothing leaks into the monitor bucket.
+- **AFFECTS:** GET /api/security/threat-feed/?source=mcp_scan (collapse=true default); §1.4 "PII Redaction … sanitized" + "Context Fields … assembled" flow-nodes (firewall-module-utils.js:286 → firewall-submodules.jsx:137). NO frontend change — it already reads action_counts.redact.
+- **VERIFY:** item16_verify.py 11/11 — live API collapse == independent DB oracle {block:16, redact:230, monitor:107907, count:108153}; null-request_id count 0 for block+redact. item16_ui.mjs: §1.4 "PII Redaction" = 230 sanitized in BOTH themes (was 0). Django module_16 telemetry suite 9/9 OK. Section D (15-16) COMPLETE.
+
+## MCP-PAGE-CLEANUP-17+18 — "Backend unreachable" banner reflects real state + degrades gracefully
+- **files:** frontend/src/hooks/useBackendHealth.js; frontend/src/components/layout/Sidebar.jsx; frontend/src/components/layout/Header.jsx; frontend/src/components/Firewall12EnterprisePage.jsx
+- **WHAT:** the System Status widget / header connection badge / module Operational pill no longer HARD-FLIP to "Backend unreachable / Offline" on a single failed health probe.
+- **WHY (item 17 diagnosis):** /api/health/ is HTTP 200 `{"status":"ok"}` in ~2ms both DIRECT (:8100) and via the Vite `/api` proxy — NOT a wrong-URL/endpoint bug. The old `useBackendHealth` flipped to "disconnected" on the FIRST failure of ANY kind (a 5s `AbortSignal.timeout` while the 16 gunicorn workers were saturated, or one transient fresh-TCP blip — the dev proxy runs keep-alive OFF), painting the whole app Offline while the backend was up.
+- **NOW DOES:** each probe yields ok|slow|down. ok→"connected" (reset counter). slow (timeout/non-2xx) OR a first miss→"degraded" (amber "Backend slow to respond") — a soft state, NOT Offline. A SUSTAINED connection failure (down) across ≥2 consecutive probes→"disconnected" ("Backend unreachable"). Sidebar/Header/Firewall12 each gained a "degraded" branch rendered soft-amber.
+- **AFFECTS:** all backend-reachability chrome (sidebar "System Status", header badge, module 1.2 Operational pill). NO backend change; frontend served live by Vite HMR (:8180).
+- **VERIFY:** frontend build green; hardening-regression 78/78; LIVE Playwright item17_ui.mjs 3/3 — A up→"All systems operational / Protected"; B slow(>5s)→"Backend slow to respond / Degraded" (NOT Offline); C sustained-abort→"Degraded" FIRST then escalates to "Backend unreachable / Offline" after the 2nd poll. Section E (17-18) COMPLETE.
+
+## MCP-PAGE-CLEANUP-19+20 — Policy Simulator defaults to a CONNECTED server + dry-run/live both work
+- **files:** frontend/src/components/simulator/MCPGuardrailSimulator.jsx
+- **WHAT:** the MCP Policy Simulator no longer pre-selects `list[0]` (the first registered server, whatever its state — incl. Failed/0-tool). It defaults to the first CONNECTED server that has tools; the server dropdown now shows each server's connection status + tool count; a graceful "no tools / not connected" guidance line shows when a selected server exposes no tools.
+- **WHY:** defaulting to `list[0]` pre-selected whatever sorted first — a Failed/0-tool server → the simulator was dead on arrival (no tool, run fails) (item 19).
+- **NOW DOES:** default = `list.find(connected && tools_count>0) || first connected || list[0]`; option label `"{name} ({slug}) · {transport} · connected · N tools"` (or the raw status for non-connected); empty-tools note guides the user to re-sync or pick a connected server.
+- **AFFECTS:** the §1.4 MCP Policy Simulator panel. No backend change; Vite HMR serves it live.
+- **VERIFY:** frontend build green; LIVE Playwright item19_ui.mjs 4/4 — default="cp09-ens8do · connected · 13 tools" (connected), tool "echo" auto-selected; Dry-Run "Evaluate Policies" → ALLOW / DRY-RUN · HTTP 200 / "No policies matched" + raw {action:allow, matched_policies:[], matched_rules:[]}; Live "Invoke Tool" → ALLOW / LIVE · HTTP 200 / "Tool executed by gateway" (real echo result, decision:allow); 0 console errors. Section F (19-20) COMPLETE.
+
+## MCP-PAGE-CLEANUP-21+22 — fleet retest + every button/tab (verification only, no product code change)
+- **files:** scripts/ralph/mcp_page_cleanup_item21_verify.py; scripts/ralph/mcp_page_cleanup_item22_ui.mjs
+- **WHAT (21):** re-synced ALL 22 servers through the now-deployed clean-error path and asserted the fleet is clean. FOUND + REFRESHED 2 STALE leaky `last_sync_error` strings that predated the clean-error fixes — cp09-verify (`"...exited with code -6 ... 'zeroshield/cp09-verify'"`) and SSE Everything stub (`"Upstream discovery failed: [Errno -2] Name or service not known"`). After re-sync: 12 connected (ALL tools_count>0, one reconnected), 10 failed ALL clean+branded (0 leak markers: no exit codes/signals/Errno/HTML/org-slug/'sandbox-agent'/'gateway logs'/raw-IPs), ruflo shows the clean "ran out of memory while starting" message.
+- **WHAT (22):** every panel tab (MCP Servers / Tool Discovery / Tool Execution / Scan Controls / MCP Security Policies / Observability) renders + clicks across 48 theme×width combos (light/dark × 1440/1024/768/375) with real content, no error boundary, no horizontal overflow; per-server Refresh + "Sync tools from server" fire their requests; 0 console errors.
+- **NOW DOES:** no server surfaces a raw-leak error; the whole §1.4 panel is exercised clean in both themes at all widths.
+- **AFFECTS:** verification only — no product code change (item 21 self-healed stale DB errors via re-sync; item 22 was all-green).
+- **VERIFY:** item21_verify.py PASS (12 connected all-with-tools, 10 failed all-clean, ruflo_ok); item22_ui.mjs PASS (48/48 combos clicked+rendered, no overflow, per-server refresh+sync fire, 0 console errors). Section G (21-22) COMPLETE.
+
+## MCP-PAGE-CLEANUP-23 — FREEZE gate: A–G re-verified 3× + login-throttle-hardened harness
+- **files:** scripts/ralph/mcp_page_cleanup_item23_freeze.sh (orchestrator); scripts/ralph/mcp_page_typesim.mjs + mcp_page_cleanup_item16_verify.py + item21_verify.py (login retry-on-429)
+- **WHAT:** the Playwright snapshot gate + all section gates (A clean-errors, B stuck-state, C alignment/responsive snapshot, D redactions API+UI, E banner, F simulator, G every-tab) run 3× back-to-back and must all be green — a regression freeze so the fixed §1.4 page can't silently regress.
+- **WHY (harness fix):** the first freeze run tripped the control login throttle (`login_user: 5/min` per email — auth/throttling.py) because every gate signs in as the same admin and E alone opens 3 contexts; a 6th login got HTTP 429, cascading FAILs. That was a HARNESS artifact, not a product regression (the stack was healthy; gates passed individually). FIX: the shared login helpers now honor 429 (wait Retry-After / backoff, retry) — production-correct client behavior — and the orchestrator spaces gates (14s) + rounds (45s) to stay under the rate.
+- **NOW DOES:** `ROUNDS=3 bash scripts/ralph/mcp_page_cleanup_item23_freeze.sh` → FREEZE MATRIX. Result: **24/24 gates PASS across 3 rounds** (A–G green ×3).
+- **AFFECTS:** verification harness only (no product code). The gate is reusable to guard §1.4 against future regressions.
+- **VERIFY:** ITEM-23-FREEZE: PASS — A–G green 3× (R1/R2/R3 all PASS for A_cleanerr, B_stuckstate, C_snapshot, D1_redact_api, D2_redact_ui, E_banner, F_simulator, G_everytab). Section H (freeze, item 23) COMPLETE — the §1.4 Context Assembly & MCP page cleanup (items 00-23) is DONE.
+
+## MCP-PAGE-CLEANUP-24 — failed server no longer mislabeled “Pending authorization” (found via visual review)
+- **files:** frontend/src/components/MCPConnectorPanel.jsx (`serverAwaitingAuth` ~869)
+- **WHAT:** a stdio mcp-remote server (Linear MCP / Linear Remote / linear-mcp-p1-repro) that FAILED with a non-auth error rendered a contradictory card — amber “Pending authorization” badge + “Authorize to load tools” — next to its red branded error (“too large to install within the current sandbox storage limit … Ref: …”). Now it shows its real **“Failed”** badge + “0 tools” + the error.
+- **WHY:** `serverAwaitingAuth()` treated ANY stdio-mcp-remote server with `tools_count===0 && connection_status!=="connected"` as awaiting authorization — so a definitively **failed** server got a dead-end Authorize affordance that can’t fix a storage failure. Added `&& connection_status!=="failed"`. A genuine auth failure still surfaces via `needs_reauth`; the true first-time-pending state (unknown/syncing) is preserved.
+- **AFFECTS:** the MCP Servers tab cards for any failed mcp-remote server. The errors themselves were already clean+expected (heavy Linear servers exceed sandbox storage; one has expired OAuth) — only the STATUS LABEL was wrong.
+- **HOW FOUND:** the user visually reviewed 04-simulator-decision.jpg — a screenshot I had asserted “PASS” on from programmatic text checks WITHOUT looking at the server cards. Lesson: programmatic value/text assertions are not visual verification; Read the actual rendered image.
+- **VERIFY:** frontend build green; scripts/ralph/mcp_page_capture_servercards.mjs → all 4 Linear cards badgeSaysFailed=true / badgeSaysPendingAuth=false; element-screenshot READ confirms “Failed / 0 tools / storage error”, no “Pending authorization”.

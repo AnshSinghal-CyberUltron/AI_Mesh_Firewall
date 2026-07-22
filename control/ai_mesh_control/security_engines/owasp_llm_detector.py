@@ -3,7 +3,24 @@ OWASP LLM Top 10 Threat Detector
 Reference: https://owasp.org/www-project-top-10-for-large-language-model-applications/
 """
 
+import re
 from dataclasses import dataclass
+
+# #41: the detectors below match fixed attack phrases via literal substring
+# `in`. Without normalization, trivial whitespace obfuscation defeats them
+# ("ignore  previous instructions" (double space) or "ignore\nprevious
+# instructions" (newline) were NOT detected). ``_norm`` lowercases and collapses
+# any run of whitespace to a single space, so the fixed single-spaced phrases
+# match across whitespace variants. This is near-zero false-positive: it only
+# normalizes INPUT whitespace against the SAME fixed phrases — it never broadens
+# which phrases match (a benign string can't gain a phrase it didn't contain).
+# (No-separator obfuscation like "ignorepreviousinstructions" is intentionally
+# NOT collapsed — removing all whitespace would risk real false positives.)
+_WS_RE = re.compile(r"\s+")
+
+
+def _norm(text: str) -> str:
+    return _WS_RE.sub(" ", (text or "").lower())
 
 
 @dataclass
@@ -105,7 +122,7 @@ class OWASPLLMDetector:
             "jailbreak mode",
         ]
 
-        prompt_lower = prompt.lower()
+        prompt_lower = _norm(prompt)
 
         detected_critical = [p for p in critical_patterns if p in prompt_lower]
         detected_standard = [p for p in standard_patterns if p in prompt_lower]
@@ -151,7 +168,7 @@ class OWASPLLMDetector:
             "i can do anything now",
         ]
 
-        output_lower = output.lower()
+        output_lower = _norm(output)
         detected_patterns = []
 
         for pattern in jailbreak_patterns:
@@ -237,7 +254,7 @@ class OWASPLLMDetector:
             "poison the model",
             "sleeper agent",
         ]
-        prompt_lower = prompt.lower()
+        prompt_lower = _norm(prompt)
         found = [p for p in patterns if p in prompt_lower]
         detected = len(found) > 0
         return ThreatResult(
@@ -269,7 +286,7 @@ class OWASPLLMDetector:
             "model weights source",
             "distribution chain",
         ]
-        prompt_lower = prompt.lower()
+        prompt_lower = _norm(prompt)
         found = [p for p in patterns if p in prompt_lower]
         detected = len(found) > 0
         return ThreatResult(
@@ -301,7 +318,7 @@ class OWASPLLMDetector:
             "exec(",
             "plugin sandbox escape",
         ]
-        prompt_lower = prompt.lower()
+        prompt_lower = _norm(prompt)
         found = [p for p in patterns if p in prompt_lower]
         detected = len(found) > 0
         return ThreatResult(
@@ -332,7 +349,7 @@ class OWASPLLMDetector:
             "full agency",
             "unlimited autonomy",
         ]
-        prompt_lower = prompt.lower()
+        prompt_lower = _norm(prompt)
         found = [p for p in patterns if p in prompt_lower]
         detected = len(found) > 0
         return ThreatResult(
@@ -361,7 +378,7 @@ class OWASPLLMDetector:
             "i will act on your advice without",
             "rely solely on you",
         ]
-        prompt_lower = prompt.lower()
+        prompt_lower = _norm(prompt)
         found = [p for p in patterns if p in prompt_lower]
         detected = len(found) > 0
         return ThreatResult(
@@ -392,7 +409,7 @@ class OWASPLLMDetector:
             "copy your model",
             "steal the model",
         ]
-        prompt_lower = prompt.lower()
+        prompt_lower = _norm(prompt)
         found = [p for p in patterns if p in prompt_lower]
         detected = len(found) > 0
         return ThreatResult(
@@ -454,7 +471,7 @@ class OWASPLLMDetector:
             "how to deface a website",
         ]
 
-        prompt_lower = prompt.lower()
+        prompt_lower = _norm(prompt)
         detected_patterns = [p for p in harmful_patterns if p in prompt_lower]
 
         count = len(detected_patterns)
@@ -552,7 +569,7 @@ class OWASPLLMDetector:
             + harassment_patterns
         )
 
-        prompt_lower = prompt.lower()
+        prompt_lower = _norm(prompt)
         detected_patterns = [p for p in all_patterns if p in prompt_lower]
 
         count = len(detected_patterns)

@@ -397,6 +397,7 @@ class PineconeClient:
         thread_pool_size: int = DEFAULT_THREAD_POOL_SIZE,
         embedding_api_key: str = "",
         reranker_model: str = "",
+        is_org_byok: bool = False,
     ) -> None:
         self._api_key = api_key
         self._environment = environment
@@ -408,6 +409,12 @@ class PineconeClient:
         # Per-org Pinecone-hosted reranker (e.g. 'bge-reranker-v2-m3'). Empty
         # -> no reranking (the retriever skips rerank()).
         self._reranker_model = reranker_model or ""
+        # True when this client authenticates with the ORG'S OWN Pinecone key
+        # (per-org BYOK), so every index on the account belongs to this org and
+        # list_collections must return them ALL. False for the SHARED env-default
+        # client, where one account holds many tenants' indexes and listing must
+        # stay namespace-scoped to avoid leaking other tenants' collection names.
+        self._is_org_byok = bool(is_org_byok)
         self._executor = ThreadPoolExecutor(
             max_workers=thread_pool_size,
             thread_name_prefix="pinecone",
@@ -727,10 +734,16 @@ class PineconeClient:
         else:
             return []
         # Tenant isolation is namespace-based (namespace = f"{project_id}__{name}").
-        # Returning ALL account index names leaks the infra/other-tenant collection
-        # set. When a project scope is supplied, keep only indexes where THIS
-        # project actually has a namespace; fail-closed (skip on stats error).
-        if not project_id:
+        # On a SHARED account (env-default key) returning ALL index names leaks the
+        # infra/other-tenant collection set, so keep only indexes where THIS project
+        # has a namespace; fail-closed (skip on stats error).
+        #
+        # A per-org BYOK client authenticates with the ORG'S OWN key — every index
+        # on that account belongs to this org, so namespace-filtering would wrongly
+        # hide the org's own collections (the "Existing Collections (0)" bug when a
+        # freshly-connected org, or a key that has not yet ingested under this exact
+        # project_id, lists its indexes). Return them all for BYOK.
+        if not project_id or self._is_org_byok:
             return raw
         prefix = f"{project_id}__"
         scoped: list[str] = []

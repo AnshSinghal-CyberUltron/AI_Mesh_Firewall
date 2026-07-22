@@ -8,6 +8,18 @@ from collections import Counter
 from dataclasses import dataclass
 
 
+def _coerce_action(a):
+    """Normalize an action-list entry to a dict.
+
+    The AGENTIC01/02/03 detectors call ``.get()`` on each entry of
+    ``current_actions`` / ``action_history`` / ``attempted_actions``. A non-dict
+    entry — e.g. a bare string tool name — raised an uncaught ``AttributeError``,
+    turning a security-scan request into an HTTP 500. Coerce bare values to a
+    minimal ``{"action_name": ...}`` dict so detection degrades gracefully.
+    """
+    return a if isinstance(a, dict) else {"action_name": str(a)}
+
+
 @dataclass
 class AgenticThreatResult:
     threat_id: str
@@ -588,6 +600,16 @@ class OWASPAgenticDetector:
             Complete scan results
         """
         results = {}
+
+        # Robustness: action lists may carry bare-string entries (e.g. a plain tool
+        # name) rather than {action_name,...} dicts; the detectors call .get() on each
+        # entry, which would raise AttributeError -> HTTP 500 on a non-dict. Coerce to
+        # dicts up front (a copy, so the caller's data is untouched). Dicts pass through.
+        agent_data = {**agent_data}
+        for _k in ("current_actions", "action_history", "attempted_actions", "agent_plan"):
+            _v = agent_data.get(_k)
+            if isinstance(_v, list):
+                agent_data[_k] = [_coerce_action(a) for a in _v]
 
         # AGENTIC01: Goal Hijacking
         if all(k in agent_data for k in ["original_goal", "current_actions"]):

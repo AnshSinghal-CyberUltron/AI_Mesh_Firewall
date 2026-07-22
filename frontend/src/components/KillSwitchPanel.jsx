@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
-import { syncModule2AfterContainmentChange } from "../utils/crossModuleSync";
 import { KillSwitchModelCombobox } from "./KillSwitchModelCombobox";
 import {
   KILL_SWITCH_GLOBAL_SCOPE,
@@ -46,6 +45,7 @@ export function KillSwitchPanel() {
   const [submitError, setSubmitError] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [actionError, setActionError] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [redisScanning, setRedisScanning] = useState(false);
   const [redisResult, setRedisResult] = useState(null);
   const [redisError, setRedisError] = useState(null);
@@ -60,7 +60,14 @@ export function KillSwitchPanel() {
       if (res.ok) {
         const data = await res.json();
         setKillSwitches(Array.isArray(data) ? data : data.results || []);
+        setLoadError(null);
+      } else {
+        // Safety surface: a failed load must NOT collapse into the benign
+        // "No kill-switches configured" state and hide ACTIVE switches.
+        setLoadError(`Failed to load kill-switches (HTTP ${res.status}).`);
       }
+    } catch {
+      setLoadError("Failed to load kill-switches.");
     } finally {
       setLoading(false);
     }
@@ -229,7 +236,6 @@ export function KillSwitchPanel() {
       }
       setModalOpen(false);
       await fetchKillSwitches();
-      syncModule2AfterContainmentChange("kill-switch-save");
     } catch {
       setSubmitError("Network error saving kill-switch.");
     } finally {
@@ -238,6 +244,7 @@ export function KillSwitchPanel() {
   };
 
   const handleActivate = async (id) => {
+    if (!window.confirm("Activate this kill-switch? It will immediately block or reroute traffic per its configuration.")) return;
     setActionLoading(id);
     setActionError(null);
     try {
@@ -248,7 +255,6 @@ export function KillSwitchPanel() {
         return;
       }
       await fetchKillSwitches();
-      syncModule2AfterContainmentChange("kill-switch-activate");
     } catch {
       setActionError("Network error activating kill-switch.");
     } finally {
@@ -257,6 +263,7 @@ export function KillSwitchPanel() {
   };
 
   const handleDeactivate = async (id) => {
+    if (!window.confirm("Deactivate this kill-switch? Traffic to the affected model(s) will resume.")) return;
     setActionLoading(id);
     setActionError(null);
     try {
@@ -267,7 +274,6 @@ export function KillSwitchPanel() {
         return;
       }
       await fetchKillSwitches();
-      syncModule2AfterContainmentChange("kill-switch-deactivate");
     } catch {
       setActionError("Network error deactivating kill-switch.");
     } finally {
@@ -287,7 +293,6 @@ export function KillSwitchPanel() {
         return;
       }
       await fetchKillSwitches();
-      syncModule2AfterContainmentChange("kill-switch-delete");
     } catch {
       setActionError("Network error deleting kill-switch.");
     } finally {
@@ -578,15 +583,30 @@ export function KillSwitchPanel() {
         </div>
       )}
 
+      {loadError && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-800 dark:text-red-200" role="alert">
+          <span>{loadError}</span>
+          <button
+            type="button"
+            onClick={fetchKillSwitches}
+            className="rounded-lg border border-red-300 px-2 py-1 text-xs font-medium text-red-700 transition-colors hover:bg-red-500/10 dark:border-red-700 dark:text-red-300"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-5 h-5 text-teal-500 animate-spin" />
           <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading kill-switches...</span>
         </div>
       ) : killSwitches.length === 0 ? (
-        <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
-          No kill-switches configured. Create one to enable emergency model isolation.
-        </div>
+        loadError ? null : (
+          <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
+            No kill-switches configured. Create one to enable emergency model isolation.
+          </div>
+        )
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -613,7 +633,7 @@ export function KillSwitchPanel() {
                         <AlertTriangle className="w-3 h-3" /> Active
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                         <CheckCircle className="w-3 h-3" /> Inactive
                       </span>
                     )}

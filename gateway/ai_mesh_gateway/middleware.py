@@ -58,6 +58,77 @@ EXCLUDED_PATH_PREFIXES: tuple[str, ...] = (
     "/gateway/oauth/",
 )
 
+# ── I-03: per-key ACTION scoping (permissions.allowed_actions/denied_actions) ──
+# The control plane has always ACCEPTED, DOCUMENTED and SYNCED these
+# (control/core/models.py DEFAULT_PERMISSIONS, gateway_key_views.py:260 —
+# "Changes are automatically propagated to the Gateway via Redis sync"), and
+# AuthContext parsed them, but NOTHING in the gateway ever read them: a key with
+# denied_actions=["embedding"] called /v1/embeddings successfully and consumed real
+# BYOK capacity. Shipping an advertised control that silently no-ops is worse than
+# not shipping it.
+#
+# Enforced HERE, in the middleware, rather than in each surface handler: the
+# handlers have already drifted apart once (per-key TPM and blocked_keywords exist
+# on chat but were never added to embeddings), so a control added per-handler is a
+# control the next endpoint forgets. One choke point, applied uniformly.
+#
+# The vocabulary is the control plane's own: {chat, completion, embedding,
+# fine-tuning}. Only paths whose action is UNAMBIGUOUS are mapped; a surface with
+# no defined action (moderations, rag, vector, mcp, admin) is left unmapped and is
+# NOT gated by allowed_actions — DEFAULT_PERMISSIONS ships
+# allowed_actions=["chat","completion","embedding"], so gating an unmapped surface
+# on that list would deny RAG/vector to every existing key on upgrade.
+_ACTION_BY_PATH: dict[str, str] = {
+    "/v1/chat/completions": "chat",
+    "/v1/chat-completions": "chat",
+    "/v1/completions": "completion",
+    "/v1/embeddings": "embedding",
+    # /v1/responses is an adapter over the chat pipeline (proxy_responses ->
+    # acompletion), so it is the same privilege as chat.
+    "/v1/responses": "chat",
+}
+_ACTION_BY_PREFIX: tuple[tuple[str, str], ...] = (
+    ("/v1/responses/", "chat"),
+    # NOTE: /v1/fine_tuning is deliberately NOT mapped. The surface is unimplemented
+    # and hard-404s (proven by test_passthrough_surface_is_hard_404_never_blind_proxied),
+    # so gating it buys no security — while "fine-tuning" is absent from
+    # DEFAULT_PERMISSIONS, so mapping it would turn that documented 404 into a 403
+    # for every existing key. Add the mapping when the surface is actually built.
+)
+
+
+def resolve_request_action(path: str) -> str:
+    """Map a request path to a control-plane action name ("" when unmapped)."""
+    action = _ACTION_BY_PATH.get(path)
+    if action:
+        return action
+    for prefix, act in _ACTION_BY_PREFIX:
+        if path.startswith(prefix):
+            return act
+    return ""
+
+
+def action_permitted(permissions: dict | None, action: str) -> bool:
+    """True when ``action`` is allowed by a key's RBAC payload.
+
+    Semantics (mirroring allowed_models, which treats EMPTY as unrestricted):
+      * an explicit ``denied_actions`` entry always wins — deny beats allow;
+      * a non-empty ``allowed_actions`` is a strict allowlist;
+      * an empty/absent ``allowed_actions`` means unrestricted, so a key whose
+        permissions were never configured keeps working.
+    An unmapped action ("") is never gated here.
+    """
+    if not action or not isinstance(permissions, dict):
+        return True
+    denied = permissions.get("denied_actions")
+    if isinstance(denied, (list, tuple, set)) and action in denied:
+        return False
+    allowed = permissions.get("allowed_actions")
+    if isinstance(allowed, (list, tuple, set)) and allowed and action not in allowed:
+        return False
+    return True
+
+
 class AuthContext:
     """Structured auth context extracted from API key, injected into request.state.
     Uses __slots__ for memory efficiency on the hot path.
@@ -289,6 +360,7 @@ class AuthMiddleware:
         _INTERNAL_MCP_PATHS = (
             "/v1/mcp/internal/discover-tools",
             "/v1/mcp/internal/tools-call",
+            "/v1/mcp/internal/oauth-token-mirror",
         )
         if path.startswith("/v1/admin/") or path in _INTERNAL_MCP_PATHS:
             internal_secret = os.environ.get("GATEWAY_INTERNAL_API_KEY", "").strip()
@@ -412,6 +484,33 @@ class AuthMiddleware:
                     "message": error["message"],
                 },
                 headers=headers if headers else None,
+            )
+            await response(scope, receive, send)
+            return
+
+        # I-03: enforce per-key ACTION scoping before the request reaches any
+        # handler. Soft-auth paths (/v1/models) are catalogue reads, not actions,
+        # and are left ungated — resolve_request_action() does not map them.
+        _req_action = resolve_request_action(path)
+        if _req_action and not action_permitted(auth_context.permissions, _req_action):
+            logger.warning(
+                "403 action denied: key=%s path=%s action=%s (allowed=%s denied=%s)",
+                auth_context.prefix, path, _req_action,
+                (auth_context.permissions or {}).get("allowed_actions"),
+                (auth_context.permissions or {}).get("denied_actions"),
+            )
+            response = JSONResponse(
+                status_code=403,
+                content={"error": {
+                    "message": (
+                        f"This API key is not permitted to perform the '{_req_action}' "
+                        f"action. Update the key's permissions.allowed_actions / "
+                        f"denied_actions in the control plane."
+                    ),
+                    "type": "permission_error",
+                    "code": "action_not_permitted",
+                    "param": None,
+                }},
             )
             await response(scope, receive, send)
             return

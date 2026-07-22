@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
+from django.contrib.postgres.indexes import BrinIndex
 from django.db import models
 from django.utils import timezone
 
@@ -232,6 +233,19 @@ class EnforcementEvent(models.Model):
             models.Index(
                 fields=["organization", "event_class", "-created_at"],
                 name="ev_org_evclass_ts_idx",
+            ),
+            # perf item 18: standalone BRIN on created_at so a time-window query
+            # (soc-kpis `created_at >= since`) seeks via block-range pruning instead
+            # of a full scan. BRIN because the log is append-only (rows inserted in
+            # created_at order) → tiny index that stays cheap as the table grows to
+            # millions; autosummarize keeps recent ranges summarized without a manual
+            # VACUUM. The composite above can't serve a created_at-only predicate
+            # (its leading column is organization).
+            BrinIndex(
+                fields=["created_at"],
+                name="ev_created_at_brin",
+                pages_per_range=64,
+                autosummarize=True,
             ),
         ]
 

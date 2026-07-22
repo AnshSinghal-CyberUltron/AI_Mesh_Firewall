@@ -5,8 +5,6 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { copyToClipboard } from "../lib/clipboard";
 import { InfoTooltip } from "./InfoTooltip";
-import { syncModule2AfterGatewayKeyChange } from "../utils/crossModuleSync";
-import { adoptSimulatorKeyById } from "../api/gatewayContext";
 import { createPortal } from "react-dom";
 
 export function GatewayKeyPanel() {
@@ -16,7 +14,6 @@ export function GatewayKeyPanel() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [newKeyValue, setNewKeyValue] = useState(null);
-  const [createdKeyId, setCreatedKeyId] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     project_id: "",
@@ -27,27 +24,47 @@ export function GatewayKeyPanel() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [formError, setFormError] = useState("");
-  const [fetchError, setFetchError] = useState(null);
-  const [adoptingSimulator, setAdoptingSimulator] = useState(false);
-  const [simulatorAdopted, setSimulatorAdopted] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const fetchKeys = useCallback(async () => {
     setLoading(true);
-    setFetchError(null);
     try {
-      const res = await fetchWithAuth("/api/gateways/keys/");
-      if (res.ok) {
+      // Global DRF PAGE_SIZE is 10; follow pages (and request a larger page) so
+      // the scrollable table can actually show every org key.
+      const collected = [];
+      let path = "/api/gateways/keys/?page_size=500";
+      let guard = 0;
+      while (path && guard < 50) {
+        guard += 1;
+        const res = await fetchWithAuth(path);
+        if (!res.ok) {
+          setLoadError(`Failed to load API keys (HTTP ${res.status}).`);
+          return;
+        }
         const data = await res.json();
-        setKeys(Array.isArray(data) ? data : data.results || []);
-      } else {
-        setKeys([]);
-        setFetchError(`Failed to load gateway API keys (${res.status}).`);
+        if (Array.isArray(data)) {
+          collected.push(...data);
+          break;
+        }
+        collected.push(...(data.results || []));
+        const next = data.next;
+        if (!next) break;
+        // next may be absolute (http://host/api/...) — strip origin for fetchWithAuth
+        try {
+          const u = new URL(next, window.location.origin);
+          path = `${u.pathname}${u.search}`;
+        } catch {
+          path = null;
+        }
       }
-    } catch {
-      setKeys([]);
-      setFetchError("Failed to load gateway API keys. Check your session and retry.");
+      setKeys(collected);
+      setLoadError("");
+    } catch (err) {
+      setLoadError(err?.message ? `Failed to load API keys: ${err.message}` : "Failed to load API keys.");
     } finally {
       setLoading(false);
     }
@@ -59,8 +76,6 @@ export function GatewayKeyPanel() {
 
   const openCreateModal = () => {
     setNewKeyValue(null);
-    setCreatedKeyId(null);
-    setSimulatorAdopted(false);
     setFormError("");
     setFormData({
       name: "",
@@ -98,28 +113,18 @@ export function GatewayKeyPanel() {
       if (res.ok) {
         const data = await res.json();
         setNewKeyValue(data.key || null);
-        setCreatedKeyId(data.id || null);
         await fetchKeys();
-        if (data.key && userOrg?.id && data.id) {
-          try {
-            const ctx = await adoptSimulatorKeyById(fetchWithAuth, data.id, userOrg.id, {
-              plaintext: data.key,
-            });
-            setSimulatorAdopted(true);
-            syncModule2AfterGatewayKeyChange("adopt-simulator", {
-              prefix: ctx.prefix,
-              key_id: ctx.keyId,
-            });
-          } catch (adoptErr) {
-            setFormError(adoptErr.message || "Key created but simulator binding failed.");
-            syncModule2AfterGatewayKeyChange("create");
-          }
-        } else {
-          syncModule2AfterGatewayKeyChange("create");
-        }
       } else {
         const errorText = await res.text();
-        setFormError(errorText || `Failed to create key (${res.status})`);
+        let msg = `Failed to create key (HTTP ${res.status}).`;
+        try {
+          const j = JSON.parse(errorText);
+          msg = j.detail || j.error || (j && typeof j === "object" ? Object.values(j).flat().join(" ") : msg);
+        } catch {
+          // Only surface short, non-markup bodies; never dump an HTML/500 page.
+          if (errorText && errorText.length < 200 && !/[<>]/.test(errorText)) msg = errorText;
+        }
+        setFormError(msg);
       }
     } catch (error) {
       setFormError(error.message || "Failed to create key.");
@@ -128,34 +133,52 @@ export function GatewayKeyPanel() {
     }
   };
 
-  const handleRevoke = async (id) => {
-    if (!window.confirm("Revoke this API key? It will immediately stop working.")) return;
+  const handleDelete = async (id, isActive) => {
+    const msg = isActive
+      ? "Permanently delete this API key? It will stop working immediately and cannot be recovered."
+      : "Permanently delete this revoked API key from the database? This cannot be undone.";
+    if (!window.confirm(msg)) return;
     setActionLoading(id);
+    setActionError("");
     try {
-      await fetchWithAuth(`/api/gateways/keys/${id}/`, { method: "DELETE" });
+      const res = await fetchWithAuth(`/api/gateways/keys/${id}/`, { method: "DELETE" });
+      if (!res.ok) {
+        setActionError(`Failed to delete key (HTTP ${res.status}).`);
+        return;
+      }
       await fetchKeys();
-      syncModule2AfterGatewayKeyChange("revoke");
+    } catch (err) {
+      setActionError(err?.message ? `Failed to delete key: ${err.message}` : "Failed to delete key.");
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleUseInSimulator = async () => {
-    if (!newKeyValue || !userOrg?.id || !createdKeyId) return;
-    setAdoptingSimulator(true);
+  const revokedCount = keys.filter((k) => !k.is_active).length;
+
+  const handleDeleteAllRevoked = async () => {
+    if (revokedCount === 0) return;
+    const msg =
+      `Permanently delete all ${revokedCount} revoked API key${revokedCount === 1 ? "" : "s"} ` +
+      "from the database? Active keys are not affected. This cannot be undone.";
+    if (!window.confirm(msg)) return;
+    setBulkDeleting(true);
+    setActionError("");
     try {
-      const ctx = await adoptSimulatorKeyById(fetchWithAuth, createdKeyId, userOrg.id, {
-        plaintext: newKeyValue,
-      });
-      setSimulatorAdopted(true);
-      syncModule2AfterGatewayKeyChange("adopt-simulator", {
-        prefix: ctx.prefix,
-        key_id: ctx.keyId,
-      });
-    } catch (error) {
-      setFormError(error.message || "Failed to adopt key for simulator.");
+      const res = await fetchWithAuth("/api/gateways/keys/purge-revoked/", { method: "DELETE" });
+      if (!res.ok) {
+        setActionError(`Failed to delete revoked keys (HTTP ${res.status}).`);
+        return;
+      }
+      await fetchKeys();
+    } catch (err) {
+      setActionError(
+        err?.message
+          ? `Failed to delete revoked keys: ${err.message}`
+          : "Failed to delete revoked keys.",
+      );
     } finally {
-      setAdoptingSimulator(false);
+      setBulkDeleting(false);
     }
   };
 
@@ -193,42 +216,72 @@ export function GatewayKeyPanel() {
             </div>
           )}
         </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-1.5 rounded-2xl bg-teal-600 px-4 py-2.5 text-xs font-medium text-white transition-colors hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-400"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Create API Key
-        </button>
-      </div>
-
-      {fetchError ? (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200" role="alert">
-          <p>{fetchError}</p>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {revokedCount > 0 && (
+            <button
+              type="button"
+              onClick={handleDeleteAllRevoked}
+              disabled={bulkDeleting || actionLoading != null}
+              className="flex items-center gap-1.5 rounded-2xl border border-red-300 bg-red-50 px-4 py-2.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40"
+              aria-label={`Delete all ${revokedCount} revoked API keys`}
+              title="Permanently delete all revoked keys from the database"
+            >
+              {bulkDeleting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+              Delete all revoked ({revokedCount})
+            </button>
+          )}
           <button
             type="button"
-            onClick={fetchKeys}
-            className="mt-2 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+            onClick={openCreateModal}
+            className="flex items-center gap-1.5 rounded-2xl bg-teal-600 px-4 py-2.5 text-xs font-medium text-white transition-colors hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-400"
           >
-            Retry
+            <Plus className="w-3.5 h-3.5" />
+            Create API Key
           </button>
         </div>
-      ) : null}
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-5 h-5 text-teal-500 animate-spin" />
           <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading API keys...</span>
         </div>
-      ) : keys.length === 0 && !fetchError ? (
+      ) : loadError && keys.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <div>{loadError}</div>
+          </div>
+          <button
+            onClick={fetchKeys}
+            className="rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            Retry
+          </button>
+        </div>
+      ) : keys.length === 0 ? (
         <div className="text-center py-8 text-sm text-slate-500 dark:text-slate-400">
           No API keys created. Create one to authenticate gateway requests.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-[24px] border border-slate-200/80 dark:border-slate-700">
+        <>
+          {(loadError || actionError) && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+              <span>{actionError || loadError}</span>
+            </div>
+          )}
+          <div
+            className="max-h-[min(60vh,32rem)] overflow-auto rounded-[24px] border border-slate-200/80 dark:border-slate-700"
+            data-testid="gateway-keys-table-scroll"
+          >
           <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Name</th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Prefix</th>
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Organization</th>
@@ -272,11 +325,11 @@ export function GatewayKeyPanel() {
                   </td>
                   <td className="px-3 py-2.5">
                     {k.is_active ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700 dark:text-emerald-300">
                         <CheckCircle className="w-3 h-3" /> Active
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-800/30 text-red-700">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300">
                         <AlertTriangle className="w-3 h-3" /> Revoked
                       </span>
                     )}
@@ -284,19 +337,18 @@ export function GatewayKeyPanel() {
                   <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">{formatDate(k.last_used_at)}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1">
-                      {actionLoading === k.id ? (
+                      {actionLoading === k.id || bulkDeleting ? (
                         <Loader2 className="w-4 h-4 text-teal-500 animate-spin" />
                       ) : (
-                        k.is_active && (
-                          <button
-                            onClick={() => handleRevoke(k.id)}
-                            className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
-                            aria-label={`Revoke gateway key ${k.name || k.prefix || ""}`.trim()}
-                            title="Revoke Key"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(k.id, !!k.is_active)}
+                          className="rounded-lg p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
+                          aria-label={`Delete gateway key ${k.name || k.prefix || ""}`.trim()}
+                          title={k.is_active ? "Delete key" : "Delete revoked key"}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
                   </td>
@@ -304,7 +356,8 @@ export function GatewayKeyPanel() {
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
 
       {/* Create Modal */}
@@ -344,36 +397,16 @@ export function GatewayKeyPanel() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                  <Key className="w-4 h-4 text-teal-600 flex-shrink-0" />
-                  <code className="text-xs text-slate-800 dark:text-slate-200 font-mono break-all flex-1">{newKeyValue}</code>
-                  <button
-                    onClick={handleCopyKey}
-                    className="p-1.5 hover:bg-slate-200 rounded transition-colors flex-shrink-0"
-                    title="Copy"
-                  >
-                    {copied ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
-                  </button>
-                </div>
-                <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                  This key is now the active Attack Simulator credential for your org.
-                  API Key & Identity Risk marks the matching fleet row as <strong>Simulator</strong>.
-                </p>
-                {!simulatorAdopted && (
-                  <button
-                    type="button"
-                    onClick={handleUseInSimulator}
-                    disabled={adoptingSimulator}
-                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-teal-300 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60 dark:border-teal-700 dark:bg-teal-950/30 dark:text-teal-200"
-                  >
-                    {adoptingSimulator ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                    Retry simulator binding
-                  </button>
-                )}
-                {simulatorAdopted && (
-                  <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
-                    Active simulator key updated. Open API Key & Identity Risk to see the matching row marked Simulator.
-                  </p>
-                )}
+                    <Key className="w-4 h-4 text-teal-600 flex-shrink-0" />
+                    <code className="text-xs text-slate-800 dark:text-slate-200 font-mono break-all flex-1">{newKeyValue}</code>
+                    <button
+                      onClick={handleCopyKey}
+                      className="p-1.5 hover:bg-slate-200 rounded transition-colors flex-shrink-0"
+                      title="Copy"
+                    >
+                      {copied ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-slate-500 dark:text-slate-400" />}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Footer for success state */}

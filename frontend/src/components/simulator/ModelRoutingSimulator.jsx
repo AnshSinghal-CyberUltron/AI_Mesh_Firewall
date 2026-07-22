@@ -3,7 +3,6 @@ import { GitBranch, Sliders } from "lucide-react";
 import { useSimulatorEngine } from "../../hooks/useSimulatorEngine";
 import { useSimulatorGatewayModels } from "../../hooks/useSimulatorGatewayModels";
 import { chatCompletionBody, normalizeRoutingResult } from "../../utils/liveGateway";
-import { errorToText, formatRoutingError } from "../../utils/errorToText";
 import { SimulatorShell } from "./SimulatorShell";
 import { SimulatorModelSelector } from "./SimulatorModelSelector";
 
@@ -42,7 +41,7 @@ const SCENARIOS = [
   },
   {
     id: "failover",
-    label: "Failover (gpt-4o-mini off)",
+    label: "Model Disabled",
     badge: "attack",
     preferences: { cost_weight: 0.25, latency_weight: 0.25, quality_weight: 0.25, risk_weight: 0.25 },
     disabled_models: ["gpt-4o-mini"],
@@ -64,10 +63,15 @@ export function ModelRoutingSimulator() {
   const [selected, setSelected] = useState(null);
   const [result, setResult] = useState(null);
   const [weights, setWeights] = useState({ cost_weight: 0.25, latency_weight: 0.25, quality_weight: 0.25, risk_weight: 0.25 });
+  // handleExecute bypasses the hook's executeScenario (calls engine.gatewayFetch
+  // directly), so engine.executing never flips. Track a local flag so the
+  // Execute button disables in-flight and concurrent clicks can't race setResult.
+  const [executing, setExecuting] = useState(false);
 
   const activeWeights = selected?.preferences || weights;
 
   const handleExecute = async () => {
+    if (executing) return;
     if (!gatewayModels.selectedModel) {
       setResult({ error: "Connect at least one model with an API key under Model Connection." });
       return;
@@ -79,7 +83,8 @@ export function ModelRoutingSimulator() {
       return;
     }
     const prefs = selected?.preferences || weights;
-    const compliance = selected?.compliance || [];
+    setExecuting(true);
+    try {
     const res = await engine.gatewayFetch("/v1/chat/completions", {
       method: "POST",
       body: JSON.stringify(
@@ -88,13 +93,13 @@ export function ModelRoutingSimulator() {
           model: gatewayModels.selectedModel,
           runInference: false,
           routingPreferences: {
+            enable_routing: true,
             preferred_model: gatewayModels.selectedModel,
             cost_weight: prefs.cost_weight,
             latency_weight: prefs.latency_weight,
             priority_weight: prefs.quality_weight,
             risk_weight: prefs.risk_weight,
-            compliance_requirements: compliance,
-            ...(compliance.length ? { data_sensitivity: "restricted" } : {}),
+            compliance_requirements: selected?.compliance || [],
           },
         }),
       ),
@@ -107,16 +112,18 @@ export function ModelRoutingSimulator() {
       res.ok
         ? normalizeRoutingResult(res.data)
         : {
-            error: formatRoutingError(res.data, res.status),
+            error: res.data?.message || res.data?.error || "Request failed",
             action: allowlistDenied ? "block" : "error",
             success: false,
             httpStatus: res.status,
             allowlistDenied,
             requested_model: gatewayModels.selectedModel,
-            code: res.data?.code || errorToText(res.data?.error),
             ...res.data,
           },
     );
+    } finally {
+      setExecuting(false);
+    }
   };
 
   // Bar chart rendering
@@ -137,7 +144,7 @@ export function ModelRoutingSimulator() {
       selectedScenario={selected}
       onSelectScenario={setSelected}
       onExecute={handleExecute}
-      executing={engine.executing}
+      executing={engine.executing || executing}
       result={result}
       customInput={
         <div className="space-y-3">
@@ -159,7 +166,7 @@ export function ModelRoutingSimulator() {
           <label className="text-[11px] text-slate-600 dark:text-slate-400 font-medium flex items-center gap-1">
             <Sliders className="w-3 h-3" /> Priority Weights
           </label>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {Object.entries(WEIGHT_LABELS).map(([key, label]) => {
               return (
                 <div key={key}>
@@ -186,10 +193,7 @@ export function ModelRoutingSimulator() {
     >
       {result?.error && (
         <div className="px-4 py-3 space-y-2">
-          <p className="text-sm text-red-700 dark:text-red-300">{errorToText(result.error)}</p>
-          {result.code ? (
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">{result.code}</p>
-          ) : null}
+          <p className="text-sm text-red-700 dark:text-red-300">{result.error}</p>
           {result.allowlistDenied && gatewayModels.selectedModel ? (
             <button
               type="button"

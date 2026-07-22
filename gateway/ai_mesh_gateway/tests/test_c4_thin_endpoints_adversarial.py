@@ -146,7 +146,57 @@ async def test_c4_completions_injection_blocks_with_request_id(recording_app):
     assert captured == [], f"injection prompt leaked to provider: {captured!r}"
 
 
+@pytest.mark.asyncio
+async def test_c4_completions_prompt_batch_cap_bounds_llm_fanout(recording_app):
+    """G64: /v1/completions makes one upstream LLM call PER prompt, so an oversized `prompt`
+    array (count OR total chars) is rejected 413 up front — a single request must not fan out
+    into unbounded paid inferences. A normal small batch still works (one choice per prompt,
+    and NO extra provider calls beyond the batch size)."""
+    from ai_mesh_gateway import main as gm
+    client = _raw(recording_app)
+    captured = recording_app._c4_captured
+    try:
+        over = await client.post("/v1/completions", json={
+            "model": "gpt-4o-mini", "prompt": ["hi"] * (gm.MAX_COMPLETION_PROMPTS + 1)})
+        assert over.status_code == 413 and "completion_input_too_large" in over.text, over.text
+        assert captured == [], "over-limit completion fanned out to the provider (DoS)"
+        huge = "a" * (gm.MAX_COMPLETION_INPUT_CHARS // 2 + 100)
+        over_chars = await client.post("/v1/completions", json={
+            "model": "gpt-4o-mini", "prompt": [huge, huge]})
+        assert over_chars.status_code == 413, over_chars.text
+        # a normal batch is served: exactly one choice + one provider call per prompt.
+        ok = await client.post("/v1/completions", json={
+            "model": "gpt-4o-mini", "prompt": ["a", "b", "c"]})
+        assert ok.status_code == 200 and len(ok.json()["choices"]) == 3, ok.text
+        assert len(captured) == 3, f"expected 3 provider calls, got {len(captured)}"
+    finally:
+        await client.aclose()
+
+
 # ───────────────────── 4. moderations agrees with an independent detector ─────────────────────
+
+@pytest.mark.asyncio
+async def test_c4_chat_tools_array_cap_bounds_redaction_dos(recording_app):
+    """G65: every tool's free text is folded into the scan AND recursively masked on a redact
+    verdict (~5s CPU for 100k tools), so an oversized `tools` array is rejected 400 up front.
+    A normal tools array is still accepted."""
+    from ai_mesh_gateway import main as gm
+    client = _raw(recording_app)
+    try:
+        over = await client.post("/v1/chat/completions", json={
+            "model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}],
+            "tools": [{"type": "function", "function": {"name": f"f{i}", "description": "x"}}
+                      for i in range(gm.MAX_TOOLS + 1)]})
+        assert over.status_code == 400 and "too_many_tools" in over.text, over.text
+        # at the limit is accepted (boundary), and a normal tools array works.
+        ok = await client.post("/v1/chat/completions", json={
+            "model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}],
+            "tools": [{"type": "function",
+                       "function": {"name": "search", "description": "search the web"}}]})
+        assert ok.status_code == 200, ok.text
+    finally:
+        await client.aclose()
+
 
 @pytest.mark.asyncio
 async def test_c4_moderations_verdict_matches_independent_signal(recording_app):
@@ -164,3 +214,26 @@ async def test_c4_moderations_verdict_matches_independent_signal(recording_app):
     assert (attack.results[0].categories.model_extra or {}).get("prompt_injection") is True
     # IDs are joinable to the response request id (SEAM-C).
     assert benign.id.startswith("modr-") and benign._request_id == benign.id
+
+
+@pytest.mark.asyncio
+async def test_c4_moderations_batch_cap_is_dos_bounded(recording_app):
+    """G63: an oversized moderations `input` (item COUNT or total CHARS) is rejected 413 up
+    front — every item is tier-1 scanned, so an unbounded array is a CPU resource-exhaustion
+    DoS. A normal small batch still works (contrast, so a stuck-413 bug is caught)."""
+    from ai_mesh_gateway import main as gm
+    client = _raw(recording_app)
+    try:
+        over = await client.post(
+            "/v1/moderations", json={"input": ["ping"] * (gm.MAX_MODERATION_BATCH + 1)})
+        assert over.status_code == 413 and "moderation_input_too_large" in over.text, over.text
+        # total-char ceiling: two large items exceed the char cap and are 413'd BEFORE any
+        # scan runs (each on its own is below the count cap).
+        huge = "a" * (gm.MAX_MODERATION_INPUT_CHARS // 2 + 100)
+        over_chars = await client.post("/v1/moderations", json={"input": [huge, huge]})
+        assert over_chars.status_code == 413, over_chars.text
+        # a normal batch is accepted and scanned (one result per item).
+        ok = await client.post("/v1/moderations", json={"input": ["hi", "there", "ok"]})
+        assert ok.status_code == 200 and len(ok.json()["results"]) == 3, ok.text
+    finally:
+        await client.aclose()

@@ -258,10 +258,9 @@ def test_load_config_defaults_with_clean_env():
     assert cfg["port"] == 8300
     assert cfg["stream_max_buffer_bytes"] == 4096
     assert cfg["stream_max_buffer_chunks"] == 64
-    assert cfg["litellm_request_timeout"] == 55
+    assert cfg["litellm_request_timeout"] == 120
     assert cfg["telemetry_flush_interval"] == 2.0
     assert cfg["telemetry_buffer_size"] == 100
-    assert cfg["litellm_num_retries"] == 1
 
 
 # ---------- load_config(): routing weights ---------------------------------

@@ -1,5 +1,14 @@
 from rest_framework import serializers
 
+from ai_mesh_shared.mcp_host_tools import (
+    HostToolValidationError,
+    MCP_HOST_TOOLS_ENV_KEY,
+    assert_host_tool_allowed,
+    merge_host_tools_into_env,
+    parse_host_tools_spec,
+    validate_host_tools_spec,
+)
+
 from ._url_guard import is_safe_outbound_url
 from .models import MCPEvent, MCPServerRegistration, MCPScanControl, MCPToolRegistration
 
@@ -95,6 +104,13 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
     auth_headers = AuthHeaderPairSerializer(many=True, required=False, write_only=True)
     auth_query_param_key = serializers.CharField(required=False, allow_blank=True, write_only=True)
     auth_query_param_value = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    host_tools = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        write_only=True,
+        help_text="Optional host CLI tools (e.g. pip:semgrep) merged into env_vars.MCP_HOST_TOOLS.",
+    )
 
     class Meta:
         model = MCPServerRegistration
@@ -115,6 +131,7 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
             "auth_headers",
             "auth_query_param_key",
             "auth_query_param_value",
+            "host_tools",
             "default_scan_action",
         ]
 
@@ -163,6 +180,29 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
 
         auth_type = (_val("auth_type", "none") or "none").strip().lower()
         attrs["auth_type"] = auth_type
+
+        # Transport-aware OAuth guard (fixes MCP OAuth bugs #1 dup-UI / #2
+        # "Server has no URL"). OAuth 2.1 authorization-code flow is HTTP-only:
+        # it runs RFC 9728/8414 discovery + token injection against an HTTP MCP
+        # endpoint URL. stdio servers (incl. Linear via `mcp-remote`) authorize
+        # upstream INSIDE the gateway sandbox — their auth_type stays "none" and
+        # the gateway-side device flow handles OAuth. Persisting auth_type="oauth"
+        # on a stdio/websocket (URL-less) row creates an "oauth" server the UI
+        # renders a SECOND, broken authorize button for, which 400s with
+        # "Server has no URL" when clicked. Reject it at the registration
+        # boundary so the invalid state can never exist.
+        if auth_type == "oauth" and transport not in ("streamable-http", "sse"):
+            raise serializers.ValidationError(
+                {
+                    "auth_type": (
+                        "OAuth 2.1 (authorize via provider) requires an HTTP MCP "
+                        "transport (streamable-http or sse) with a URL. For stdio "
+                        "servers such as Linear via mcp-remote, upstream OAuth is "
+                        "handled automatically by the gateway sandbox — leave the "
+                        "auth type as 'none'."
+                    )
+                }
+            )
 
         if auth_type == "bearer" and not attrs.get("auth_token"):
             raise serializers.ValidationError({"auth_token": "auth_token is required for bearer auth."})
@@ -217,6 +257,34 @@ class MCPServerCreateSerializer(serializers.ModelSerializer):
                     )
                 }
             )
+
+        env_vars = attrs.get("env_vars")
+        if env_vars is None and instance is not None:
+            env_vars = instance.env_vars
+        host_tools = attrs.pop("host_tools", None)
+        if transport == "stdio" and (host_tools is not None or isinstance(env_vars, dict)):
+            try:
+                attrs["env_vars"] = merge_host_tools_into_env(
+                    env_vars if isinstance(env_vars, dict) else None,
+                    host_tools,
+                )
+            except HostToolValidationError as exc:
+                raise serializers.ValidationError(
+                    {MCP_HOST_TOOLS_ENV_KEY: str(exc)}
+                ) from exc
+            env_vars = attrs.get("env_vars")
+        if isinstance(env_vars, dict):
+            spec = (env_vars.get(MCP_HOST_TOOLS_ENV_KEY) or "").strip()
+            if spec:
+                try:
+                    validate_host_tools_spec(spec)
+                    for _mgr, pkg in parse_host_tools_spec(spec):
+                        assert_host_tool_allowed(pkg)
+                except HostToolValidationError as exc:
+                    raise serializers.ValidationError(
+                        {MCP_HOST_TOOLS_ENV_KEY: str(exc)}
+                    ) from exc
+
         return attrs
 
     @staticmethod

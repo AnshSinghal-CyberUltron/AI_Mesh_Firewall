@@ -6,7 +6,7 @@
  * dev may use in-process gateway spawn when MCP_STDIO_IN_PROCESS=true.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Server,
   Shield,
@@ -32,10 +32,9 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { toAbsoluteGatewayUrl, resolveGatewayBaseUrl } from "../utils/environmentUrls";
+import { toAbsoluteGatewayUrl, resolveMcpGatewayBaseUrl } from "../utils/environmentUrls";
 import { MCPScanControlMatrix } from "./MCPScanControlMatrix";
 import { PolicyManagementPanel } from "./PolicyManagementPanel";
-import { syncModule2AfterTelemetryChange } from "../utils/crossModuleSync";
 
 import { Card, CardContent } from "./ui/Card";
 import { Button } from "./ui/Button";
@@ -69,7 +68,7 @@ const TRANSPORT_OPTIONS = [
   // spawn inside the gateway container (MCP_STDIO_IN_PROCESS=true). Command must be
   // an allow-listed interpreter (npx/node/python/python3); package runtime deps must
   // exist in the sandbox image. Failures surface in last_sync_error, not silent disconnect.
-  { value: "stdio", label: "Stdio (sandbox)", supported: true },
+  { value: "stdio", label: "Stdio", supported: true },
   { value: "websocket", label: "WebSocket", supported: true },
 ];
 
@@ -105,13 +104,29 @@ const MCP_PRESETS = [
   { name: "Context7 MCP", url: "https://mcp.context7.com/mcp", transport: "streamable-http", description: "Context7 docs MCP endpoint" },
 
   { name: "Playwright MCP", transport: "stdio", description: "Browser automation via Playwright MCP", command: "npx", args: ["-y", "@playwright/mcp@latest"] },
-  { name: "Semgrep MCP", transport: "stdio", description: "Code security scanning via Semgrep MCP", command: "npx", args: ["-y", "mcp-server-semgrep"] },
+  { name: "Semgrep MCP", transport: "stdio", description: "Code security scanning via Semgrep MCP", command: "npx", args: ["-y", "mcp-server-semgrep"], host_tools: ["pip:semgrep"] },
+  { name: "Host tools demo (cowsay)", transport: "stdio", description: "Minimal MCP server that shells out to cowsay (declares pip:cowsay host CLI)", command: "python3", args: ["-m", "agent.host_tools_demo_mcp"], host_tools: ["pip:cowsay"] },
   { name: "Memory MCP", transport: "stdio", description: "Knowledge graph memory via official MCP memory server", command: "npx", args: ["-y", "@modelcontextprotocol/server-memory"] },
   { name: "Filesystem MCP", transport: "stdio", description: "Official MCP filesystem server (sandbox /data/mcp-auth scope)", command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "/data/mcp-auth"] },
-  { name: "Fetch MCP", transport: "stdio", description: "HTTP fetch MCP server (mcp-server-fetch)", command: "npx", args: ["-y", "mcp-server-fetch"] },
+  { name: "Fetch MCP", transport: "stdio", description: "HTTP fetch MCP server (mcp-server-fetch, a uvx/Python package)", command: "uvx", args: ["mcp-server-fetch"] },
   { name: "Everything MCP", transport: "stdio", description: "Official MCP reference/test server (tools echo, add, etc.)", command: "npx", args: ["-y", "@modelcontextprotocol/server-everything"] },
   { name: "Vibe Check MCP", transport: "stdio", description: "Vibe Check MCP for plan/goal alignment", command: "npx", args: ["-y", "@pv-bhat/vibe-check-mcp", "start", "--stdio"] },
 ];
+
+const MCP_HOST_TOOLS_KEY = "MCP_HOST_TOOLS";
+
+const formatHostToolsSpec = (entries) => {
+  if (!Array.isArray(entries) || entries.length === 0) return "";
+  return entries
+    .map((entry) => {
+      if (typeof entry === "string") return entry.trim();
+      const manager = (entry?.manager || "pip").trim();
+      const pkg = (entry?.package || entry?.name || "").trim();
+      return manager === "pip" ? pkg : `${manager}:${pkg}`;
+    })
+    .filter(Boolean)
+    .join(" ");
+};
 
 const makeEmptyAddForm = () => ({
   name: "",
@@ -120,6 +135,7 @@ const makeEmptyAddForm = () => ({
   command: "",
   args: [],
   env_vars: {},
+  host_tools: [],
   description: "",
   auth_type: "none",
   auth_token: "",
@@ -163,11 +179,39 @@ const buildServerPayload = (form) => {
     auth_query_param_value: form.auth_query_param_value,
   };
 
-  // Include stdio-specific fields
+  // Include stdio-specific fields.
+  // Args/env are parsed from the RAW TEXT buffers (args_text/env_text) at submit —
+  // never per keystroke — so commas/spaces/newlines survive typing (bug #1 fix).
+  // Fall back to the array/object when a preset set them without a text buffer.
   if (form.transport === "stdio") {
     payload.command = form.command || "";
-    payload.args = Array.isArray(form.args) ? form.args : [];
-    payload.env_vars = form.env_vars && typeof form.env_vars === "object" ? form.env_vars : {};
+    payload.args =
+      typeof form.args_text === "string"
+        ? form.args_text.split(",").map((s) => s.trim()).filter(Boolean)
+        : Array.isArray(form.args)
+        ? form.args
+        : [];
+    payload.env_vars =
+      typeof form.env_text === "string"
+        ? (() => {
+            const vars = {};
+            form.env_text.split("\n").forEach((line) => {
+              const idx = line.indexOf("=");
+              if (idx > 0) vars[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+            });
+            return vars;
+          })()
+        : form.env_vars && typeof form.env_vars === "object"
+        ? form.env_vars
+        : {};
+    const hostToolsText =
+      typeof form.host_tools_text === "string" ? form.host_tools_text.trim() : "";
+    if (hostToolsText) {
+      payload.env_vars[MCP_HOST_TOOLS_KEY] = hostToolsText;
+    } else if (!payload.env_vars[MCP_HOST_TOOLS_KEY]) {
+      const catalogSpec = formatHostToolsSpec(form.host_tools);
+      if (catalogSpec) payload.env_vars[MCP_HOST_TOOLS_KEY] = catalogSpec;
+    }
   }
 
   if (form.auth_type === "authheaders") {
@@ -185,6 +229,19 @@ const buildServerPayload = (form) => {
 const getToolSchema = (tool) => tool?.inputSchema || tool?.input_schema || null;
 
 const makeExecuteToolKey = (tool) => `${tool?.server_slug || ""}::${tool?.name || ""}`;
+
+/**
+ * True when an arg refers to the `mcp-remote` package in any npm form — bare
+ * (`mcp-remote`), version-pinned (`mcp-remote@0.1.17`, `mcp-remote@latest`),
+ * scoped (`@scope/mcp-remote`), or a path. The old checks matched only the bare /
+ * path forms, so a version-pinned "Linear Remote" (`mcp-remote@0.1.17`) was not
+ * recognized as OAuth-needing → no Authorize button + URL-extraction returned null.
+ */
+const isMcpRemoteArg = (a) => {
+  if (typeof a !== "string") return false;
+  const bare = a.replace(/@[^@/]+$/, ""); // strip a trailing @version, keep an @scope
+  return bare === "mcp-remote" || bare.endsWith("/mcp-remote");
+};
 
 const buildExampleFromSchema = (schema, depth = 0) => {
   if (!schema || depth > 3) return {};
@@ -272,8 +329,11 @@ function StatCard({ icon: Icon, label, value, sub, tone = "slate" }) {
     blue: "text-blue-600 dark:text-blue-400",
   };
   return (
-    <Card className="shadow-none">
-      <CardContent className="flex items-center gap-3 p-4">
+    // CLEANUP-11: h-full so every stat card fills its grid cell → equal heights;
+    // items-start top-aligns the value/label across cards so the big numbers line up
+    // regardless of label length.
+    <Card className="shadow-none h-full">
+      <CardContent className="flex items-start gap-3 p-4">
         {Icon ? (
           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-700/60 ${toneStyles[tone]}`}>
             <Icon className="h-5 w-5" aria-hidden="true" />
@@ -281,8 +341,10 @@ function StatCard({ icon: Icon, label, value, sub, tone = "slate" }) {
         ) : null}
         <div className="min-w-0">
           <p className="text-lg font-semibold leading-tight text-slate-900 dark:text-white tabular-nums">{value}</p>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{label}</p>
-          {sub ? <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{sub}</p> : null}
+          {/* CLEANUP-11: wrap (leading-tight) instead of truncate — a label like
+              "Servers connected" must never clip mid-word ("Servers connec…"). */}
+          <p className="text-[11px] leading-tight text-slate-500 dark:text-slate-400">{label}</p>
+          {sub ? <p className="text-[10px] leading-tight text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p> : null}
         </div>
       </CardContent>
     </Card>
@@ -315,6 +377,12 @@ function MCPConnectorPanelInner() {
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState(makeEmptyAddForm());
   const [addSaving, setAddSaving] = useState(false);
+  // Register flow (bug #2): connect-first inline; keep the modal open during the
+  // connection + tool-discovery attempt; only close after tools are discovered.
+  const [addConnecting, setAddConnecting] = useState(false);
+  const [addConnectError, setAddConnectError] = useState(null);
+  const [addConnectErrorCode, setAddConnectErrorCode] = useState(null); // stable client-facing code (CP17)
+  const [addServerId, setAddServerId] = useState(null); // created row id (retry re-syncs it)
 
   /* ── OAuth upstream authorization ── */
   const [oauthBusy, setOauthBusy] = useState(null); // server id currently authorizing
@@ -348,6 +416,9 @@ function MCPConnectorPanelInner() {
 
   /* ── org gateway key (auto-provisioned for MCP) ── */
   const [orgGatewayKey, setOrgGatewayKey] = useState(null); // { has_gateway_key, prefix, key, ... }
+  // Scan-controls row count — when 0, gateway skips Tier-1/Tier-2; server
+  // default_scan_action badges must not imply active scanning (UI honesty).
+  const [scanControlsConfigured, setScanControlsConfigured] = useState(null);
 
   /* ── OAuth polling interval (BUG FIX a: tracked + cleaned up) ── */
   const oauthPollRef = useRef(null);
@@ -369,16 +440,36 @@ function MCPConnectorPanelInner() {
     }
   }, [fetchWithAuth]);
 
-  const executableTools = (Array.isArray(tools) ? tools : [])
-    .filter((tool) => tool?.enabled !== false)
-    .filter((tool) => !executeServerSlug || tool.server_slug === executeServerSlug)
-    .sort((left, right) => {
-      const leftLabel = `${left.server_name || left.server_slug || ""}/${left.name || ""}`;
-      const rightLabel = `${right.server_name || right.server_slug || ""}/${right.name || ""}`;
-      return leftLabel.localeCompare(rightLabel);
-    });
+  const loadScanControlsConfigured = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth("/api/mcp-connector/scan-controls/");
+      if (!res.ok) return;
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data : data.results ?? [];
+      setScanControlsConfigured(rows.length > 0);
+    } catch {
+      // leave prior value; do not flip honesty banner on transient failure
+    }
+  }, [fetchWithAuth]);
 
-  const selectedExecuteTool = executableTools.find((tool) => makeExecuteToolKey(tool) === executeToolKey) || null;
+  // CP44 (impeccable perf): memoize derived lists so they don't recompute on
+  // every render (audit dim 2 — 0 useMemo → filtered/sorted lists recomputed).
+  const executableTools = useMemo(
+    () => (Array.isArray(tools) ? tools : [])
+      .filter((tool) => tool?.enabled !== false)
+      .filter((tool) => !executeServerSlug || tool.server_slug === executeServerSlug)
+      .sort((left, right) => {
+        const leftLabel = `${left.server_name || left.server_slug || ""}/${left.name || ""}`;
+        const rightLabel = `${right.server_name || right.server_slug || ""}/${right.name || ""}`;
+        return leftLabel.localeCompare(rightLabel);
+      }),
+    [tools, executeServerSlug],
+  );
+
+  const selectedExecuteTool = useMemo(
+    () => executableTools.find((tool) => makeExecuteToolKey(tool) === executeToolKey) || null,
+    [executableTools, executeToolKey],
+  );
 
   useEffect(() => {
     if (!selectedExecuteTool && executeToolKey) {
@@ -411,25 +502,38 @@ function MCPConnectorPanelInner() {
     }
   }, [fetchWithAuth]);
 
+  // Fetch that retries once on a transient 503 (db_unavailable) — the control
+  // plane returns 503 + Retry-After when the Postgres pool is briefly exhausted
+  // under load, instead of a hard 500, so the tab recovers real data on retry. (CP26)
+  const fetchWithRetry = useCallback(async (url) => {
+    let res = await fetchWithAuth(url);
+    if (res.status === 503) {
+      const wait = Math.min(5, Number(res.headers.get("Retry-After")) || 2) * 1000;
+      await new Promise((r) => setTimeout(r, wait));
+      res = await fetchWithAuth(url);
+    }
+    return res;
+  }, [fetchWithAuth]);
+
   const loadEvents = useCallback(async (hours = obsHours) => {
     try {
       const qs = hours > 0 ? `?limit=500&hours=${hours}` : `?limit=500`;
-      const res = await fetchWithAuth(`/api/mcp-connector/events/${qs}`);
+      const res = await fetchWithRetry(`/api/mcp-connector/events/${qs}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setEvents(Array.isArray(data) ? data : data.results ?? []);
       setEventsVisible(EVENTS_PAGE_SIZE); // BUG FIX (c): reset paging on reload
     } catch { setEvents([]); }
-  }, [fetchWithAuth, obsHours]);
+  }, [fetchWithRetry, obsHours]);
 
   const loadEventSummary = useCallback(async (hours = obsHours) => {
     try {
       const qs = hours > 0 ? `?hours=${hours}` : ``;
-      const res = await fetchWithAuth(`/api/mcp-connector/events/summary/${qs}`);
+      const res = await fetchWithRetry(`/api/mcp-connector/events/summary/${qs}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setEventSummary(await res.json());
     } catch { setEventSummary(null); }
-  }, [fetchWithAuth, obsHours]);
+  }, [fetchWithRetry, obsHours]);
 
   const loadServerTools = useCallback(async (serverId) => {
     try {
@@ -461,12 +565,13 @@ function MCPConnectorPanelInner() {
 
   /* ── tab-switched loaders ── */
   useEffect(() => {
-    if (tab === "servers") { loadServers(); loadOrgGatewayKey(); loadHealth(); }
+    if (tab === "servers") { loadServers(); loadOrgGatewayKey(); loadHealth(); loadScanControlsConfigured(); }
     if (tab === "tools") loadTools();
     if (tab === "execute") loadTools();
     if (tab === "protection") { loadServers(); }
     if (tab === "observability") { loadEvents(); }
-  }, [tab, loadServers, loadTools, loadHealth, loadEvents, loadOrgGatewayKey]);
+    if (tab === "scan-matrix") { loadScanControlsConfigured(); }
+  }, [tab, loadServers, loadTools, loadHealth, loadEvents, loadOrgGatewayKey, loadScanControlsConfigured]);
 
   /* The header-strip decision StatCards (Allowed / Blocked / Redact·Monitor)
      are ALWAYS visible regardless of the active tab, so the decision summary
@@ -477,40 +582,115 @@ function MCPConnectorPanelInner() {
   /* ────────── actions ────────── */
 
   const addServer = async () => {
-    setAddSaving(true);
     setError(null);
+    setAddConnectError(null);
+    setAddConnectErrorCode(null);
     try {
-      const payload = buildServerPayload(addForm);
-      const res = await fetchWithAuth("/api/mcp-connector/servers/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || body.error || `HTTP ${res.status}`);
-      }
-      const data = await res.json().catch(() => ({}));
-      // Capture auto-provisioned gateway key from response
-      if (data.default_gateway_key) {
-        setOrgGatewayKey({
-          has_gateway_key: true,
-          prefix: data.default_gateway_key_prefix,
-          key: data.default_gateway_key,
-          name: `MCP Default Key`,
+      // Step 1 — create the registration (skip if a prior attempt already created
+      // it and only the connection failed; a retry then just re-connects).
+      let serverId = addServerId;
+      if (!serverId) {
+        setAddSaving(true);
+        const payload = buildServerPayload(addForm);
+        const res = await fetchWithAuth("/api/mcp-connector/servers/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
         });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.detail || body.error || `HTTP ${res.status}`);
+        }
+        const data = await res.json().catch(() => ({}));
+        serverId = data.id;
+        setAddServerId(serverId);
+        if (data.default_gateway_key) {
+          setOrgGatewayKey({
+            has_gateway_key: true,
+            prefix: data.default_gateway_key_prefix,
+            key: data.default_gateway_key,
+            name: `MCP Default Key`,
+          });
+        }
+        setAddSaving(false);
+      } else {
+        // Retry after a failed connect — apply any form edits to the existing row
+        // (so "fix + retry" actually takes effect) before re-connecting (CP08).
+        setAddSaving(true);
+        const payload = buildServerPayload(addForm);
+        const patchRes = await fetchWithAuth(`/api/mcp-connector/servers/${serverId}/`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!patchRes.ok) {
+          const body = await patchRes.json().catch(() => ({}));
+          throw new Error(body.detail || body.error || `HTTP ${patchRes.status}`);
+        }
+        setAddSaving(false);
       }
-      setAddOpen(false);
-      setAddForm(makeEmptyAddForm());
-      await loadServers();
-      syncModule2AfterTelemetryChange("mcp-server-add");
-      toast(`Registered "${payload.name}"`, { tone: "success" });
+
+      // Step 2 (bug #2 / CP07) — attempt the MCP connection + tool discovery INLINE.
+      // Keep the modal OPEN during the attempt; only close after tools are found.
+      setAddConnecting(true);
+      const syncRes = await fetchWithAuth(`/api/mcp-connector/servers/${serverId}/tools/`, {
+        method: "POST",
+      });
+      const syncData = await syncRes.json().catch(() => ({}));
+      const toolCount = Array.isArray(syncData.tools)
+        ? syncData.tools.length
+        : typeof syncData.synced === "number"
+        ? syncData.synced
+        : 0;
+      const syncErr =
+        syncData.error || syncData.last_sync_error || (!syncRes.ok ? `HTTP ${syncRes.status}` : null);
+
+      if (syncErr || toolCount === 0) {
+        // Failure (CP08) — clear inline error, modal stays open, user fixes + retries.
+        setAddConnectError(
+          syncErr
+            ? `Connection failed: ${syncErr}`
+            : "Connected, but the server exposed no tools. Check the command / URL / auth and retry."
+        );
+        // CP17: surface the STABLE client-facing error code (the message already
+        // carries the branded summary + correlation "(Ref: …)").
+        setAddConnectErrorCode(syncData.error_code || null);
+        const httpOAuthPending =
+          addForm.auth_type === "oauth" &&
+          (addForm.transport === "streamable-http" || addForm.transport === "sse");
+        if (httpOAuthPending) {
+          // B2: show the pending-authorization card immediately (never a hidden 0-tools row).
+          await loadServers();
+        }
+      } else {
+        // Success (CP09) — tools discovered → close + add to the list (never 0 tools).
+        setAddOpen(false);
+        setAddForm(makeEmptyAddForm());
+        setAddServerId(null);
+        await loadServers();
+        toast(`Registered "${addForm.name}" — ${toolCount} tools discovered`, { tone: "success" });
+      }
     } catch (e) {
-      setError(`Add server failed: ${e.message}`);
+      setAddConnectError(`Add server failed: ${e.message}`);
+      setAddConnectErrorCode(null);
       toast(`Add server failed: ${e.message}`, { tone: "error" });
     } finally {
       setAddSaving(false);
+      setAddConnecting(false);
     }
+  };
+
+  // Cancel/close the Add modal. If a row was created but never connected (tools
+  // not discovered), delete it so it never appears in the list with 0 tools (bug #2).
+  const cancelAdd = async () => {
+    if (addServerId) {
+      await fetchWithAuth(`/api/mcp-connector/servers/${addServerId}/`, { method: "DELETE" }).catch(() => {});
+    }
+    setAddServerId(null);
+    setAddConnectError(null);
+    setAddConnectErrorCode(null);
+    setAddForm(makeEmptyAddForm());
+    setAddOpen(false);
   };
 
   const deleteServerById = async (pk) => {
@@ -519,7 +699,6 @@ function MCPConnectorPanelInner() {
       const res = await fetchWithAuth(`/api/mcp-connector/servers/${pk}/`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
       await loadServers();
-      syncModule2AfterTelemetryChange("mcp-server-delete");
       toast("Server deleted", { tone: "success" });
     } catch (e) {
       setError(`Delete failed: ${e.message}`);
@@ -537,6 +716,7 @@ function MCPConnectorPanelInner() {
         description: preset.description,
         command: preset.command || "",
         args: preset.args || [],
+        host_tools: preset.host_tools || [],
         auth_type: preset.suggestedAuthType || "bearer",
       });
       setAddOpen(true);
@@ -556,6 +736,8 @@ function MCPConnectorPanelInner() {
       if (preset.transport === "stdio") {
         payload.command = preset.command || "";
         payload.args = preset.args || [];
+        const hostSpec = formatHostToolsSpec(preset.host_tools);
+        if (hostSpec) payload.env_vars = { [MCP_HOST_TOOLS_KEY]: hostSpec };
       }
       const res = await fetchWithAuth("/api/mcp-connector/servers/", {
         method: "POST",
@@ -567,7 +749,21 @@ function MCPConnectorPanelInner() {
         throw new Error(body.detail || body.error || `HTTP ${res.status}`);
       }
       await loadServers();
-      toast(`Registered "${preset.name}"`, { tone: "success" });
+      // Bug #3: an OAuth-required preset must not look "done" on register — the
+      // operator has to authorize before it becomes usable. Direct them to the
+      // Authorize action instead of a plain "Registered" success.
+      const presetNeedsOAuth =
+        (preset.transport === "stdio" &&
+          (preset.args || []).some(isMcpRemoteArg)) ||
+        preset.suggestedAuthType === "oauth";
+      if (presetNeedsOAuth) {
+        toast(`Registered "${preset.name}" — click Authorize to activate`, { tone: "success" });
+        setError(
+          `"${preset.name}" requires authorization. Click "Authorize" on its card to complete OAuth before syncing tools.`
+        );
+      } else {
+        toast(`Registered "${preset.name}"`, { tone: "success" });
+      }
     } catch (e) {
       setError(`Preset registration failed: ${e.message}`);
       toast(`Preset registration failed: ${e.message}`, { tone: "error" });
@@ -580,27 +776,27 @@ function MCPConnectorPanelInner() {
     setSyncingServer(serverId);
     try {
       const res = await fetchWithAuth(`/api/mcp-connector/servers/${serverId}/tools/`, { method: "POST" });
-      // A2 contract: the sync endpoint returns HTTP 200 even on upstream
-      // failure, carrying { synced, pruned, error, connection_status } in the
-      // body. A transport/handshake/auth error is reported via body.error with
-      // connection_status="failed" — NOT via a non-2xx status. So we must
-      // inspect the body instead of relying on res.ok alone.
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(body.detail || body.error || `HTTP ${res.status}`);
       }
       if (body.error || body.connection_status === "failed") {
-        setError(`Sync failed for server: ${body.error || "upstream discovery error"}`);
-        toast(`Sync failed: ${body.error || "upstream discovery error"}`, { tone: "error" });
-      } else {
-        setError(null);
-        toast(`Synced ${body.synced ?? ""} tool${body.synced === 1 ? "" : "s"}`.replace(/\s+/g, " ").trim(), { tone: "success" });
+        const errMsg = body.error || "upstream discovery error";
+        setError(`Sync failed for server: ${errMsg}`);
+        toast(`Sync failed: ${errMsg}`, { tone: "error" });
+        await loadServerTools(serverId);
+        await loadServers();
+        return { ok: false, error: errMsg };
       }
+      setError(null);
+      toast(`Synced ${body.synced ?? ""} tool${body.synced === 1 ? "" : "s"}`.replace(/\s+/g, " ").trim(), { tone: "success" });
       await loadServerTools(serverId);
       await loadServers();
+      return { ok: true };
     } catch (e) {
       setError(`Sync tools failed: ${e.message}`);
       toast(`Sync tools failed: ${e.message}`, { tone: "error" });
+      return { ok: false, error: e.message };
     } finally {
       setSyncingServer(null);
     }
@@ -694,17 +890,98 @@ function MCPConnectorPanelInner() {
 
   /* ── Upstream OAuth helpers ── */
 
-  /** Check whether a server uses mcp-remote (needs OAuth authorization). */
+  /** Check whether a server uses mcp-remote (needs gateway-side OAuth authorization). */
   const serverNeedsOAuth = (srv) =>
     srv.transport === "stdio" &&
     Array.isArray(srv.args) &&
-    srv.args.some((a) => a === "mcp-remote" || (typeof a === "string" && a.endsWith("/mcp-remote")));
+    srv.args.some(isMcpRemoteArg);
+
+  /**
+   * Whether a server is eligible for the control-plane OAuth 2.1 flow
+   * (startControlOAuth). OAuth 2.1 authorization-code is HTTP-only — it needs an
+   * HTTP MCP endpoint URL for RFC 9728/8414 discovery. Guarding on transport+URL
+   * here (in addition to the backend serializer reject) is defense-in-depth:
+   * even a legacy/invalid stdio row with auth_type="oauth" must NEVER surface the
+   * control authorize button (which 400s "Server has no URL") — that dup/broken
+   * button is MCP OAuth bugs #1/#2. Mutually exclusive with serverNeedsOAuth,
+   * which only fires for stdio.
+   */
+  const serverUsesHttpOAuth = (srv) =>
+    srv.auth_type === "oauth" &&
+    !!srv.url &&
+    (srv.transport === "streamable-http" || srv.transport === "sse");
+
+  /**
+   * A server that requires OAuth but has not completed it yet — it must be
+   * AUTHORIZED before it is usable (fixes bug #3: freshly-registered OAuth
+   * servers showing up as a generic "0 tools / Unknown" card that misleads the
+   * operator into syncing before auth). Two tracked cases:
+   *  - HTTP OAuth 2.1 (auth_type="oauth"): control persists oauth_authorized.
+   *  - stdio mcp-remote (Linear): the token lives gateway-side, so the control
+   *    row has no oauth_authorized flag — treat "never synced, no tools, not
+   *    connected" as awaiting authorization.
+   */
+  const serverAwaitingAuth = (srv) => {
+    if (srv.auth_type === "oauth") return !srv.oauth_authorized;
+    if (serverNeedsOAuth(srv)) {
+      // "Awaiting authorization" = genuinely not yet resolved (never synced /
+      // unknown / syncing), NOT a server that was attempted and definitively
+      // FAILED for a concrete non-auth reason (storage limit, crash, DNS, …).
+      // A failed server must show its real "Failed" status + branded error so the
+      // operator acts on the actual cause — a "Pending authorization / Authorize"
+      // affordance is a dead end that can't fix a storage failure. (A true auth
+      // failure surfaces via needs_reauth, which the caller already excludes and
+      // which renders its own "needs re-auth" badge.)
+      return (srv.tools_count ?? 0) === 0
+        && srv.connection_status !== "connected"
+        && srv.connection_status !== "failed";
+    }
+    return false;
+  };
+
+  /**
+   * Whether the manual "Sync tools" action must be blocked pending auth. Only
+   * gated for the TRACKABLE http-oauth case (startControlOAuth auto-syncs on
+   * success, so a pre-auth manual sync is always a wasted, failing call). stdio
+   * mcp-remote is intentionally NOT gated — its tokens are gateway-side and a
+   * post-authorize sync is exactly how its tools get discovered, so gating it
+   * would deadlock (no control-row signal ever flips).
+   */
+  const syncBlockedForAuth = (srv) => srv.auth_type === "oauth" && !srv.oauth_authorized;
+
+  const isAuthRelatedSyncError = (srv) => {
+    const err = (srv.last_sync_error || "").toLowerCase();
+    if (!err) return false;
+    return (
+      srv.needs_reauth ||
+      err.includes("re-authenticat") ||
+      err.includes("re-authorize") ||
+      err.includes("unauthorized") ||
+      err.includes("401") ||
+      err.includes("oauth") ||
+      err.includes("invalid_token") ||
+      err.includes("invalid token") ||
+      err.includes("rejected your oauth")
+    );
+  };
+
+  const isOAuthConfigMismatch = (srv) => {
+    const err = srv.last_sync_error || "";
+    return err.includes("re-authorizing will not help") || err.includes("OAuth configuration");
+  };
+
+  const oauthExpiresWithin24h = (srv) => {
+    if (!srv.oauth_token_expires_at) return false;
+    const exp = new Date(srv.oauth_token_expires_at).getTime();
+    const now = Date.now();
+    return exp > now && exp - now < 24 * 60 * 60 * 1000;
+  };
 
   /** Extract the MCP server URL from mcp-remote args. */
   const extractMcpRemoteUrl = (args) => {
     if (!Array.isArray(args)) return null;
     for (let i = 0; i < args.length; i++) {
-      if (args[i] === "mcp-remote" || (typeof args[i] === "string" && args[i].endsWith("/mcp-remote"))) {
+      if (isMcpRemoteArg(args[i])) {
         for (let j = i + 1; j < args.length; j++) {
           if (!args[j].startsWith("-")) return args[j];
         }
@@ -728,18 +1005,16 @@ function MCPConnectorPanelInner() {
 
     // UX-02 FIX: Pre-open popup SYNCHRONOUSLY before async fetch to avoid popup blocker.
     // Browser will block window.open() after await unless it's in the same call stack as user click.
+    // If popups are blocked entirely (Cursor/Electron embedded browser), popup is
+    // null → we fall back to a SAME-TAB redirect below.
     const popup = window.open("about:blank", "mcp-oauth", "width=600,height=700");
-    if (!popup) {
-      setError("Popup blocked. Please allow popups for this site and try again.");
-      return;
-    }
 
     setOauthBusy(srv.id);
     setError(null);
     try {
-      const gwBase = resolveGatewayBaseUrl();
+      const gwBase = resolveMcpGatewayBaseUrl();
       if (!gwBase) {
-        popup.close();
+        if (popup) popup.close();
         throw new Error("Gateway URL is not configured.");
       }
 
@@ -757,14 +1032,23 @@ function MCPConnectorPanelInner() {
         error: (await res.text().catch(() => "")) || null,
       }));
       if (!res.ok) {
-        popup.close();
+        if (popup) popup.close();
         throw new Error(data.error || `HTTP ${res.status}`);
       }
 
+      if (!popup) {
+        // Popup blocked → same-tab fallback (never blocked). Remember the server
+        // so we auto-sync its tools when the callback returns us to the app.
+        try {
+          localStorage.setItem("mcp_oauth_pending", JSON.stringify({ id: srv.id }));
+        } catch { /* storage disabled — return handler just won't auto-sync */ }
+        window.location.assign(data.authorize_url);
+        return;
+      }
       // Navigate the pre-opened popup to OAuth URL
       popup.location.href = data.authorize_url;
     } catch (e) {
-      if (!popup.closed) popup.close();
+      if (popup && !popup.closed) popup.close();
       const rawMessage = e?.message || "Unknown error";
       const message = /failed to fetch|about:blank|networkerror|load failed/i.test(rawMessage)
         ? "Browser blocked the gateway request. Check gateway CORS or network configuration."
@@ -788,19 +1072,27 @@ function MCPConnectorPanelInner() {
    */
   const startControlOAuth = async (srv) => {
     // Pre-open popup SYNCHRONOUSLY (same call stack as click) to dodge blockers.
+    // If the browser blocks popups entirely (e.g. the Cursor/Electron embedded
+    // browser), popup is null → we fall back to a SAME-TAB redirect below, which
+    // is never blocked.
     const popup = window.open("about:blank", "mcp-oauth-2-1", "width=620,height=760");
-    if (!popup) {
-      setError("Popup blocked. Please allow popups for this site and try again.");
-      return;
-    }
     setOauthBusy(srv.id);
     setError(null);
     try {
       const res = await fetchWithAuth(`/api/mcp-connector/servers/${srv.id}/oauth/authorize/`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.authorize_url) {
-        popup.close();
+        if (popup) popup.close();
         throw new Error(data.error || data.detail || `HTTP ${res.status}`);
+      }
+      if (!popup) {
+        // Popup blocked → same-tab fallback. Remember which server so we
+        // auto-sync its tools when the callback returns us to the app.
+        try {
+          localStorage.setItem("mcp_oauth_pending", JSON.stringify({ id: srv.id }));
+        } catch { /* storage disabled — return handler just won't auto-sync */ }
+        window.location.assign(data.authorize_url);
+        return;
       }
       popup.location.href = data.authorize_url;
 
@@ -824,8 +1116,12 @@ function MCPConnectorPanelInner() {
               setOauthBusy(null);
               if (!popup.closed) popup.close();
               await loadServers();
-              await syncServerTools(srv.id);
-              toast("OAuth authorized", { tone: "success" });
+              const syncOutcome = await syncServerTools(srv.id);
+              if (syncOutcome?.ok) {
+                toast("OAuth authorized", { tone: "success" });
+              } else if (!syncOutcome?.error) {
+                toast("OAuth authorized", { tone: "success" });
+              }
               return;
             }
           }
@@ -854,6 +1150,33 @@ function MCPConnectorPanelInner() {
         oauthPollRef.current = null;
       }
     };
+  }, []);
+
+  // Same-tab OAuth return: when the popup is blocked we redirect the whole tab
+  // to the provider; the control callback then bounces the browser back here.
+  // On mount, if we stashed a pending server, refresh + auto-sync it (mirrors
+  // the popup path's poll auto-sync) so tools populate without a manual click.
+  useEffect(() => {
+    let pending = null;
+    try {
+      pending = JSON.parse(localStorage.getItem("mcp_oauth_pending") || "null");
+    } catch { pending = null; }
+    if (!pending?.id) return;
+    try { localStorage.removeItem("mcp_oauth_pending"); } catch { /* ignore */ }
+    (async () => {
+      await loadServers();
+      try {
+        const r = await fetchWithAuth(`/api/mcp-connector/servers/${pending.id}/`);
+        if (r.ok) {
+          const s = await r.json();
+          if (s.oauth_authorized) {
+            await syncServerTools(pending.id);
+            toast("OAuth authorized — tools synced", { tone: "success" });
+          }
+        }
+      } catch { /* transient — user can sync manually */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // BUG FIX (b): OAuth popup completion handler wrapped in useCallback with
@@ -923,10 +1246,14 @@ function MCPConnectorPanelInner() {
 
   /* ────────── derived status-strip values ────────── */
 
-  const connectedCount = servers.filter(
-    (s) => connectionInfo(s.connection_status).badge === "success"
-  ).length;
-  const toolsDiscovered = servers.reduce((acc, s) => acc + (s.tools_count || 0), 0);
+  const connectedCount = useMemo(
+    () => servers.filter((s) => connectionInfo(s.connection_status).badge === "success").length,
+    [servers],
+  );
+  const toolsDiscovered = useMemo(
+    () => servers.reduce((acc, s) => acc + (s.tools_count || 0), 0),
+    [servers],
+  );
   const tier2On =
     health?.mcp_tier2_enabled ??
     health?.tier2_enabled ??
@@ -957,7 +1284,7 @@ function MCPConnectorPanelInner() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="h-9 w-9"
                       aria-label={keyRevealed ? "Hide gateway API key" : "Reveal gateway API key"}
                       onClick={() => setKeyRevealed((v) => !v)}
                     >
@@ -970,7 +1297,7 @@ function MCPConnectorPanelInner() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7"
+                      className="h-9 w-9"
                       aria-label="Copy gateway API key"
                       onClick={() => {
                         navigator.clipboard.writeText(orgGatewayKey.key);
@@ -1019,19 +1346,76 @@ function MCPConnectorPanelInner() {
     const conn = connectionInfo(srv.connection_status);
     const risk = riskBadge(srv.risk_level);
     const absUrl = srv.gateway_endpoint ? toAbsoluteGatewayUrl(srv.gateway_endpoint) : null;
+    // B2: a server that requires OAuth but has not completed it must read as a
+    // DISTINCT "Pending authorization" state — never a normal-looking card with a
+    // grey "Unknown" status + "0 tools" (which misleads the operator into thinking
+    // it is ready/empty). needs_reauth has its own badge and takes precedence.
+    const awaitingAuth = !srv.needs_reauth && serverAwaitingAuth(srv);
+    const showAuthBanner = srv.needs_reauth || (srv.connection_status === "failed" && isAuthRelatedSyncError(srv));
+    const configMismatch = showAuthBanner && isOAuthConfigMismatch(srv);
+    const tokenExpiringSoon = serverUsesHttpOAuth(srv) && oauthExpiresWithin24h(srv) && !showAuthBanner;
     return (
       <Card key={srv.id}>
         <CardContent className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
+          {showAuthBanner && (
+            <div
+              className={`mb-3 rounded-lg border px-3 py-2.5 flex flex-wrap items-start justify-between gap-3 ${
+                configMismatch
+                  ? "border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
+                  : "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40"
+              }`}
+              data-testid={`mcp-auth-alert-${srv.server_slug}`}
+            >
+              <div className="flex items-start gap-2 min-w-0 flex-1">
+                <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${configMismatch ? "text-sky-600 dark:text-sky-400" : "text-amber-600 dark:text-amber-400"}`} />
+                <div className="min-w-0">
+                  <p className={`text-xs font-semibold ${configMismatch ? "text-sky-900 dark:text-sky-100" : "text-amber-900 dark:text-amber-100"}`}>
+                    {configMismatch ? "OAuth configuration mismatch" : "OAuth token expired or rejected"}
+                  </p>
+                  <p className={`text-[11px] mt-0.5 break-all ${configMismatch ? "text-sky-800 dark:text-sky-200" : "text-amber-800 dark:text-amber-200"}`}>
+                    {configMismatch
+                      ? (srv.last_sync_error || "The upstream rejected a valid token — check scopes, audience, and account access.")
+                      : (srv.last_sync_error || "Re-authorize this server to restore tool discovery and calls.")}
+                  </p>
+                </div>
+              </div>
+              {(serverUsesHttpOAuth(srv) || serverNeedsOAuth(srv)) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => (serverUsesHttpOAuth(srv) ? startControlOAuth(srv) : startOAuth(srv))}
+                  disabled={oauthBusy === srv.id}
+                >
+                  {oauthBusy === srv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Shield className="w-3 h-3" />}
+                  Re-authorize
+                </Button>
+              )}
+            </div>
+          )}
+          {tokenExpiringSoon && (
+            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/80 dark:border-amber-800 dark:bg-amber-950/30 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200 flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              OAuth token expires within 24 hours — re-authorize soon to avoid sync interruptions.
+            </div>
+          )}
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 flex-1">
               <h4 className="font-medium text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
                 <Server className="w-4 h-4 text-teal-500 shrink-0" />
                 {srv.name}
                 {srv.is_active && <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
-                <Badge variant={conn.badge}>
-                  <span className={`mr-1.5 inline-block w-1.5 h-1.5 rounded-full ${conn.dot}`} />
-                  {conn.label}
-                </Badge>
+                {awaitingAuth ? (
+                  <Badge variant="warning">
+                    <span className="mr-1.5 inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    Pending authorization
+                  </Badge>
+                ) : (
+                  <Badge variant={conn.badge}>
+                    <span className={`mr-1.5 inline-block w-1.5 h-1.5 rounded-full ${conn.dot}`} />
+                    {conn.label}
+                  </Badge>
+                )}
                 {srv.risk_level && srv.risk_level !== "low" && (
                   <Badge variant={risk}>{srv.risk_level} risk</Badge>
                 )}
@@ -1040,7 +1424,11 @@ function MCPConnectorPanelInner() {
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-all">{srv.url}</p>
               {srv.description && <p className="text-xs text-slate-400 mt-0.5">{srv.description}</p>}
               <div className="flex items-center gap-3 mt-2 flex-wrap">
-                {srv.tools_count != null && (
+                {awaitingAuth ? (
+                  <span className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <Wrench className="w-3 h-3" /> Authorize to load tools
+                  </span>
+                ) : srv.tools_count != null && (
                   <span className="text-[10px] text-slate-500 flex items-center gap-1">
                     <Wrench className="w-3 h-3" /> {srv.tools_count} tools
                   </span>
@@ -1059,15 +1447,15 @@ function MCPConnectorPanelInner() {
               )}
               {srv.gateway_endpoint && (
                 <div className="mt-2 space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <code className="text-[10px] bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded font-mono text-slate-600 dark:text-slate-300 break-all">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <code className="min-w-0 flex-1 text-[10px] bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded font-mono text-slate-600 dark:text-slate-300 break-all">
                       {absUrl}
                     </code>
                     <Tooltip content="Copy gateway URL only">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
+                        className="h-9 w-9 shrink-0"
                         aria-label="Copy gateway URL"
                         onClick={() => copyEndpoint(absUrl)}
                       >
@@ -1091,19 +1479,38 @@ function MCPConnectorPanelInner() {
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 min-w-0 lg:max-w-[min(100%,28rem)] lg:justify-end shrink-0">
               <Badge variant="secondary">{srv.transport}</Badge>
+              {/* Every transport runs in the per-org sandbox (bug #3 / CP15) — the
+                  gateway never dials the upstream directly, so show it for ALL. */}
+              <Badge variant="secondary" className="inline-flex items-center gap-1" title="Executes in your org's isolated per-org sandbox; the gateway never dials the upstream directly.">
+                <Shield className="w-3 h-3" /> Sandboxed
+              </Badge>
               <Select
                 value={srv.default_scan_action || "tag"}
                 onChange={(e) => setServerScanDefault(srv.id, e.target.value)}
                 aria-label="Default scan enforcement"
                 className="w-auto text-[11px] py-1"
-                title="Default scan enforcement after Tier-1/Tier-2 (tag = observe only)"
+                title={
+                  scanControlsConfigured === false
+                    ? "Scanning is OFF (0 Scan Controls). Tier-1/Tier-2 do not run until you add a control on the Scan Controls tab. This posture only applies after scanning is enabled."
+                    : "Default scan enforcement after Tier-1/Tier-2 (tag = observe only)"
+                }
+                disabled={scanControlsConfigured === false}
               >
                 <option value="tag">Scan: tag</option>
                 <option value="redact">Scan: redact</option>
                 <option value="block">Scan: block</option>
               </Select>
+              {scanControlsConfigured === false && (
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] text-amber-700 dark:text-amber-300"
+                  title="Zero scan-control rows — gateway skips Tier-1/Tier-2 entirely"
+                >
+                  Scanning off
+                </Badge>
+              )}
               {serverNeedsOAuth(srv) && (
                 <Tooltip content="Authorize OAuth — opens popup for upstream provider login">
                   <Button
@@ -1118,7 +1525,7 @@ function MCPConnectorPanelInner() {
                   </Button>
                 </Tooltip>
               )}
-              {srv.auth_type === "oauth" && (
+              {serverUsesHttpOAuth(srv) && (
                 <Tooltip
                   content={srv.oauth_authorized
                     ? "Re-authorize OAuth 2.1 — opens provider consent popup"
@@ -1136,14 +1543,20 @@ function MCPConnectorPanelInner() {
                   </Button>
                 </Tooltip>
               )}
-              <Tooltip content="Sync tools from server">
+              <Tooltip
+                content={
+                  syncBlockedForAuth(srv)
+                    ? "Authorize this server before syncing tools"
+                    : "Sync tools from server"
+                }
+              >
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-9 w-9"
                   aria-label="Sync tools from server"
                   onClick={() => syncServerTools(srv.id)}
-                  disabled={syncingServer === srv.id}
+                  disabled={syncingServer === srv.id || syncBlockedForAuth(srv)}
                 >
                   {syncingServer === srv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 </Button>
@@ -1152,7 +1565,7 @@ function MCPConnectorPanelInner() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-9 w-9"
                   aria-label="View tool controls"
                   onClick={() => {
                     if (expandedServer === srv.id) {
@@ -1170,7 +1583,7 @@ function MCPConnectorPanelInner() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-red-500 hover:text-red-700"
+                  className="h-9 w-9 text-red-500 hover:text-red-700"
                   aria-label="Delete server"
                   onClick={() => deleteServerById(srv.id)}
                 >
@@ -1270,10 +1683,10 @@ function MCPConnectorPanelInner() {
           icon={Server}
           title="No MCP servers registered yet"
           description='Click "Register Server" to connect an MCP server for centralized discovery and governance.'
-          action={<Button onClick={() => setAddOpen(true)}><Plus className="w-4 h-4" /> Register Server</Button>}
+          action={<Button onClick={() => { setAddServerId(null); setAddConnectError(null); setAddConnectErrorCode(null); setAddOpen(true); }}><Plus className="w-4 h-4" /> Register Server</Button>}
         />
       ) : (
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {servers.map((srv) => renderServerCard(srv))}
         </div>
       )}
@@ -1313,7 +1726,19 @@ function MCPConnectorPanelInner() {
               <label className="block text-sm font-medium mb-1">Transport</label>
               <Select
                 value={addForm.transport}
-                onChange={(e) => setAddForm({ ...addForm, transport: e.target.value })}
+                onChange={(e) => {
+                  const nextTransport = e.target.value;
+                  const httpOAuth =
+                    nextTransport === "streamable-http" || nextTransport === "sse";
+                  setAddForm((prev) => ({
+                    ...prev,
+                    transport: nextTransport,
+                    // OAuth 2.1 is HTTP-only (bugs #1/#2): drop it when switching
+                    // to a non-HTTP transport so we never build a stdio+oauth row.
+                    auth_type:
+                      prev.auth_type === "oauth" && !httpOAuth ? "none" : prev.auth_type,
+                  }));
+                }}
                 aria-label="Transport"
               >
                 {TRANSPORT_OPTIONS.map((t) => (
@@ -1323,9 +1748,14 @@ function MCPConnectorPanelInner() {
                 ))}
               </Select>
               <p className="text-xs text-slate-500 mt-1">
-                Supports HTTP, SSE, WebSocket, and Stdio (per-org sandbox) transports.
-                Stdio delegates to the mcp-broker sandbox in production; dev may use in-process gateway spawn.
+                Every transport (HTTP, SSE, WebSocket, Stdio) executes inside your
+                organization&apos;s isolated per-org sandbox (mcp-broker &rarr; sandbox-agent);
+                the gateway never connects to the upstream MCP server directly.
+                (Dev may run stdio in-process when MCP_STDIO_IN_PROCESS=true.)
               </p>
+              <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/30 border border-teal-200 dark:border-teal-800 rounded px-1.5 py-0.5">
+                <Shield className="w-3 h-3" /> Sandboxed &mdash; all transports run in your org&apos;s isolated sandbox
+              </span>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Description</label>
@@ -1345,11 +1775,10 @@ function MCPConnectorPanelInner() {
               <h4 className="text-xs font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">Stdio Transport Settings</h4>
               <p className="text-xs text-teal-700/80 dark:text-teal-300/80">
                 Command must be an allow-listed interpreter (<code>npx</code>, <code>node</code>,
-                <code> python</code>, <code>python3</code>) — not a path. Production runs the
-                command inside your org&apos;s Docker sandbox (not a gateway subprocess); the
-                package&apos;s runtime dependency must be present in the sandbox image
-                (e.g. Semgrep MCP requires the <code>semgrep</code> binary). Missing
-                dependencies surface a clear error below the server.
+                <code> python</code>, <code>python3</code>, <code>uvx</code>) — not a path. Production
+                runs inside your org&apos;s Docker sandbox. If the MCP server shells out to an extra
+                CLI binary, declare it under <strong>Host CLI tools</strong> (installed on demand
+                before startup) or set <code>MCP_HOST_TOOLS</code> in environment variables.
               </p>
               <div>
                 <label className="block text-sm font-medium mb-1">Command</label>
@@ -1364,29 +1793,54 @@ function MCPConnectorPanelInner() {
                 <label className="block text-sm font-medium mb-1">Arguments (comma-separated)</label>
                 <input
                   className="w-full border rounded-lg px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-600"
-                  value={Array.isArray(addForm.args) ? addForm.args.join(", ") : ""}
-                  onChange={(e) => setAddForm({ ...addForm, args: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })}
+                  // RAW-TEXT source of truth (bug #1 fix): the input holds the exact
+                  // typed string so commas/spaces are never dropped by an array
+                  // round-trip; parsed to args[] only at submit (buildServerPayload).
+                  // Fall back to the array join when a preset populated args[].
+                  value={
+                    addForm.args_text !== undefined
+                      ? addForm.args_text
+                      : Array.isArray(addForm.args)
+                      ? addForm.args.join(", ")
+                      : ""
+                  }
+                  onChange={(e) => setAddForm({ ...addForm, args_text: e.target.value })}
                   placeholder="-y, @playwright/mcp@latest"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Host CLI tools (one per line or space-separated)</label>
+                <textarea
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono dark:bg-slate-800 dark:border-slate-600"
+                  rows={2}
+                  value={
+                    addForm.host_tools_text !== undefined
+                      ? addForm.host_tools_text
+                      : formatHostToolsSpec(addForm.host_tools)
+                  }
+                  onChange={(e) => setAddForm({ ...addForm, host_tools_text: e.target.value })}
+                  placeholder={"pip:semgrep\nnpm:some-cli"}
+                />
+                <p className="text-xs text-teal-600/80 dark:text-teal-400/80 mt-1">
+                  Installed into the sandbox before the server starts. Prefix with <code>pip:</code>,{" "}
+                  <code>uv:</code>, or <code>npm:</code> (bare name defaults to pip).
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Environment Variables (KEY=VALUE, one per line)</label>
                 <textarea
                   className="w-full border rounded-lg px-3 py-2 text-sm font-mono dark:bg-slate-800 dark:border-slate-600"
                   rows={2}
+                  // RAW-TEXT source of truth (bug #1 fix): hold the exact typed text so
+                  // separators/newlines survive; parsed to env_vars{} only at submit.
                   value={
-                    addForm.env_vars && typeof addForm.env_vars === "object"
+                    addForm.env_text !== undefined
+                      ? addForm.env_text
+                      : addForm.env_vars && typeof addForm.env_vars === "object"
                       ? Object.entries(addForm.env_vars).map(([k, v]) => `${k}=${v}`).join("\n")
                       : ""
                   }
-                  onChange={(e) => {
-                    const vars = {};
-                    e.target.value.split("\n").forEach((line) => {
-                      const idx = line.indexOf("=");
-                      if (idx > 0) vars[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-                    });
-                    setAddForm({ ...addForm, env_vars: vars });
-                  }}
+                  onChange={(e) => setAddForm({ ...addForm, env_text: e.target.value })}
                   placeholder="GITHUB_TOKEN=ghp_xxx"
                 />
               </div>
@@ -1403,7 +1857,12 @@ function MCPConnectorPanelInner() {
                 onChange={(e) => setAddForm({ ...addForm, auth_type: e.target.value })}
                 aria-label="Upstream authentication type"
               >
-                {AUTH_OPTIONS.map((opt) => (
+                {AUTH_OPTIONS.filter(
+                  (opt) =>
+                    opt.value !== "oauth" ||
+                    addForm.transport === "streamable-http" ||
+                    addForm.transport === "sse"
+                ).map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </Select>
@@ -1539,13 +1998,31 @@ function MCPConnectorPanelInner() {
           </section>
         </DialogBody>
         <DialogFooter>
-          <Button variant="secondary" onClick={() => setAddOpen(false)}>Cancel</Button>
+          <div className="flex-1 min-w-0">
+            {addConnectError && (
+              <div role="alert">
+                <p className="text-sm text-rose-600 dark:text-rose-400">{addConnectError}</p>
+                {addConnectErrorCode && (
+                  <p className="mt-0.5 text-xs font-mono text-rose-500/80 dark:text-rose-400/70">
+                    Error code: {addConnectErrorCode}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <Button variant="secondary" onClick={cancelAdd} disabled={addSaving || addConnecting}>Cancel</Button>
           <Button
             onClick={addServer}
-            disabled={addSaving || !addForm.name || (addForm.transport === "stdio" ? !addForm.command : !addForm.url)}
+            disabled={addSaving || addConnecting || !addForm.name || (addForm.transport === "stdio" ? !addForm.command : !addForm.url)}
           >
-            {addSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-            Register
+            {(addSaving || addConnecting) && <Loader2 className="w-4 h-4 animate-spin" />}
+            {addSaving
+              ? "Creating…"
+              : addConnecting
+              ? "Connecting & discovering tools…"
+              : addServerId
+              ? "Retry connection"
+              : "Register"}
           </Button>
         </DialogFooter>
       </Dialog>
@@ -1580,7 +2057,10 @@ function MCPConnectorPanelInner() {
       ) : (
         <div className="grid gap-2">
           {(Array.isArray(tools) ? tools : []).map((tool, idx) => (
-            <Card key={tool.name || idx}>
+            // Aggregated across all servers → a bare tool.name collides when two servers
+            // expose the same tool (e.g. multiple `everything`/echo presets). Key on
+            // server_slug::name (+idx tiebreaker), matching the Execute tab (line ~2004).
+            <Card key={`${makeExecuteToolKey(tool)}-${idx}`}>
               <CardContent className="p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -1653,7 +2133,11 @@ function MCPConnectorPanelInner() {
   };
 
   const renderScanMatrix = () => (
-    <MCPScanControlMatrix fetchWithAuth={fetchWithAuth} servers={servers} />
+    <MCPScanControlMatrix
+      fetchWithAuth={fetchWithAuth}
+      servers={servers}
+      onControlsChanged={loadScanControlsConfigured}
+    />
   );
 
   const renderProtection = () => renderPolicies();
@@ -1907,10 +2391,15 @@ function MCPConnectorPanelInner() {
                     <Wrench className="w-4 h-4 text-teal-500" /> Top Tools
                   </h4>
                   <div className="space-y-2">
-                    {eventSummary.top_tools.map((t) => (
-                      <div key={t.tool_name} className="flex items-center justify-between text-xs">
-                        <span className="font-mono text-slate-700 dark:text-slate-300 truncate">{t.tool_name}</span>
-                        <span className="text-slate-500 font-medium shrink-0 ml-2">{t.count}</span>
+                    {eventSummary.top_tools.map((t, idx) => (
+                      // CLEANUP-13: a tool with an empty name rendered as a blank row
+                      // (just a count) — label it "(unnamed)" and give it a stable key
+                      // so the list reads intentionally, never a floating number.
+                      <div key={t.tool_name || `__unnamed-${idx}`} className="flex items-center justify-between text-xs">
+                        <span className={`font-mono truncate ${t.tool_name ? "text-slate-700 dark:text-slate-300" : "italic text-slate-400 dark:text-slate-500"}`}>
+                          {t.tool_name || "(unnamed)"}
+                        </span>
+                        <span className="text-slate-500 font-medium shrink-0 ml-2 tabular-nums">{t.count}</span>
                       </div>
                     ))}
                   </div>
@@ -2084,7 +2573,7 @@ function MCPConnectorPanelInner() {
           <Button
             variant="ghost"
             size="icon"
-            className="ml-auto h-7 w-7 text-red-500 hover:text-red-700"
+            className="ml-auto h-9 w-9 text-red-500 hover:text-red-700"
             aria-label="Dismiss error"
             onClick={() => setError(null)}
           >

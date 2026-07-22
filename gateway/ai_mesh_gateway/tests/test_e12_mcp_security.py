@@ -39,6 +39,15 @@ import mcp_proxy  # noqa: E402
 from middleware import AuthContext  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _force_direct_http_path(monkeypatch):
+    # These tests mock the direct-httpx streamable-http upstream to exercise the
+    # transport-agnostic scan/redaction pipeline. Pin the legacy direct path
+    # (MCP_HTTP_VIA_SANDBOX off) so the mock is hit; the sandbox-routed path is
+    # covered by the stdio adapter tests + test_mcp_http_via_sandbox.py.
+    monkeypatch.setenv("MCP_HTTP_VIA_SANDBOX", "0")
+
+
 # A credential that detect_secrets (SECRET_PATTERNS) reliably flags as a secret
 # → orchestrator tags it threat_type="secret".
 _CRED_ARG = {"config": "token=ghp_abcdefghijklmnopqrstuvwxyz0123456789"}
@@ -101,8 +110,16 @@ def _decode(resp):
 
 
 @pytest.mark.asyncio
-async def test_fix1_credential_in_args_blocked_under_tag_default():
-    """A secret in tool ARGS is BLOCKED even though scan_action defaults to tag."""
+async def test_fix1_credential_in_args_blocked_under_enforcing_posture():
+    """A secret in tool ARGS is hard-BLOCKED under an operator-selected enforcing posture.
+
+    Used to be ``test_fix1_credential_in_args_blocked_under_tag_default`` and ran with
+    ``enabled_info=None`` (→ ``tag``), asserting the block fired anyway. STRICT OPERATOR
+    CONTROL (2026-07-21) makes that premise wrong: ``tag`` is the operator-selectable
+    "Tag only" action, an OBSERVE-ONLY posture — detection and tagging still happen, but
+    the call is never blocked. The credential force-block is a static hardening floor and
+    fires only under ``redact``/``block``, so the posture is now selected explicitly.
+    """
     req = _make_request(_auth())
     body = {"jsonrpc": "2.0", "id": 7, "method": "tools/call",
             "params": {"name": "echo", "arguments": _CRED_ARG}}
@@ -113,7 +130,7 @@ async def test_fix1_credential_in_args_blocked_under_tag_default():
         resp = await _run_jsonrpc(
             req, body,
             server_config={"transport": "streamable-http"},
-            enabled_info=None,  # → default scan_action "tag"
+            enabled_info={"default_scan_action": "redact"},  # operator-selected enforcing
         )
     data = _decode(resp)
     assert data["result"]["isError"] is True

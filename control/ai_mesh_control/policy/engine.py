@@ -164,26 +164,49 @@ def _safe_json(value: Any) -> str:
         return str(value)
 
 
-def _collect_key_values(obj: Any, key: str, *, _depth: int = 0) -> list[str]:
-    """Recursively collect string-ified values stored under ``key``.
+# #29: match ``apply_field_redaction`` (redaction.py, CHG-0148 max_depth=500) and the
+# gateway's ``_MCP_MAX_RESULT_DEPTH=500`` result guard. The old recursive depth-10 cap
+# was a DETECTION BYPASS: a scope='key' policy rule silently did NOT match a field nested
+# 11..500 deep (the gateway allows payloads up to 500 deep), so its block/redact action
+# never fired for deeply-nested keys. Iterative (explicit stack) so depth 500 is safe with
+# no RecursionError; belt-and-suspenders node cap mirrors the sibling.
+_KEY_COLLECT_MAX_DEPTH = 500
+_KEY_COLLECT_MAX_NODES = 2_000_000
 
-    Walks dicts/lists; key match is NFKC + case-insensitive. Bounded depth
-    guards against pathological nesting. Used for scope='key' rules so an
-    operator can target a single argument/response field by name.
+
+def _collect_key_values(obj: Any, key: str) -> list[str]:
+    """Collect string-ified values stored under ``key`` (ITERATIVE walk).
+
+    Walks dicts/lists; key match is NFKC + case-insensitive. Bounded by
+    ``_KEY_COLLECT_MAX_DEPTH``/``_KEY_COLLECT_MAX_NODES`` (matching
+    ``apply_field_redaction``) — guards pathological nesting without a depth-10
+    detection blind spot. Used for scope='key' rules so an operator can target a
+    single argument/response field by name.
     """
-    if _depth > 10 or not key:
+    if not key:
         return []
     target = _normalize_key(key)
     out: list[str] = []
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            if _normalize_key(k) == target:
-                out.append(v if isinstance(v, str) else _safe_json(v))
-            else:
-                out.extend(_collect_key_values(v, key, _depth=_depth + 1))
-    elif isinstance(obj, list):
-        for item in obj:
-            out.extend(_collect_key_values(item, key, _depth=_depth + 1))
+    stack: list[tuple[Any, int]] = [(obj, 0)]
+    nodes = 0
+    while stack:
+        cur, depth = stack.pop()
+        if depth > _KEY_COLLECT_MAX_DEPTH:
+            continue
+        nodes += 1
+        if nodes > _KEY_COLLECT_MAX_NODES:
+            break
+        if isinstance(cur, dict):
+            for k, v in cur.items():
+                if _normalize_key(k) == target:
+                    # A matched key's value is collected but NOT descended into
+                    # (same semantics as the original recursive version).
+                    out.append(v if isinstance(v, str) else _safe_json(v))
+                else:
+                    stack.append((v, depth + 1))
+        elif isinstance(cur, list):
+            for item in cur:
+                stack.append((item, depth + 1))
     return out
 
 

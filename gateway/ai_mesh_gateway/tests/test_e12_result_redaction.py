@@ -1,18 +1,12 @@
 """E12 — MCP tool-RESULT redaction floor (symmetric to FIX1 arg credential block).
 
-PROBLEM (fail-open): under the DEFAULT scan_action "tag" (and "monitor"), the
-OUTBOUND tool-RESULT scan DETECTS a secret/PII but does NOT redact/block it, so a
-tool result carrying token=ghp_... or an SSN reaches the LLM/client RAW.
+Under explicit ``redact`` / ``block`` postures (and legacy floors when the
+resolved action is NOT observe-only), detected secrets/PII in tool RESULTS are
+force-redacted when ``GATEWAY_MCP_REDACT_RESULT_ON_DETECT`` is ON.
 
-FIX: a result-REDACTION floor. When GATEWAY_MCP_REDACT_RESULT_ON_DETECT is ON,
-the resolved output action is not already redact/block, the explicit per-tool
-action is not "monitor", and the output scan DETECTED a secret OR PII, the result
-is force-REDACTED (masked, never blocked) before it is returned — on BOTH the
-streamable-http and adapter (stdio/ws) transports.
-
-Run:
-    cd .../gateway && .venv/bin/python -m pytest \
-        ai_mesh_gateway/tests/test_e12_result_redaction.py -q
+``tag`` is a legacy alias of ``monitor`` (observe-only): the E12 static floor
+does NOT fire under either — only explicit policy redact/block + field RBAC
+projection still apply.
 """
 
 from __future__ import annotations
@@ -34,6 +28,15 @@ if _SHARED.is_dir() and str(_SHARED) not in sys.path:
 
 import mcp_proxy  # noqa: E402
 from middleware import AuthContext  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _force_direct_http_path(monkeypatch):
+    # These tests mock the direct-httpx streamable-http upstream to exercise the
+    # transport-agnostic scan/redaction pipeline. Pin the legacy direct path
+    # (MCP_HTTP_VIA_SANDBOX off) so the mock is hit; the sandbox-routed path is
+    # covered by the stdio adapter tests + test_mcp_http_via_sandbox.py.
+    monkeypatch.setenv("MCP_HTTP_VIA_SANDBOX", "0")
 
 
 # A tool RESULT carrying BOTH a real-looking secret AND an SSN.
@@ -145,9 +148,9 @@ def test_redact_result_on_detect_default_on():
 
 
 @pytest.mark.asyncio
-async def test_streamable_secret_and_pii_result_redacted_under_tag_default():
-    """A tool RESULT carrying a secret AND an SSN is REDACTED under the default
-    "tag" scan_action — the raw token and raw SSN are absent from the return."""
+async def test_streamable_secret_and_pii_result_not_redacted_under_tag_observe_only():
+    """Under default ``tag`` (observe-only alias of monitor), the E12 static floor
+    does NOT force-redact — raw secret/SSN may egress (policy redact is separate)."""
     req = _make_request(_auth())
     body = {"jsonrpc": "2.0", "id": 11, "method": "tools/call",
             "params": {"name": "echo", "arguments": _BENIGN_ARG}}
@@ -156,6 +159,24 @@ async def test_streamable_secret_and_pii_result_redacted_under_tag_default():
         resp = await _run_streamable(
             req, body,
             enabled_info=None,  # → default scan_action "tag"
+            backend_result=_SECRET_PII_RESULT_TEXT,
+        )
+    blob = str(_decode(resp))
+    assert _RAW_TOKEN in blob
+    assert _RAW_SSN in blob
+
+
+@pytest.mark.asyncio
+async def test_streamable_secret_and_pii_result_redacted_under_redact_posture():
+    """Under explicit ``redact`` posture, static detection still masks secrets/PII."""
+    req = _make_request(_auth())
+    body = {"jsonrpc": "2.0", "id": 11, "method": "tools/call",
+            "params": {"name": "echo", "arguments": _BENIGN_ARG}}
+    with patch.object(mcp_proxy, "_mcp_redact_result_on_detect_enabled",
+                      return_value=True):
+        resp = await _run_streamable(
+            req, body,
+            enabled_info={"default_scan_action": "redact"},
             backend_result=_SECRET_PII_RESULT_TEXT,
         )
     blob = str(_decode(resp))
@@ -227,9 +248,8 @@ async def test_streamable_explicit_monitor_does_not_force_redact():
 
 
 @pytest.mark.asyncio
-async def test_adapter_secret_and_pii_result_redacted_under_tag_default():
-    """Parity: the stdio adapter path also REDACTS a secret+SSN tool RESULT under
-    the default "tag" action."""
+async def test_adapter_secret_and_pii_result_not_redacted_under_tag_observe_only():
+    """Parity: stdio adapter path does NOT E12-redact under default ``tag``."""
     req = _make_request(_auth())
     body = {"jsonrpc": "2.0", "id": 15, "method": "tools/call",
             "params": {"name": "echo", "arguments": _BENIGN_ARG}}
@@ -237,13 +257,13 @@ async def test_adapter_secret_and_pii_result_redacted_under_tag_default():
                       return_value=True):
         resp = await _run_adapter(
             req, body,
-            enabled_info=None,  # → default scan_action "tag"
+            enabled_info=None,
             adapter_result={"content": [{"type": "text",
                                          "text": _SECRET_PII_RESULT_TEXT}]},
         )
     blob = str(_decode(resp))
-    assert _RAW_TOKEN not in blob
-    assert _RAW_SSN not in blob
+    assert _RAW_TOKEN in blob
+    assert _RAW_SSN in blob
 
 
 @pytest.mark.asyncio
@@ -263,3 +283,108 @@ async def test_adapter_explicit_monitor_does_not_force_redact():
     blob = str(_decode(resp))
     assert _RAW_TOKEN in blob
     assert _RAW_SSN in blob
+
+
+# ── CHG-0025: cross-stage RBAC field projection onto the adapter RESPONSE ──────
+# An INPUT-stage policy match declaring redaction_fields projects those named
+# fields OUT of the tool RESPONSE — even though the rule fired on the CALL, not the
+# response (the "role X never sees field F" RBAC pattern). Control HTTP-path parity
+# on the stdio/websocket adapter path.
+
+
+def _field_rbac_policy(fields, keyword):
+    return [{
+        "policy": {"id": 9, "code": "RBAC", "name": "field-rbac", "priority": 10,
+                   "severity": "medium", "redaction_fields": list(fields)},
+        "rules": [{"id": 91, "name": "kw", "rule_type": "keywords",
+                   "condition": {"keywords": [keyword]}, "action": "monitor"}],
+    }]
+
+
+@pytest.mark.asyncio
+async def test_adapter_input_policy_projects_redaction_fields_onto_response():
+    """The tool CALL matches an RBAC policy declaring redaction_fields=['account_
+    number']; the adapter RESPONSE (which does NOT itself match the rule) has that
+    field masked. Proves the input→output cross-stage thread end-to-end through
+    org_mcp_jsonrpc, not just the orchestrator unit."""
+    from unittest.mock import MagicMock
+
+    import mcp_scan_orchestrator
+    from fastapi.responses import JSONResponse
+
+    req = _make_request(_auth())
+    body = {"jsonrpc": "2.0", "id": 21, "method": "tools/call",
+            "params": {"name": "get_account",
+                       "arguments": {"q": "lookup flagme account"}}}
+    adapter_result = {
+        "content": [{"type": "text", "text": "account balance is 42"}],
+        "account_number": "ACCT-SECRET-999",
+    }
+    raw = JSONResponse(
+        content={"jsonrpc": "2.0", "id": 21, "result": adapter_result},
+        status_code=200,
+    )
+    sync = MagicMock()
+    sync.get_policies_for_server.return_value = _field_rbac_policy(
+        ["account_number"], "flagme"
+    )
+    req.json = AsyncMock(return_value=body)
+    with (
+        patch.object(mcp_proxy, "_validate_org_scope", return_value=None),
+        patch.object(mcp_proxy, "_get_server_config",
+                     AsyncMock(return_value={"transport": "stdio", "command": "x"})),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy, "_incr_tool_call_count", AsyncMock(return_value=1)),
+        patch.object(mcp_proxy, "_adapter_forward", AsyncMock(return_value=raw)),
+        patch.object(mcp_scan_orchestrator, "_get_policy_sync", return_value=sync),
+        patch.object(mcp_scan_orchestrator, "_get_input_scanner",
+                     return_value=MagicMock()),
+    ):
+        resp = await mcp_proxy.org_mcp_jsonrpc("demo", "srv", req)
+    decoded = _decode(resp)
+    blob = str(decoded)
+    assert "ACCT-SECRET-999" not in blob                  # field projected out
+    assert "[REDACTED]" in blob
+    assert "account balance is 42" in blob                # non-targeted content survives
+    assert decoded["result"]["account_number"] == "[REDACTED]"
+
+
+@pytest.mark.asyncio
+async def test_adapter_no_input_policy_leaves_response_fields_intact():
+    """Guard: with NO input-stage field policy, the adapter response is unchanged
+    (the cross-stage thread is dormant unless a policy declares fields)."""
+    from unittest.mock import MagicMock
+
+    import mcp_scan_orchestrator
+    from fastapi.responses import JSONResponse
+
+    req = _make_request(_auth())
+    body = {"jsonrpc": "2.0", "id": 22, "method": "tools/call",
+            "params": {"name": "get_account", "arguments": {"q": "lookup account"}}}
+    adapter_result = {
+        "content": [{"type": "text", "text": "account balance is 42"}],
+        "account_number": "ACCT-SECRET-999",
+    }
+    raw = JSONResponse(
+        content={"jsonrpc": "2.0", "id": 22, "result": adapter_result},
+        status_code=200,
+    )
+    sync = MagicMock()
+    sync.get_policies_for_server.return_value = []        # no policies
+    req.json = AsyncMock(return_value=body)
+    with (
+        patch.object(mcp_proxy, "_validate_org_scope", return_value=None),
+        patch.object(mcp_proxy, "_get_server_config",
+                     AsyncMock(return_value={"transport": "stdio", "command": "x"})),
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy, "_incr_tool_call_count", AsyncMock(return_value=1)),
+        patch.object(mcp_proxy, "_adapter_forward", AsyncMock(return_value=raw)),
+        patch.object(mcp_scan_orchestrator, "_get_policy_sync", return_value=sync),
+        patch.object(mcp_scan_orchestrator, "_get_input_scanner",
+                     return_value=MagicMock()),
+    ):
+        resp = await mcp_proxy.org_mcp_jsonrpc("demo", "srv", req)
+    decoded = _decode(resp)
+    assert decoded["result"]["account_number"] == "ACCT-SECRET-999"  # intact

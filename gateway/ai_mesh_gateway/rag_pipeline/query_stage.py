@@ -103,7 +103,11 @@ class QueryStage:
                 if intent_v.is_suspicious:
                     injection_flags.append(f"intent:{intent_v.intent}")
             except Exception as e:
-                LOG.debug("Intent classification failed: %s", e)
+                # Observability: an ENABLED detection layer that silently no-ops on
+                # failure is a hidden fallback. Fail-open is intended (an additive
+                # layer's outage must not block the query) but it MUST be VISIBLE,
+                # so operators know detection is degraded — warn, don't debug-swallow.
+                LOG.warning("Intent classifier failed (fail-open, layer skipped): %s", e)
 
         # ── Embedding Vault check (cosine similarity against known attacks) ──
         if self._embedding_vault is not None:
@@ -141,21 +145,44 @@ class QueryStage:
                 elif vault_v.is_match:
                     injection_flags.append("embedding_vault_match")
             except Exception as e:
-                LOG.debug("Embedding vault check failed: %s", e)
+                LOG.warning("Embedding vault check failed (fail-open, layer skipped): %s", e)
 
         # ── Scanner: Tier1 regex + Tier1.5 fuzzy + optional Tier2 Bedrock ──
         scan_tier = "none"
         if self._scanner is not None:
             verdict = await self._scanner.scan_prompt(inp.query_text, is_rag=True)
             scan_tier = getattr(verdict, "tier", "tier_1") or "tier_1"
+            # Per-request policy overrides the static startup config so the RAG
+            # query stage honors the SAME per-org FirewallConfig the chat path
+            # honors. ``input_scan_enabled`` + the injection thresholds are
+            # control-plane FirewallConfig fields mirrored per-org by
+            # config_sync; the chat path reads them via org_config
+            # (main.py:7091/7248/12990), but this stage previously read them ONLY
+            # from the static startup CONFIG, so a per-org threshold change never
+            # affected RAG query blocking. Fall back to self._config when the
+            # caller omits a key — identical to the ``max_query_length`` pattern
+            # above, so there is NO behavior change when policy lacks these keys.
+            input_scan_on = inp.policy.get(
+                "input_scan_enabled", self._config.get("input_scan_enabled", True)
+            )
+
+            def _thr(key: str, default: float) -> float:
+                val = inp.policy.get(key, self._config.get(key, default))
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    return float(default)
+
             # FIX G3 (path unification): PII-redact the query with the SAME
             # verdict-aware redactor the ingest/embeddings path uses, BEFORE it
             # flows downstream to the retriever (where it is embedded). Computed
             # off the injection verdict we already have so there is no extra scan.
-            embed_query = self._redact_pii(inp.query_text, verdict)
-            threshold = self._config.get("prompt_injection_threshold", 0.80)
-            rewrite_threshold = self._config.get("prompt_rewrite_threshold", 0.50)
-            downgrade_threshold = self._config.get("prompt_downgrade_threshold", 0.40)
+            embed_query = self._redact_pii(
+                inp.query_text, verdict, input_scan_enabled=input_scan_on
+            )
+            threshold = _thr("prompt_injection_threshold", 0.80)
+            rewrite_threshold = _thr("prompt_rewrite_threshold", 0.50)
+            downgrade_threshold = _thr("prompt_downgrade_threshold", 0.40)
 
             if verdict.action == "block" and verdict.confidence >= threshold:
                 # Hard block: confidence exceeds block threshold
@@ -196,7 +223,9 @@ class QueryStage:
                 if rewritten and rewritten != inp.query_text:
                     # FIX G3: the rewritten text is what proceeds to embedding —
                     # PII-redact it too so the rewrite path matches ingest.
-                    rewritten = self._redact_pii(rewritten, verdict)
+                    rewritten = self._redact_pii(
+                        rewritten, verdict, input_scan_enabled=input_scan_on
+                    )
                     LOG.info(
                         "Query rewritten: removed %d injection patterns (confidence=%.2f)",
                         len(verdict.matched_patterns),
@@ -295,7 +324,7 @@ class QueryStage:
                 elif judge_v.is_injection:
                     injection_flags.append(f"llm_judge:{judge_v.attack_type}")
             except Exception as e:
-                LOG.debug("LLM Judge failed: %s", e)
+                LOG.warning("LLM Judge failed (fail-open, layer skipped): %s", e)
 
         return QueryStageOutput(
             verdict=StageVerdict(
@@ -316,7 +345,7 @@ class QueryStage:
             intent_verdict=intent_result,
         )
 
-    def _redact_pii(self, text: str, verdict: Any) -> str:
+    def _redact_pii(self, text: str, verdict: Any, input_scan_enabled: bool | None = None) -> str:
         """PII-redact the RAG query BEFORE it is embedded/sent to the retriever.
 
         FIX G3 (path unification): RAG ingest (``_scan_redact_embedding_inputs``)
@@ -335,15 +364,25 @@ class QueryStage:
         must never crash the query path).
         """
         scanner = self._scanner
-        if scanner is None or not self._config.get("input_scan_enabled", True):
+        enabled = (
+            self._config.get("input_scan_enabled", True)
+            if input_scan_enabled is None
+            else input_scan_enabled
+        )
+        if scanner is None or not enabled:
             return text
         if not isinstance(text, str) or not text.strip():
             return text
         try:
             redacted = scanner.redact_pii(text, verdict=verdict)
         except Exception as e:  # noqa: BLE001
-            LOG.debug("Query PII redaction failed: %s", e)
-            return text
+            # Redaction crashed. Do NOT embed fully-raw text (the "never embed
+            # unredacted content" invariant): fall through to the digit backstop
+            # below so 7+-digit phone/SSN/ID runs are still masked, rather than
+            # returning the raw query. WARN so the redactor failure is observable
+            # (a silent debug-swallow here would be a hidden fallback that embeds PII).
+            LOG.warning("Query PII redaction failed (applying digit backstop): %s", e)
+            redacted = text
         # Fail-closed digit backstop (mirrors _scan_redact_embedding_inputs and
         # llm_router._apply_redaction): mask any run of 7+ digits the original
         # carried that the verdict-aware redactor did not remove, using the SAME

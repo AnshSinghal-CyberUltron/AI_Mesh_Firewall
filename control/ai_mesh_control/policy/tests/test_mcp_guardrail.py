@@ -172,6 +172,53 @@ def test_rag_domain_excludes_mcp_only_policy():
 
 
 @pytest.mark.django_db
+def test_pem_private_key_in_response_redacts_not_blocks():
+    """PKG MCP_RESPONSE_SECRET_REDACT PEM rule is redact (not block)."""
+    policy = _mk_policy("MCP_PEM_OUTPUT")
+    _mk_rule(
+        policy,
+        regex=(
+            r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----"
+            r"[\s\S]*?"
+            r"-----END (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----"
+        ),
+        action="redact",
+        direction="output",
+    )
+
+    qs = Policy.objects.filter(enabled=True).prefetch_related("rules")
+    pem = (
+        "-----BEGIN PRIVATE KEY-----\n"
+        "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7\n"
+        "-----END PRIVATE KEY-----"
+    )
+    # Output-only: must not match input alone (simulator dry-run gap without sim).
+    res_in = evaluate({"input_args": {"message": pem}, "response": ""}, policies_qs=qs, domain="mcp")
+    assert res_in.action == "allow"
+
+    res_out = evaluate(
+        {"response": f"Echo: {pem}", "output_data": {"content": [{"type": "text", "text": f"Echo: {pem}"}]}},
+        policies_qs=qs,
+        domain="mcp",
+    )
+    assert res_out.action == "redact"
+    assert policy.id in res_out.matched_policy_ids
+    assert res_out.redaction_hints
+
+
+@pytest.mark.django_db
+def test_package_pem_rule_spec_is_redact():
+    """Seed package defines PEM response rule as redact with replacement."""
+    from policy.policy_package.mcp_policies import POLICIES
+
+    secret = next(p for p in POLICIES if p["key"] == "MCP_RESPONSE_SECRET_REDACT")
+    pem_rule = next(r for r in secret["rules"] if "PEM" in r["name"] or "PRIVATE KEY" in (r.get("regex") or ""))
+    assert pem_rule["action"] == "redact"
+    assert pem_rule["replacement"] == "[REDACTED_PRIVATE_KEY]"
+    assert "Block" not in pem_rule["name"]
+
+
+@pytest.mark.django_db
 def test_seed_mcp_pii_policy_is_idempotent():
     from auth.models import Organization
     from policy.mcp_seed import policy_code_for_org, seed_mcp_pii_policy

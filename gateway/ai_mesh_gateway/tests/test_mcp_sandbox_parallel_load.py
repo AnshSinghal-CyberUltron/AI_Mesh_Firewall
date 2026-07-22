@@ -16,7 +16,18 @@ import time
 from pathlib import Path
 from typing import Iterator
 
+import os
+
 import pytest
+
+# Docker-in-Docker parallel-load gate (5 orgs × 5 servers) — opt-in only (builds
+# images + spins 25 containers; flakes/ERRORS on a contended host). Excluded from
+# the default deterministic gate; run with RUN_MCP_SANDBOX_DOCKER=1 on a
+# non-contended host with a healthy local docker daemon.
+pytestmark = pytest.mark.skipif(
+    os.environ.get("RUN_MCP_SANDBOX_DOCKER", "").lower() not in ("1", "true", "yes"),
+    reason="MCP sandbox DinD integration; set RUN_MCP_SANDBOX_DOCKER=1 to run",
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCKERFILE = REPO_ROOT / "services/mcp-broker/sandbox-image/Dockerfile"

@@ -3,10 +3,14 @@ Send real-time notifications to WebSocket clients (e.g. on enforcement events).
 Call from sync code (Django views). Uses channel layer group_send.
 """
 
+import logging
+
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
 from .consumers import notification_group_for_org
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_org_id(payload: dict, organization_id: int | None = None) -> int | None:
@@ -49,5 +53,14 @@ def send_enforcement_notification(payload: dict, organization_id: int | None = N
     try:
         async_to_sync(channel_layer.group_send)(group_name, message)
     except Exception:
-        # Keep telemetry drain resilient even if websocket broadcast fails.
+        # #42: keep the caller (enforcement decision / telemetry drain) resilient —
+        # a websocket-broadcast failure must NOT propagate. But the old bare
+        # `return` swallowed it SILENTLY, so a broken channel layer would drop
+        # EVERY real-time enforcement alert with zero operator visibility. Log it
+        # (fail-open on delivery, but observably) so dropped alerts are detectable.
+        logger.warning(
+            "failed to broadcast enforcement notification for org=%s (event dropped): ",
+            org_id,
+            exc_info=True,
+        )
         return

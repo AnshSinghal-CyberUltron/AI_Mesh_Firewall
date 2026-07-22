@@ -1,0 +1,29 @@
+{
+  "case_id": "07_benign_kill_switch_reroute",
+  "contract_final": "allow",
+  "final_action": "allow",
+  "stages": [
+    {
+      "action": "allow",
+      "stage": "policy"
+    },
+    {
+      "action": "allow",
+      "detection_tier": "tier_2",
+      "stage": "input_scan",
+      "threat_type": "clean"
+    },
+    {
+      "action": "allow",
+      "stage": "route"
+    },
+    {
+      "action": "allow",
+      "stage": "route"
+    },
+    {
+      "action": "allow",
+      "stage": "output_guard"
+    }
+  ]
+}

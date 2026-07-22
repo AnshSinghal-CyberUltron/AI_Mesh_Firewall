@@ -1,0 +1,29 @@
+{
+  "case_id": "09_output_guard_pii_redact",
+  "contract_final": "redact",
+  "final_action": "redact",
+  "stages": [
+    {
+      "action": "allow",
+      "stage": "policy"
+    },
+    {
+      "action": "allow",
+      "detection_tier": "tier_2",
+      "stage": "input_scan",
+      "threat_type": "clean"
+    },
+    {
+      "action": "allow",
+      "stage": "route"
+    },
+    {
+      "action": "allow",
+      "stage": "route"
+    },
+    {
+      "action": "redact",
+      "stage": "output_guard"
+    }
+  ]
+}

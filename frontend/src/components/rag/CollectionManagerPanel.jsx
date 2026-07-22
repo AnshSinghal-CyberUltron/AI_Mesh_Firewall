@@ -146,7 +146,7 @@ export function CollectionManagerPanel() {
 
       <div className="p-4 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg space-y-3">
         <div className="text-xs font-medium text-slate-600 dark:text-slate-400">Create New Collection</div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Provider</label>
             <select
@@ -159,9 +159,9 @@ export function CollectionManagerPanel() {
               {VECTOR_PROVIDERS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <label className="block text-[11px] text-slate-500 dark:text-slate-400 mb-1">Collection Name</label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 min-w-0">
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
@@ -169,7 +169,7 @@ export function CollectionManagerPanel() {
                 disabled={!hasConfiguredProvider}
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                 aria-label="Collection name"
-                className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 flex-1 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
+                className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 flex-1 min-w-0 px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
               />
               <button
                 onClick={handleCreate}

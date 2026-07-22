@@ -11,31 +11,41 @@ export function Dialog({ open, onClose, labelledBy, children, className }) {
   const ref = useRef(null);
   const prevFocus = useRef(null);
 
-  const handleKey = useCallback(
-    (e) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose?.();
-        return;
+  // FOCUS-LOSS ROOT FIX: callers pass an inline `onClose` (new identity every
+  // render). If `handleKey` (and therefore the mount/focus-trap effect below)
+  // depended on `onClose`, the effect would tear down + re-run on EVERY parent
+  // re-render — e.g. once per keystroke in a controlled form inside the modal.
+  // Its cleanup calls `prevFocus.focus()` and its setTimeout re-autofocuses the
+  // first focusable element, stealing focus away from the field being typed in.
+  // Keep the latest onClose in a ref so `handleKey` stays stable and the effect
+  // runs only when `open` actually toggles.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  const handleKey = useCallback((e) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onCloseRef.current?.();
+      return;
+    }
+    if (e.key === "Tab" && ref.current) {
+      const focusable = ref.current.querySelectorAll(
+        'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
-      if (e.key === "Tab" && ref.current) {
-        const focusable = ref.current.querySelectorAll(
-          'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
-        );
-        if (!focusable.length) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    },
-    [onClose]
-  );
+    }
+  }, []);
 
   useEffect(() => {
     if (!open) return undefined;

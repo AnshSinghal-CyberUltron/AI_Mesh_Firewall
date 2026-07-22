@@ -5,7 +5,17 @@ Scalar API documentation view.
 """
 
 from django.conf import settings
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseForbidden
+from drf_spectacular.views import SpectacularAPIView
+from rest_framework.permissions import IsAuthenticated
+
+from core.admin_views import IsAdminOrSuperuser
+
+
+class ProtectedSpectacularAPIView(SpectacularAPIView):
+    """OpenAPI schema — admin/staff/platform_admin only (CDL finding #12)."""
+
+    permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
 
 
 def docs_view(request):
@@ -20,6 +30,11 @@ def docs_view(request):
     because the Scalar CDN library does not support dynamic re-initialization
     after the initial page load.
     """
+    if not request.user.is_authenticated:
+        return HttpResponse(status=401)
+    if not IsAdminOrSuperuser().has_permission(request, None):
+        return HttpResponseForbidden("Admin access required.")
+
     gateway_url = (getattr(settings, "GATEWAY_PUBLIC_URL", None) or "").strip().rstrip("/")
     if not gateway_url:
         gateway_url = (request.build_absolute_uri("/") or "").rstrip("/")

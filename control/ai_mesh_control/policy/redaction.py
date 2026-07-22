@@ -136,8 +136,17 @@ def apply_field_redaction(
     fields: Iterable[str],
     *,
     placeholder: str = _FIELD_REDACT_PLACEHOLDER,
-    max_depth: int = 10,
-    max_nodes: int = 100_000,
+    # CHG-0148: was 10, but a name-based redaction target nested at depth 11..N (N up to
+    # the gateway's _MCP_MAX_RESULT_DEPTH=500 result-depth guard) evaded masking and
+    # egressed RAW — opaque name-redacted fields are NOT caught by the content/pattern
+    # scan, so this was the only layer protecting them. Raised to 500; the walk below is
+    # now ITERATIVE so a deep structure can't blow the recursion limit.
+    max_depth: int = 500,
+    # CHG-0150: was 100_000 — a wide result with a redaction target beyond the 100k-th node
+    # had the walk STOP early → the target egressed RAW. The gateway's _MCP_MAX_RESULT_NODES
+    # guard (1M) blocks wider results upstream on the chat path; raised here (2M margin) so any
+    # result that reaches this redactor is FULLY walked. (Defense-in-depth for the control path.)
+    max_nodes: int = 2_000_000,
 ) -> Any:
     """Return a deep-copied version of ``obj`` with matching keys redacted.
 
@@ -166,30 +175,32 @@ def apply_field_redaction(
     result = copy.deepcopy(obj)
     node_count = 0
 
-    def _walk(node: Any, depth: int) -> None:
-        nonlocal node_count
+    # CHG-0148: ITERATIVE walk (explicit stack) so max_depth can safely be 500 without a
+    # RecursionError (which would propagate to the caller and fail-OPEN, un-redacted).
+    stack: list = [(result, 0)]
+    while stack:
+        node, depth = stack.pop()
         if depth > max_depth or node_count > max_nodes:
-            return
+            continue
         if isinstance(node, dict):
             for k in list(node.keys()):
                 node_count += 1
                 if node_count > max_nodes:
-                    return
+                    break
                 if _normalize_key(k) in targets:
                     node[k] = placeholder
                 else:
                     v = node[k]
                     if isinstance(v, (dict, list)):
-                        _walk(v, depth + 1)
+                        stack.append((v, depth + 1))
         elif isinstance(node, list):
             for item in node:
                 node_count += 1
                 if node_count > max_nodes:
-                    return
+                    break
                 if isinstance(item, (dict, list)):
-                    _walk(item, depth + 1)
+                    stack.append((item, depth + 1))
 
-    _walk(result, 0)
     return result
 
 
@@ -204,18 +215,48 @@ def _hint_targets_side(hint: dict[str, Any], side: str) -> bool:
     return direction == "both" or direction == side
 
 
+# #30: match apply_field_redaction (max_depth=500) and the gateway's _MCP_MAX_RESULT_DEPTH=500.
+_REDACT_STRING_LEAVES_MAX_DEPTH = 500
+_REDACT_STRING_LEAVES_MAX_NODES = 2_000_000
+
+
 def _redact_string_leaves(node: Any, hints: list[dict[str, Any]], placeholder: str, depth: int = 0) -> Any:
-    """Recursively apply ``apply_redaction`` (regex/keyword) to every string
-    leaf in a dict/list/str structure. Used for scope='entire' rules where
-    the operator wants the pattern scrubbed anywhere it appears."""
-    if depth > 10:
-        return node
+    """Apply ``apply_redaction`` (regex/keyword) to every string leaf in a
+    dict/list/str structure. Used for scope='entire' rules where the operator
+    wants the pattern scrubbed anywhere it appears.
+
+    #30 (sibling of #29): the old RECURSIVE ``depth > 10`` cap was a REDACTION
+    BYPASS — a scope='entire' hint stopped scrubbing past depth 10, so depth-11+
+    string leaves EGRESSED UNREDACTED while the audit trail said "redacted".
+    Inconsistent with ``apply_field_redaction`` (CHG-0148, max_depth=500) and the
+    gateway's ``_MCP_MAX_RESULT_DEPTH=500``. Now ITERATIVE (explicit stack) with
+    cap 500 + node cap: covers the full admitted depth, NO RecursionError at any
+    depth, DoS still bounded. The sole caller (``redact_structured``) passes an
+    owned ``copy.deepcopy`` result, so containers are scrubbed IN PLACE.
+    """
     if isinstance(node, str):
         return apply_redaction(node, hints, placeholder=placeholder)
-    if isinstance(node, dict):
-        return {k: _redact_string_leaves(v, hints, placeholder, depth + 1) for k, v in node.items()}
-    if isinstance(node, list):
-        return [_redact_string_leaves(v, hints, placeholder, depth + 1) for v in node]
+    if not isinstance(node, (dict, list)):
+        return node
+    stack: list[tuple[Any, int]] = [(node, 0)]
+    node_count = 0
+    while stack:
+        cur, d = stack.pop()
+        if d > _REDACT_STRING_LEAVES_MAX_DEPTH or node_count > _REDACT_STRING_LEAVES_MAX_NODES:
+            continue
+        node_count += 1
+        if isinstance(cur, dict):
+            for k, v in cur.items():
+                if isinstance(v, str):
+                    cur[k] = apply_redaction(v, hints, placeholder=placeholder)
+                elif isinstance(v, (dict, list)):
+                    stack.append((v, d + 1))
+        elif isinstance(cur, list):
+            for i, v in enumerate(cur):
+                if isinstance(v, str):
+                    cur[i] = apply_redaction(v, hints, placeholder=placeholder)
+                elif isinstance(v, (dict, list)):
+                    stack.append((v, d + 1))
     return node
 
 

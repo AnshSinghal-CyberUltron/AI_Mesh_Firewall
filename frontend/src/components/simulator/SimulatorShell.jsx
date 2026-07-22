@@ -3,9 +3,9 @@ import { Wifi, WifiOff, Activity, RefreshCw, ChevronDown, ChevronUp, Copy, Check
 import { deriveResultAction } from "./simulatorResultUtils";
 
 const STATUS_STYLES = {
-  connected: { color: "text-emerald-400", bg: "bg-emerald-500/10", label: "Connected" },
-  degraded: { color: "text-amber-400", bg: "bg-amber-500/10", label: "Degraded" },
-  disconnected: { color: "text-red-400", bg: "bg-red-500/10", label: "Disconnected" },
+  connected: { color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-500/10", label: "Connected" },
+  degraded: { color: "text-amber-700 dark:text-amber-400", bg: "bg-amber-500/10", label: "Degraded" },
+  disconnected: { color: "text-red-700 dark:text-red-400", bg: "bg-red-500/10", label: "Disconnected" },
 };
 
 /**
@@ -37,11 +37,17 @@ export function SimulatorShell({
 
   const status = STATUS_STYLES[connectionStatus] || STATUS_STYLES.disconnected;
 
-  const handleCopyTrace = () => {
-    if (result?.request_id) {
-      navigator.clipboard.writeText(result.request_id);
+  const handleCopyTrace = async () => {
+    if (!result?.request_id) return;
+    try {
+      // Only flip to the success checkmark if the write actually resolved —
+      // a rejected clipboard write (insecure context / denied permission)
+      // must not show a green "copied" state for a copy that never happened.
+      await navigator.clipboard.writeText(result.request_id);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable — leave the copy icon unchanged */
     }
   };
 
@@ -132,7 +138,7 @@ export function SimulatorShell({
       )}
 
       {/* Execute button row */}
-      <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
         <button
           onClick={onExecute}
           disabled={executing || connectionStatus === "disconnected"}
@@ -152,11 +158,11 @@ export function SimulatorShell({
         </button>
         {extraActions}
         {result?.request_id && (
-          <div className="ml-auto flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-            <span>Trace:</span>
-            <code className="font-mono text-slate-700 dark:text-slate-300">{result.request_id}</code>
-            <button onClick={handleCopyTrace} className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
-              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+          <div className="ml-auto flex min-w-0 items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <span className="shrink-0">Trace:</span>
+            <code className="min-w-0 truncate font-mono text-slate-700 dark:text-slate-300">{result.request_id}</code>
+            <button onClick={handleCopyTrace} className="shrink-0 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+              {copied ? <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3 h-3" />}
             </button>
           </div>
         )}
@@ -168,7 +174,12 @@ export function SimulatorShell({
           <div className="flex items-center gap-2 mb-2">
             <ResultBadge action={deriveResultAction(result)} />
             {result.total_latency_ms !== undefined && (
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">{result.total_latency_ms}ms</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                {result.total_latency_ms}ms total
+                {result.stream && result.ttft_ms != null && (
+                  <span> · TTFT {result.ttft_ms}ms</span>
+                )}
+              </span>
             )}
             {result.latency_ms !== undefined && (
               <span className="text-[10px] text-slate-500 dark:text-slate-400">{result.latency_ms}ms</span>

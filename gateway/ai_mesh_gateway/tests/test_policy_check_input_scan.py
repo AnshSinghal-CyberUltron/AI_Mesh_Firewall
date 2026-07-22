@@ -51,7 +51,9 @@ async def test_policy_check_blocks_tier1_injection():
     ) as mock_policy, patch.object(gateway_main, "_emit_telemetry", lambda **_kw: None):
         resp = await gateway_main.policy_check_endpoint(request)
 
-    assert resp.status_code == 403
+    # GATEWAY_BLOCK_STATUS contract (main.py:660): a CONTENT block now surfaces as
+    # 400 content_filter (block STILL happens), not 403. The block is unchanged.
+    assert resp.status_code == 400
     mock_policy.assert_not_called()
     mock_scanner.scan_prompt.assert_awaited_once()
     body = json.loads(resp.body.decode())
@@ -141,6 +143,8 @@ async def test_policy_check_blocks_injection_from_messages_body():
     ) as mock_policy, patch.object(gateway_main, "_emit_telemetry", lambda **_kw: None):
         resp = await gateway_main.policy_check_endpoint(request)
 
-    assert resp.status_code == 403
+    # GATEWAY_BLOCK_STATUS contract (main.py:660): a CONTENT block now surfaces as
+    # 400 content_filter (block STILL happens), not 403. The block is unchanged.
+    assert resp.status_code == 400
     mock_policy.assert_not_called()
     mock_scanner.scan_prompt.assert_awaited_once()

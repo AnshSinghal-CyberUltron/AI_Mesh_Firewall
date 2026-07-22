@@ -713,16 +713,24 @@ POLICIES: list[dict[str, Any]] = [
                 "description": "Block AWS secret access keys leaking in output.",
             },
             {
-                "name": "Block PEM private key in response",
+                "name": "Redact PEM private key in response",
                 "rule_type": "regex",
                 "keywords": None,
-                "regex": r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----",
+                # Full PEM block (BEGIN..END), not just the header line — otherwise
+                # redact leaves the base64 body + END line in egress.
+                "regex": (
+                    r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----"
+                    r"[\s\S]*?"
+                    r"-----END (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----"
+                    r"|-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----"
+                    r"(?:[A-Za-z0-9+/=\s]{20,})?"
+                ),
                 "field": "response",
-                "action": "block",
-                "replacement": None,
+                "action": "redact",
+                "replacement": "[REDACTED_PRIVATE_KEY]",
                 "pipeline_stage": "",
                 "target_tool": "",
-                "description": "Block PEM private-key blocks in tool output.",
+                "description": "Redact PEM private-key blocks in tool output.",
             },
             {
                 "name": "Redact JWT/bearer token in response",

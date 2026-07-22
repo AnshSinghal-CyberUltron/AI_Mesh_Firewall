@@ -52,6 +52,10 @@ def _apply_stubs():
     lr.acompletion_stream = T._fake_stream
     lr.aembedding = AsyncMock(side_effect=T._fake_embedding)
     lr.get_model_list = MagicMock(return_value=[{"id": "gpt-4o-mini", "object": "model", "owned_by": "openai"}])
+    # Routing governance sizes the prompt + reads fallback chains; a bare MagicMock
+    # returns a non-JSON-serialisable MagicMock once it reaches the zeroshield envelope.
+    lr.estimate_prompt_tokens = MagicMock(return_value=500)
+    cs.get_fallback_chains = MagicMock(return_value={"chains": {}, "per_primary": {}})
     gm.CONFIG = dict(T.TEST_CONFIG); gm.CONFIG_SYNC = cs; gm.LLM_ROUTER = lr
     gm.INPUT_SCANNER = InputScanner(thread_pool_size=2)
     gm.AGENT_ID = None; gm.POLICY_SYNC = None; gm.RATE_LIMITER = None
@@ -144,8 +148,11 @@ async def test_live_block_raises_permission_denied(live_url):
     try:
         with pytest.raises(openai.APIStatusError) as exc:
             await c.chat.completions.create(model="gpt-4o-mini", messages=[{"role": "user", "content": INJECTION}])
-        assert exc.value.status_code == 403
-        assert exc.value.code == "content_blocked"
+        # D-a content-filter contract (GATEWAY_BLOCK_STATUS default 400): a content
+        # block surfaces as 400 content_filter over the LIVE socket too (block still
+        # happens). request_id (x-request-id header) is still populated.
+        assert exc.value.status_code == 400
+        assert exc.value.code == "content_filter"
         assert exc.value.request_id
     finally:
         await c.close()
@@ -162,11 +169,11 @@ async def test_live_request_id_header_present_and_matches_body(live_url):
 
 @pytest.mark.asyncio
 async def test_live_blocked_stream_is_json_not_sse(live_url):
-    """v5: a stream=true request blocked at input returns JSON 403, never a corrupt SSE body."""
+    """v5: a stream=true request blocked at input returns JSON 400, never a corrupt SSE body."""
     async with httpx.AsyncClient(base_url=live_url, headers=_AUTH) as rc:
         r = await rc.post("/v1/chat/completions",
                           json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": INJECTION}], "stream": True})
-    assert r.status_code == 403
+    assert r.status_code == 400
     assert "application/json" in r.headers.get("content-type", "")
     assert "text/event-stream" not in r.headers.get("content-type", "")
 

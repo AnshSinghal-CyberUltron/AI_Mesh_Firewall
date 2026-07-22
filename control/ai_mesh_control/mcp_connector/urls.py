@@ -25,6 +25,9 @@ urlpatterns = [
     path("internal/enabled-tools/", views.MCPGatewayEnabledToolsView.as_view(), name="mcp-internal-enabled-tools"),
     path("internal/record-event/", views.MCPGatewayRecordEventView.as_view(), name="mcp-internal-record-event"),
     path("internal/needs-reauth/", views.MCPGatewayNeedsReauthView.as_view(), name="mcp-internal-needs-reauth"),
+    # Developer diagnostic channel (staff-only) — real cause behind a sanitized
+    # client error, looked up by the correlation ref. Never exposed to clients.
+    path("diagnostics/<str:ref>/", views.MCPDiagnosticDetailView.as_view(), name="mcp-diagnostic-detail"),
     # Observability events
     path("events/", views.MCPEventListView.as_view(), name="mcp-event-list"),
     path("events/summary/", views.MCPEventSummaryView.as_view(), name="mcp-event-summary"),

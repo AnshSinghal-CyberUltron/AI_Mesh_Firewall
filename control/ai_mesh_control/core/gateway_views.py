@@ -232,13 +232,11 @@ class SimulatorDefaultGatewayKeyView(APIView):
             {
                 "has_gateway_key": True,
                 "prefix": key.prefix,
-                "key_id": str(key.id),
                 "name": key.name,
                 "project_id": key.project_id,
                 "org_id": org.id,
                 "org_slug": org.slug,
                 "storage_key": storage_key,
-                "is_simulator_default": True,
             }
         )
 
@@ -266,13 +264,11 @@ class SimulatorDefaultGatewayKeyView(APIView):
         data = {
             "has_gateway_key": True,
             "prefix": key_instance.prefix,
-            "key_id": str(key_instance.id),
             "name": key_instance.name,
             "project_id": key_instance.project_id,
             "org_id": org.id,
             "org_slug": org.slug,
             "storage_key": storage_key,
-            "is_simulator_default": True,
             "created": bool(raw_key),
         }
         if raw_key:

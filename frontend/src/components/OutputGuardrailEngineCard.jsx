@@ -47,7 +47,7 @@ function CategoryCard({ category, stats }) {
         : "border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-900/30"
     }`}>
       <div className={`p-1.5 rounded-lg ${isActive ? "bg-amber-100 dark:bg-amber-900/40" : "bg-slate-100 dark:bg-slate-800"}`}>
-        <Icon className={`w-4 h-4 ${isActive ? "text-amber-600 dark:text-amber-400" : "text-slate-400 dark:text-slate-500"}`} />
+        <Icon className={`w-4 h-4 ${isActive ? "text-amber-600 dark:text-amber-400" : "text-slate-500 dark:text-slate-400"}`} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
@@ -58,7 +58,7 @@ function CategoryCard({ category, stats }) {
             </span>
           )}
         </div>
-        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{category.description}</p>
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{category.description}</p>
       </div>
     </div>
   );
@@ -215,7 +215,7 @@ export function OutputGuardrailEngineCard({ timeRange = "24h" }) {
           {/* Compliance tags summary */}
           {summary.total > 0 && (
             <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-              <span className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold">Engine Capabilities</span>
+              <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">Engine Capabilities</span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {["PII Redaction", "Secret Detection", "Hallucination Scoring", "IP Leakage Guard", "Streaming Scan", "Compliance Tagging"].map((cap) => (
                   <span key={cap} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800">

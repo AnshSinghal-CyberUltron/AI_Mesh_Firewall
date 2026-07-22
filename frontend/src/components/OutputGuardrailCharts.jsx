@@ -1,32 +1,48 @@
 import { useState, useEffect, useCallback } from "react";
 import { BarChart3, RefreshCw, Loader2, Eye, AlertTriangle } from "lucide-react";
-import {
-  AreaChart, Area, PieChart, Pie, Cell, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-} from "recharts";
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { actionColor, OUTPUT_ACTION_COLORS } from "../constants/outputGuardColors";
 
-// §1.7 Output Guardrail analytics — live recharts views bound to the existing
+// §1.7 Output Guardrail analytics — live views bound to the existing
 // module-scoped endpoint /api/security/module-charts/1.7/?period=<lens>. The
 // period follows the page operator lens (default 7d) so every surface agrees.
+//
+// Charts render via ECharts (theme-aware, canvas) behind SafeResponsiveChart's
+// `option` API — axis/grid/tooltip/legend colors follow the active light/dark
+// theme (see utils/chartTheme.js), replacing the old hardcoded-dark recharts
+// styling that showed a dark grid + dark tooltip on the light theme.
 
-const TOOLTIP_STYLE = {
-  backgroundColor: "#0f172a",
-  borderColor: "#334155",
-  borderRadius: 10,
-  fontSize: 12,
-  color: "#e2e8f0",
-};
-const AXIS_TICK = { fill: "#94a3b8", fontSize: 11 };
 const TIMELINE_SERIES = [
   { key: "blocked", color: OUTPUT_ACTION_COLORS.block },
   { key: "redacted", color: OUTPUT_ACTION_COLORS.redact },
   { key: "monitored", color: OUTPUT_ACTION_COLORS.monitor },
   { key: "allowed", color: OUTPUT_ACTION_COLORS.allow },
 ];
+
+const cap = (s) => String(s || "").charAt(0).toUpperCase() + String(s || "").slice(1);
+
+// hex (#rrggbb) + alpha → #rrggbbaa, for ECharts area gradients.
+const withAlpha = (hex, a) =>
+  `${hex}${Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, "0")}`;
+
+const areaGradient = (color) => ({
+  type: "linear",
+  x: 0,
+  y: 0,
+  x2: 0,
+  y2: 1,
+  colorStops: [
+    { offset: 0.05, color: withAlpha(color, 0.5) },
+    { offset: 0.95, color: withAlpha(color, 0.05) },
+  ],
+});
+
+const riskBucketColor = (range) => {
+  const lo = parseInt(range, 10) || 0;
+  return lo >= 80 ? "#ef4444" : lo >= 60 ? "#fb923c" : lo >= 40 ? "#f59e0b" : "#10b981";
+};
 
 function ChartFrame({ title, icon: Icon, children, className = "" }) {
   return (
@@ -40,7 +56,87 @@ function ChartFrame({ title, icon: Icon, children, className = "" }) {
   );
 }
 
-const cap = (s) => String(s || "").charAt(0).toUpperCase() + String(s || "").slice(1);
+// ── ECharts option builders (data-identical to the prior recharts views) ──
+function timelineOption(rows) {
+  return {
+    tooltip: { trigger: "axis" },
+    legend: { bottom: 0, itemWidth: 10, itemHeight: 8, data: TIMELINE_SERIES.map((s) => cap(s.key)) },
+    grid: { top: 12, right: 12, bottom: 30, left: 8, containLabel: true },
+    xAxis: {
+      type: "category",
+      boundaryGap: false,
+      data: rows.map((d) => d.time),
+      axisLabel: { hideOverlap: true },
+    },
+    yAxis: { type: "value", minInterval: 1 },
+    series: TIMELINE_SERIES.map((s) => ({
+      name: cap(s.key),
+      type: "line",
+      stack: "total",
+      smooth: true,
+      showSymbol: false,
+      lineStyle: { width: 1.5, color: s.color },
+      itemStyle: { color: s.color },
+      areaStyle: { color: areaGradient(s.color) },
+      data: rows.map((d) => (typeof d[s.key] === "number" ? d[s.key] : 0)),
+    })),
+  };
+}
+
+function actionOption(rows) {
+  return {
+    tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+    series: [
+      {
+        type: "pie",
+        radius: ["46%", "72%"],
+        center: ["50%", "50%"],
+        avoidLabelOverlap: true,
+        padAngle: 2,
+        itemStyle: { borderRadius: 3 },
+        label: { formatter: "{b} {d}%", fontSize: 11 },
+        labelLine: { show: true, length: 8, length2: 8 },
+        data: rows.map((d) => ({ name: d.name, value: d.value, itemStyle: { color: actionColor(d.name) } })),
+      },
+    ],
+  };
+}
+
+function threatsOption(rows) {
+  return {
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    grid: { top: 8, right: 16, bottom: 4, left: 4, containLabel: true },
+    xAxis: { type: "value", minInterval: 1 },
+    yAxis: { type: "category", data: rows.map((d) => d.name) },
+    series: [
+      {
+        type: "bar",
+        data: rows.map((d) => ({
+          value: d.value,
+          itemStyle: { color: d.color || "#14b8a6", borderRadius: [0, 4, 4, 0] },
+        })),
+      },
+    ],
+  };
+}
+
+function riskOption(rows) {
+  return {
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    grid: { top: 12, right: 8, bottom: 4, left: 4, containLabel: true },
+    xAxis: { type: "category", data: rows.map((d) => d.range) },
+    yAxis: { type: "value", minInterval: 1 },
+    series: [
+      {
+        type: "bar",
+        data: rows.map((d) => ({
+          value: d.count,
+          itemStyle: { color: riskBucketColor(d.range), borderRadius: [4, 4, 0, 0] },
+        })),
+      },
+    ],
+  };
+}
 
 export function OutputGuardrailCharts({ timeRange = "7d", moduleId = "1.7" }) {
   const { fetchWithAuth } = useAuth();
@@ -99,7 +195,7 @@ export function OutputGuardrailCharts({ timeRange = "7d", moduleId = "1.7" }) {
           <h3 className="flex items-center text-base font-semibold text-slate-900 dark:text-slate-100">
             Output Guardrail Analytics
             <InfoTooltip title="Output Analytics">
-              {"Live recharts views of generator-level output enforcement: outputs over time, action distribution, detected categories, and risk-score spread. Every chart honors the operator lens window above."}
+              {"Live views of generator-level output enforcement: outputs over time, action distribution, detected categories, and risk-score spread. Every chart honors the operator lens window above."}
             </InfoTooltip>
           </h3>
           <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
@@ -143,37 +239,7 @@ export function OutputGuardrailCharts({ timeRange = "7d", moduleId = "1.7" }) {
           {/* Outputs over time — full width stacked area */}
           {timeline && (
             <ChartFrame title="Outputs Over Time" icon={BarChart3}>
-              <div className="h-[220px]">
-                <SafeResponsiveChart className="h-full">
-                  <AreaChart data={timeline.data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                    <defs>
-                      {TIMELINE_SERIES.map((s) => (
-                        <linearGradient key={s.key} id={`og-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={s.color} stopOpacity={0.5} />
-                          <stop offset="95%" stopColor={s.color} stopOpacity={0.05} />
-                        </linearGradient>
-                      ))}
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
-                    <XAxis dataKey="time" tick={AXIS_TICK} interval="preserveStartEnd" minTickGap={48} />
-                    <YAxis tick={AXIS_TICK} allowDecimals={false} width={32} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    {TIMELINE_SERIES.map((s) => (
-                      <Area
-                        key={s.key}
-                        type="monotone"
-                        dataKey={s.key}
-                        name={cap(s.key)}
-                        stackId="1"
-                        stroke={s.color}
-                        fill={`url(#og-${s.key})`}
-                        strokeWidth={1.5}
-                      />
-                    ))}
-                  </AreaChart>
-                </SafeResponsiveChart>
-              </div>
+              <SafeResponsiveChart className="h-[220px]" option={timelineOption(timeline.data)} />
             </ChartFrame>
           )}
 
@@ -181,73 +247,21 @@ export function OutputGuardrailCharts({ timeRange = "7d", moduleId = "1.7" }) {
             {/* Action distribution donut */}
             {actions && (
               <ChartFrame title="Action Distribution">
-                <div className="h-[200px]">
-                  <SafeResponsiveChart className="h-full">
-                    <PieChart>
-                      <Pie
-                        data={actions.data}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={42}
-                        outerRadius={70}
-                        paddingAngle={2}
-                        label={({ name, percent }) => `${name} ${(Number.isFinite(percent) ? percent * 100 : 0).toFixed(0)}%`}
-                        labelLine={false}
-                      >
-                        {actions.data.map((d, i) => (
-                          <Cell key={i} fill={actionColor(d.name)} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    </PieChart>
-                  </SafeResponsiveChart>
-                </div>
+                <SafeResponsiveChart className="h-[200px]" option={actionOption(actions.data)} />
               </ChartFrame>
             )}
 
             {/* Detected categories — horizontal bar */}
             {threats && (
               <ChartFrame title="Detected Categories">
-                <div className="h-[200px]">
-                  <SafeResponsiveChart className="h-full">
-                    <BarChart data={threats.data} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" horizontal={false} />
-                      <XAxis type="number" tick={AXIS_TICK} allowDecimals={false} />
-                      <YAxis type="category" dataKey="name" tick={AXIS_TICK} width={92} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(148,163,184,0.1)" }} />
-                      <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                        {threats.data.map((d, i) => (
-                          <Cell key={i} fill={d.color || "#14b8a6"} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </SafeResponsiveChart>
-                </div>
+                <SafeResponsiveChart className="h-[200px]" option={threatsOption(threats.data)} />
               </ChartFrame>
             )}
 
             {/* Risk score distribution — vertical bar */}
             {risk && (
               <ChartFrame title="Risk Score Spread">
-                <div className="h-[200px]">
-                  <SafeResponsiveChart className="h-full">
-                    <BarChart data={risk.data} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
-                      <XAxis dataKey="range" tick={AXIS_TICK} />
-                      <YAxis tick={AXIS_TICK} allowDecimals={false} width={32} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: "rgba(148,163,184,0.1)" }} />
-                      <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                        {risk.data.map((d, i) => {
-                          const lo = parseInt(d.range, 10) || 0;
-                          const fill = lo >= 80 ? "#ef4444" : lo >= 60 ? "#fb923c" : lo >= 40 ? "#f59e0b" : "#10b981";
-                          return <Cell key={i} fill={fill} />;
-                        })}
-                      </Bar>
-                    </BarChart>
-                  </SafeResponsiveChart>
-                </div>
+                <SafeResponsiveChart className="h-[200px]" option={riskOption(risk.data)} />
               </ChartFrame>
             )}
           </div>

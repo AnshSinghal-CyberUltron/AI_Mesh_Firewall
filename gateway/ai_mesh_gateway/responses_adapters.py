@@ -180,6 +180,31 @@ def _input_item_to_message(item: Any) -> dict | None:
                                 "type": "function",
                                 "function": {"name": item.get("name", ""),
                                              "arguments": _stringify(item.get("arguments"))}}]}
+    # I-14: MCP / custom tool items are the MCP-flow equivalents of
+    # function_call_output and must be treated the same way. They previously fell
+    # through to the ``{"role": role, "content": ""}`` fallback at the bottom, so an
+    # ``mcp_call`` collapsed to an EMPTY user message: HTTP 200, no diagnostic, the
+    # payload silently gone — violating this module's own B12 no-silent-drop rule.
+    # ``mcp_approval_request``/``mcp_approval_response``/``mcp_list_tools``/
+    # ``custom_tool_call_output`` collapsed identically.
+    #
+    # Mapping them to ``role=tool`` (rather than dropping them) is deliberate: the
+    # drop was fail-CLOSED for injection but lost real conversation state on replay.
+    # role=tool content IS scanned — an injection here blocks exactly as it does in
+    # function_call_output — so intent is preserved without opening a new vector.
+    if itype in ("mcp_call", "mcp_approval_request", "mcp_approval_response",
+                 "mcp_list_tools", "custom_tool_call_output"):
+        _payload = item.get("output")
+        if _payload is None:
+            _payload = item.get("arguments")
+        if _payload is None:
+            # No explicit payload: carry the whole item minus structural noise so the
+            # content is still visible to the scanner rather than vanishing.
+            _payload = {k: v for k, v in item.items()
+                        if k not in ("type", "id", "call_id", "status")}
+        return {"role": "tool",
+                "tool_call_id": item.get("call_id") or item.get("id") or "",
+                "content": _stringify(_payload)}
     role = item.get("role") or "user"
     content = item.get("content")
     if isinstance(content, str):

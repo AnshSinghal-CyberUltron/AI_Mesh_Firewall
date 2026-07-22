@@ -92,13 +92,44 @@ def _completion(model: str, *, secret_channel: str, n_choices: int = 1) -> dict:
                                         "arguments": json.dumps({"key": SECRET})}
             elif secret_channel == "audio":
                 msg["audio"] = {"id": "aud_1", "transcript": f"the key is {SECRET}"}
+            elif secret_channel == "list_content":
+                # G57: multimodal / content-block shape — content is a LIST of
+                # content-part dicts, not a str. The non-stream scanner previously
+                # only read str content, so an all-list answer yielded EMPTY scan
+                # text and the output guard was skipped entirely (raw egress).
+                msg["content"] = [
+                    {"type": "text", "text": "Here is the answer. "},
+                    {"type": "text", "text": f"The key is {SECRET} for {PII}."},
+                ]
+            elif secret_channel == "dict_content":
+                # G62: a bare DICT content (non-conforming single content-part) — the
+                # str/list-only _content_to_text coerced it to "" and SKIPPED the guard.
+                msg["content"] = {"type": "text", "text": f"The key is {SECRET} for {PII}"}
+            elif secret_channel == "list_reasoning":
+                # G61: structured reasoning_content (a LIST of blocks) — the str-only
+                # scan/enforce skipped it, leaking PII in a reasoning channel.
+                msg["reasoning_content"] = [
+                    {"type": "text", "text": f"internally the key is {SECRET} for {PII}"}]
+            elif secret_channel == "list_refusal":
+                msg["refusal"] = [{"type": "text", "text": f"I refuse but the key was {SECRET}"}]
+            elif secret_channel == "dict_tool_args":
+                # G58: tool-call ``arguments`` as a PARSED DICT (some providers do
+                # this) rather than the spec's JSON string. The str-only scan +
+                # enforce paths skipped it, so a dict-shaped argument egressed
+                # unscanned AND un-neutralized.
+                msg["tool_calls"] = [{
+                    "id": "call_2", "type": "function",
+                    "function": {"name": "exfiltrate",
+                                 "arguments": {"key": SECRET, "to": PII}},
+                }]
         choices.append({"index": i, "message": msg, "finish_reason": "stop"})
     return {"id": "chatcmpl-x", "object": "chat.completion", "model": model,
             "choices": choices}
 
 
 SECONDARY_CHANNELS = ["content", "reasoning_content", "refusal",
-                      "tool_calls", "function_call", "audio"]
+                      "tool_calls", "function_call", "audio", "list_content",
+                      "dict_tool_args", "list_reasoning", "list_refusal", "dict_content"]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -142,6 +173,125 @@ def test_nonstream_scan_is_model_invariant():
             f"MODEL-DIFFERENTIAL: scan input differs for model={model!r} "
             f"vs {MODEL_IDS[0]!r}. A provider branch in the scan path is a bypass."
         )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# G57: LIST-shaped (multimodal content-block) content must be scanned + redacted.
+# The non-stream extractor read only str content, so an all-list answer yielded
+# empty scan text -> the output guard was SKIPPED (_og_scan_text falsy) and PII/
+# secrets egressed raw. The streaming path already coerced it (FIX-C); this pins
+# the non-stream parity so a refactor cannot silently reopen the asymmetry.
+# ──────────────────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("model", MODEL_IDS)
+def test_g57_list_content_scanned_not_skipped(model):
+    completion = _completion(model, secret_channel="list_content")
+    scan_text = gm._extract_scannable_output_text(completion)
+    assert scan_text, (
+        f"G57: list-shaped content produced EMPTY scan text (model={model!r}) — "
+        f"the output guard would be SKIPPED and the answer egress unscanned."
+    )
+    assert SECRET in scan_text and PII in scan_text, (
+        f"G57: secret/PII in list-shaped content is not in the scan input "
+        f"(model={model!r}); scan_text={scan_text!r}"
+    )
+
+
+def test_g57_response_extractor_coerces_list_to_str():
+    """_extract_response_from_completion (the redaction input) must return a str for
+    list-shaped content — else _sanitize_output_for_verdict gets a list and the
+    redact path breaks (or forwards raw)."""
+    completion = _completion("gpt-4o-mini", secret_channel="list_content")
+    rt = gm._extract_response_from_completion(completion)
+    assert isinstance(rt, str), f"response text is {type(rt).__name__}, not str"
+    assert SECRET in rt and PII in rt, "coerced response text lost the content"
+
+
+def test_g57_list_content_stream_nonstream_parity():
+    """The stream and non-stream extractors must AGREE that list content carries the
+    secret — the asymmetry was the leak (stream saw it, non-stream did not)."""
+    from ai_mesh_gateway.secure_streaming import SecureStreamingResponse as _S
+    completion = _completion("gpt-4o-mini", secret_channel="list_content")
+    nonstream = gm._extract_scannable_output_text(completion)
+    delta = {"choices": [{"delta": {"content": [
+        {"type": "text", "text": f"The key is {SECRET} for {PII}."}]}}]}
+    stream = _S._extract_content_delta(_S.__new__(_S), delta)
+    assert SECRET in nonstream and SECRET in stream, (
+        f"stream/non-stream disagree on list content: nonstream={nonstream!r} stream={stream!r}"
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# G58: tool-call ``arguments`` as a PARSED DICT (not the spec JSON string). The
+# str-only scan + enforce paths skipped it, so a dict-shaped argument egressed
+# unscanned AND survived neutralization. The input side already coerced it
+# (_extract_prompt_from_messages json.dumps); this pins output-side parity.
+# ──────────────────────────────────────────────────────────────────────────────
+@pytest.mark.parametrize("model", MODEL_IDS)
+def test_g58_dict_tool_args_scanned(model):
+    completion = _completion(model, secret_channel="dict_tool_args")
+    scan_text = gm._extract_scannable_output_text(completion)
+    assert SECRET in scan_text and PII in scan_text, (
+        f"G58: dict-shaped tool-call arguments not in scan input (model={model!r}); "
+        f"scan_text={scan_text!r}"
+    )
+
+
+def test_g58_dict_tool_args_neutralized_on_enforcement():
+    """After enforcement, a dict-shaped tool-call argument must NOT still carry the
+    secret — the str-only neutralizer left the dict verbatim (post-redact leak)."""
+    completion = _completion("gpt-4o-mini", secret_channel="dict_tool_args")
+    gm._set_completion_response_text(completion, "[REDACTED]")
+    blob = json.dumps(completion)
+    assert SECRET not in blob and PII not in blob, (
+        f"G58: dict-shaped tool-call argument survived enforcement. blob={blob[:400]}"
+    )
+
+
+def test_g58_tool_arg_coercion_helper():
+    """_tool_arg_to_text coerces dict/None to scannable text; str is identity."""
+    assert gm._tool_arg_to_text('{"a":1}') == '{"a":1}'
+    assert SECRET in gm._tool_arg_to_text({"key": SECRET})
+    assert gm._tool_arg_to_text(None) == ""
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# G61: structured (list/dict) reasoning_content / refusal — the str-only scan +
+# enforce skipped them, leaking PII in a reasoning/refusal channel. The
+# list_reasoning / list_refusal matrix rows above cover the list shape; this pins
+# the DICT shape incl. the Anthropic-style `thinking` key (not `text`).
+# ──────────────────────────────────────────────────────────────────────────────
+def test_g61_dict_reasoning_thinking_key_scanned():
+    comp = {"choices": [{"message": {"role": "assistant", "content": "ok",
+            "reasoning_content": {"thinking": f"the key is {SECRET}"}}}]}
+    assert SECRET in gm._extract_scannable_output_text(comp), (
+        "G61: dict reasoning_content (thinking key) not scanned"
+    )
+
+
+def test_g61_structured_reasoning_refusal_blanked_on_enforcement():
+    comp = {"choices": [{"message": {"role": "assistant", "content": "ok",
+            "reasoning_content": [{"type": "text", "text": SECRET}],
+            "refusal": {"text": SECRET}}}]}
+    gm._set_completion_response_text(comp, "[REDACTED]")
+    assert SECRET not in json.dumps(comp), (
+        "G61: structured reasoning/refusal survived enforcement"
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# G62: a bare DICT content (non-conforming single content-part) — the str/list-only
+# _content_to_text coerced it to "" so the guard was SKIPPED (the G57 bypass class,
+# dict shape). The dict_content matrix row above covers scan+enforce across models;
+# this pins the helper contract incl. image-safety (never fold a binary payload).
+# ──────────────────────────────────────────────────────────────────────────────
+def test_g62_content_to_text_handles_dict():
+    assert gm._content_to_text("plain") == "plain"
+    assert gm._content_to_text({"type": "text", "text": SECRET}) == SECRET
+    assert gm._content_to_text({"text": SECRET}) == SECRET
+    # image/binary part dict has no str text -> NOT folded (no base64 bloat / leak-safe)
+    assert gm._content_to_text({"type": "image_url",
+                                "image_url": {"url": "data:image/png;base64,AAAA"}}) == ""
+    assert gm._content_to_text([{"type": "text", "text": SECRET}]) == SECRET
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -197,6 +347,17 @@ def _delta_chunk(channel: str, n_choices: int = 1) -> dict:
                 delta = {"function_call": {"name": "x", "arguments": SECRET}}
             elif channel == "audio":
                 delta = {"audio": {"transcript": f"key {SECRET}"}}
+            elif channel == "list_content":
+                delta = {"content": [{"type": "text", "text": f"key {SECRET}"}]}
+            elif channel == "dict_tool_args":
+                delta = {"tool_calls": [{"index": 0, "function":
+                         {"name": "x", "arguments": {"key": SECRET}}}]}
+            elif channel == "dict_content":
+                delta = {"content": {"type": "text", "text": f"key {SECRET}"}}
+            elif channel == "list_reasoning":
+                delta = {"reasoning_content": [{"type": "text", "text": f"key {SECRET}"}]}
+            elif channel == "list_refusal":
+                delta = {"refusal": [{"type": "text", "text": f"key {SECRET}"}]}
         choices.append({"index": i, "delta": delta})
     return {"choices": choices}
 

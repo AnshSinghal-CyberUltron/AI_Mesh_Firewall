@@ -9,55 +9,7 @@ import {
   formatRoutingReason,
   isRoutingReroute,
 } from "../constants/zeroshieldBrand.js";
-
-/** Distinguish gateway-key 401 (middleware) from upstream provider 401 (LiteLLM). */
-export function describeGatewayHttp401(data, { modelName = "" } = {}) {
-  if (data?.error === "unauthorized") {
-    return "Authentication failed. Your Gateway API Key is invalid or expired.";
-  }
-  const providerMsg = String(data?.error?.message || data?.message || "").trim();
-  if (
-    data?.error?.type === "AuthenticationError"
-    || /incorrect api key|invalid api key|authenticationerror/i.test(providerMsg)
-  ) {
-    const modelHint = modelName ? ` (${modelName})` : "";
-    return (
-      `Provider API key rejected${modelHint}. The gateway accepted your request, but the `
-      + "OpenAI/Anthropic key stored under Model Connection is invalid. Edit that model and save a real API key."
-    );
-  }
-  return providerMsg || "Authentication failed (HTTP 401).";
-}
-
-/** Gateway middleware 403 — disabled/expired key (not input scan or kill switch). */
-export function describeGatewayHttp403(data) {
-  const message = String(data?.message || extractErrorPayload(data).message || "").trim();
-  const code = String(data?.code || "").toLowerCase();
-  if (code === "forbidden" && /api key is disabled/i.test(message)) {
-    return "Gateway API key is disabled. Re-enable it under API Keys or API Key & Identity Risk.";
-  }
-  if (code === "forbidden" && /api key has expired/i.test(message)) {
-    return "Gateway API key has expired. Create a new key or extend expiry.";
-  }
-  return message || "Request forbidden (HTTP 403).";
-}
-
-function resolveResponseCode(data) {
-  const err = extractErrorPayload(data);
-  return String(data?.code || err.code || "").toLowerCase();
-}
-
-export function isGatewayAuthForbidden(data, httpStatus) {
-  if (httpStatus === 401 || data?.error === "unauthorized") return true;
-  const message = String(data?.message || extractErrorPayload(data).message || "").toLowerCase();
-  const code = resolveResponseCode(data);
-  const errField = typeof data?.error === "string" ? data.error.toLowerCase() : "";
-  return (
-    httpStatus === 403
-    && (code === "forbidden" || errField === "forbidden")
-    && (message.includes("api key is disabled") || message.includes("api key has expired"))
-  );
-}
+import { resolveTotalLatencyMs, resolveTtftMs, formatRouteDestination } from "./pipelineTrace.js";
 
 export function chatCompletionBody({
   prompt,
@@ -87,6 +39,31 @@ export function chatCompletionBody({
     body.routing_preferences = routingPreferences;
   }
   return body;
+}
+
+/** Pin the selected model: disable org routing for simulator / SDK callers. */
+export function pinnedModelRoutingPreferences(model) {
+  const name = String(model || "").trim();
+  if (!name || name.toLowerCase() === "auto") {
+    return null;
+  }
+  return { enable_routing: false, preferred_model: name };
+}
+
+/**
+ * Attack / isolation simulators: honour org routing_enabled from firewall config.
+ * When org routing is on, send enable_routing:true (model is a preference hint).
+ * When off, pin the selected model (SDK parity).
+ */
+export function simulatorRoutingPreferences(model, { orgRoutingEnabled = true } = {}) {
+  const name = String(model || "").trim();
+  if (!name || name.toLowerCase() === "auto") {
+    return null;
+  }
+  if (orgRoutingEnabled) {
+    return { enable_routing: true, preferred_model: name };
+  }
+  return pinnedModelRoutingPreferences(name);
 }
 
 /**
@@ -124,6 +101,7 @@ export async function consumeSSEStream(response) {
   const events = [];
   let aggregatedContent = "";
   let terminalError = null;
+  let terminalTracePayload = null;
 
   // Parse a single SSE "event block" (already split on the \n\n boundary).
   // Returns nothing; mutates events/aggregatedContent/terminalError in place.
@@ -146,9 +124,18 @@ export async function consumeSSEStream(response) {
     if (parsed?.error) {
       terminalError = parsed.error;
     }
+    // M-51 terminal trace frame: empty choices + zeroshield/pipeline_trace.
+    if (parsed?.pipeline_trace || parsed?.zeroshield) {
+      terminalTracePayload = parsed;
+    }
     const delta = parsed?.choices?.[0]?.delta?.content;
     if (typeof delta === "string") {
       aggregatedContent += delta;
+    } else {
+      const reasoning = parsed?.choices?.[0]?.delta?.reasoning_content;
+      if (typeof reasoning === "string" && reasoning) {
+        aggregatedContent += reasoning;
+      }
     }
   };
 
@@ -172,7 +159,14 @@ export async function consumeSSEStream(response) {
     processPart(buffer);
   }
 
-  return { isStream: true, events, aggregatedContent, terminalError, raw: "" };
+  return {
+    isStream: true,
+    events,
+    aggregatedContent,
+    terminalError,
+    terminalTracePayload,
+    raw: "",
+  };
 }
 
 /** Map streamed chat completion into Attack Simulator pipeline shape. */
@@ -202,13 +196,17 @@ export function normalizeStreamChatPipelineResult(
     return normalizeChatPipelineResult(sseResult?.data || {}, httpStatus, ctx);
   }
 
+  const terminal = sseResult?.terminalTracePayload;
+  const terminalZs = terminal?.zeroshield || {};
   const synthetic = {
     choices: sseResult?.aggregatedContent
       ? [{ message: { content: sseResult.aggregatedContent } }]
       : [],
+    pipeline_trace: terminal?.pipeline_trace,
     zeroshield: {
-      action: blockedInStream ? "block" : terminalErr ? "error" : "allow",
-      threat_type: blockedInStream ? (terminalErr?.type || "output_blocked") : "",
+      ...terminalZs,
+      action: blockedInStream ? "block" : terminalErr ? "error" : (terminalZs.action || "allow"),
+      threat_type: blockedInStream ? (terminalErr?.type || "output_blocked") : (terminalZs.threat_type || ""),
       stream: true,
       stream_scan_mode: scanMode,
     },
@@ -216,12 +214,18 @@ export function normalizeStreamChatPipelineResult(
   };
 
   const normalized = normalizeChatPipelineResult(synthetic, blockedInStream ? 403 : httpStatus, ctx);
+  const ttftMs = resolveTtftMs({
+    pipelineTrace: terminal?.pipeline_trace,
+    zeroshield: synthetic.zeroshield,
+    meta: synthetic.zeroshield,
+  });
   return {
     ...normalized,
     stream: true,
     stream_events: sseResult?.events?.length || 0,
     stream_scan_mode: scanMode,
     aggregated_content: sseResult?.aggregatedContent || "",
+    ttft_ms: ttftMs ?? normalized.ttft_ms,
     final_action: blockedInStream
       ? "block"
       : terminalErr
@@ -338,9 +342,7 @@ function isContentPolicyBlock(data, httpStatus) {
 
 function inferFinalAction(data, httpStatus, zs) {
   if (data?.final_action) return data.final_action;
-  const code = resolveResponseCode(data);
-  if (code === "kill_switch_active") return "block";
-  if (isGatewayAuthForbidden(data, httpStatus)) return "block";
+  const code = String(data?.code || "").toLowerCase();
   if (httpStatus === 422 && INFERENCE_SETUP_CODES.has(code)) return "needs_model";
   if (isUpstreamProviderError(data, httpStatus)) return "error";
   if (zs?.action) return zs.action;
@@ -382,7 +384,7 @@ export function inferDetectionCheckpoint(data, zs) {
 
 /** Map gateway response to the pipeline stage where processing stopped. */
 function inferBlockedStage(data, httpStatus, zs) {
-  const code = resolveResponseCode(data);
+  const code = String(data?.code || "").toLowerCase();
   const category = String(data?.category || zs?.threat_type || "").toLowerCase();
   const tier = String(data?.detection_tier || data?.pipeline_stage || zs?.detection_tier || "").toLowerCase();
 
@@ -398,7 +400,6 @@ function inferBlockedStage(data, httpStatus, zs) {
     return "rate_limit";
   }
   if (code === "kill_switch_active") return "kill_switch";
-  if (isGatewayAuthForbidden(data, httpStatus)) return "auth";
   if (INFERENCE_SETUP_CODES.has(code) || data?.category === "inference_not_configured") {
     return "model_routing";
   }
@@ -435,19 +436,16 @@ function inferBlockedStage(data, httpStatus, zs) {
   if (
     category === "blocked_keyword"
     || tier === "config"
+    || code === "threat_intel_blocked"
   ) {
     return "policy";
-  }
-
-  if (code === "threat_intel_blocked" || tier === "threat_intel") {
-    return "threat_intel";
   }
 
   if (code === "content_blocked" && tier === "policy") return "policy";
   if (code === "content_blocked" && category === "blocked_keyword") return "policy";
   if (code === "content_blocked" && tier) return tier.startsWith("tier") ? "input_scan" : "policy";
 
-  if (httpStatus === 403 && !isGatewayAuthForbidden(data, httpStatus)) return "input_scan";
+  if (httpStatus === 403) return "input_scan";
   if (httpStatus === 429) return "rate_limit";
   if (httpStatus >= 500 || (httpStatus >= 400 && data?.error)) return "model_output";
   return "";
@@ -472,20 +470,6 @@ function formatRateLimitDetail(data, context = {}) {
 }
 
 function formatPolicyBlockDetail(data, zs) {
-  const code = String(data?.code || "").toLowerCase();
-  const tier = String(data?.detection_tier || zs?.detection_tier || "").toLowerCase();
-  if (code === "threat_intel_blocked" || tier === "threat_intel") {
-    const threat = data?.category || zs?.threat_type || "IOC match";
-    const indicator = (zs?.matched_patterns || data?.matched_patterns || [])[0];
-    if (zs?.reason) return zs.reason;
-    if (data?.message && !String(data.message).toLowerCase().includes("policy management")) {
-      return `Threat Intelligence policy block — ${data.message}`;
-    }
-    return (
-      `Blocked by Threat Intelligence policy (IOC match: ${threat}`
-      + `${indicator ? ` — indicator "${indicator}"` : ""})`
-    );
-  }
   const category = data?.category || zs?.threat_type || "";
   if (category === "blocked_keyword" || data?.blocked_by === "firewall_keywords") {
     return (
@@ -604,7 +588,10 @@ function latencyForStage(stageName, stageMetrics, zs = {}, context = {}) {
     model_routing: roundMs(stageMetrics.routing_ms, 0.5),
     model_input: roundMs(stageMetrics.model_input_ms, 0.1),
     model_output: roundMs(stageMetrics.upstream_ms, roundMs(zs.processing_time_ms, 0)),
-    output_guardrail: roundMs(stageMetrics.output_guard_ms, 0.2),
+    output_guardrail: roundMs(
+      stageMetrics.output_guardrail_ms ?? stageMetrics.output_guard_ms,
+      0.2,
+    ),
   };
   if (map[stageName] > 0) return map[stageName];
   // Do NOT fabricate an even total/N split for stages with no real metric — it
@@ -679,17 +666,6 @@ function enrichStages(stages, data, zs, context) {
       if (!enriched.detail && enriched.routing_reason) {
         enriched.detail = enriched.routing_reason;
       }
-      const reqModel = enriched.requested_model || "";
-      const selModel = enriched.selected_model || "";
-      const routingMeta = {
-        ...routing,
-        decision_source: rawSource,
-        trigger_source: routing.trigger_source,
-        rerouted: routing.rerouted ?? enriched.action === "reroute",
-      };
-      if (enriched.action === "reroute" && !isRoutingReroute(reqModel, selModel, routingMeta)) {
-        enriched.action = "allow";
-      }
     }
     if (stage.name === "kill_switch" && enriched.action === "reroute" && enriched.routing_reason) {
       enriched.detail = formatRoutingReason(enriched.routing_reason, {
@@ -718,7 +694,6 @@ function skipDetail(stageName, blockedStage) {
 
 function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, context = {}) {
   const routing = { ...(zs.routing || {}), ...(context.routingHeaders || {}) };
-  const ksTrigger = String(routing.trigger_source || routing.decision_source || "").toLowerCase();
   const stageMetrics = metricsFromPayload(data, context);
   const promptPreview = truncateText(context.prompt || "");
   const blockedIdx = blockedStage ? stageIndex(blockedStage) : -1;
@@ -751,11 +726,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       name: "auth",
       action: at === "blocked" ? "block" : "allow",
       latency_ms: latencyForStage("auth", stageMetrics, zs, context),
-      detail: at === "blocked"
-        ? (isGatewayAuthForbidden(data, httpStatus)
-          ? describeGatewayHttp403(data)
-          : "Gateway API key invalid or missing")
-        : "Gateway API key accepted",
+      detail: at === "blocked" ? "Gateway API key invalid or missing" : "Gateway API key accepted",
     });
   }
 
@@ -777,10 +748,9 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     });
   }
 
-  // 3 — Policy / Threat Intel IOC
+  // 3 — Policy
   {
     const at = stageAt("policy");
-    const threatIntelBlocked = blockedStage === "threat_intel";
     const policyBlocked = blockedStage === "policy";
     const matchedPolicies = data?.matched_policies || zs.matched_policies || [];
     let matchedRules = data?.matched_rules || zs.matched_rules || [];
@@ -798,8 +768,8 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     }
     const policyActed = Boolean(matchedPolicies?.length || matchedRules?.length || policyRedacted);
     stages.push({
-      name: threatIntelBlocked ? "threat_intel" : "policy",
-      action: (policyBlocked || threatIntelBlocked)
+      name: "policy",
+      action: policyBlocked
         ? "block"
         : at === "after"
           ? "skip"
@@ -807,7 +777,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
             ? "redact"
             : (policyActed && finalAction === "flag" ? "flag" : "allow"),
       latency_ms: latencyForStage("policy", stageMetrics, zs, context),
-      detail: (policyBlocked || threatIntelBlocked)
+      detail: policyBlocked
         ? formatPolicyBlockDetail(data, zs)
         : at === "after"
           ? skipDetail("policy", blockedStage)
@@ -878,13 +848,15 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
   {
     const at = stageAt("kill_switch");
     const ksBlocked = blockedStage === "kill_switch";
-    const ksRerouted = Boolean(routing.rerouted && ksTrigger === "kill_switch");
+    const ksRerouted = Boolean(
+      routing.rerouted && String(routing.trigger_source || routing.decision_source || "").toLowerCase() === "kill_switch",
+    );
     stages.push({
       name: "kill_switch",
       action: ksBlocked ? "block" : ksRerouted ? "reroute" : at === "after" ? "skip" : "allow",
       latency_ms: latencyForStage("kill_switch", stageMetrics, zs, context),
       detail: ksBlocked
-        ? (data?.message || "Kill-switch is active for this API key or model.")
+        ? (data?.message || "Model kill-switch is active")
         : ksRerouted
           ? formatRoutingReason(routing.routing_reason || routing.reason || "", {
             decisionSource: routing.decision_source,
@@ -908,8 +880,7 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     const rawRoutingReason = routing.routing_reason || zs.routing_reason || context.routingHeaders?.routing_reason || "";
     const rawDecisionSource = routing.decision_source || zs.decision_source || context.routingHeaders?.decision_source || "";
     const formattedReason = formatRoutingReason(rawRoutingReason, { decisionSource: rawDecisionSource });
-    const ksRerouteActive = Boolean(routing.rerouted && ksTrigger === "kill_switch");
-    const rerouted = !ksRerouteActive && isRoutingReroute(reqModel, selModel, routing);
+    const rerouted = isRoutingReroute(reqModel, selModel, routing);
     stages.push({
       name: "model_routing",
       action: needsModel
@@ -937,12 +908,18 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
       requested_model: reqModel,
       selected_model: selModel,
       routed_model: routing.routed_model || routing.selected_model || "",
+      route_destination: routing.route_destination || "llm",
+      route_destination_label: routing.route_destination_label || formatRouteDestination(routing.route_destination || "llm"),
       routing_reason: formattedReason,
       decision_source: rawDecisionSource,
       decision_source_label: formatDecisionSource(rawDecisionSource),
       policy_summary: routing.policy_summary || zs.policy_summary || context.routingHeaders?.policy_summary || "",
       decision_factors: routing.decision_factors || zs.decision_factors || [],
       weights: routing.weights || zs.weights || {},
+      routing_score: routing.routing_score || zs.routing_score || 0,
+      candidate_count: routing.candidate_count || zs.candidate_count || 0,
+      fallback_chain: routing.fallback_chain || zs.fallback_chain || [],
+      evaluator_model: routing.evaluator_model || zs.evaluator_model || "",
       latency_ms: latencyForStage("model_routing", stageMetrics, zs, context),
     });
   }
@@ -1017,12 +994,28 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     const at = stageAt("output_guardrail");
     const ogBlocked = blockedStage === "output_guardrail";
     const outContent = zs.redacted_response || zs.rewritten_response || data?.choices?.[0]?.message?.content || "";
+    const outputGuardMs = roundMs(
+      stageMetrics.output_guardrail_ms ?? stageMetrics.output_guard_ms,
+      0,
+    );
+    const outputGuardRan = outputGuardMs > 0
+      || zs.detection_tier === "output_guard"
+      || hasOutputGuardSignal(zs, data);
+    const gatewayErrorAfterOutputGuard = httpStatus >= 500 && outputGuardRan;
     if (ogBlocked) {
       stages.push({
         name: "output_guardrail",
         action: "block",
         latency_ms: latencyForStage("output_guardrail", stageMetrics, zs, context),
         detail: data?.message || zs.reason || zs.detail || "Output guard blocked the response",
+        content: outContent,
+      });
+    } else if (gatewayErrorAfterOutputGuard) {
+      stages.push({
+        name: "output_guardrail",
+        action: "error",
+        latency_ms: latencyForStage("output_guardrail", stageMetrics, zs, context),
+        detail: "Response failed after output guard ran (gateway internal error)",
         content: outContent,
       });
     } else if (hasOutputGuardSignal(zs, data) && !isBlocked) {
@@ -1100,12 +1093,16 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
     const zs = mergeScanFieldsFromTrace(data.zeroshield || {}, data.pipeline_trace);
     const finalAction = inferFinalAction(data, httpStatus, zs);
     const blockedStage = inferTerminalBlockedStage(data, httpStatus, zs, finalAction);
-    const stageSource = blockedStage || httpStatus >= 400
-      ? buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, mergedContext)
-      : data.pipeline_trace.stages;
-    const stages = enrichStages(stageSource, data, zs, mergedContext);
-    const totalLatency = data.pipeline_trace.total_latency_ms ?? context.totalLatencyMs;
+    const stages = enrichStages(data.pipeline_trace.stages, data, zs, mergedContext);
+    const totalLatency = resolveTotalLatencyMs({
+      pipelineTrace: data.pipeline_trace,
+      zeroshield: zs,
+      clientMs: context.totalLatencyMs,
+    }) ?? data.pipeline_trace.total_latency_ms ?? context.totalLatencyMs;
     const guardSummary = data.pipeline_trace.guard_summary || null;
+    const stageLatencySum = data.pipeline_trace.stage_latency_sum_ms;
+    const overheadMs = data.pipeline_trace.overhead_ms;
+    const ttftMs = resolveTtftMs({ pipelineTrace: data.pipeline_trace, zeroshield: zs });
     // Hoist stages/guard_summary/total_latency to the top level (the single
     // source the simulator reads) and DROP the raw pipeline_trace so the result
     // doesn't carry a full duplicate of the stage array + guard summary.
@@ -1120,6 +1117,9 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
       request_id: data.request_id || zs.request_id,
       stages,
       total_latency_ms: totalLatency,
+      stage_latency_sum_ms: stageLatencySum,
+      overhead_ms: overheadMs,
+      ttft_ms: ttftMs,
       estimated_tokens: context.estimatedTokens ?? estimateRequestTokens(context.prompt, context.maxTokens),
       pipeline_live: true,
     };
@@ -1169,7 +1169,12 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
       }
       : null);
 
-  const totalLatency = context.totalLatencyMs ?? payload.pipeline_trace?.total_latency_ms;
+  const totalLatency = resolveTotalLatencyMs({
+    pipelineTrace: payload.pipeline_trace,
+    zeroshield: zs,
+    clientMs: context.totalLatencyMs,
+  }) ?? context.totalLatencyMs ?? payload.pipeline_trace?.total_latency_ms;
+  const ttftMs = resolveTtftMs({ pipelineTrace: payload.pipeline_trace, zeroshield: zs });
   // Drop the raw pipeline_trace — its stages/guard_summary are hoisted below.
   const { pipeline_trace: _omitTrace, ...payloadRest } = payload;
   return {
@@ -1182,6 +1187,9 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
     guard_summary: guardSummary,
     request_id: payload.request_id || zs.request_id,
     total_latency_ms: totalLatency,
+    stage_latency_sum_ms: payload.pipeline_trace?.stage_latency_sum_ms,
+    overhead_ms: payload.pipeline_trace?.overhead_ms,
+    ttft_ms: ttftMs,
     estimated_tokens: context.estimatedTokens ?? estimateRequestTokens(context.prompt, context.maxTokens),
     pipeline_live: true,
   };
@@ -1222,14 +1230,11 @@ export function normalizeOutputGuardResult(data, httpStatus) {
     compliance_tags: zs.compliance_tags || [],
     raw_text: content,
     safe_text: zs.redacted_response || zs.rewritten_response || content,
-    redacted_tokens: [],
-    hallucination: {
-      risk_score: zs.factuality_warning ? 0.7 : 0,
-      pattern_score: 0,
-      grounding_score: 1,
-      contradiction_score: 0,
-      matched_markers: [],
-    },
+    // The gateway returns a single boolean factuality signal, not granular
+    // grounding/pattern/contradiction sub-scores. Carry ONLY the real flag so
+    // the UI cannot render fabricated per-metric percentages (grounding was
+    // hardcoded 100%, pattern/contradiction 0%, risk a boolean→70% literal).
+    factuality_warning: Boolean(zs.factuality_warning),
     escalation_flag: Boolean(zs.review_required || zs.security_incident),
     latency_ms: zs.processing_time_ms,
   };

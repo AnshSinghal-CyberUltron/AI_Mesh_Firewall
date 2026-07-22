@@ -98,6 +98,17 @@ body {
   transform: translateY(0) scale(0.99);
 }
 
+/* App-wide keyboard focus ring — theme-aware (uses --ring), visible in both
+   light and dark. `:focus-visible` shows it only for keyboard / assistive-tech
+   users, never on mouse click, so there is no visual change for pointer users.
+   Many custom rounded/pill controls define no focus style of their own; this
+   guarantees a perceivable, consistent focus indicator everywhere. */
+.zs-app-shell
+  :is(a, button, input, select, textarea, summary, [role="button"], [role="tab"], [role="switch"], [role="checkbox"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 :root {
   /* Firewall config semantic tokens — light */
   --background: oklch(0.99 0 0);
@@ -495,26 +506,6 @@ code, kbd, samp, pre, .font-mono {
   }
   45%, 55% {
     transform: translateX(130%);
-  }
-}
-
-/* Flashy "Open analyst guide" CTA — light sweep across the button */
-@keyframes guide-shine {
-  0% {
-    transform: translateX(-100%);
-  }
-  60%, 100% {
-    transform: translateX(200%);
-  }
-}
-
-/* Flashy "Open analyst guide" CTA — animated gradient background pan */
-@keyframes gradient-pan {
-  0%, 100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
   }
 }
 

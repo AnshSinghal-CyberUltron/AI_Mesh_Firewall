@@ -17,8 +17,26 @@ from core.gateway_serializers import (
     GatewayAPIKeyUpdateSerializer,
 )
 from core.models import GatewayAPIKey
+from core.pagination import PublicUrlPagination
 
 logger = logging.getLogger(__name__)
+
+_ORG_ADMIN_ROLE_NAMES = ("admin", "superadmin", "org_admin")
+
+
+class GatewayAPIKeyPagination(PublicUrlPagination):
+    """Keys admin UI needs more than the global PAGE_SIZE=10 default."""
+
+    page_size = 100
+    page_size_query_param = "page_size"
+    max_page_size = 500
+
+
+def _profile_is_org_admin(profile) -> bool:
+    """True when profile has an org-admin role via the roles M2M (never profile.role)."""
+    if profile is None:
+        return False
+    return profile.roles.filter(name__in=_ORG_ADMIN_ROLE_NAMES).exists()
 
 
 # ── SEC-07 FIX: Owner-only permission for key mutation ──
@@ -39,7 +57,13 @@ class IsGatewayKeyOwner(BasePermission):
         # Allow org admins to manage any key in their org
         profile = getattr(user, "profile", None)
         if profile and profile.organization_id == obj.organization_id:
-            if profile.role in ("admin", "superadmin", "org_admin"):
+            # #43: UserProfile has a `roles` M2M (auth/models.py) — there is NO
+            # singular `role` attribute, so the old `profile.role in (...)` raised
+            # AttributeError → HTTP 500, BREAKING the org-admin-manages-any-key path
+            # (a same-org non-owner mutation hit this branch and 500'd instead of the
+            # intended allow/deny). Query the M2M by role name (codebase idiom, cf.
+            # core/models.py `profile.roles.values_list("name", ...)`).
+            if _profile_is_org_admin(profile):
                 return True
         return False
 
@@ -293,6 +317,7 @@ class GatewayAPIKeyViewSet(ModelViewSet):
 
     # SEC-07 FIX: Add object-level permission for key mutation
     permission_classes = [IsAuthenticated, IsGatewayKeyOwner]
+    pagination_class = GatewayAPIKeyPagination
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
     lookup_field = "id"
 
@@ -331,18 +356,6 @@ class GatewayAPIKeyViewSet(ModelViewSet):
             max_context_tokens=validated.get("max_context_tokens", 0),
         )
 
-        from auth.utils import get_request_organization
-
-        org = get_request_organization(request)
-        if org and not instance.organization_id:
-            instance.organization = org
-            instance.save(update_fields=["organization"])
-
-        try:
-            instance.store_secret(plaintext_key)
-        except Exception:  # noqa: BLE001 — provisioning must not fail if cipher is unavailable
-            logger.warning("Could not persist recoverable secret for prefix=%s", instance.prefix)
-
         logger.info(
             "GatewayAPIKey created: prefix=%s user_id=%s project=%s",
             instance.prefix,
@@ -356,53 +369,6 @@ class GatewayAPIKeyViewSet(ModelViewSet):
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
-    @action(
-        detail=True,
-        methods=["post"],
-        url_path="adopt-simulator",
-        permission_classes=[IsAuthenticated],
-    )
-    def adopt_simulator(self, request, id=None):
-        """Promote this key as the org's Attack Simulator credential."""
-        from auth.utils import get_request_organization
-
-        org = get_request_organization(request)
-        if org is None:
-            return Response(
-                {"detail": "Organization membership required."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        key = self.get_object()
-        if key.organization_id != org.id:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        if not key.is_active:
-            return Response(
-                {"detail": "Cannot adopt a disabled API key as simulator credential."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            promoted, raw_key = GatewayAPIKey.promote_as_org_simulator(org, key)
-        except ValueError:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        storage_key = f"zeroshield_gateway_key:{org.id}"
-        payload = {
-            "prefix": promoted.prefix,
-            "key_id": str(promoted.id),
-            "name": promoted.name,
-            "project_id": promoted.project_id,
-            "org_id": org.id,
-            "org_slug": org.slug,
-            "storage_key": storage_key,
-            "is_simulator_default": True,
-            "has_plaintext": bool(raw_key),
-        }
-        if raw_key:
-            payload["key"] = raw_key
-        return Response(payload)
-
     def perform_destroy(self, instance):
         logger.info(
             "GatewayAPIKey revoked: prefix=%s user_id=%s project=%s",
@@ -411,6 +377,66 @@ class GatewayAPIKeyViewSet(ModelViewSet):
             instance.project_id,
         )
         instance.delete()
+
+    def _revoked_keys_for_bulk_purge(self):
+        """Revoked keys the caller may permanently delete (owner or org-admin).
+
+        Active keys are never included. Org admins purge all revoked keys in the
+        org-scoped list queryset; everyone else only their own revoked keys.
+        """
+        qs = self.get_queryset().filter(is_active=False)
+        user = self.request.user
+        profile = getattr(user, "profile", None)
+        if _profile_is_org_admin(profile):
+            return qs
+        return qs.filter(owner=user)
+
+    @extend_schema(
+        tags=["Gateway API Keys"],
+        summary="Permanently delete all revoked API keys",
+        description=(
+            "Hard-deletes every **revoked** (`is_active=false`) Gateway API Key the "
+            "caller is allowed to manage.\n\n"
+            "- **Org admins** (`admin` / `superadmin` / `org_admin`): all revoked keys "
+            "in their organization.\n"
+            "- **Other users**: only their own revoked keys.\n\n"
+            "Each delete removes the row from Postgres and clears `auth:apikey:{hash}` "
+            "from Redis via the existing post_delete signal. Active keys are never touched.\n\n"
+            "**This action is irreversible.**\n\n"
+            "**Authentication:** JWT required."
+        ),
+        responses={
+            200: OpenApiTypes.OBJECT,
+        },
+        examples=[
+            OpenApiExample(
+                "Purge result",
+                value={"deleted": 7, "ids": ["a1b2c3d4-e5f6-7890-abcd-ef1234567890"]},
+                response_only=True,
+            ),
+        ],
+    )
+    @action(detail=False, methods=["delete", "post"], url_path="purge-revoked")
+    def purge_revoked(self, request, *args, **kwargs):
+        qs = self._revoked_keys_for_bulk_purge()
+        # Materialize before delete so we can return ids. Include key_hash:
+        # post_delete Redis sync reads instance.key_hash; a deferred field after
+        # DELETE would refresh_from_db → DoesNotExist → HTTP 500.
+        targets = list(qs.only("id", "prefix", "project_id", "owner_id", "key_hash"))
+        deleted_ids = []
+        for instance in targets:
+            deleted_ids.append(str(instance.id))
+            logger.info(
+                "GatewayAPIKey bulk-purge revoked: prefix=%s user_id=%s project=%s",
+                instance.prefix,
+                request.user.pk,
+                instance.project_id,
+            )
+            instance.delete()
+        return Response(
+            {"deleted": len(deleted_ids), "ids": deleted_ids},
+            status=status.HTTP_200_OK,
+        )
 
 
 class GatewayKeyContextView(APIView):

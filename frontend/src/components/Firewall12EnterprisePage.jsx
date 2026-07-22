@@ -11,19 +11,9 @@ import {
   Shield,
   Gauge,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  Tooltip,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-} from "recharts";
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { useFirewallData } from "../hooks/useFirewallData";
+import { useBackendHealth } from "../hooks/useBackendHealth";
 import { useAuth } from "../context/AuthContext";
 import { PolicyManagementPanel } from "./PolicyManagementPanel";
 import { PolicyAnalyticsPanel } from "./PolicyAnalyticsPanel";
@@ -38,6 +28,31 @@ function numberOrDash(value) {
 function percentOrDash(value) {
   if (value == null || Number.isNaN(Number(value))) return "--";
   return `${Number(value).toFixed(1)}%`;
+}
+
+// ── ECharts option builders (replace recharts; zs-light/zs-dark theme drives
+// axis/grid/tooltip colors so the charts read correctly on the dark card). The
+// neutral slate series color (#6b7280) is preserved.
+function eventTrendOption(rows) {
+  return {
+    grid: { top: 14, right: 14, bottom: 24, left: 40 },
+    tooltip: { trigger: "axis" },
+    xAxis: { type: "category", boundaryGap: false, data: rows.map((r) => r.time), axisLabel: { fontSize: 11 } },
+    yAxis: { type: "value", axisLabel: { fontSize: 11 } },
+    series: [{ name: "Events", type: "line", smooth: true, showSymbol: false, data: rows.map((r) => r.primary), lineStyle: { color: "#6b7280", width: 2 }, itemStyle: { color: "#6b7280" } }],
+  };
+}
+
+function topCategoriesOption(rows) {
+  return {
+    grid: { top: 10, right: 18, bottom: 18, left: 104 },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    xAxis: { type: "value", minInterval: 1, axisLabel: { fontSize: 11 } },
+    // inverse: true keeps the largest category (data is sorted desc) at the top,
+    // matching the prior recharts horizontal-bar order.
+    yAxis: { type: "category", inverse: true, data: rows.map((r) => r.name), axisLabel: { fontSize: 11, width: 96, overflow: "truncate" } },
+    series: [{ name: "Events", type: "bar", itemStyle: { color: "#6b7280", borderRadius: [0, 6, 6, 0] }, data: rows.map((r) => r.value) }],
+  };
 }
 
 function sectionSkeleton() {
@@ -92,13 +107,35 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
   const [externalCreateScopeLocked, setExternalCreateScopeLocked] = useState(false);
   const { fetchWithAuth } = useAuth();
   const firewallData = useFirewallData("1.2", timeRange);
+  // Real backend reachability drives the module status pill (was a hardcoded
+  // green "Operational").
+  const backendHealth = useBackendHealth();
+  const opBadge = backendHealth === "connected"
+    ? { label: "Operational", cls: "bg-emerald-50 dark:bg-emerald-900/25 text-emerald-700 dark:text-emerald-300", Icon: CheckCircle2 }
+    : backendHealth === "checking"
+      ? { label: "Checking…", cls: "bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300", Icon: RefreshCw }
+      : backendHealth === "degraded"
+        ? { label: "Degraded", cls: "bg-amber-50 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300", Icon: RefreshCw }
+        : { label: "Backend offline", cls: "bg-red-50 dark:bg-red-900/25 text-red-700 dark:text-red-300", Icon: AlertTriangle };
   const [policies, setPolicies] = useState([]);
   const [policyLoading, setPolicyLoading] = useState(true);
 
-  const totalEvents = firewallData.socKpis?.total_threats || firewallData.threatFeed.length || 0;
-  const blocked = firewallData.socKpis?.blocked || 0;
-  const redacted = firewallData.socKpis?.redacted || 0;
-  const critical = firewallData.socKpis?.critical_count || 0;
+  // Module 1.2 KPIs are SCOPED to this module's own security_scan evidence — the same
+  // per-module scoping the generic module pages + module 1.4 use — NOT the org-wide
+  // soc-kpis totals. `useFirewallData("1.2").socKpis` is the WHOLE-MESH SOC feed
+  // (soc-kpis has no source filter), so binding to `socKpis.total_threats` showed the
+  // ~68k mesh-wide count instead of this module's ~900 events, contradicting the evidence
+  // list below. Use the server's scoped `threatFeedCount` + per-action aggregate.
+  const actionCounts = firewallData.threatFeedActionCounts;
+  const totalEvents = firewallData.threatFeedCount ?? firewallData.threatFeed.length ?? 0;
+  const blocked = actionCounts?.block ?? 0;
+  const redacted = actionCounts?.redact ?? 0;
+  // Critical = high-risk events within THIS module's evidence feed (no scoped critical
+  // count is exposed by the API, so derive it from the same feed the evidence list shows).
+  const critical = (firewallData.threatFeed || []).filter((ev) => {
+    const score = Number(ev.security_risk_score ?? ev.severity);
+    return Number.isFinite(score) ? score >= 80 : String(ev.severity || "").toLowerCase() === "critical";
+  }).length;
   const successRate = totalEvents > 0 ? ((Math.max(totalEvents - blocked - redacted, 0) / totalEvents) * 100) : null;
 
   const trendData = firewallData.timeSeriesData || [];
@@ -224,17 +261,17 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
     <div className="space-y-5 pb-8">
       <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-3">
+          <div className="flex flex-wrap items-start gap-3">
             <div className="mt-1 rounded-xl border border-slate-200 dark:border-slate-700 p-2">
               <Shield className="h-5 w-5 text-slate-700 dark:text-slate-200" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-3xl font-semibold leading-tight text-slate-900 dark:text-slate-100">Policy Management</h1>
               <p className="text-sm text-slate-500 dark:text-slate-400">Firewall Module 1.2</p>
             </div>
-            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-900/25 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Operational
+            <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${opBadge.cls}`}>
+              <opBadge.Icon className="h-3.5 w-3.5" />
+              {opBadge.label}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -277,15 +314,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
       <section className="grid gap-4 xl:grid-cols-3">
         <ChartCard title="Event Trend">
           {firewallData.loading && trendData.length === 0 ? sectionSkeleton() : (
-            <SafeResponsiveChart className="h-[210px] w-full">
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#33415522" />
-                <XAxis dataKey="time" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="primary" stroke="#6b7280" strokeWidth={2} dot={false} />
-              </LineChart>
-            </SafeResponsiveChart>
+            <SafeResponsiveChart className="h-[210px] w-full" option={eventTrendOption(trendData)} />
           )}
         </ChartCard>
 
@@ -318,15 +347,7 @@ export function Firewall12EnterprisePage({ onViewResults, onViewLogDetail, child
 
         <ChartCard title="Top Categories">
           {firewallData.loading && categoryData.length === 0 ? sectionSkeleton() : (
-            <SafeResponsiveChart className="h-[210px] w-full">
-              <BarChart data={categoryData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#33415522" />
-                <XAxis dataKey="name" hide />
-                <YAxis tick={{ fontSize: 11 }} width={100} dataKey="name" type="category" />
-                <Tooltip />
-                <Bar dataKey="value" fill="#6b7280" radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </SafeResponsiveChart>
+            <SafeResponsiveChart className="h-[210px] w-full" option={topCategoriesOption(categoryData)} />
           )}
         </ChartCard>
       </section>

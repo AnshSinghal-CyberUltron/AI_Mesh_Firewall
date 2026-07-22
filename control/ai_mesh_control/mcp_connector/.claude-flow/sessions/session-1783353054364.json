@@ -1,0 +1,15 @@
+{
+  "id": "session-1783353054364",
+  "startedAt": "2026-07-06T15:50:54.364Z",
+  "cwd": "/home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control/mcp_connector",
+  "context": {},
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "restoredAt": "2026-07-06T15:52:00.728Z",
+  "endedAt": "2026-07-06T15:55:53.039Z",
+  "duration": 298675
+}

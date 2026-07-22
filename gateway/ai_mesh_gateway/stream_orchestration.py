@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Callable, TYPE_CHECKING
 
+from pipeline_trace import attach_latency_breakdown
+
 if TYPE_CHECKING:
     from llm_router import LLMRouter, ModelSelection
     from rate_limiter import RateLimiter
@@ -113,7 +115,6 @@ class StreamLaunchContext:
     org_slug: str
     model: str
     key_hash: str = ""
-    key_prefix: str = ""
     rate_limit_tpm: int = 0
     estimated_tokens: int = 20
     org_tpm_limit: int = 0
@@ -374,11 +375,15 @@ async def finalize_stream(
         _sc_risk = float(getattr(_sv, "confidence", 0.0) or 0.0) if _sv is not None else 0.0
     else:
         _sc_action, _sc_threat, _sc_risk = "allow", "", 0.0
-    # Output-guard outcome wins only when STRICTLY more severe (block > redact > flag >
-    # allow) so a mid-stream block/redact is never downgraded by a clean input scan.
-    _SEV = {"allow": 0, "flag": 1, "redact": 2, "block": 3}
+    # PER-STAGE HONESTY (2026-07-16): the streamed request action is the OUTPUT DELIVERY
+    # action whenever the output guard actually acted (block/redact/rewrite/flag) —
+    # matching the non-stream `request` emission — NOT the max-severity vs the input
+    # redact. Previously the severity map ("allow/flag/redact/block") OMITTED "rewrite",
+    # so a streamed rewrite scored 0 and was recorded as the input redact (severity 2).
+    # The separate input prompt redaction is preserved as `input_action`.
+    _input_prompt_action = _sc_action  # "redact"/"allow" from the prompt redaction above
     _guard_action = "block" if metrics.output_blocked else (metrics.guard_action or "")
-    if _guard_action and _SEV.get(_guard_action, 0) > _SEV.get(_sc_action, 0):
+    if _guard_action in ("block", "redact", "rewrite", "flag"):
         _sc_action = _guard_action
         if metrics.guard_threat_type:
             _sc_threat = metrics.guard_threat_type
@@ -390,12 +395,10 @@ async def finalize_stream(
                 model=model,
                 user_id=ctx.user_id,
                 project_id=ctx.project_id,
-                key_prefix=ctx.key_prefix or (ctx.key_hash[:8] if ctx.key_hash else ""),
                 latency_ms=elapsed_ms,
                 action=_sc_action,
                 risk_score=_sc_risk,
                 threat_type=_sc_threat,
-                prompt_snippet=_prompt_snip[:500] if _prompt_snip else "",
                 metadata={
                     "ttft_ms": round(metrics.ttft_ms, 2),
                     "chunks": metrics.chunks_emitted,
@@ -404,6 +407,8 @@ async def finalize_stream(
                     "usage": metrics.usage or {},
                     "usage_estimated": metrics.usage_estimated,
                     "output_blocked": metrics.output_blocked,
+                    "input_action": _input_prompt_action,
+                    "output_action": _guard_action or "allow",
                     "request_id": ctx.request_id,
                     # SCAN-DETAIL ENRICHMENT: include the full pipeline trace, the
                     # (already-redacted) input, and the reconstructed assistant
@@ -540,6 +545,8 @@ def build_stream_trace_frame(
     if elapsed_ms <= 0 and ctx.start_time:
         elapsed_ms = (time.perf_counter() - ctx.start_time) * 1000
     zs["processing_time_ms"] = round(elapsed_ms, 2)
+    if metrics.ttft_ms > 0:
+        zs["ttft_ms"] = round(metrics.ttft_ms, 2)
 
     frame: dict[str, Any] = {
         "id": stream_id or f"chatcmpl-{ctx.request_id or 'zs-stream'}",
@@ -569,6 +576,18 @@ def build_stream_trace_frame(
                             s2["detail"] = zs["detail"]
                     _stages.append(s2)
                 pt["stages"] = _stages
+            # Reconcile totals with the completed stream wall-clock (PIPELINE-0015).
+            _stage_sum = round(
+                sum(float(s.get("latency_ms") or 0) for s in (pt.get("stages") or []) if isinstance(s, dict)),
+                1,
+            )
+            _overhead = round(max(0.0, elapsed_ms - _stage_sum), 1)
+            pt["stage_latency_sum_ms"] = _stage_sum
+            pt["overhead_ms"] = _overhead
+            pt["total_latency_ms"] = round(elapsed_ms, 2)
+            if metrics.ttft_ms > 0:
+                pt["ttft_ms"] = round(metrics.ttft_ms, 2)
+            attach_latency_breakdown(pt)
             frame["pipeline_trace"] = pt
         except Exception:
             frame["pipeline_trace"] = pipeline_trace_base

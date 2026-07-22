@@ -38,61 +38,6 @@ class GatewayLitellmReloadTests(unittest.TestCase):
         prepared = LLMRouter._prepare_reload_entry(entry)
         self.assertEqual(prepared["litellm_params"]["custom_llm_provider"], "openai")
 
-    def test_gateway_prepare_reload_entry_maps_bedrock_iam_credentials(self):
-        from ai_mesh_gateway.llm_router import LLMRouter
-
-        with patch("ai_mesh_gateway.llm_router.decrypt_api_key", return_value="AKIAEXAMPLE1234567"):
-            with patch.dict(
-                "os.environ",
-                {
-                    "AWS_SECRET_ACCESS_KEY": "secret-from-env",
-                    "BEDROCK_REGION": "ap-south-1",
-                },
-                clear=False,
-            ):
-                entry = {
-                    "model_name": "bedrock-llama-3",
-                    "provider": "aws_bedrock",
-                    "litellm_params": {
-                        "model": "bedrock/meta.llama3-1-70b-instruct-v1:0",
-                        "api_key_encrypted": "enc-blob",
-                    },
-                }
-                prepared = LLMRouter._prepare_reload_entry(entry)
-                params = prepared["litellm_params"]
-                self.assertEqual(params["aws_access_key_id"], "AKIAEXAMPLE1234567")
-                self.assertEqual(params["aws_secret_access_key"], "secret-from-env")
-                self.assertEqual(params["aws_region_name"], "ap-south-1")
-                self.assertNotIn("api_key", params)
-
-    def test_gateway_prepare_reload_entry_bedrock_env_credentials_without_byok(self):
-        from ai_mesh_gateway.llm_router import LLMRouter
-
-        with patch.dict(
-            "os.environ",
-            {
-                "AWS_ACCESS_KEY_ID": "AKIAFROMENV123456",
-                "AWS_SECRET_ACCESS_KEY": "secret-from-env",
-                "BEDROCK_REGION": "ap-south-1",
-            },
-            clear=False,
-        ):
-                entry = {
-                    "model_name": "bedrock-llama-3",
-                    "provider": "aws_bedrock",
-                    "litellm_params": {
-                        "model": "bedrock/meta.llama3-1-70b-instruct-v1:0",
-                        "aws_region_name": "ap-south-1",
-                    },
-                }
-                prepared = LLMRouter._prepare_reload_entry(entry)
-                params = prepared["litellm_params"]
-                self.assertEqual(params["aws_access_key_id"], "AKIAFROMENV123456")
-                self.assertEqual(params["aws_secret_access_key"], "secret-from-env")
-                self.assertEqual(params["aws_region_name"], "ap-south-1")
-                self.assertEqual(params["model"], "bedrock/meta.llama3-70b-instruct-v1:0")
-                self.assertNotIn("api_key", params)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,27 @@
+{
+  "case_id": "04_injection_block",
+  "contract_final": "block",
+  "final_action": "block",
+  "stages": [
+    {
+      "action": "block",
+      "stage": "policy"
+    },
+    {
+      "action": "skip",
+      "stage": "input_scan"
+    },
+    {
+      "action": "skip",
+      "stage": "route"
+    },
+    {
+      "action": "skip",
+      "stage": "route"
+    },
+    {
+      "action": "skip",
+      "stage": "output_guard"
+    }
+  ]
+}

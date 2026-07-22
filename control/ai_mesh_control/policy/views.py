@@ -12,6 +12,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from rest_framework.viewsets import ModelViewSet
 
 from auth.utils import get_request_organization
@@ -54,6 +55,13 @@ _RULE_ID_PATH_PARAM = [
 ]
 
 logger = logging.getLogger(__name__)
+
+
+class PolicyWriteThrottle(UserRateThrottle):
+    """Cap policy CRUD writes per user (CDL finding #5)."""
+
+    scope = "policy_write"
+    rate = "30/min"
 
 
 def _user_is_policy_admin(request) -> bool:
@@ -397,6 +405,11 @@ class PolicyViewSet(ModelViewSet):
         if self.action in ("create", "update", "partial_update"):
             return PolicyWriteSerializer
         return PolicySerializer
+
+    def get_throttles(self):
+        if self.action in ("create", "update", "partial_update", "destroy"):
+            return [PolicyWriteThrottle()]
+        return super().get_throttles()
 
     def _get_policy_stats_map(self, policy_ids, since):
         """Bulk-fetch per-policy enforcement stats for the given IDs and time window."""

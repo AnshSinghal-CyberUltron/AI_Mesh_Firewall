@@ -193,6 +193,76 @@ def _is_owned_collection_name(name: str) -> bool:
     return bool(_COLLECTION_NAME_RE.fullmatch(name))
 
 
+# ── RAG pipeline policy construction for the portable /v1/vector/* routes ──
+#
+# The 4-stage RAGFirewallPipeline.execute() treats ``policy`` as a flat DICT of
+# per-request directives (it does ``(policy or {}).get(...)`` and every stage
+# reads ``inp.policy.get(...)``). ``POLICY_SYNC.get_policies(org_slug)`` returns
+# a ``list[dict]`` of COMPILED policy entries — a DIFFERENT shape. Passing that
+# list straight through was a latent defect: a non-empty list is truthy, so
+# ``policy or {}`` kept the list and the first ``.get`` raised
+# ``AttributeError: 'list' object has no attribute 'get'`` (→ 500); an empty
+# list silently collapsed to ``{}`` so the org slug was lost and the pipeline's
+# internal ``_get_compiled_policies`` fell back to the "default" org. This
+# mirrors main.py's /v1/rag/query, which builds a dict and sets ``_org_slug``
+# so the pipeline can resolve the org's compiled policies + guardrail config.
+
+_RAG_GUARDRAIL_KEYS = (
+    "prompt_injection_threshold",
+    "prompt_rewrite_threshold",
+    "prompt_downgrade_threshold",
+    "input_scan_enabled",
+)
+
+
+def _gateway_main_module():
+    """Resolve the LIVE gateway main module (startup-populated globals).
+
+    Same sys.modules idiom as ``_scan_redact_upsert_documents`` — gunicorn loads
+    ``ai_mesh_gateway.main`` and sets CONFIG_SYNC on THAT object; a bare
+    ``import main`` resolves a different module whose startup never ran.
+    """
+    import sys
+
+    gm = sys.modules.get("ai_mesh_gateway.main") or sys.modules.get("main")
+    if gm is None:
+        try:
+            from ai_mesh_gateway import main as gm  # type: ignore[no-redef]
+        except Exception:  # noqa: BLE001
+            try:
+                import main as gm  # type: ignore[no-redef]
+            except Exception:
+                return None
+    return gm
+
+
+def _build_rag_policy(org_slug: str) -> dict:
+    """Build the per-request DICT policy the RAGFirewallPipeline expects.
+
+    Sets ``_org_slug`` (so the pipeline resolves the org's compiled policies +
+    ranker rules) and merges the per-org FirewallConfig guardrail keys the
+    QueryStage consumes (injection thresholds + input-scan gate) so the portable
+    /v1/vector/query path honors the SAME frontend config the chat and
+    /v1/rag/query paths honor. Fail-open: returns just ``{"_org_slug": ...}``
+    when CONFIG_SYNC is unavailable.
+    """
+    policy: dict = {"_org_slug": org_slug or ""}
+    if not org_slug:
+        return policy
+    gm = _gateway_main_module()
+    config_sync = getattr(gm, "CONFIG_SYNC", None) if gm is not None else None
+    if config_sync is None:
+        return policy
+    try:
+        oc = config_sync.get_config(org_slug) or {}
+    except Exception:  # noqa: BLE001 — never let config lookup break the query path
+        return policy
+    for _k in _RAG_GUARDRAIL_KEYS:
+        if _k in oc:
+            policy[_k] = oc[_k]
+    return policy
+
+
 # ────────────────────────────────────────────────────────────────────────────
 #  AUTH + ORG RESOLUTION
 # ────────────────────────────────────────────────────────────────────────────
@@ -561,7 +631,11 @@ async def query_vector_db(
                 vector_db_type=provider_type,
                 n_results=n_results,
                 where_filter=where_filter,
-                policy=POLICY_SYNC.get_policies(org_slug) if POLICY_SYNC else {},
+                # Build a DICT policy (see _build_rag_policy): passing the raw
+                # POLICY_SYNC.get_policies() list here raised AttributeError in
+                # the pipeline. The pipeline resolves the org's compiled policies
+                # internally from ``_org_slug``.
+                policy=_build_rag_policy(org_slug),
                 actor=actor,
             )
         except Exception as exc:
@@ -665,13 +739,24 @@ async def _scan_redact_upsert_documents(
     # Lazy, function-local import of the gateway singletons (same idiom as
     # mcp_proxy / mcp_scan_orchestrator) — avoids a circular import at module load
     # (main imports vector_routes at startup).
-    try:
-        import main as gateway_main
-    except Exception:  # noqa: BLE001 — never let an import error block a write path
+    # Resolve the LIVE app module from sys.modules (same defect class as
+    # _get_input_scanner/_get_policy_sync, #18/#19): gunicorn loads
+    # ``ai_mesh_gateway.main`` and its startup handler sets CONTEXT_GUARD/CONFIG_SYNC
+    # on THAT module object. A bare ``import main`` resolves a *different* module
+    # object (same file, separate namespace) whose startup never ran → those globals
+    # stayed None → the embedding-input scan silently PASSED THROUGH. Prefer the
+    # packaged module already in sys.modules; only import fresh as a last resort.
+    import sys
+
+    gateway_main = sys.modules.get("ai_mesh_gateway.main") or sys.modules.get("main")
+    if gateway_main is None:
         try:
             from ai_mesh_gateway import main as gateway_main  # type: ignore[no-redef]
-        except Exception:
-            return doc_ids, doc_texts, doc_metas, [], False
+        except Exception:  # noqa: BLE001 — never let an import error block a write path
+            try:
+                import main as gateway_main  # type: ignore[no-redef]
+            except Exception:
+                return doc_ids, doc_texts, doc_metas, [], False
 
     context_guard = getattr(gateway_main, "CONTEXT_GUARD", None)
     config_sync = getattr(gateway_main, "CONFIG_SYNC", None)

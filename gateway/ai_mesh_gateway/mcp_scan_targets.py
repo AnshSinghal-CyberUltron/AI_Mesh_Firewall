@@ -25,21 +25,40 @@ def _safe_json(value: Any) -> str:
         return str(value)
 
 
-def collect_key_values(obj: Any, key: str, *, _depth: int = 0) -> list[str]:
-    """Recursively collect string values under ``key`` (case-insensitive)."""
-    if _depth > 10 or not key:
+# #32 (consistency with control #29 / gateway #31): align this "aligned with the
+# policy engine" helper to cap 500 (was a recursive depth-10 cap). The gateway's
+# LIVE key-path scan walker is extract_scan_targets._walk (unbounded, bounded by the
+# _MCP_MAX_RESULT_DEPTH result guard) — collect_key_values is currently only exercised
+# by tests, so the depth-10 cap was latent, not a live bypass; still fixed so a future
+# caller can't inherit the old blind spot. Iterative → no RecursionError at any depth.
+_KEY_COLLECT_MAX_DEPTH = 500
+_KEY_COLLECT_MAX_NODES = 2_000_000
+
+
+def collect_key_values(obj: Any, key: str) -> list[str]:
+    """Collect string values under ``key`` (case-insensitive), ITERATIVE walk."""
+    if not key:
         return []
     target = _normalize_key(key)
     out: list[str] = []
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            if _normalize_key(k) == target:
-                out.append(v if isinstance(v, str) else _safe_json(v))
-            else:
-                out.extend(collect_key_values(v, key, _depth=_depth + 1))
-    elif isinstance(obj, list):
-        for item in obj:
-            out.extend(collect_key_values(item, key, _depth=_depth + 1))
+    stack: list[tuple[Any, int]] = [(obj, 0)]
+    nodes = 0
+    while stack:
+        cur, depth = stack.pop()
+        if depth > _KEY_COLLECT_MAX_DEPTH:
+            continue
+        nodes += 1
+        if nodes > _KEY_COLLECT_MAX_NODES:
+            break
+        if isinstance(cur, dict):
+            for k, v in cur.items():
+                if _normalize_key(k) == target:
+                    out.append(v if isinstance(v, str) else _safe_json(v))
+                else:
+                    stack.append((v, depth + 1))
+        elif isinstance(cur, list):
+            for item in cur:
+                stack.append((item, depth + 1))
     return out
 
 
@@ -93,19 +112,27 @@ def extract_scan_targets(
 
     if "." in path:
         values = _get_by_dot_path(payload, path)
+
         # Dot-path mutation is best-effort: rebuild only when a single dict path.
+        def _make_setter(i: int) -> Callable[[str], None]:
+            def _set(v: str) -> None:
+                _mutate_dot_path(payload, path, i, v)
+
+            return _set
+
         for idx, val in enumerate(values):
             if isinstance(val, str):
-
-                def _make_setter(i: int) -> Callable[[str], None]:
-                    def _set(v: str) -> None:
-                        _mutate_dot_path(payload, path, i, v)
-
-                    return _set
-
                 targets.append((val, _make_setter(idx)))
             else:
-                targets.append((_safe_json(val), lambda _v, _val=val: None))
+                # CHG-0046: a non-string dot-path target (number / list / object)
+                # previously got a NO-OP setter, so a detected secret/PII inside it
+                # was reported redacted (scan_mcp_payload sets result_redacted=True)
+                # yet egressed RAW — and the E12 result-floor is then BYPASSED
+                # (the returned payload is a fresh object, so `scanned is
+                # result_content` is False). Bind the SAME real mutator so redaction
+                # replaces the value with the masked string (fail-closed byte truth,
+                # never report-redact-while-forwarding-raw).
+                targets.append((_safe_json(val), _make_setter(idx)))
         return targets
 
     # Simple key name — walk all matching keys.
@@ -120,7 +147,14 @@ def extract_scan_targets(
 
                         targets.append((v, _set_str))
                     else:
-                        targets.append((_safe_json(v), lambda _n, _p=node, _k=k: None))
+                        # CHG-0046: a non-string keyed value (number / list / object)
+                        # was bound to a NO-OP setter — detected secret/PII in it was
+                        # reported redacted but forwarded RAW. Bind a REAL setter so
+                        # the masked string replaces the value in place (fail-closed).
+                        def _set_nonstr(new: str, _p=node, _k=k) -> None:
+                            _p[_k] = new
+
+                        targets.append((_safe_json(v), _set_nonstr))
                 else:
                     _walk(v, node, k)
         elif isinstance(node, list):
