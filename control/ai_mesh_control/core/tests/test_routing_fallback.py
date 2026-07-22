@@ -34,6 +34,17 @@ def _routing_entry(
 
 def test_fallback_profile_key_stable():
     assert fallback_profile_key("confidential", ["hipaa", "soc2"]) == "confidential|hipaa,soc2"
+    assert fallback_profile_key("RESTRICTED", ["HIPAA"]) == fallback_profile_key("restricted", ["hipaa"])
+
+
+def test_build_chains_case_insensitive_compliance_tags():
+    entries = [
+        _routing_entry("hipaa-model", sensitivity="restricted", tags=["HIPAA"], priority=10),
+        _routing_entry("public-model", sensitivity="public"),
+    ]
+    payload = build_compliant_fallback_chains(entries)
+    chain = payload["chains"][fallback_profile_key("restricted", ["hipaa"])]
+    assert chain[0] == "hipaa-model"
 
 
 def test_build_chains_respects_sensitivity_and_tags():

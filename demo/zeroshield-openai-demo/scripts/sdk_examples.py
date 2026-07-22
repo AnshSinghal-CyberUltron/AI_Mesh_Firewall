@@ -7,7 +7,6 @@ ZeroShield — six OpenAI SDK scenarios (stock client only).
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 from pathlib import Path
@@ -62,18 +61,18 @@ def scenario_4_mcp_context() -> None:
 
 
 def scenario_5_routing() -> None:
-    raw = client.chat.completions.with_raw_response.create(
+    r = client.responses.create(
         model="auto",
-        max_tokens=80,
+        input="Write Python code to reverse a string.",
         extra_body={"routing_preferences": {"enable_routing": True, "data_sensitivity": "restricted"}},
-        messages=[{"role": "user", "content": "Write Python code to reverse a string."}],
     )
-    body = json.loads(raw.text)
-    routing = (body.get("zeroshield") or {}).get("routing", {})
+    extra = getattr(r, "model_extra", None) or {}
+    zs = extra.get("zeroshield") if isinstance(extra.get("zeroshield"), dict) else {}
+    routing = zs.get("routing") if isinstance(zs.get("routing"), dict) else {}
+    snippet = (r.output_text or "")[:80]
     print(
-        f"[5] routing: requested={routing.get('original_model')} "
-        f"served={routing.get('selected_model') or routing.get('routed_model')} "
-        f"rerouted={routing.get('rerouted')}"
+        f"[5] routing: text={snippet!r} "
+        f"routed={routing.get('selected_model') or routing.get('routed_model') or 'n/a'}"
     )
 
 

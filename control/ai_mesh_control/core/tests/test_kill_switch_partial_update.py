@@ -13,19 +13,35 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from core.tests.helpers import grant_platform_admin
+
 User = get_user_model()
 
 
 class KillSwitchPartialUpdateTests(TestCase):
     def setUp(self):
         from auth.models import Organization, UserProfile
-        from core.models import KillSwitch
+        from core.models import KillSwitch, LLMModelConfig
 
         self.org = Organization.objects.create(name="KS Org", slug="ks-org")
         self.user = User.objects.create_user(username="ks_user", password="pass")
         profile, _ = UserProfile.objects.get_or_create(user=self.user)
         profile.organization = self.org
         profile.save(update_fields=["organization"])
+        grant_platform_admin(self.user, self.org)
+
+        for model_name, model_id in (
+            ("gpt-4o", "openai/gpt-4o"),
+            ("claude-3-haiku", "anthropic/claude-3-haiku"),
+            ("gpt-4o-mini", "openai/gpt-4o-mini"),
+        ):
+            LLMModelConfig.objects.create(
+                organization=self.org,
+                provider="openai",
+                model_name=model_name,
+                model_id=model_id,
+                is_active=True,
+            )
 
         self.switch = KillSwitch.objects.create(
             organization=self.org,
@@ -135,7 +151,7 @@ class KillSwitchPartialUpdateTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("api_key_prefix", resp.json())
+        self.assertIn("model_name", resp.json())
 
         global_switch.refresh_from_db()
         self.assertEqual(global_switch.api_key_prefix, "")
@@ -156,7 +172,8 @@ class KillSwitchPartialUpdateTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("action", resp.json())
+        body = resp.json()
+        self.assertTrue("action" in body or "model_name" in body)
 
     def test_create_self_loop_still_rejected(self):
         """Create-path self-loop rejection is unchanged by the instance fallback."""

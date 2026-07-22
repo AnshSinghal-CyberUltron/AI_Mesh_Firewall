@@ -84,8 +84,9 @@ docker build --platform "${PLATFORM}" -f workers/Dockerfile \
   -t "${ECR}/ai-mesh-workers:${TAG}" .
 docker push "${ECR}/ai-mesh-workers:${TAG}"
 
-docker build --platform "${PLATFORM}" -f examples/zeroshield-openai-demo/Dockerfile \
-  -t "${ECR}/ai-mesh-demo:${TAG}" examples/zeroshield-openai-demo
+# Canonical demo source: demo/zeroshield-openai-demo (examples/ is legacy reference).
+docker build --platform "${PLATFORM}" -f demo/zeroshield-openai-demo/Dockerfile \
+  -t "${ECR}/ai-mesh-demo:${TAG}" demo/zeroshield-openai-demo
 docker push "${ECR}/ai-mesh-demo:${TAG}"
 
 # nginx bakes the /demo/ Basic Auth credential (apr1 hash) from these build args.

@@ -76,6 +76,85 @@ def ensure_simulator_firewall_keywords_cleared(org) -> None:
             config.save(update_fields=["blocked_keywords"])
 
 
+def _model_is_gateway_routable(model) -> bool:
+    """True when the gateway would treat this org model as inference-eligible."""
+    if not model.is_active:
+        return False
+    provider = str(model.provider or "").strip().lower()
+    if provider in {"bedrock", "aws_bedrock", "ollama"}:
+        return True
+    if model.has_usable_api_key():
+        return True
+    env_var = str(model.api_key_env_var or "").strip()
+    return bool(env_var and os.environ.get(env_var))
+
+
+def ensure_routable_inference_model(org) -> None:
+    """
+    Dev bootstrap: guarantee at least one user-managed inference model is routable.
+
+    After a DJANGO_SECRET_KEY rotation, encrypted BYOK keys become undecryptable while
+    the API still exposed ``api_key_set`` from blob presence alone — the gateway then
+    returns 422 at model routing. Prefer activating an existing Bedrock model that uses
+    gateway AWS env credentials when no credentialed model remains.
+    """
+    if org is None:
+        return
+    from core.models import LLMModelConfig, is_reserved_inference_model_name
+
+    active = list(
+        LLMModelConfig.queryset_user_managed(
+            LLMModelConfig.objects.filter(organization=org, is_active=True)
+        )
+    )
+    if any(_model_is_gateway_routable(m) for m in active):
+        return
+
+    inactive_bedrock = (
+        LLMModelConfig.queryset_user_managed(
+            LLMModelConfig.objects.filter(
+                organization=org,
+                is_active=False,
+                provider__iexact="aws_bedrock",
+            )
+        )
+        .order_by("-updated_at")
+        .first()
+    )
+    if inactive_bedrock and os.environ.get("AWS_ACCESS_KEY_ID"):
+        if not is_reserved_inference_model_name(inactive_bedrock.model_name, inactive_bedrock.model_id):
+            inactive_bedrock.is_active = True
+            if not (inactive_bedrock.api_key_env_var or "").strip():
+                inactive_bedrock.api_key_env_var = "AWS_ACCESS_KEY_ID"
+            inactive_bedrock.save(update_fields=["is_active", "api_key_env_var", "updated_at"])
+            logger.info(
+                "Activated Bedrock inference model %r for simulator bootstrap (org=%s)",
+                inactive_bedrock.model_name,
+                getattr(org, "slug", org),
+            )
+            return
+
+    inactive_ollama = (
+        LLMModelConfig.queryset_user_managed(
+            LLMModelConfig.objects.filter(
+                organization=org,
+                is_active=False,
+                provider__iexact="ollama",
+            )
+        )
+        .order_by("-updated_at")
+        .first()
+    )
+    if inactive_ollama is not None:
+        inactive_ollama.is_active = True
+        inactive_ollama.save(update_fields=["is_active", "updated_at"])
+        logger.info(
+            "Activated Ollama inference model %r for simulator bootstrap (org=%s)",
+            inactive_ollama.model_name,
+            getattr(org, "slug", org),
+        )
+
+
 def ensure_firewall_excludes_guard_model(org) -> None:
     """
     Strip the ZeroShield guard model from every firewall allowlist (self-healing).
@@ -102,6 +181,49 @@ def ensure_firewall_excludes_guard_model(org) -> None:
             config.save(update_fields=["allowed_models"])
 
 
+def ensure_compliance_capable_inference_model(org) -> None:
+    """
+    Dev bootstrap: ensure at least one routable user model can satisfy HIPAA/restricted routing.
+
+    The internal zeroshield guard model is excluded from inference pools; demos and Module 1.5
+    HIPAA scenarios need a user-managed model tagged restricted + HIPAA.
+    """
+    if org is None:
+        return
+    from core.models import LLMModelConfig, is_reserved_inference_model_name
+
+    routable = [
+        m
+        for m in LLMModelConfig.queryset_user_managed(
+            LLMModelConfig.objects.filter(organization=org, is_active=True)
+        )
+        if _model_is_gateway_routable(m)
+        and not is_reserved_inference_model_name(m.model_name, m.model_id)
+    ]
+    if not routable:
+        return
+
+    def _hipaa_restricted(model) -> bool:
+        tags = {str(t).strip().lower() for t in (model.compliance_tags or [])}
+        return str(model.data_sensitivity_level or "").strip().lower() == "restricted" and "hipaa" in tags
+
+    if any(_hipaa_restricted(m) for m in routable):
+        return
+
+    model = routable[0]
+    tags = list(model.compliance_tags or [])
+    if not any(str(t).strip().lower() == "hipaa" for t in tags):
+        tags.append("HIPAA")
+    model.compliance_tags = tags
+    model.data_sensitivity_level = "restricted"
+    model.save(update_fields=["compliance_tags", "data_sensitivity_level", "updated_at"])
+    logger.info(
+        "Tagged inference model %r restricted+HIPAA for simulator bootstrap (org=%s)",
+        model.model_name,
+        getattr(org, "slug", org),
+    )
+
+
 def ensure_simulator_dev_bootstrap(org=None) -> bool:
     """
     Apply dev-only simulator bootstrap (LLM model + firewall helpers).
@@ -125,6 +247,8 @@ def ensure_simulator_dev_bootstrap(org=None) -> bool:
 
     try:
         ensure_default_llm_model(org)
+        ensure_routable_inference_model(org)
+        ensure_compliance_capable_inference_model(org)
         ensure_firewall_excludes_guard_model(org)
         ensure_simulator_firewall_keywords_cleared(org)
         return True

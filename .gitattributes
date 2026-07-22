@@ -1,0 +1,2 @@
+# Keep shell entrypoints executable in Linux containers (avoid CRLF on Windows).
+*.sh text eol=lf

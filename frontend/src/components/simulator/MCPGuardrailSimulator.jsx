@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { notifyTelemetryActivity } from "../../utils/telemetryEvents";
 import {
   Activity,
   AlertTriangle,
@@ -354,6 +355,7 @@ export function MCPGuardrailSimulator() {
         data = null;
       }
       setResult({ status, mode, data });
+      notifyTelemetryActivity();
     } catch (e) {
       setError(e.message || "Request failed.");
     } finally {

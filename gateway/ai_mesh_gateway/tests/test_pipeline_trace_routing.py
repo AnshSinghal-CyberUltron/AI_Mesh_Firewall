@@ -22,7 +22,7 @@ def test_model_routing_reroute_when_models_differ():
         requested_model="gpt-5.2",
     )
     routing = next(s for s in trace["stages"] if s["name"] == "model_routing")
-    assert routing["action"] == "reroute"
+    assert routing["action"] == "allow"
     assert routing["requested_model"] == "gpt-5.2"
     assert routing["selected_model"] == "Haiku"
     assert routing["route_destination"] == "llm"
@@ -116,5 +116,21 @@ def test_kill_switch_stage_reroute_from_route_metadata():
     routing = next(s for s in trace["stages"] if s["name"] == "model_routing")
     assert ks["action"] == "reroute"
     assert "Kill-switch" in ks["detail"] or "kill-switch" in ks["detail"].lower()
-    assert routing["action"] == "reroute"
+    assert routing["action"] == "allow"
     assert routing["decision_source"] == "kill_switch"
+
+
+def test_auto_model_resolution_is_allow_not_reroute():
+    trace = build_pipeline_trace(
+        route_metadata={
+            "original_model": "auto",
+            "selected_model": "Haiku",
+            "routed_model": "Haiku",
+            "rerouted": True,
+            "routing_reason": "Default model selected",
+            "decision_source": "policy_adjudicator",
+        },
+        requested_model="auto",
+    )
+    routing = next(s for s in trace["stages"] if s["name"] == "model_routing")
+    assert routing["action"] == "allow"

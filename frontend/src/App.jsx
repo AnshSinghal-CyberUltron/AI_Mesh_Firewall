@@ -1,182 +1,150 @@
-import { useEffect, useRef, useState } from "react";
-import { Routes, Route, Navigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "./context/AuthContext";
+import { lazy, Suspense, useCallback, useEffect } from "react";
+import {
+  Routes,
+  Route,
+  Navigate,
+  Outlet,
+  useLocation,
+  useNavigate,
+  useOutletContext,
+  useSearchParams,
+} from "react-router-dom";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { LazyRouteErrorBoundary } from "./components/LazyRouteErrorBoundary";
+import { RouteFallback } from "./components/module2/RouteFallback";
+import { resolveActiveTab, routeForTab } from "./utils/resolveActiveTab";
+import { lazyImportWithTimeout } from "./utils/lazyImportWithTimeout";
 import { Login } from "./pages/Login";
-import { Profile } from "./pages/Profile";
-import { Settings } from "./pages/Settings";
 import { OAuthCallback } from "./pages/OAuthCallback";
-import { AIMeshFirewallOverview } from "./pages/AIMeshFirewallOverview";
-import {
-  Firewall11Page,
-  Firewall12Page,
-  Firewall13Page,
-  Firewall14Page,
-  Firewall15Page,
-  Firewall16Page,
-  Firewall17Page,
-} from "./pages/firewall-submodules";
-import { AIMeshFirewallConfig } from "./pages/AIMeshFirewallConfig";
-import { SubModuleResultsPage } from "./components/SubmoduleResultsPage";
-import { LogDetailPage } from "./components/LogDetailPage";
 
-const firewallTabToModuleId = {
-  "firewall-1-1": "1.1",
-  "firewall-1-2": "1.2",
-  "firewall-1-3": "1.3",
-  "firewall-1-4": "1.4",
-  "firewall-1-5": "1.5",
-  "firewall-1-6": "1.6",
-  "firewall-1-7": "1.7",
-};
+// FirewallHome transitively imports every Module-1 panel + simulator (the heaviest part
+// of the app). Keep it lazy so /login does not pay for it up front.
+const loadFirewallHome = lazyImportWithTimeout(
+  () => import("./pages/FirewallHome").then((m) => ({ default: m.FirewallHome })),
+  { label: "FirewallHome", timeoutMs: 60000, retries: 1 },
+);
+const FirewallHome = lazy(loadFirewallHome);
 
-// Whitelist of valid ?tab= values. Anything else (typos, stale links,
-// crafted URLs) falls back to the overview tab instead of leaking an
-// arbitrary string into layout/navigation state.
-const KNOWN_TABS = new Set([
-  "firewall",
-  "profile",
-  "settings",
-  "firewall-config",
-  ...Object.keys(firewallTabToModuleId),
-]);
+const DashboardPage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/DashboardPage").then((m) => ({ default: m.DashboardPage })),
+    { label: "DashboardPage" },
+  ),
+);
+const UebaApiKeysPage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/UebaApiKeysPage").then((m) => ({ default: m.UebaApiKeysPage })),
+    { label: "UebaApiKeysPage", timeoutMs: 60000, retries: 1 },
+  ),
+);
+const ModelExposurePage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/ModelAnalyticsPage").then((m) => ({ default: m.ModelExposurePage })),
+    { label: "ModelExposurePage" },
+  ),
+);
+const ThreatIntelPage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/ThreatIntelPage").then((m) => ({ default: m.ThreatIntelPage })),
+    { label: "ThreatIntelPage" },
+  ),
+);
+const IncidentsPage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/IncidentsPage").then((m) => ({ default: m.IncidentsPage })),
+    { label: "IncidentsPage" },
+  ),
+);
+const IncidentDetailPage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/IncidentDetailPage").then((m) => ({ default: m.IncidentDetailPage })),
+    { label: "IncidentDetailPage" },
+  ),
+);
+const McpRiskPage = lazy(
+  lazyImportWithTimeout(
+    () => import("./pages/module2/McpRiskPage").then((m) => ({ default: m.McpRiskPage })),
+    { label: "McpRiskPage" },
+  ),
+);
 
-function DashboardApp() {
-  const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const rawTab = searchParams.get("tab");
-  const activeTab = rawTab && KNOWN_TABS.has(rawTab) ? rawTab : "firewall";
-  const [resultsTab, setResultsTab] = useState(null);
-  const [logDetailData, setLogDetailData] = useState(null);
-  const tabInitializedRef = useRef(false);
+function FirewallHomeRoute() {
+  const { onTabChange } = useOutletContext();
+  return <FirewallHome onTabChange={onTabChange} />;
+}
 
-  const setActiveTab = (tab) => {
-    if (tab === "firewall") {
-      setSearchParams({}, { replace: true });
-    } else {
-      setSearchParams({ tab }, { replace: true });
-    }
-  };
+function isModule2Path(pathname) {
+  return (
+    pathname.startsWith("/ueba")
+    || pathname.startsWith("/models")
+    || pathname.startsWith("/mcp")
+    || pathname.startsWith("/threat")
+    || pathname.startsWith("/incidents")
+    || pathname === "/dashboard"
+  );
+}
 
+/**
+ * Layout route (no path splat) so Module-1/2 child paths match the full URL.
+ * The old pattern — parent `path="/*"` + nested `<Routes>` — broke Module 2 under
+ * React Router 7 relative splat matching (URL changed, UI stayed on Module 1).
+ */
+function ProtectedShell() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const activeTab = resolveActiveTab(location.pathname, searchParams);
+
+  // Prefetch FirewallHome only when already on Module 1 home. Prefetching the
+  // heaviest chunk while Module 2 lazy routes compete for Vite transforms on
+  // Docker Desktop Windows bind-mounts wedges FSWatcher (EIO) and leaves
+  // Suspense stuck on "Loading module…".
   useEffect(() => {
-    if (!user || tabInitializedRef.current) return;
-    const tab = searchParams.get("tab");
-    // Normalize missing or unknown ?tab= values to the overview URL once on
-    // first authenticated render.
-    if (!tab || !KNOWN_TABS.has(tab)) {
-      setSearchParams({}, { replace: true });
+    if (isModule2Path(location.pathname)) {
+      return undefined;
     }
-    tabInitializedRef.current = true;
-  }, [user, searchParams, setSearchParams]);
+    const idle = window.requestIdleCallback
+      ? window.requestIdleCallback(() => {
+          loadFirewallHome().catch(() => {});
+        })
+      : setTimeout(() => {
+          loadFirewallHome().catch(() => {});
+        }, 300);
+    return () => {
+      if (window.cancelIdleCallback && typeof idle === "number") {
+        window.cancelIdleCallback(idle);
+      } else {
+        clearTimeout(idle);
+      }
+    };
+  }, [location.pathname]);
 
-  const handleViewResults = (tabId) => {
-    setResultsTab(tabId);
-    setLogDetailData(null);
-  };
-
-  const handleViewLogDetail = (logData) => {
-    setLogDetailData(logData);
-  };
-
-  const handleBackFromResults = () => {
-    setResultsTab(null);
-    setLogDetailData(null);
-  };
-
-  const handleBackFromLog = () => {
-    setLogDetailData(null);
-  };
-
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setResultsTab(null);
-    setLogDetailData(null);
-  };
-
-  const renderContent = () => {
-    if (logDetailData) {
-      return <LogDetailPage logData={logDetailData} onBack={handleBackFromLog} />;
-    }
-
-    if (resultsTab && firewallTabToModuleId[resultsTab]) {
-      return (
-        <SubModuleResultsPage
-          moduleId={firewallTabToModuleId[resultsTab]}
-          onBack={handleBackFromResults}
-          onViewLogDetail={handleViewLogDetail}
-        />
-      );
-    }
-
-    if (activeTab === "profile") return <Profile />;
-    if (activeTab === "settings") return <Settings />;
-    if (activeTab === "firewall") {
-      return <AIMeshFirewallOverview onTabChange={handleTabChange} />;
-    }
-    if (activeTab === "firewall-1-1") {
-      return (
-        <Firewall11Page
-          onViewResults={() => handleViewResults("firewall-1-1")}
-          onViewLogDetail={handleViewLogDetail}
-        />
-      );
-    }
-    if (activeTab === "firewall-1-2") {
-      return (
-        <Firewall12Page
-          onViewResults={() => handleViewResults("firewall-1-2")}
-          onViewLogDetail={handleViewLogDetail}
-        />
-      );
-    }
-    if (activeTab === "firewall-1-3") {
-      return (
-        <Firewall13Page
-          onViewResults={() => handleViewResults("firewall-1-3")}
-          onViewLogDetail={handleViewLogDetail}
-        />
-      );
-    }
-    if (activeTab === "firewall-1-4") {
-      return (
-        <Firewall14Page
-          onViewResults={() => handleViewResults("firewall-1-4")}
-          onViewLogDetail={handleViewLogDetail}
-        />
-      );
-    }
-    if (activeTab === "firewall-1-5") {
-      return (
-        <Firewall15Page
-          onViewResults={() => handleViewResults("firewall-1-5")}
-          onViewLogDetail={handleViewLogDetail}
-        />
-      );
-    }
-    if (activeTab === "firewall-1-6") {
-      return (
-        <Firewall16Page
-          onViewResults={() => handleViewResults("firewall-1-6")}
-          onViewLogDetail={handleViewLogDetail}
-        />
-      );
-    }
-    if (activeTab === "firewall-1-7") {
-      return (
-        <Firewall17Page
-          onViewResults={() => handleViewResults("firewall-1-7")}
-          onViewLogDetail={handleViewLogDetail}
-        />
-      );
-    }
-    if (activeTab === "firewall-config") return <AIMeshFirewallConfig />;
-    return <AIMeshFirewallOverview onTabChange={handleTabChange} />;
-  };
+  const handleTabChange = useCallback(
+    (tab) => {
+      const module2Route = routeForTab(tab);
+      if (module2Route) {
+        navigate(module2Route);
+        return;
+      }
+      if (tab === "firewall") {
+        navigate("/");
+        return;
+      }
+      if (tab === "profile" || tab === "settings" || tab.startsWith("firewall")) {
+        navigate(tab === "firewall" ? "/" : `/?tab=${tab}`);
+      }
+    },
+    [navigate]
+  );
 
   return (
     <DashboardLayout activeTab={activeTab} onTabChange={handleTabChange}>
-      {renderContent()}
+      <LazyRouteErrorBoundary>
+        <Suspense fallback={<RouteFallback label="Loading module…" />}>
+          <Outlet context={{ onTabChange: handleTabChange }} />
+        </Suspense>
+      </LazyRouteErrorBoundary>
     </DashboardLayout>
   );
 }
@@ -188,14 +156,23 @@ export default function App() {
       <Route path="/signup" element={<Navigate to="/login" replace />} />
       <Route path="/oauth/callback" element={<OAuthCallback />} />
       <Route
-        path="/"
         element={
           <ProtectedRoute>
-            <DashboardApp />
+            <ProtectedShell />
           </ProtectedRoute>
         }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      >
+        <Route path="/" element={<FirewallHomeRoute />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/ueba/api-keys" element={<UebaApiKeysPage />} />
+        <Route path="/models/exposure" element={<ModelExposurePage />} />
+        <Route path="/mcp/risk" element={<McpRiskPage />} />
+        <Route path="/threat-intel" element={<ThreatIntelPage />} />
+        <Route path="/threats/intelligence" element={<ThreatIntelPage />} />
+        <Route path="/incidents" element={<IncidentsPage />} />
+        <Route path="/incidents/:id" element={<IncidentDetailPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
     </Routes>
   );
 }

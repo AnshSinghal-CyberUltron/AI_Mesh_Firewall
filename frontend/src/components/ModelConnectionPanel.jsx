@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
+import { syncModule2AfterTelemetryChange } from "../utils/crossModuleSync";
 import {
   ZEROSHIELD_GUARD_MODEL,
   ZEROSHIELD_GUARD_MODEL_LABEL,
@@ -495,6 +496,7 @@ export function ModelConnectionPanel({
         setEditingModel(null);
         await fetchModels();
         onConnectionsMutated?.();
+        syncModule2AfterTelemetryChange("model-connection-save");
       } else {
         const errData = await res.json().catch(() => ({}));
         setError(
@@ -524,6 +526,7 @@ export function ModelConnectionPanel({
       }
       await fetchModels();
       onConnectionsMutated?.();
+      syncModule2AfterTelemetryChange("model-connection-toggle");
     } finally {
       setActionLoading(null);
     }
@@ -542,6 +545,7 @@ export function ModelConnectionPanel({
       }
       await fetchModels();
       onConnectionsMutated?.();
+      syncModule2AfterTelemetryChange("model-connection-delete");
     } finally {
       setActionLoading(null);
     }
@@ -643,6 +647,18 @@ export function ModelConnectionPanel({
         <div className="flex items-center justify-center py-8">
           <Loader2 className="w-5 h-5 text-teal-500 animate-spin" />
           <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">Loading model configurations...</span>
+        </div>
+      ) : models.length === 0 && error ? (
+        <div className="text-center py-10 px-4 rounded-xl border border-red-200 dark:border-red-800 bg-red-50/80 dark:bg-red-950/20">
+          <p className="text-sm font-medium text-red-800 dark:text-red-200">Could not load model connections</p>
+          <p className="text-xs text-red-700 dark:text-red-300 mt-1 max-w-md mx-auto">{error}</p>
+          <button
+            type="button"
+            onClick={fetchModels}
+            className="mt-4 inline-flex items-center gap-1.5 min-h-[44px] px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Retry loading models
+          </button>
         </div>
       ) : models.length === 0 ? (
         <div className="text-center py-10 px-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-600 bg-slate-50/80 dark:bg-slate-900/30">

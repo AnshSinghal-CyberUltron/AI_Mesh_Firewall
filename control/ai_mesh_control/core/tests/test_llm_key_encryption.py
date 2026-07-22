@@ -35,3 +35,18 @@ class BuildLitellmEntryTests(TestCase):
         params = entry["litellm_params"]
         self.assertEqual(params["custom_llm_provider"], "openai")
         self.assertEqual(entry["provider"], "custom")
+
+    def test_build_litellm_entry_bedrock_uses_env_not_api_key(self):
+        cfg = LLMModelConfig(
+            provider="aws_bedrock",
+            model_name="bedrock-llama-3",
+            model_id="bedrock/meta.llama3-1-70b-instruct-v1:0",
+            region="ap-south-1",
+            api_key_env_var="AWS_ACCESS_KEY_ID",
+        )
+        entry = cfg.build_litellm_entry()
+        params = entry["litellm_params"]
+        self.assertNotIn("api_key", params)
+        self.assertNotIn("api_key_encrypted", params)
+        self.assertEqual(params["aws_region_name"], "ap-south-1")
+        self.assertEqual(params["model"], "bedrock/meta.llama3-70b-instruct-v1:0")

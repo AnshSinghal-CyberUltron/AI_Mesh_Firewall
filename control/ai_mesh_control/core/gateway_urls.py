@@ -3,7 +3,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from core.gateway_key_views import GatewayAPIKeyViewSet
+from core.gateway_key_views import GatewayAPIKeyViewSet, GatewayKeyContextView
 from core.gateway_instance_views import (
     GatewayInstanceRegisterView,
     GatewayInstanceTelemetryView,
@@ -20,6 +20,7 @@ router = DefaultRouter()
 router.register(r"keys", GatewayAPIKeyViewSet, basename="gateway-apikey")
 
 urlpatterns = [
+    path("keys/context/", GatewayKeyContextView.as_view(), name="gateway-key-context"),
     path("public-url/", GatewayPublicUrlView.as_view(), name="gateway-public-url"),
     path("instances/register/", GatewayInstanceRegisterView.as_view(), name="gateway-instance-register"),
     path("instances/telemetry/", GatewayInstanceTelemetryView.as_view(), name="gateway-instance-telemetry"),

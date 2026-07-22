@@ -28,28 +28,49 @@ import { SemanticSearchPanel } from "../components/rag/SemanticSearchPanel";
 import { RAGSetupGuide } from "../components/rag/RAGSetupGuide";
 import { ModelStatePanel } from "../components/ModelStatePanel";
 import { FirewallModulePage } from "../components/FirewallModulePage";
+import { FirewallPanelErrorBoundary } from "../components/FirewallPanelErrorBoundary";
 import { MCPConnectorPanel } from "../components/MCPConnectorPanel";
 import { Firewall12EnterprisePage } from "../components/Firewall12EnterprisePage";
 
 class FirewallModuleErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
   }
+
+  componentDidCatch(error, info) {
+    console.error("[FirewallModuleErrorBoundary]", error, info);
+  }
+
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null });
+  };
 
   render() {
     if (this.state.hasError) {
       const label = this.props.title || "This module";
+      const detail = this.state.error?.message;
       return (
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200">
           <h2 className="text-base font-semibold">{label} failed to render</h2>
           <p className="mt-2">
-            One of the panels threw an error while loading. The rest of the app remains usable, and this tab no longer blanks the screen.
+            One of the panels threw an error while loading. Other modules remain usable.
+            Individual panels are isolated so this should be rare — retry or refresh if it persists.
           </p>
+          {import.meta.env.DEV && detail ? (
+            <p className="mt-2 font-mono text-xs break-all opacity-90">{detail}</p>
+          ) : null}
+          <button
+            type="button"
+            onClick={this.handleRetry}
+            className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          >
+            Try again
+          </button>
         </div>
       );
     }
@@ -216,19 +237,34 @@ function Firewall15PageInner({ onViewResults, onViewLogDetail }) {
       onViewResults={onViewResults}
       onViewLogDetail={onViewLogDetail}
       controlPanels={[
-        <GatewayKeyPanel key="gateway-keys-routing" />,
-        <ModelConnectionPanel
-          key="model-connections"
-          showProviderForm={false}
-          showGatewayCatalog={false}
-          onModelsChanged={handleModelsChanged}
-          onConnectionsMutated={handleConnectionsMutated}
-        />,
-        <ModelGovernancePanel key="model-governance" />,
-        <RoutingGovernancePanel key="routing-governance" />,
+        <FirewallPanelErrorBoundary key="gateway-keys-routing" title="Gateway API Keys">
+          <GatewayKeyPanel />
+        </FirewallPanelErrorBoundary>,
+        <FirewallPanelErrorBoundary key="model-connections" title="Model Connections">
+          <ModelConnectionPanel
+            showProviderForm={false}
+            showGatewayCatalog={false}
+            onModelsChanged={handleModelsChanged}
+            onConnectionsMutated={handleConnectionsMutated}
+          />
+        </FirewallPanelErrorBoundary>,
+        <FirewallPanelErrorBoundary key="model-governance" title="Model Governance">
+          <ModelGovernancePanel />
+        </FirewallPanelErrorBoundary>,
+        <FirewallPanelErrorBoundary key="routing-governance" title="Routing Governance">
+          <RoutingGovernancePanel />
+        </FirewallPanelErrorBoundary>,
       ]}
-      simulatorPanels={[<ModelRoutingSimulator key="routing-simulator" />]}
-      footerPanels={[<RoutingAuditPanel key="routing-audit" />]}
+      simulatorPanels={[
+        <FirewallPanelErrorBoundary key="routing-simulator" title="Model Routing Simulator">
+          <ModelRoutingSimulator />
+        </FirewallPanelErrorBoundary>,
+      ]}
+      footerPanels={[
+        <FirewallPanelErrorBoundary key="routing-audit" title="Routing Audit">
+          <RoutingAuditPanel />
+        </FirewallPanelErrorBoundary>,
+      ]}
     />
   );
 }
