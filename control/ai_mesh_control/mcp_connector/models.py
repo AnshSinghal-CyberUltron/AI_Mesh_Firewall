@@ -117,7 +117,14 @@ class MCPServerRegistration(models.Model):
     default_scan_action = models.CharField(
         max_length=8,
         choices=[("tag", "Tag only"), ("redact", "Redact"), ("block", "Block")],
-        default="tag",
+        # SECURE-BY-DEFAULT (2026-07-22): a NEW server masks sensitive data on egress
+        # out of the box instead of observe-only. Was "tag", which let a detected
+        # credential in tool-call arguments egress raw to an external MCP server
+        # (real incident: an AWS key shipped into a public GitHub issue) — the
+        # operator had to remember to raise the posture. The operator can still lower
+        # a specific server to "tag" explicitly; existing servers keep their chosen
+        # value (a field-default change is not retroactive).
+        default="redact",
     )
 
     # ── BYOK auth (Phase B) ──────────────────────────────────────────
