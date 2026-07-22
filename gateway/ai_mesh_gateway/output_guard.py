@@ -503,6 +503,36 @@ _NO_CONTEXT_HALLUCINATION_THRESHOLD = 0.45
 _RAG_GROUNDED_HALLUCINATION_THRESHOLD = 0.2
 
 
+def _safe_grounding_threshold(raw, default: float) -> float:
+    """Coerce an operator-supplied grounding threshold to a usable [0.0, 1.0] value.
+
+    FAIL-SAFE ON CORRUPT CONFIG (2026-07-23): the risk score is capped at 1.0, so a
+    threshold > 1.0 (a stale/mis-migrated bundle, or a bool True -> 1.0, or a UI bug)
+    is UNREACHABLE — an enabled hallucination=block detector then silently FAILS OPEN
+    and delivers the ungrounded response at 200. And a non-numeric value ('abc',
+    None, '') raised inside inspect(), 500-ing every request for the org (benign
+    traffic included). Both are corrupt SELECTIONS, not valid ones: coerce to a
+    number, clamp to [0.0, 1.0], and fall back to the class default on anything
+    non-numeric / NaN so detection still fires. Never trust the raw value into the
+    comparison.
+    """
+    # A bool is not a valid threshold TYPE (float(True) == 1.0 would masquerade as a
+    # legitimate extreme threshold and fail open); treat it as corrupt.
+    if isinstance(raw, bool):
+        return default
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        return default
+    # Out of [0,1] is a CORRUPT selection, not a boundary to clamp to: the risk score
+    # is capped at 1.0, so clamping an out-of-range threshold to 1.0 would preserve
+    # the fail-open (a 0.99 finding never reaches 1.0). Fall back to the class default
+    # so detection still fires. NaN (which fails every comparison) -> default too.
+    if val != val or val < 0.0 or val > 1.0:
+        return default
+    return val
+
+
 def _mask_value_for_detail(value: str, max_len: int = 24) -> str:
     """Mask a raw matched PII/secret value for the client-facing ``detail`` string.
 
@@ -1338,15 +1368,17 @@ class OutputGuard:
         cfg = org_config or self._config
         has_context = bool(context_chunks)
         if has_context:
-            threshold = float(
-                cfg.get("hallucination_grounding_threshold", _RAG_GROUNDED_HALLUCINATION_THRESHOLD)
+            threshold = _safe_grounding_threshold(
+                cfg.get("hallucination_grounding_threshold"),
+                _RAG_GROUNDED_HALLUCINATION_THRESHOLD,
             )
         else:
-            threshold = float(
+            threshold = _safe_grounding_threshold(
                 cfg.get(
                     "hallucination_no_context_threshold",
-                    cfg.get("hallucination_grounding_threshold", _NO_CONTEXT_HALLUCINATION_THRESHOLD),
-                )
+                    cfg.get("hallucination_grounding_threshold"),
+                ),
+                _NO_CONTEXT_HALLUCINATION_THRESHOLD,
             )
 
         if score.risk_score < threshold:
@@ -1594,8 +1626,37 @@ class OutputGuard:
 
     @staticmethod
     def _select_highest_severity(verdicts: list[OutputVerdict]) -> OutputVerdict:
-        """Select the verdict with the highest-priority action."""
-        return max(verdicts, key=lambda v: ACTION_PRIORITY.get(v.action, 0))
+        """Select the verdict that delivers the operator's remedy for every class.
+
+        WHOLE-RESPONSE vs SPAN COLLAPSE (2026-07-23): a single verdict is delivered,
+        so when two classes fire with different actions, ACTION_PRIORITY decides. But
+        that priority (redact=3 > rewrite=2) is written for SPAN actions and silently
+        DROPPED a WHOLE-RESPONSE remedy: with policy/hallucination = rewrite AND a
+        co-occurring pii/credential/ip = redact, the span-redact verdict won, the
+        whole-response rewrite was discarded, and the unsafe/hallucinated CONTENT
+        egressed at 200 while only the email was masked — the operator's policy /
+        hallucination action was never applied.
+
+        A whole-response action (block, or rewrite/redact on a class-less
+        policy/hallucination threat — both REPLACE or WITHHOLD the entire response)
+        SUBSUMES a span mask: replacing the whole response removes the span too (and
+        the rewrite residual net masks any echo). So a whole-response rewrite/redact
+        must outrank a span redact. block stays top; flag/allow stay low; the span
+        cross-scrubber (redact_classes) still masks every protected span whichever
+        verdict wins.
+        """
+        def _key(v: OutputVerdict) -> float:
+            base = ACTION_PRIORITY.get(v.action, 0)
+            _is_whole_response = (
+                v.threat_type not in _REDACTABLE_OUTPUT_CATEGORIES
+                and v.threat_type != "ip_leakage"
+            )
+            if _is_whole_response and v.action in ("rewrite", "redact"):
+                # Above span redact(3), below block(4): a whole-response remedy wins
+                # over span masking but never over an explicit whole-response block.
+                return 3.5
+            return float(base)
+        return max(verdicts, key=_key)
 
 
 def _static_rewrite_text(threat_type: str, detail: str | None = None) -> str:
@@ -2088,7 +2149,24 @@ def output_verdict_applies_to_delivered_text(
     if not matched:
         return True
     delivered = delivered_text or ""
-    return any(v and v in delivered for v in matched.values())
+    if any(v and v in delivered for v in matched.values()):
+        return True
+    # ENCODED FORMS (2026-07-23): matched_values holds the DECODED secret, which is
+    # ABSENT from delivered bytes that carry only the ENCODED blob (base64/hex/\u…).
+    # The raw-value check above then wrongly concluded "not delivered" and downgraded
+    # redact→allow, so a base64-encoded credential/PII the operator chose to redact
+    # egressed verbatim (client-recoverable by decoding) — at ANY size. redact_all
+    # DOES mask those blobs ([ENCODED_SECRET_REDACTED]); so if the sanitizer would
+    # change the delivered text, there IS client-visible maskable data and the verdict
+    # must NOT be downgraded. A no-op (already smart-masked echo / match only in a
+    # blanked non-delivered channel) still downgrades, preserving that carve-out.
+    try:
+        from patterns import redact_all as _ra
+    except ImportError:  # pragma: no cover - packaging fallback
+        from .patterns import redact_all as _ra
+    if delivered and _ra(delivered) != delivered:
+        return True
+    return False
 
 
 def coalesce_output_guard_verdict_for_delivery(

@@ -1216,29 +1216,34 @@ class SecureStreamingResponse:
                 except (TypeError, ValueError):
                     pass
 
-            # FIX-B: tool-call function name + arguments stream raw — scan them.
+            # FIX-B: tool-call text streams raw — scan it. A-01 (stream parity): the
+            # OpenAI SDK has TWO tool-call shapes — {"type":"function","function":
+            # {name,arguments}} AND {"type":"custom","custom":{name,input}}. Reading
+            # only ``function`` (and worse, ``continue``-ing when it is absent) let a
+            # secret in ``custom.input`` stream UNSCANNED — the exact leak the
+            # non-stream path fixed via _tool_call_text_channels. Fold BOTH shapes'
+            # text; never early-skip a custom-only call.
             tool_calls = delta.get("tool_calls")
             if isinstance(tool_calls, list):
                 for call in tool_calls:
                     if not isinstance(call, dict):
                         continue
-                    fn = call.get("function")
-                    if not isinstance(fn, dict):
-                        continue
-                    name = fn.get("name")
-                    if isinstance(name, str):
-                        parts.append(name)
-                    # G58: coerce a non-str (dict) arguments to JSON text (a
-                    # non-conforming provider may stream parsed args) — stream parity
-                    # with the non-stream _tool_arg_to_text coercion.
-                    arguments = fn.get("arguments")
-                    if isinstance(arguments, str):
-                        parts.append(arguments)
-                    elif arguments is not None:
-                        try:
-                            parts.append(json.dumps(arguments))
-                        except (TypeError, ValueError):
-                            pass
+                    for _cont, _keys in ((call.get("function"), ("name", "arguments")),
+                                         (call.get("custom"), ("name", "input"))):
+                        if not isinstance(_cont, dict):
+                            continue
+                        for _k in _keys:
+                            _v = _cont.get(_k)
+                            if isinstance(_v, str):
+                                parts.append(_v)
+                            # G58: coerce a non-str (dict) value to JSON text (a
+                            # non-conforming provider may stream parsed args/input) —
+                            # parity with the non-stream _tool_arg_to_text coercion.
+                            elif _v is not None:
+                                try:
+                                    parts.append(json.dumps(_v))
+                                except (TypeError, ValueError):
+                                    pass
 
             # R12 (#13): legacy `function_call` delta channel (pre-tool_calls API
             # shape) streams raw too — scan name + arguments (non-stream I5 parity).
@@ -1288,15 +1293,21 @@ class SecureStreamingResponse:
         if delta.get("reasoning_content"):
             delta["reasoning_content"] = ""
         for call in (delta.get("tool_calls") or []):
-            if isinstance(call, dict) and isinstance(call.get("function"), dict):
-                fn = call["function"]
-                # G58: blank a TRUTHY value of ANY type — a dict-shaped ``arguments``
-                # (parsed JSON from a non-conforming provider) was left verbatim by
-                # the str-only check, streaming its secret after a redact rebuild.
-                if fn.get("arguments"):
-                    fn["arguments"] = ""
-                if fn.get("name"):
-                    fn["name"] = ""
+            if not isinstance(call, dict):
+                continue
+            # A-01 (stream parity): blank BOTH tool-call shapes — function{name,
+            # arguments} AND custom{name,input} — or a redact/block rebuild leaves a
+            # secret in custom.input streaming raw.
+            for _cont, _keys in ((call.get("function"), ("name", "arguments")),
+                                 (call.get("custom"), ("name", "input"))):
+                if not isinstance(_cont, dict):
+                    continue
+                for _k in _keys:
+                    # G58: blank a TRUTHY value of ANY type — a dict-shaped value
+                    # (parsed JSON from a non-conforming provider) was left verbatim
+                    # by a str-only check, streaming its secret after a redact rebuild.
+                    if _cont.get(_k):
+                        _cont[_k] = ""
         fc = delta.get("function_call")
         if isinstance(fc, dict):
             for _k in ("name", "arguments"):
