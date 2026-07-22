@@ -4193,6 +4193,7 @@ async def _rewrite_output_response_text_via_router(
             _MAX_REWRITE_INPUT_CHARS,
             redact_all,
         )
+        from patterns import redact_all_scoped
 
         guidance = _REWRITE_THREAT_GUIDANCE.get(
             threat_type or "", _REWRITE_THREAT_GUIDANCE.get("policy_violation", "")
@@ -4233,7 +4234,18 @@ async def _rewrite_output_response_text_via_router(
                 # delivered verbatim. The strengthened _REWRITE_SYSTEM_PROMPT tells
                 # the model to use natural placeholders (no fake emails/phones), so
                 # a compliant rewrite has no residual and egresses as a true rewrite.
-                residual = redact_all(clean)
+                # For an ip_leakage rewrite the residual net must also cover internal
+                # FILE PATHS (round-1 d46bd2f2 made ip_leakage=redact mask them, but
+                # the unscoped mask-all redact_all leaves them raw by design); a
+                # rewrite model that echoes /home/svc/.ssh/id_rsa would otherwise ship
+                # it in the 200 body. Use the class-scoped redactor (all classes +
+                # file paths) when the rewrite is for the ip_leakage class; every
+                # other class keeps the FP-safe mask-all residual.
+                _tt = (threat_type or "").lower()
+                if "ip_leak" in _tt or "ip_leakage" in _tt or "infrastructure" in _tt:
+                    residual = redact_all_scoped(clean, {"pii", "credential", "ip_leakage"})
+                else:
+                    residual = redact_all(clean)
                 return (residual if residual != clean else clean), True
         LOG.warning(
             "Output rewrite re-inference returned no usable text (code=%s); using static fallback",

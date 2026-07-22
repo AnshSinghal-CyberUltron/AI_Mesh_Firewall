@@ -1100,47 +1100,71 @@ class SecureStreamingResponse:
         bytes masked both. E14 missed them because ``10`` / ``s`` are not >= 32-char
         secret runs.
 
-        Fix: on a non-final redact flush, RETAIN a ``STREAM_LOOKAHEAD_BYTES`` raw
-        tail (identical split logic to the clean path) and redact + release ONLY the
-        leading prefix, so any token straddling the boundary stays buffered and is
-        re-scanned WHOLE next flush. For a > lookahead prefix-anchored secret whose
-        head is in the released prefix, arm the E14 anchor from the RELEASED prefix
-        so ``_consume_secret_continuation`` masks the retained tail's leading
-        secret-charset run — retention (<= lookahead tokens) and the anchor
-        (> lookahead keys) compose to cover both. A sub-lookahead buffer retains
-        everything and releases nothing this flush (delivered whole at DONE), exactly
-        as the clean path already does.
+        Fix: on a non-final redact flush, release only a WHITESPACE-DELIMITED
+        prefix (redacted whole) and retain a >= STREAM_LOOKAHEAD_BYTES raw tail for a
+        whole re-scan next flush.
+
+        WHY WHITESPACE, NOT CHUNK BOUNDARIES (2026-07-23): the first version of this
+        helper released ``_chunk_queue[:keep_from]`` and redacted that raw fragment in
+        isolation. Under token-by-token streaming (1-8 chars/delta) the default
+        ``max_buffer_chunks`` forces repeated flushes, ``keep_from`` advances one tiny
+        chunk at a time, and ``redact_fn("j")`` / ``redact_fn("o")`` on a single
+        character matches no pattern — so an email/SSN/key was released one RAW char at
+        a time and egressed verbatim while non-stream masked it. A sensitive token
+        (email, key, IP, SSN) contains NO whitespace, so cutting the release at a
+        whitespace boundary guarantees no token straddles the cut: every token in the
+        released prefix is COMPLETE and is masked by the re-scanning redactor, and the
+        retained tail always begins after a whitespace. A run with no whitespace in the
+        releasable region (a single long token) retains everything until a whitespace
+        arrives or DONE — the E14 long-secret path is handled by the caller before this
+        helper, and a pathological > MAX_OPEN_MEDIA_HOLDBACK no-whitespace run fails
+        closed by redacting and releasing the whole buffer (never raw).
         """
-        acc = 0
-        keep_from = 0
-        for i in range(len(self._chunk_queue) - 1, -1, -1):
-            acc += len(self._chunk_queue[i][1].encode("utf-8"))
-            keep_from = i
-            if acc >= STREAM_LOOKAHEAD_BYTES:
-                break
-        if keep_from == 0:
+        full_text = "".join(c for _, c in self._chunk_queue)
+        if len(full_text.encode("utf-8")) <= STREAM_LOOKAHEAD_BYTES:
             # Whole buffer within the lookahead window: retain everything, release
-            # nothing now. Do NOT clear — the tail is re-scanned (and redacted whole)
-            # at a later flush / DONE. No token can be split because none is released.
+            # nothing now. Delivered whole at a later flush / DONE. No split possible.
             return
-        release = self._chunk_queue[:keep_from]
-        retain = self._chunk_queue[keep_from:]
-        prefix_raw = "".join(c for _, c in release)
-        redacted_prefix = redact_fn(prefix_raw)
-        # Arm the E14 anchor from the RELEASED prefix so a > lookahead secret whose
+        # Walk left from the end until >= STREAM_LOOKAHEAD_BYTES of raw tail is held.
+        tail_start = len(full_text)
+        acc = 0
+        while tail_start > 0 and acc < STREAM_LOOKAHEAD_BYTES:
+            tail_start -= 1
+            acc += len(full_text[tail_start].encode("utf-8"))
+        # Snap the cut LEFT to the last whitespace at or before tail_start so no
+        # sensitive token (which never contains whitespace) can straddle it.
+        cut = tail_start
+        while cut > 0 and not full_text[cut - 1].isspace():
+            cut -= 1
+        if cut == 0:
+            # No safe whitespace boundary in the releasable region.
+            if len(full_text.encode("utf-8")) > MAX_OPEN_MEDIA_HOLDBACK:
+                # Pathological single long run: fail closed — redact the WHOLE buffer
+                # and release it (masked), never hold unboundedly nor ship raw.
+                first_sse, _ = self._chunk_queue[0]
+                yield self._rebuild_sse_content(first_sse, redact_fn(full_text))
+                for original_sse, _ in self._chunk_queue[1:]:
+                    yield self._rebuild_sse_content(original_sse, "")
+                self._clear_buffers()
+                return
+            # Otherwise retain everything and wait for a whitespace boundary / DONE.
+            return
+        released = full_text[:cut]
+        retained = full_text[cut:]
+        redacted_release = redact_fn(released)
+        # Arm the E14 anchor from the released prefix so a > lookahead secret whose
         # head just streamed has its retained continuation masked next flush.
         if arm_anchor:
-            self._secret_anchor = _trailing_secret_run(prefix_raw) or self._secret_anchor
-        # Retain the raw tail for a whole re-scan next flush.
-        self._chunk_queue = retain
-        self._content_buffer = [c for _, c in retain]
-        self._content_buffer_len = sum(len(c.encode("utf-8")) for _, c in retain)
-        # Emit the redacted prefix: all text on the first released frame, rest empty
-        # (mirrors _yield_redacted so the downstream frame count is preserved).
-        first_sse, _ = release[0]
-        yield self._rebuild_sse_content(first_sse, redacted_prefix)
-        for original_sse, _ in release[1:]:
-            yield self._rebuild_sse_content(original_sse, "")
+            self._secret_anchor = _trailing_secret_run(released) or self._secret_anchor
+        # Rebuild the buffer as a single synthetic chunk carrying the retained raw tail
+        # (re-scanned whole next flush), reusing the last original frame as carrier.
+        first_sse, _ = self._chunk_queue[0]
+        carrier_sse, _ = self._chunk_queue[-1]
+        self._chunk_queue = [(carrier_sse, retained)]
+        self._content_buffer = [retained]
+        self._content_buffer_len = len(retained.encode("utf-8"))
+        # Emit the redacted released prefix as a single rebuilt frame.
+        yield self._rebuild_sse_content(first_sse, redacted_release)
 
     def _extract_content_delta(self, chunk_data: dict) -> str:
         """Concatenate every text-bearing field of the delta into a single str

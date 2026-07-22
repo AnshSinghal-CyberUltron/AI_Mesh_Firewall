@@ -1721,7 +1721,16 @@ def _content_preserving_rewrite(
     # behind (so a compliant rewrite is not blanket-masked into "[redacted]" and thus
     # made indistinguishable from the redact action).
     _clean = rewritten.strip()
-    _residual = redact_all(_clean)
+    # For an ip_leakage rewrite the residual net must also cover internal FILE PATHS
+    # (round-1 d46bd2f2 made ip_leakage=redact mask them; the unscoped mask-all
+    # redact_all leaves them raw by design), else a rewrite model that echoes
+    # /home/svc/.ssh/id_rsa ships it verbatim. Scope to all classes + file paths for
+    # ip_leakage; every other class keeps the FP-safe mask-all residual.
+    _tt = (threat_type or "").lower()
+    if "ip_leak" in _tt or "ip_leakage" in _tt or "infrastructure" in _tt:
+        _residual = _redact_all_scoped(_clean, {"pii", "credential", "ip_leakage"})
+    else:
+        _residual = redact_all(_clean)
     return _residual if _residual != _clean else _clean
 
 

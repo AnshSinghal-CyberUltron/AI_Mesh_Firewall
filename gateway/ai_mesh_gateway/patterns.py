@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import base64
 import functools
+import codecs
 import re
 import unicodedata
 import urllib.parse
@@ -280,6 +281,11 @@ _MAX_URL_DECODE_TOKENS = 4096
 # fixed entity+percent tokens) -> ReDoS-safe; masked only when the decode/strip reveals PII/secret.
 _ENTITY_RUN_RE = re.compile(r"(?:&#x[0-9A-Fa-f]{1,6};|&#[0-9]{1,7};){2,}")
 _PCT_RUN_RE = re.compile(r"(?:%[0-9A-Fa-f]{2}){2,}")
+# Backslash-escape run: >=2 contiguous \uXXXX / \xHH / \U00000041 escapes. The
+# DETECTION side already decodes these (scanner._USTR_RE / _XHEX_RE); this lets the
+# REDACTION sanitizer mask them too so a \u/\x-escaped secret in a mixed maskable
+# carrier cannot ship raw (recoverable client-side via unicode_escape).
+_BSLASH_ESC_RUN_RE = re.compile(r"(?:\\u[0-9A-Fa-f]{4}|\\x[0-9A-Fa-f]{2}|\\U[0-9A-Fa-f]{8}){2,}")
 _MD_SPLIT_RUN_RE = re.compile(r"[\w@.\-]{1,256}+(?:[*`]{1,8}[\w@.\-]{1,256}+){1,256}")
 
 
@@ -1682,6 +1688,24 @@ def _redact_obfuscated(original: str, result: str) -> str:
         if dec != tok and (_detect_pii_core(dec) or _detect_secrets_core(dec)
                            or _dec_has_infra(dec) or _detect_credential_exposure_core(dec)):
             masks.append((tok, "[ENCODED_SECRET_REDACTED]"))
+    # Backslash-escape obfuscation — a \uXXXX / \xHH / \U-escaped PII/secret survives
+    # the raw pattern pass verbatim but is trivially recoverable client-side
+    # (str.encode().decode('unicode_escape')). The DETECTION side already decodes these
+    # (scanner._USTR_RE / _XHEX_RE) and fires the operator's redact verdict, but a
+    # mixed maskable carrier kept the redact->block "nothing maskable" floor from firing,
+    # so the escaped secret shipped in the 200 body. Mask each escape RUN whose decode
+    # reveals PII/secret/infra/credential (decode-gated, so a benign "\n"/"\t" or a lone
+    # "ሴ" in prose is untouched). Unconditional (mirrors the percent pass) so it
+    # fires on plain-ASCII escapes where canon == original.
+    for _bm in _BSLASH_ESC_RUN_RE.finditer(original[:_CANON_MAX_LEN]):
+        _btok = _bm.group(0)
+        try:
+            _bdec = codecs.decode(_btok, "unicode_escape")
+        except Exception:  # noqa: BLE001 - decode must never break redaction
+            continue
+        if _bdec != _btok and (_detect_pii_core(_bdec) or _detect_secrets_core(_bdec)
+                               or _dec_has_infra(_bdec) or _detect_credential_exposure_core(_bdec)):
+            masks.append((_btok, "[ENCODED_SECRET_REDACTED]"))
     for sub, tag in sorted(masks, key=lambda x: -len(x[0])):
         if sub and sub in result:
             result = result.replace(sub, tag)
