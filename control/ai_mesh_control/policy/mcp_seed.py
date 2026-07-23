@@ -15,11 +15,18 @@ automatically and existing orgs can be backfilled on demand.
 
 from __future__ import annotations
 
+import json
 import logging
 
 from django.db import transaction
 
 logger = logging.getLogger(__name__)
+
+
+def _rule_sig(action: str, condition: dict) -> tuple:
+    """Hashable identity of a rule for reconcile/dedup — condition may hold list values
+    (keywords), so JSON-serialize it (sorted) rather than hashing its items tuple."""
+    return (action, json.dumps(condition or {}, sort_keys=True, default=str))
 
 # (preset key, rule action, direction, human label)
 # direction "both" => evaluated on tool input args AND tool output.
@@ -47,6 +54,9 @@ def detector_policy_code(org_id: int, server_id) -> str:
 # posture/scan-control ACTION as an enforcement input, NO org loses coverage. detector_class
 # = "all" carries the full 63-pattern detect_* suite the posture used to provide.
 _ENFORCING_ACTIONS = frozenset({"redact", "block"})
+# Marks an auto-seeded detector rule so re-seed can reconcile ONLY its own rules
+# (retiring stale ones on a config change) while preserving operator-added rules.
+_SEED_MARKER = "Auto-seeded Phase-2 detector rule"
 
 
 def _detector_rules_for_server(posture: str, effective: dict) -> list[dict]:
@@ -111,12 +121,16 @@ def seed_mcp_detector_policies(organization, *, reset_rules: bool = False):
         code = detector_policy_code(organization.id, server.id)
 
         if not specs:
-            # Nothing enforcing to replicate (tag posture, no enforcing scan-control). If a
-            # stale seeded policy exists from a prior enforcing config, disable its rules so it
-            # doesn't over-enforce — but keep the (empty) policy row for idempotency.
+            # Nothing enforcing to replicate now (tag posture, no enforcing scan-control).
+            # RECONCILE (red-team #6): a stale seeded policy from a PRIOR enforcing config must
+            # not keep enforcing — retire its auto-seeded rules regardless of ``reset_rules``
+            # (a posture redact→tag downgrade would otherwise leave the old redact rule live).
             existing = Policy.objects.filter(code=code, organization=organization).first()
-            if existing and reset_rules:
-                existing.rules.all().delete()
+            if existing:
+                stale = [r for r in existing.rules.all()
+                         if reset_rules or (r.description or "").startswith(_SEED_MARKER)]
+                for r in stale:
+                    r.delete()
             continue
 
         policy, created = Policy.objects.get_or_create(
@@ -141,14 +155,24 @@ def seed_mcp_detector_policies(organization, *, reset_rules: bool = False):
         if reset_rules:
             policy.rules.all().delete()
 
-        # Idempotent by (action, condition) signature so re-runs don't duplicate.
-        existing_sigs = {
-            (r.action, tuple(sorted((r.condition or {}).items())))
-            for r in policy.rules.all()
-        }
+        # RECONCILE (red-team #6): re-seed must converge to the CURRENT config, not append.
+        # Delete AUTO-SEEDED rules whose (action, condition) is no longer in the current spec
+        # set (a stale rule from a prior posture/scan-control config would otherwise keep
+        # enforcing the OLD action — drift / over- or under-enforcement). Operator-added rules
+        # (without the seed marker) are preserved.
+        current_sigs = {_rule_sig(s["action"], s["condition"]) for s in specs}
+        existing_sigs = set()
+        for r in policy.rules.all():
+            sig = _rule_sig(r.action, r.condition or {})
+            if (r.description or "").startswith(_SEED_MARKER):
+                if sig not in current_sigs:
+                    r.delete()  # stale seeded rule → retire it
+                    continue
+            existing_sigs.add(sig)
+
         new_rules = []
         for idx, spec in enumerate(specs):
-            sig = (spec["action"], tuple(sorted(spec["condition"].items())))
+            sig = _rule_sig(spec["action"], spec["condition"])
             if sig in existing_sigs:
                 continue
             new_rules.append(Rule(
@@ -161,7 +185,7 @@ def seed_mcp_detector_policies(organization, *, reset_rules: bool = False):
                 redaction_config={},
                 priority=len(specs) - idx,
                 enabled=True,
-                description="Auto-seeded Phase-2 detector rule (replicates posture/scan-control).",
+                description=f"{_SEED_MARKER} (replicates posture/scan-control).",
             ))
         if new_rules:
             Rule.objects.bulk_create(new_rules)
