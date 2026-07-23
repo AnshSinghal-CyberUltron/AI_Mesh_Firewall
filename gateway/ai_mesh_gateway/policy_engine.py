@@ -1087,24 +1087,21 @@ def apply_redaction(
             or []
         )
         for kw in keywords:
-            # Skip empty keywords: ``\b\b`` is zero-width and ``.sub`` would blanket the
-            # WHOLE text (Finding B); detection already skips empty keywords too.
+            # A keyword rule masks the LITERAL SUBSTRING wherever it appears — the same
+            # semantics keyword DETECTION uses (``kw in text``), so a detected keyword is
+            # ALWAYS fully masked (every occurrence, standalone AND embedded). This closes:
+            #   * the prefix-credential SILENT BYPASS (``ghp_``/``AKIA``/``-----BEGIN`` — a
+            #     word-bounded ``\b{kw}\b`` never matched them, so they egressed raw);
+            #   * the partial-mask gap where a word-bounded pass masked one occurrence and
+            #     skipped a second embedded one (``key`` in ``api_keyXYZ``).
+            # Empty keywords are skipped (an empty ``.sub`` would blanket the whole text —
+            # Finding B); the compile is guarded (a >_MAX_REGEX_LEN keyword raises re.error,
+            # which used to crash the whole scan uncaught — Finding C). ``re.escape`` makes the
+            # pattern a pure literal, so no ReDoS. Over-masking a benign word that contains the
+            # keyword (``secret`` in ``secretary``) is the operator's substring choice and the
+            # safe direction.
             if not isinstance(kw, str) or not kw:
                 continue
-            # Word-bounded first (clean masking of standalone occurrences), guarding the
-            # compile (Finding C: a >_MAX_REGEX_LEN keyword raises re.error — the old code
-            # let it crash the whole scan uncaught).
-            try:
-                after_wb = _compile_regex(rf"\b{re.escape(kw)}\b").sub(repl, result)
-            except re.error:
-                after_wb = None
-            if after_wb is not None and after_wb != result:
-                result = after_wb
-                continue
-            # Word-bounded matched nothing. Mask the LITERAL substring so a keyword that
-            # DETECTION matched (substring) is never forwarded raw — boundary-hostile
-            # credential keywords (``ghp_``/``AKIA``/``-----BEGIN``) or a keyword embedded in a
-            # larger word (Finding A). No-op if the keyword is genuinely absent.
             try:
                 result = _compile_regex(re.escape(kw)).sub(repl, result)
             except re.error:

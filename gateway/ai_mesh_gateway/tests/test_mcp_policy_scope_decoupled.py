@@ -390,5 +390,19 @@ async def test_unmaskable_match_fails_closed_under_redact():
     assert res.blocked is True, "enforcing posture fails closed on an unmaskable match"
 
 
+@pytest.mark.asyncio
+async def test_keyword_masks_all_occurrences_standalone_and_embedded():
+    """A keyword rule masks the literal substring EVERYWHERE — a standalone occurrence must not
+    cause an embedded one to be skipped (substr-hunter finding #1). Detection (substring) and
+    redaction (substring) fully agree, every occurrence masked."""
+    ec = _effc(_slot(True, "inherit", target_mode="entire"), _slot(False, direction="output"))
+    payload = {"arguments": {"note": "the key is stored as api_keyXYZ"}}
+    scanned, res = await _scan(payload, ec, [_kw_rule("key")], enforcement="redact")
+    assert res.blocked is False
+    blob = json.dumps(scanned)
+    assert "api_key" not in blob, "embedded occurrence must also be masked (no skip)"
+    assert " key " not in blob, "standalone occurrence masked too"
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
