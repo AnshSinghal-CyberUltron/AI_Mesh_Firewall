@@ -692,6 +692,49 @@ def _leaf_value_texts(obj: Any) -> list[str]:
     return out
 
 
+def _leaf_key_names(obj: Any) -> list[str]:
+    """Collect the KEY NAMES of a structured payload (recursive, bounded — mirrors
+    ``_leaf_value_texts``). A secret can be smuggled as a JSON KEY (``{"AKIA…": "x"}``); the live
+    entire-mode preset scans the serialized blob and catches it, but the value-leaf detection
+    misses it (B3). Used ONLY by the detector-class check — a real secret PATTERN in a key — never
+    by keyword/regex rules, so PR#19's key-name false-block (a keyword matching a STRUCTURAL key
+    like ``password``/``arguments``) cannot recur; and the redactor masks a matched key by RENAME,
+    so detection⟺redaction still agree (no cannot-mask)."""
+    out: list[str] = []
+    stack: list[tuple[Any, int]] = [(obj, 0)]
+    nodes = 0
+    while stack:
+        cur, depth = stack.pop()
+        if depth > _KEY_COLLECT_MAX_DEPTH:
+            continue
+        nodes += 1
+        if nodes > _KEY_COLLECT_MAX_NODES:
+            break
+        if isinstance(cur, dict):
+            for k, v in cur.items():
+                if isinstance(k, str):
+                    out.append(k)
+                stack.append((v, depth + 1))
+        elif isinstance(cur, list):
+            for item in cur:
+                stack.append((item, depth + 1))
+    return out
+
+
+def _detector_key_name_texts(context: dict[str, Any], matcher: dict[str, Any]) -> list[str]:
+    """KEY NAMES to add to the DETECTOR-class scan for a scope=entire rule, honoring direction.
+    Empty for scope=key (value-only there) or when the source isn't a container."""
+    if matcher.get("scope") == "key":
+        return []
+    out: list[str] = []
+    direction = matcher["direction"]
+    if direction in ("input", "both") and isinstance(context.get("input_args"), (dict, list)):
+        out.extend(_leaf_key_names(context["input_args"]))
+    if direction in ("output", "both") and isinstance(context.get("output_data"), (dict, list)):
+        out.extend(_leaf_key_names(context["output_data"]))
+    return out
+
+
 def _resolve_matcher_dict(rule: dict[str, Any]) -> dict[str, Any]:
     cond = rule.get("condition") or {}
     raw_dir = str(cond.get("direction") or cond.get("field") or "both").strip().lower()
@@ -833,7 +876,10 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
         return True
     matcher = _resolve_matcher_dict(rule)
     texts = _candidate_texts_mcp(context, matcher)
-    if not texts:
+    # B3: a DETECTOR-class rule ALSO scans KEY NAMES for scope=entire (a secret smuggled as a JSON
+    # key that the live entire-mode blob scan catches). Value-only for keyword/regex (PR#19).
+    key_texts = _detector_key_name_texts(context, matcher) if matcher["detector_class"] else []
+    if not texts and not key_texts:
         return False
 
     if matcher["regex"]:
@@ -907,6 +953,10 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
                         return True
                     if want_infra and _dec_has_infra(variant):
                         return True
+        # B3: a secret in a JSON KEY NAME (raw class match — the redactor masks it by rename).
+        for kt in key_texts:
+            if classes and redact_all_scoped(kt, classes) != kt:
+                return True
         return False
 
     return False

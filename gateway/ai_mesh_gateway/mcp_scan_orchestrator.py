@@ -911,6 +911,13 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]],
     # B2 scoped floor: compile the key-scoped render-floor keys into leaf-path matchers.
     neu_matchers = [m for m in (_compile_key_matcher(k) for k in (neutralize_keys or [])) if m is not None]
 
+    # B3: entire-scope DETECTOR hints also mask a secret smuggled as a JSON KEY NAME (by rename) —
+    # parity with the live blob scan, which detection now matches via _leaf_key_names (agreement,
+    # no cannot-mask). Only DETECTOR hints (class patterns), only ENTIRE scope (key-name detection
+    # is entire-only) — keyword/regex keys are never scanned (PR#19 false-block stays fixed).
+    entire_detector_hints = [h for h in entire_hints
+                             if isinstance(h, dict) and (h.get("config") or {}).get("detector_class")]
+
     def _hints_for(path: tuple[str, ...]) -> list[dict[str, Any]]:
         if not keyed_hints:
             return hints  # fast path: no key-scoped hints → original behavior
@@ -941,7 +948,17 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]],
             # parity with _collect_dot_path_values) — do not extend ``path``.
             return [_walk(x, depth + 1, path) for x in node]
         if isinstance(node, dict):
-            return {k: _walk(v, depth + 1, path + (_normalize_key(k),)) for k, v in node.items()}
+            new_dict: dict[Any, Any] = {}
+            for k, v in node.items():
+                nk = k
+                if entire_detector_hints and isinstance(k, str):
+                    mk = apply_redaction(k, entire_detector_hints)
+                    if mk != k:  # a secret in the KEY NAME → mask it (rename), like the live blob scan
+                        nk = mk
+                        changed = True
+                # The VALUE keeps the ORIGINAL key in its path (key rename never shifts scoping).
+                new_dict[nk] = _walk(v, depth + 1, path + (_normalize_key(k),))
+            return new_dict
         # Numeric scalar (int/float — NOT bool, whose "true"/"false" carries no secret):
         # stringify, redact, and mask only if a hint actually matched.
         if isinstance(node, (int, float)) and not isinstance(node, bool):
