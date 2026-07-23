@@ -92,8 +92,9 @@ class SeedMcpDetectorPoliciesDBTests(TestCase):
         seed_mcp_detector_policies(self.org)
         seed_mcp_detector_policies(self.org)  # second run
         pol = Policy.objects.get(code=detector_policy_code(self.org.id, srv.id))
-        self.assertEqual(pol.rules.count(), 1, "re-run must not duplicate rules")
-        self.assertEqual(pol.rules.get().action, "block")
+        # block posture seeds a detector_class=all block rule + an injection block rule (#4)
+        self.assertEqual(pol.rules.count(), 2, "re-run must not duplicate (detector + injection)")
+        self.assertTrue(all(r.action == "block" for r in pol.rules.all()))
 
 
 class DetectorSeedReconcileTests(TestCase):
@@ -112,8 +113,11 @@ class DetectorSeedReconcileTests(TestCase):
         srv.save()
         seed_mcp_detector_policies(self.org)  # re-seed after change
         pol = Policy.objects.get(code=detector_policy_code(self.org.id, srv.id))
-        self.assertEqual(pol.rules.count(), 1, "must reconcile to one rule, not append")
-        self.assertEqual(pol.rules.get().action, "block", "stale redact rule retired, block seeded")
+        # reconcile: the stale redact rule is retired; block seeds detector_class=all + injection
+        self.assertFalse(pol.rules.filter(action="redact").exists(), "stale redact rule retired")
+        detector_all = [r for r in pol.rules.all() if (r.condition or {}).get("detector_class") == "all"]
+        self.assertEqual(len(detector_all), 1, "one detector_class=all rule")
+        self.assertEqual(detector_all[0].action, "block")
 
     def test_downgrade_to_tag_retires_seeded_rule(self):
         srv = self._server("gh", "redact")
@@ -189,4 +193,30 @@ class PerToolSeedTests(TestCase):
         seed_mcp_detector_policies(self.org)
         seed_mcp_detector_policies(self.org)
         pol = Policy.objects.get(code=detector_policy_code(self.org.id, srv.id))
-        self.assertEqual(pol.rules.filter(target_tool="wire_transfer").count(), 1, "no per-tool duplicate")
+        # block tool seeds a per-tool detector rule + a per-tool injection rule; re-run must not duplicate
+        wt = [r for r in pol.rules.filter(target_tool="wire_transfer")]
+        detector_all = [r for r in wt if (r.condition or {}).get("detector_class") == "all"]
+        injection = [r for r in wt if (r.condition or {}).get("detector_class") == "injection"]
+        self.assertEqual(len(detector_all), 1, "no per-tool detector duplicate")
+        self.assertEqual(len(injection), 1, "no per-tool injection duplicate")
+
+
+class InjectionSeedTests(TestCase):
+    """#4: a BLOCK posture also seeds an injection block rule."""
+    def setUp(self):
+        self.org = Organization.objects.create(name="Acme", slug="acme")
+
+    def test_block_posture_seeds_injection_rule(self):
+        srv = MCPServerRegistration.objects.create(organization=self.org, name="gh", default_scan_action="block")
+        seed_mcp_detector_policies(self.org)
+        pol = Policy.objects.get(code=detector_policy_code(self.org.id, srv.id))
+        inj = [r for r in pol.rules.all() if (r.condition or {}).get("detector_class") == "injection"]
+        self.assertEqual(len(inj), 1, "block posture seeds one injection block rule")
+        self.assertEqual(inj[0].action, "block")
+
+    def test_redact_posture_no_injection_rule(self):
+        srv = MCPServerRegistration.objects.create(organization=self.org, name="gh", default_scan_action="redact")
+        seed_mcp_detector_policies(self.org)
+        pol = Policy.objects.get(code=detector_policy_code(self.org.id, srv.id))
+        inj = [r for r in pol.rules.all() if (r.condition or {}).get("detector_class") == "injection"]
+        self.assertEqual(inj, [], "redact posture seeds no injection rule")

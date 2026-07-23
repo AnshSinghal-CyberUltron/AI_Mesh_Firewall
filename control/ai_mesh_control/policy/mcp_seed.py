@@ -104,6 +104,26 @@ def _detector_rules_for_server(posture: str, effective: dict) -> list[dict]:
 _ACTION_RANK = {"tag": 0, "monitor": 0, "": 0, "inherit": 0, "allow": 0, "redact": 1, "block": 2}
 
 
+def _augment_injection_specs(specs: list[dict]) -> list[dict]:
+    """#4: a BLOCK action also blocks prompt-injection/jailbreak via the server posture's preset
+    floor — coverage that detector_class=all (pii/credential/ip_leakage) does NOT carry. For
+    every seeded BLOCK detector rule, add a parallel injection block rule at the same
+    direction/target_tool so injection blocking survives Phase 3."""
+    extra: list[dict] = []
+    for s in specs:
+        cond = s.get("condition") or {}
+        if s.get("action") == "block" and cond.get("detector_class") == "all":
+            # Mirror the source block rule's SCOPE binding (#3): a key_path-scoped block must
+            # scope injection to the SAME fragment, else injection widens to the whole payload
+            # (over-block on fields the posture never scanned).
+            inj = {"detector_class": "injection", "direction": cond.get("direction", "both"),
+                   "scope": cond.get("scope", "entire")}
+            if cond.get("key"):
+                inj["key"] = cond["key"]
+            extra.append({"action": "block", "condition": inj, "target_tool": s.get("target_tool", "")})
+    return specs + extra
+
+
 def _resolved_dir_action(ctrl: dict, tool_scan_action: str | None, posture: str) -> str | None:
     """Effective action for one direction with the full inherit chain:
     scan-control action → per-tool MCPToolRegistration.scan_action → server posture → observe.
@@ -217,6 +237,7 @@ def seed_mcp_detector_policies(organization, *, reset_rules: bool = False):
                     and (r.get("tool_name") or "")):
                 tool_actions.setdefault(r["tool_name"], "inherit")
         specs = specs + _per_tool_specs(rows, sid, posture, tool_actions)
+        specs = _augment_injection_specs(specs)  # #4: block postures also block injection
 
         code = detector_policy_code(organization.id, server.id)
 
