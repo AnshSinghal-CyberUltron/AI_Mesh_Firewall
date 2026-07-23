@@ -706,22 +706,20 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
         return False
 
     if matcher["keywords"]:
-        # Keyword DETECTION must agree with apply_redaction's keyword REDACTION, which masks
-        # ``\b{re.escape(kw)}\b`` (word-bounded). A bare substring detect (``kw in text``)
-        # matched a keyword INSIDE a larger word (``secret`` in ``secretary``) that the
-        # word-bounded redactor could never mask → changed=False → cannot-mask fail-closed
-        # BLOCKED benign traffic. Match on the SAME word-bounded pattern so detection and
-        # masking agree on what "matched" means. (Substring intent → use a regex rule.)
+        # Keyword DETECTION is SUBSTRING (``kw in text``), and apply_redaction masks the same
+        # substring occurrence (word-bounded first, then a literal-substring fallback), so the
+        # two agree on what "matched" means. An earlier word-bounded DETECTION silently missed
+        # boundary-hostile credential keywords (``ghp_``/``AKIA``/``-----BEGIN``: ``\bghp_\b``
+        # can't match ``ghp_ABC…`` — no word boundary after ``_``), so those redact rules
+        # DETECTED NOTHING and forwarded the secret RAW under every posture with no telemetry —
+        # a far worse regression than the ``secret``-in-``secretary`` false-block it fixed
+        # (now handled by the substring-fallback masking, not by narrowing detection). Empty
+        # keywords are skipped (``"" in text`` is always True → would match every payload).
         for text in texts:
+            tl = text.lower()
             for kw in matcher["keywords"]:
-                if not kw:
-                    continue
-                try:
-                    if _compile_regex(rf"\b{re.escape(kw)}\b").search(text):
-                        return True
-                except re.error:
-                    if kw.lower() in text.lower():  # uncompilable boundary → substring fallback
-                        return True
+                if kw and kw.lower() in tl:
+                    return True
         return False
 
     if matcher["detector_class"]:
@@ -1089,10 +1087,28 @@ def apply_redaction(
             or []
         )
         for kw in keywords:
-            if not isinstance(kw, str):
+            # Skip empty keywords: ``\b\b`` is zero-width and ``.sub`` would blanket the
+            # WHOLE text (Finding B); detection already skips empty keywords too.
+            if not isinstance(kw, str) or not kw:
                 continue
-            pattern = rf"\b{re.escape(kw)}\b"
-            result = _compile_regex(pattern).sub(repl, result)
+            # Word-bounded first (clean masking of standalone occurrences), guarding the
+            # compile (Finding C: a >_MAX_REGEX_LEN keyword raises re.error — the old code
+            # let it crash the whole scan uncaught).
+            try:
+                after_wb = _compile_regex(rf"\b{re.escape(kw)}\b").sub(repl, result)
+            except re.error:
+                after_wb = None
+            if after_wb is not None and after_wb != result:
+                result = after_wb
+                continue
+            # Word-bounded matched nothing. Mask the LITERAL substring so a keyword that
+            # DETECTION matched (substring) is never forwarded raw — boundary-hostile
+            # credential keywords (``ghp_``/``AKIA``/``-----BEGIN``) or a keyword embedded in a
+            # larger word (Finding A). No-op if the keyword is genuinely absent.
+            try:
+                result = _compile_regex(re.escape(kw)).sub(repl, result)
+            except re.error:
+                continue
 
     return result
 
