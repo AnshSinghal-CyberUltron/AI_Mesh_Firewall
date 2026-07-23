@@ -12,12 +12,26 @@ from __future__ import annotations
 
 import logging
 
-from django.db.models.signals import post_save
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 from auth.models import Organization
 
 logger = logging.getLogger(__name__)
+
+
+def _reseed_org_detectors(org, *, why):
+    """Best-effort idempotent re-seed of an org's MCP detector policies. Never raises — a seeding
+    failure is logged and never blocks the operator save/delete that triggered it."""
+    if org is None:
+        return
+    try:
+        from policy.mcp_seed import seed_mcp_detector_policies
+
+        seed_mcp_detector_policies(org)
+    except Exception:  # pragma: no cover
+        logger.warning("Failed to re-seed MCP detector policies (%s) for org=%s",
+                       why, getattr(org, "id", "?"), exc_info=True)
 
 
 @receiver(post_save, sender=Organization, dispatch_uid="seed_mcp_policies_on_org_create")
@@ -41,3 +55,37 @@ def _seed_mcp_policies_on_org_create(sender, instance, created, **kwargs):
         logger.warning(
             "Failed to auto-seed MCP detector policies for org=%s", instance.id, exc_info=True
         )
+
+
+@receiver(post_save, sender="mcp_connector.MCPServerRegistration",
+          dispatch_uid="seed_mcp_detector_policies_on_server_save")
+def _seed_mcp_detector_policies_on_server_save(sender, instance, **kwargs):
+    """(Re-)seed the org's MCP detector policies whenever a server is REGISTERED or its posture
+    changes. Detector policies are PER-SERVER, so the org-create signal (no servers yet at create)
+    can't seed them — this is the effective trigger that keeps a NEW server from being un-seeded at
+    Phase-3 cutover. Seeding is idempotent (reconciles to the current posture + scan-controls), so
+    re-running on every save is safe; a failure is logged and never blocks the server save."""
+    _reseed_org_detectors(getattr(instance, "organization", None), why="server_save")
+
+
+# The detector policies replicate the server posture AND the Tier-1 SCAN-CONTROL / per-tool ACTIONS,
+# so those surfaces must ALSO re-seed on change — else an operator scan-control/tool edit after the
+# backfill drifts the seeded policies STALE, and flipping the Phase-3 flag retires the posture +
+# scan-control action in favour of policies that no longer reflect the operator's config → raw
+# egress (red-team wf_11139764). post_DELETE matters too: the seeder reconcile retires the stale
+# rule when an enforcing control/tool override is removed.
+@receiver(post_save, sender="mcp_connector.MCPScanControl",
+          dispatch_uid="seed_mcp_detectors_on_scan_control_save")
+@receiver(post_delete, sender="mcp_connector.MCPScanControl",
+          dispatch_uid="seed_mcp_detectors_on_scan_control_delete")
+def _reseed_on_scan_control_change(sender, instance, **kwargs):
+    _reseed_org_detectors(getattr(instance, "organization", None), why="scan_control_change")
+
+
+@receiver(post_save, sender="mcp_connector.MCPToolRegistration",
+          dispatch_uid="seed_mcp_detectors_on_tool_save")
+@receiver(post_delete, sender="mcp_connector.MCPToolRegistration",
+          dispatch_uid="seed_mcp_detectors_on_tool_delete")
+def _reseed_on_tool_change(sender, instance, **kwargs):
+    server = getattr(instance, "server", None)
+    _reseed_org_detectors(getattr(server, "organization", None), why="tool_change")

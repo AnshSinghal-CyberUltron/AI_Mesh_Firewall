@@ -60,6 +60,66 @@ class DetectorRuleReplicationLogicTests(TestCase):
         self.assertEqual(_detector_rules_for_server("redact", eff), [])
 
 
+class DetectorSeedSignalTests(TestCase):
+    """The post_save signals must auto-seed detector policies so no server is un-seeded at Phase-3
+    cutover — the org-create signal (no servers yet) can't, so server registration is the trigger."""
+
+    def test_registering_a_server_auto_seeds_its_detector_policy(self):
+        org = Organization.objects.create(name="Sig", slug="sig")
+        # No detector policy yet (no server).
+        self.assertFalse(Policy.objects.filter(code__startswith=f"MCP_DETECTOR_{org.id}_").exists())
+        srv = MCPServerRegistration.objects.create(
+            organization=org, name="gh", default_scan_action="redact",
+        )
+        # The MCPServerRegistration post_save signal seeded the detector policy for this server.
+        pol = Policy.objects.get(code=detector_policy_code(org.id, srv.id))
+        self.assertTrue(pol.is_system)
+        self.assertTrue(pol.rules.filter(rule_type="detector").exists())
+
+    def test_changing_server_posture_reseeds_idempotently(self):
+        org = Organization.objects.create(name="Sig2", slug="sig2")
+        srv = MCPServerRegistration.objects.create(
+            organization=org, name="gh", default_scan_action="redact",
+        )
+        code = detector_policy_code(org.id, srv.id)
+        self.assertTrue(Policy.objects.filter(code=code).exists())
+        # A posture change re-fires the signal; seeding reconciles (idempotent, no duplicate policy).
+        srv.default_scan_action = "block"
+        srv.save()
+        self.assertEqual(Policy.objects.filter(code=code).count(), 1)
+
+    def test_adding_enforcing_scan_control_reseeds(self):
+        """red-team wf_11139764: a scan-control edit must re-seed, else the seeded policy drifts stale
+        and the operator's redact is silently absent at cutover. Observe-only server → no enforcing
+        rule; adding an enforcing Tier-1 control materializes the redact detector rule via the signal."""
+        org = Organization.objects.create(name="Sig3", slug="sig3")
+        srv = MCPServerRegistration.objects.create(
+            organization=org, name="gh", default_scan_action="tag",  # observe-only → seeds nothing enforcing
+        )
+        code = detector_policy_code(org.id, srv.id)
+        self.assertFalse(Policy.objects.filter(code=code, rules__action="redact").exists())
+        MCPScanControl.objects.create(
+            organization=org, server=srv, tier="tier1", direction="both",
+            scope_type="server", action="redact",
+        )
+        # The MCPScanControl post_save signal re-seeded → the enforcing redact rule now exists.
+        self.assertTrue(Policy.objects.filter(code=code, rules__action="redact").exists())
+
+    def test_per_tool_action_change_reseeds(self):
+        """A per-tool scan_action override must re-seed too (it feeds the seeder)."""
+        org = Organization.objects.create(name="Sig4", slug="sig4")
+        srv = MCPServerRegistration.objects.create(
+            organization=org, name="gh", default_scan_action="tag",
+        )
+        code = detector_policy_code(org.id, srv.id)
+        MCPToolRegistration.objects.create(
+            server=srv, tool_name="delete_repo", enabled=True, scan_action="block",
+        )
+        # The MCPToolRegistration post_save signal re-seeded → a per-tool block detector rule exists.
+        self.assertTrue(Policy.objects.filter(
+            code=code, rules__target_tool="delete_repo", rules__action="block").exists())
+
+
 class SeedMcpDetectorPoliciesDBTests(TestCase):
     def setUp(self):
         self.org = Organization.objects.create(name="Acme", slug="acme")
