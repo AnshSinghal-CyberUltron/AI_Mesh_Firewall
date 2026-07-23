@@ -507,12 +507,12 @@ async def test_B2_scoped_floor_leaves_encoded_secret_OUTSIDE_key_untouched(direc
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("direction", _DIRECTIONS)
-async def test_B2_keypath_into_list_masks_not_leaks(direction):
-    """A key_path value nested INSIDE a list is the one intended posture→observe divergence: the live
-    dict-only setter can't write through the list so live fails closed and BLOCKS; under Phase-3
-    observe-only (tag) the frozen contract forbids blocking, so the seed BEST-EFFORT MASKS the keyed
-    value (scoped to it — siblings preserved) rather than egress it raw. Assert the SAFE outcome:
-    the keyed secret does not leak raw, and the sibling is untouched."""
+async def test_B2_keypath_into_list_masks_on_both_lanes(direction):
+    """A key_path value nested INSIDE a list: the B2 live-binder fix (wf_8683e8d0) binds per-leaf
+    setters that are list-transparent (mirroring the seed), so the LIVE lane now MASKS it too rather
+    than failing closed (the old dict-only setter couldn't write through the list → cannot-mask
+    BLOCK). Both lanes mask the keyed secret, scoped to it (siblings preserved) — full parity, no
+    divergence and no raw egress."""
     rows = [_row(direction="input", action="redact", scope_type="tool", tool_name="getData",
                  target_mode="key_path", key_path="args.secret"),
             _row(direction="output", action="redact", scope_type="tool", tool_name="getData",
@@ -521,11 +521,10 @@ async def test_B2_keypath_into_list_masks_not_leaks(direction):
     (lo, lr), (so, sr) = await _pair(payload, posture="redact", rows=rows,
                                      tool_actions={"getData": "inherit"}, tool="getData",
                                      direction=direction)
-    assert lr.blocked, "live fails closed (cannot-mask through a list)"
-    assert not sr.blocked, "seed runs observe-only under tag — never blocks (frozen)"
-    seed_blob = json.dumps(so)
-    assert _AWS not in seed_blob, "the keyed secret must be best-effort MASKED, not leaked raw"
-    assert _EMAIL in seed_blob and _IP in seed_blob, "siblings outside the key path stay untouched"
+    assert not lr.blocked and not sr.blocked, "both lanes mask the list-nested key (no cannot-mask block)"
+    for blob in (json.dumps(lo), json.dumps(so)):
+        assert _AWS not in blob, "the keyed secret is masked on both lanes (not raw)"
+        assert _EMAIL in blob and _IP in blob, "siblings outside the key path stay untouched"
 
 
 @pytest.mark.parametrize("tok", [_AWS, _SSN, _EMAIL])
@@ -650,3 +649,19 @@ async def test_B2_dotted_keypath_case_nfkc_variant_matches_live(payload_key, dir
     assert bool(lr.blocked) == bool(sr.blocked)
     assert (_AWS in json.dumps(lo)) == (_AWS in json.dumps(so)), "case/NFKC-variant key must match live"
     assert _AWS not in json.dumps(so), "the case-variant credential key is masked"
+
+
+@pytest.mark.asyncio
+def test_B2_fold_colliding_sibling_keys_all_masked():
+    """B2 red-team wf_8683e8d0 (HIGH): two DISTINCT sibling keys that NFKC-casefold together
+    (``email``/``Email``) under a dotted key_path. The getter collects BOTH; the OLD index-based
+    setter masked only the first → the 2nd key's secret egressed RAW while reported redacted. The
+    per-leaf setters (bound to the exact matched key) must mask EVERY match."""
+    from mcp_scan_targets import extract_scan_targets
+    payload = {"arguments": {"email": "PUBLIC@corp.com", "Email": _AWS}}
+    targets = extract_scan_targets(payload, target_mode="key_path", key_path="arguments.email")
+    assert len(targets) == 2, "both fold-colliding sibling keys are targeted"
+    for _val, setter in targets:
+        setter("[MASKED]")
+    assert payload["arguments"]["email"] == "[MASKED]" and payload["arguments"]["Email"] == "[MASKED]", \
+        "every fold-colliding key is masked — no raw egress of the 2nd"

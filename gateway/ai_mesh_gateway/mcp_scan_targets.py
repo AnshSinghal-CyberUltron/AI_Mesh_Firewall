@@ -120,28 +120,18 @@ def extract_scan_targets(
     targets: list[tuple[str, Callable[[str], None]]] = []
 
     if "." in path:
-        values = _get_by_dot_path(payload, path)
-
-        # Dot-path mutation is best-effort: rebuild only when a single dict path.
-        def _make_setter(i: int) -> Callable[[str], None]:
-            def _set(v: str) -> None:
-                _mutate_dot_path(payload, path, i, v)
-
-            return _set
-
-        for idx, val in enumerate(values):
-            if isinstance(val, str):
-                targets.append((val, _make_setter(idx)))
-            else:
-                # CHG-0046: a non-string dot-path target (number / list / object)
-                # previously got a NO-OP setter, so a detected secret/PII inside it
-                # was reported redacted (scan_mcp_payload sets result_redacted=True)
-                # yet egressed RAW — and the E12 result-floor is then BYPASSED
-                # (the returned payload is a fresh object, so `scanned is
-                # result_content` is False). Bind the SAME real mutator so redaction
-                # replaces the value with the masked string (fail-closed byte truth,
-                # never report-redact-while-forwarding-raw).
-                targets.append((_safe_json(val), _make_setter(idx)))
+        # PER-LEAF setters bound to the exact (parent dict, real key) — mirrors the plain-key walk
+        # below. B2 red-team (wf_8683e8d0): the old index-based ``_mutate_dot_path`` re-resolved the
+        # path and picked the FIRST NFKC-fold-matching key each call, so when two DISTINCT sibling
+        # keys folded together (``email``/``Email``) the getter collected BOTH but the setter masked
+        # only the first — the 2nd key's secret egressed RAW while reported redacted. Binding a
+        # setter to the precise matched key masks every match, keeping detection⟺redaction in sync.
+        for parent, real_key, val in _resolve_dot_path_leaves(payload, path):
+            def _set(new: str, _p=parent, _k=real_key) -> None:
+                _p[_k] = new
+            # CHG-0046: a non-string value still gets a REAL setter (masked string replaces it in
+            # place) — never report-redact-while-forwarding-raw.
+            targets.append((val if isinstance(val, str) else _safe_json(val), _set))
         return targets
 
     # Simple key name — walk all matching keys.
@@ -206,6 +196,41 @@ def _mutate_dot_path(root: Any, path: str, index: int, new_value: str) -> None:
         node[last][index] = new_value
     elif index == 0:
         node[last] = new_value
+
+
+def _resolve_dot_path_leaves(obj: Any, path: str) -> list[tuple[dict, Any, Any]]:
+    """Resolve a dot path to ``(parent_dict, real_key, value)`` triples for EVERY terminal match —
+    so a caller can bind a setter to the precise matched key. Keys are NFKC-casefolded (parity with
+    the getter / detection binder / seed); lists are transparent (the path continues into each item
+    dict). An all-blank path yields no triples."""
+    parts = [p for p in path.split(".") if p]
+    if not parts:
+        return []
+    # Navigate to the containers that hold the LAST segment.
+    parents: list[Any] = [obj]
+    for part in parts[:-1]:
+        pn = _normalize_key(part)
+        nxt: list[Any] = []
+        for node in parents:
+            if isinstance(node, dict):
+                nxt.extend(v for k, v in node.items() if _normalize_key(k) == pn)
+            elif isinstance(node, list):
+                for item in node:
+                    if isinstance(item, dict):
+                        nxt.extend(v for k, v in item.items() if _normalize_key(k) == pn)
+        parents = nxt
+        if not parents:
+            return []
+    last = _normalize_key(parts[-1])
+    out: list[tuple[dict, Any, Any]] = []
+    for node in parents:
+        dicts = [node] if isinstance(node, dict) else (
+            [it for it in node if isinstance(it, dict)] if isinstance(node, list) else [])
+        for d in dicts:
+            for k, v in list(d.items()):
+                if _normalize_key(k) == last:
+                    out.append((d, k, v))
+    return out
 
 
 def apply_target_updates(payload: Any, updates: list[tuple[Callable[[str], None], str]]) -> Any:

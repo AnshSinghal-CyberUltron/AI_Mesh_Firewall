@@ -1439,6 +1439,7 @@ async def scan_mcp_payload(
 
     if tier1_blocked:
         result.blocked = True
+        result.monitored = False  # F3: a blocked call is never observe-only
         return payload, result
 
     mutable = state_ref[0]
@@ -1495,13 +1496,19 @@ async def scan_mcp_payload(
         )
         if t2_blocked:
             result.blocked = True
+            result.monitored = False  # F3: a blocked call is never observe-only
             return payload, result
         if fallback and strict_mode == "strict" and "strict" in fallback:
             result.blocked = True
+            result.monitored = False
             return payload, result
         if new_text != text and tier2_action == "redact":
             setter(new_text)
             result_redacted = True
 
+    # F3 audit honesty: 'monitored' means NOTHING was enforced on this call. Recompute from the
+    # FINAL state so a later-lane enforcement (e.g. a Tier-2 redact after a Tier-1 observe) clears an
+    # earlier per-lane observe set — the incremental sets alone left monitored=True on an enforced call.
+    result.monitored = bool(result.findings) and not result.blocked and not result_redacted
     out = _finalize_output(state_ref[0] if result_redacted else payload)
     return out, result
