@@ -167,13 +167,13 @@ def _observe_controls():
             "tier2_output": {"tier": "tier2", "enabled": False, "action": "inherit"}}
 
 
-async def _run(payload, *, rules, enforcement, effective_controls, direction, tool):
+async def _run(payload, *, rules, enforcement, effective_controls, direction, tool, enabled_info=None):
     orig = orch._get_policy_sync
     orch._get_policy_sync = lambda: _FakePolicySync(rules)
     try:
         return await orch.scan_mcp_payload(
             payload, scan_direction=direction, enforcement=enforcement,
-            effective_controls=effective_controls, tool_name=tool,
+            effective_controls=effective_controls, tool_name=tool, enabled_info=enabled_info,
             org_slug="o", server_slug="s", actor=None)
     finally:
         orch._get_policy_sync = orig
@@ -186,6 +186,64 @@ def _cases():
                 for direction in _DIRECTIONS:
                     yield pytest.param(sid, posture, rows, tool_actions, tool, pid, payload,
                                        direction, id=f"{sid}-{tool}-{pid}-{direction}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scn,posture,rows,tool_actions,tool,pid,payload,direction", list(_cases()))
+async def test_phase3_flag_reproduces_live_posture(scn, posture, rows, tool_actions, tool, pid,
+                                                   payload, direction):
+    """PHASE 3 (the cutover mechanism itself): with the per-org policy-only-enforcement flag ON, the
+    LIVE call path — posture STILL passed as ``enforcement`` but coerced away, the REAL effective
+    scan-controls, and the SEEDED policies present — must reproduce the live posture verdict. This
+    exercises the actual flag (``_mcp_policy_only_enforcement``) end to end, not the ``tag`` proxy:
+    it proves flipping Phase 3 for a SEEDED org loses no coverage."""
+    tool_scan_action = tool_actions.get(tool, "inherit")
+    live_enf = _live_enforcement(rows, posture, tool, tool_scan_action, direction)
+    live_eff = resolve_effective_controls(rows, server_id=_SID, tool_name=tool)
+    live_out, live_res = await _run(payload, rules=[], enforcement=live_enf,
+                                    effective_controls=live_eff, direction=direction, tool=tool)
+
+    # PHASE 3: posture passed but retired by the flag; the seeded policies enforce.
+    seeded = _seeded_rules(posture, rows, tool_actions)
+    p3_out, p3_res = await _run(payload, rules=seeded, enforcement=live_enf,
+                                effective_controls=live_eff, direction=direction, tool=tool,
+                                enabled_info={"mcp_policy_only_enforcement": True})
+
+    assert bool(live_res.blocked) == bool(p3_res.blocked), (
+        f"[{scn}/{tool}/{pid}/{direction}] PHASE-3 BLOCK divergence: "
+        f"live.blocked={live_res.blocked} phase3.blocked={p3_res.blocked}")
+    if not live_res.blocked:
+        assert _tokens_present(json.dumps(live_out)) == _tokens_present(json.dumps(p3_out)), (
+            f"[{scn}/{tool}/{pid}/{direction}] PHASE-3 CONTENT divergence: "
+            f"live={sorted(_tokens_present(json.dumps(live_out)))} "
+            f"phase3={sorted(_tokens_present(json.dumps(p3_out)))}")
+
+
+@pytest.mark.asyncio
+async def test_phase3_flag_off_by_default_posture_still_enforces():
+    """Guard: with the flag OFF (default), the posture STILL enforces (no accidental cutover). A
+    block posture with no policy blocks; a redact posture masks — unchanged legacy behavior."""
+    eff = resolve_effective_controls([], server_id=_SID, tool_name="t")
+    _, blk = await _run({"args": {"note": _AWS}}, rules=[], enforcement="block",
+                        effective_controls=eff, direction="input", tool="t")
+    assert blk.blocked, "flag OFF: a block posture must still enforce (block)"
+    red_out, red = await _run({"args": {"note": _AWS}}, rules=[], enforcement="redact",
+                              effective_controls=eff, direction="output", tool="t")
+    assert not red.blocked and _AWS not in json.dumps(red_out), "flag OFF: redact posture still masks"
+
+
+@pytest.mark.asyncio
+async def test_phase3_flag_unseeded_org_loses_enforcement():
+    """Guard (the cutover PREREQUISITE, made explicit): with the flag ON but NO seeded policies, the
+    posture is retired and nothing enforces — a raw egress. This is WHY Phase 3 defaults OFF and must
+    only be flipped per-org AFTER seeding; the test documents the failure mode so it can't regress
+    into a silent assumption."""
+    eff = resolve_effective_controls([], server_id=_SID, tool_name="t")
+    out, res = await _run({"args": {"note": _AWS}}, rules=[], enforcement="block",
+                          effective_controls=eff, direction="input", tool="t",
+                          enabled_info={"mcp_policy_only_enforcement": True})
+    assert not res.blocked and _AWS in json.dumps(out), (
+        "flag ON + unseeded → posture retired, no enforcement (must seed before flipping)")
 
 
 @pytest.mark.asyncio
