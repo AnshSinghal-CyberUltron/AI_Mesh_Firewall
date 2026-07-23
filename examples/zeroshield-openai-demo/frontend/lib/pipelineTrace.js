@@ -364,3 +364,37 @@ export function resolvePipelineInputOutput(sources = {}) {
     fromTrace: Boolean(trace?.input_text || trace?.output_text != null),
   };
 }
+
+/**
+ * Last `[user]: …` segment from a gateway transcript (or the whole string if
+ * unwrapped). Used so the chat plane can show the redacted user turn without
+ * dumping the full multi-turn prompt.
+ */
+export function extractLastUserPromptSegment(transcript) {
+  const s = String(transcript || "");
+  if (!s) return "";
+  const matches = [...s.matchAll(/\[user\]:\s*/gi)];
+  if (!matches.length) return s.trim();
+  const last = matches[matches.length - 1];
+  return s.slice(last.index + last[0].length).trim();
+}
+
+/**
+ * Reconcile the chat-plane user bubble with gateway input redaction.
+ * Optimistic UI shows the typed text; after the response, prefer the redacted
+ * prompt the model actually received (PIPELINE-0022 I/O fields, or stream
+ * prompt_submitted when input_was_redacted was omitted).
+ */
+export function resolveRedactedChatUserText(sources = {}, originalUserText = "") {
+  const original = String(originalUserText || "");
+  const io = resolvePipelineInputOutput(sources);
+  const afterRaw = io.inputAfter || io.promptSubmitted || "";
+  const display = extractLastUserPromptSegment(afterRaw) || original;
+  const redacted = Boolean(io.inputWasRedacted)
+    || (Boolean(display) && Boolean(original) && display !== original);
+  return {
+    redacted,
+    display: redacted ? display : original,
+    original,
+  };
+}

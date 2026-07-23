@@ -1,15 +1,12 @@
 {
-  "timestamp": "2026-07-11T10:17:34.336Z",
-  "mode": "headless",
-  "workerType": "audit",
-  "model": "haiku",
-  "durationMs": 27908,
-  "executionId": "audit_1783765026428_xd9fdf",
-  "success": true,
-  "findings": {
-    "parseError": true,
-    "rawOutput": "The \"Codebase Context\" attached to this request isn't actually part of this project's code — it's minified/bundled JS from `litellm`'s vendored Next.js admin UI, sitting under `.venv/lib/python3.14/site-packages/litellm/proxy/_experimental/out/_next/static/...` (auto-generated chunks like `0493aafc4891dd29.js`, tree-shaken UI icon components, TanStack Query internals, etc.). That's third-party dependency build output, not source you own or can meaningfully fix — scanning it for hardcoded secrets/SQLi/XSS would produce a report full of noise (e.g. flagging `api_key=\"YOUR_LITELLM_API_KEY\"` placeholder strings in generated SDK-snippet templates as \"hardcoded secrets\").\n\nA couple of things worth flagging directly:\n1. This looks like a context-assembly bug upstream (possibly a script globbing `.venv/**` instead of your actual source tree) rather than a real analysis request.\n2. I already have an extensive, verified security-audit history for the *actual* AI Mesh Firewall gateway/control-plane code in memory — dozens of open findings (MCP OAuth open-redirect, X-Gateway-Roles forgery, policy_signing gaps, telemetry fail-open paths, etc.) plus several fixed issues, from prior deep-dive sessions.\n\nRather than fabricate a JSON report from vendored minified JS, I'd rather do one of these — which would you like?\n- Run a fresh targeted scan against the real gateway/control-plane/frontend source (respecting the repo's CLAUDE.md phased-investigation process), or\n- Pull together a JSON-formatted summary of the already-verified open findings from memory for this repo, or\n- If you specifically intended to audit `litellm` itself as a dependency, confirm that and I'll scope a proper review of the actual `.py`/source files (not the compiled `_next/static` bundle).\n"
+  "timestamp": "2026-07-23T14:19:58.814Z",
+  "mode": "local",
+  "checks": {
+    "envFilesProtected": true,
+    "gitIgnoreExists": false,
+    "noHardcodedSecrets": true
   },
-  "rawOutputPreview": "The \"Codebase Context\" attached to this request isn't actually part of this project's code — it's minified/bundled JS from `litellm`'s vendored Next.js admin UI, sitting under `.venv/lib/python3.14/site-packages/litellm/proxy/_experimental/out/_next/static/...` (auto-generated chunks like `0493aafc4891dd29.js`, tree-shaken UI icon components, TanStack Query internals, etc.). That's third-party dependency build output, not source you own or can meaningfully fix — scanning it for hardcoded secrets/SQLi/XSS would produce a report full of noise (e.g. flagging `api_key=\"YOUR_LITELLM_API_KEY\"` placeholder strings in generated SDK-snippet templates as \"hardcoded secrets\").\n\nA couple of things worth flagging directly:\n1. This looks like a context-assembly bug upstream (possibly a script globbing `.venv/**` instead of your actual source tree) rather than a real analysis request.\n2. I already have an extensive, verified security-audit history for the *actual* AI Mesh Firewall gateway/control-plane code in memory — dozens of open findings (MCP OAuth open-redirect, X-Gateway-Roles forgery, policy_signing gaps, telemetry fail-open paths, etc.) plus several fixed issues, from prior deep-dive sessions.\n\nRather than fabricate a JSON report from vendored minified JS, I'd rather do one of these — which would you like?\n- Run a fresh targeted scan against the real gateway/control-plane/frontend source (respecting the repo's CLAUDE.md phased-investigation process), or\n- Pull together a JSON-formatted summary of the already-verified open findings from memory for this repo, or\n- If you specifically intended to audit `litellm` itself as a dependency, confirm that and I'll scope a proper review of the actual `.py`/source files (not the compiled `_next/static` bundle).\n",
-  "rawOutputLength": 1774
+  "riskLevel": "low",
+  "recommendations": [],
+  "note": "Install Claude Code CLI for AI-powered security analysis"
 }

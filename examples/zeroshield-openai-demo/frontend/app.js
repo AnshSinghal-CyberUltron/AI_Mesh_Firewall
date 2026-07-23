@@ -1,4 +1,5 @@
 import { renderPipelineView } from "./lib/pipelineView.js";
+import { resolveRedactedChatUserText } from "./lib/pipelineTrace.js";
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -558,14 +559,38 @@ function addMsg(role, text) {
   return el.querySelector(".txt");
 }
 
+/** After gateway response: replace optimistic raw user text with redacted prompt. */
+function reconcileChatUserRedaction(userTxtEl, historyIdx, trace) {
+  if (!userTxtEl || historyIdx < 0 || historyIdx >= history.length) return;
+  const original = history[historyIdx]?.content || "";
+  const pt = trace?.pipeline_trace || null;
+  const resolved = resolveRedactedChatUserText(
+    { pipelineTrace: pt || trace, fallbackAction: trace?.action },
+    original,
+  );
+  if (!resolved.redacted) return;
+  userTxtEl.textContent = resolved.display;
+  history[historyIdx].content = resolved.display;
+  const who = userTxtEl.closest(".msg")?.querySelector(".who");
+  if (who && !who.querySelector(".redacted-badge")) {
+    const badge = document.createElement("span");
+    badge.className = "redacted-badge";
+    badge.title = "Input redacted by ZeroShield before the model";
+    badge.textContent = "redacted";
+    who.appendChild(document.createTextNode(" "));
+    who.appendChild(badge);
+  }
+}
+
 async function sendChat() {
   const input = $("#chat-input");
   const text = input.value.trim();
   if (!text) return;
   input.value = "";
   const gen = resetPipeline("pending");
-  addMsg("user", text);
+  const userTxt = addMsg("user", text);
   history.push({ role: "user", content: text });
+  const userHistoryIdx = history.length - 1;
   const model = $("#chat-model").value;
   const extra_body = routingExtraBody(model);
   const msgs = $("#chat-multiturn").checked ? history : [{ role: "user", content: text }];
@@ -603,6 +628,7 @@ async function sendChat() {
           if (d.delta) { acc += d.delta; out.textContent = acc; $("#chat-thread").scrollTop = 1e9; }
           if (d.trace) {
             sawTrace = true;
+            reconcileChatUserRedaction(userTxt, userHistoryIdx, d.trace);
             const blocked = /ZeroShield blocked|⛔/.test(acc) || d.trace.action === "block";
             const blockMessage = blocked
               ? (acc.match(/ZeroShield blocked this request — (.+?)\]/)?.[1]
@@ -630,6 +656,7 @@ async function sendChat() {
       });
       out.textContent = d.content;
       history.push({ role: "assistant", content: d.content });
+      reconcileChatUserRedaction(userTxt, userHistoryIdx, d.trace);
       const blocked = !!(d.blocked || d.trace?.action === "block");
       renderVisualizer(d.trace, {
         streamed: false,

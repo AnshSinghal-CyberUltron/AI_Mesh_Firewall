@@ -1,16 +1,14 @@
 {
-  "timestamp": "2026-07-11T09:54:55.440Z",
+  "timestamp": "2026-07-23T14:13:58.809Z",
   "distillationEnabled": true,
-  "patternsConsolidated": 1,
-  "memoryCleaned": 6,
-  "duplicatesRemoved": 5,
-  "episodes": 1,
-  "patternEmbeddings": 1,
+  "patternsConsolidated": 0,
+  "memoryCleaned": 0,
+  "duplicatesRemoved": 0,
+  "episodes": 0,
+  "patternEmbeddings": 0,
   "causalEdges": 0,
   "promoted": 0,
-  "byProvenance": {
-    "proxy:structural": 1
-  },
+  "byProvenance": {},
   "namespaces": [
     "session",
     "security-audits"
