@@ -482,6 +482,59 @@ async def test_B3_secret_in_json_key_name_matches_live(tok, posture, direction):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("direction", _DIRECTIONS)
+async def test_B3_injection_as_key_name_blocks(direction):
+    """B3 red-team finding B: a prompt injection smuggled as a JSON KEY NAME. The live blob scan
+    blocks it under block posture; the seeded injection detector rule must too (its detector_class
+    is an empty frozenset, so key-name collection is gated on detect_injection, and the key_texts
+    loop runs the injection matcher). Injection is block-only — parity under block."""
+    payload = {"args": {_INJ: "x"}}
+    (lo, lr), (so, sr) = await _pair(payload, posture="block", rows=[], tool_actions={},
+                                     tool="t", direction=direction)
+    assert bool(lr.blocked) == bool(sr.blocked), f"live={lr.blocked} seed={sr.blocked}"
+
+
+@pytest.mark.parametrize("posture", ["block", "redact"])
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_B3_secret_as_key_inside_keypath_field(posture, direction):
+    """B3 red-team finding A: a secret smuggled as a KEY NAME INSIDE a key_path-scoped field. The
+    live scoped preset pass serializes the bound subtree and blocks/masks the key; the seeded
+    scope=key detector rule now scans key names of the bound subtree and masks a matched key by
+    rename — scoped to the field, siblings untouched. Must equal live."""
+    rows = [_row(direction="input", action=posture, scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret"),
+            _row(direction="output", action=posture, scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret")]
+    payload = {"args": {"secret": {_AWS: "x"}, "other": _EMAIL}}
+    (lo, lr), (so, sr) = await _pair(payload, posture=posture, rows=rows,
+                                     tool_actions={"getData": "inherit"}, tool="getData",
+                                     direction=direction)
+    assert bool(lr.blocked) == bool(sr.blocked), f"live={lr.blocked} seed={sr.blocked}"
+    if not lr.blocked:
+        assert (_AWS in json.dumps(lo)) == (_AWS in json.dumps(so)), "key-name secret survival diverges"
+        assert _EMAIL in json.dumps(so), "sibling outside the key path must be untouched"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+async def test_B3_secret_key_OUTSIDE_keypath_not_renamed(direction):
+    """The scope=key key-name rename must NOT touch a secret key name OUTSIDE the key path — parity
+    with live, which scopes to the field. A secret key in a sibling is forwarded exactly as live."""
+    rows = [_row(direction="input", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret"),
+            _row(direction="output", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret")]
+    payload = {"args": {"secret": "clean", "other": {_AWS: "x"}}}
+    (lo, lr), (so, sr) = await _pair(payload, posture="redact", rows=rows,
+                                     tool_actions={"getData": "inherit"}, tool="getData",
+                                     direction=direction)
+    assert bool(lr.blocked) == bool(sr.blocked)
+    if not lr.blocked:
+        assert (_AWS in json.dumps(lo)) == (_AWS in json.dumps(so)), "sibling secret key must match live"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("direction", _DIRECTIONS)
 async def test_B3_benign_keys_and_keyword_rules_untouched(direction):
     """B3 guard (PR#19 stays fixed): a benign key name is NOT renamed, and a KEYWORD rule matching a
     structural key name must NOT block (only detector-class rules scan keys). Under a plain detector

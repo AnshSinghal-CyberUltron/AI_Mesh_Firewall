@@ -594,13 +594,9 @@ _KEY_COLLECT_MAX_DEPTH = 500
 _KEY_COLLECT_MAX_NODES = 2_000_000
 
 
-def _collect_dot_path_values(obj: Any, path: str) -> list[str]:
-    """Collect string (and stringified) values at a DOT-separated path (e.g.
-    ``arguments.body``), mirroring the scan-control ``key_path`` binding
-    (mcp_scan_targets._get_by_dot_path). A ``scope=key`` policy rule whose ``key`` is a
-    dot-path must traverse the path — the plain ``_collect_key_values`` recursive key-name
-    walk never matched a dotted key, so a detector policy SEEDED from a dot-path scan-control
-    scanned NOTHING and the field egressed raw (Phase-2b red-team #1)."""
+def _collect_dot_path_nodes(obj: Any, path: str) -> list[Any]:
+    """Resolve a DOT-separated ``key_path`` to the bound subtree NODES (raw, un-stringified),
+    mirroring ``mcp_scan_targets._get_by_dot_path`` (lists transparent)."""
     parts = [p for p in path.split(".") if p]
     if not parts:
         return []
@@ -622,17 +618,18 @@ def _collect_dot_path_values(obj: Any, path: str) -> list[str]:
         nodes = nxt
         if not nodes:
             return []
-    return [n if isinstance(n, str) else _safe_json(n) for n in nodes]
+    return nodes
 
 
-def _collect_key_values(obj: Any, key: str) -> list[str]:
+def _collect_key_nodes(obj: Any, key: str) -> list[Any]:
+    """Resolve a scope=key ``key`` to the bound subtree NODES. Dotted key → path from root; plain
+    key → recursive key-name match (collect the matched value, do NOT descend into it)."""
     if not key:
         return []
-    # A dotted key is a PATH (scan-control key_path parity), not a literal key name.
     if "." in key:
-        return _collect_dot_path_values(obj, key)
+        return _collect_dot_path_nodes(obj, key)
     target = _normalize_key(key)
-    out: list[str] = []
+    out: list[Any] = []
     stack: list[tuple[Any, int]] = [(obj, 0)]
     nodes = 0
     while stack:
@@ -645,14 +642,25 @@ def _collect_key_values(obj: Any, key: str) -> list[str]:
         if isinstance(cur, dict):
             for k, v in cur.items():
                 if _normalize_key(k) == target:
-                    # Matched key: collect but do NOT descend (original semantics).
-                    out.append(v if isinstance(v, str) else _safe_json(v))
+                    out.append(v)  # matched key: collect its value, do NOT descend
                 else:
                     stack.append((v, depth + 1))
         elif isinstance(cur, list):
             for item in cur:
                 stack.append((item, depth + 1))
     return out
+
+
+def _collect_dot_path_values(obj: Any, path: str) -> list[str]:
+    """String (and stringified) values at a DOT-separated ``key_path`` — see
+    ``_collect_dot_path_nodes``. A ``scope=key`` detector rule whose ``key`` is a dot-path must
+    traverse the path (a detector SEEDED from a dot-path scan-control else scanned NOTHING —
+    Phase-2b red-team #1)."""
+    return [n if isinstance(n, str) else _safe_json(n) for n in _collect_dot_path_nodes(obj, path)]
+
+
+def _collect_key_values(obj: Any, key: str) -> list[str]:
+    return [n if isinstance(n, str) else _safe_json(n) for n in _collect_key_nodes(obj, key)]
 
 
 def _leaf_value_texts(obj: Any) -> list[str]:
@@ -722,16 +730,25 @@ def _leaf_key_names(obj: Any) -> list[str]:
 
 
 def _detector_key_name_texts(context: dict[str, Any], matcher: dict[str, Any]) -> list[str]:
-    """KEY NAMES to add to the DETECTOR-class scan for a scope=entire rule, honoring direction.
-    Empty for scope=key (value-only there) or when the source isn't a container."""
-    if matcher.get("scope") == "key":
-        return []
+    """KEY NAMES to add to the DETECTOR-class scan, honoring direction. For scope=entire, every key
+    name in the payload; for scope=key, the key names UNDER the bound ``key`` subtree (so a secret
+    smuggled as a key name INSIDE the operator's protected field is caught — parity with the live
+    scoped preset pass, which serializes and blob-scans that subtree). The orchestrator masks a
+    matched key by rename at the same scope, keeping detection⟺redaction agreement."""
+    scope = matcher.get("scope")
+    key = matcher.get("key") or ""
     out: list[str] = []
-    direction = matcher["direction"]
-    if direction in ("input", "both") and isinstance(context.get("input_args"), (dict, list)):
-        out.extend(_leaf_key_names(context["input_args"]))
-    if direction in ("output", "both") and isinstance(context.get("output_data"), (dict, list)):
-        out.extend(_leaf_key_names(context["output_data"]))
+    for direction, src_key in (("input", "input_args"), ("output", "output_data")):
+        if matcher["direction"] not in (direction, "both"):
+            continue
+        src = context.get(src_key)
+        if not isinstance(src, (dict, list)):
+            continue
+        if scope == "key":
+            for node in _collect_key_nodes(src, key):
+                out.extend(_leaf_key_names(node))
+        else:
+            out.extend(_leaf_key_names(src))
     return out
 
 
@@ -876,9 +893,12 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
         return True
     matcher = _resolve_matcher_dict(rule)
     texts = _candidate_texts_mcp(context, matcher)
-    # B3: a DETECTOR-class rule ALSO scans KEY NAMES for scope=entire (a secret smuggled as a JSON
-    # key that the live entire-mode blob scan catches). Value-only for keyword/regex (PR#19).
-    key_texts = _detector_key_name_texts(context, matcher) if matcher["detector_class"] else []
+    # B3: a DETECTOR-class OR injection rule ALSO scans KEY NAMES for scope=entire (a secret /
+    # prompt-injection smuggled as a JSON key that the live entire-mode blob scan catches).
+    # Value-only for keyword/regex (PR#19). A pure-injection rule has an EMPTY detector_class
+    # frozenset (falsy) — gate on detect_injection too, else its key names are never collected.
+    key_texts = (_detector_key_name_texts(context, matcher)
+                 if (matcher["detector_class"] or matcher.get("detect_injection")) else [])
     if not texts and not key_texts:
         return False
 
@@ -953,9 +973,12 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
                         return True
                     if want_infra and _dec_has_infra(variant):
                         return True
-        # B3: a secret in a JSON KEY NAME (raw class match — the redactor masks it by rename).
+        # B3: a secret OR prompt-injection in a JSON KEY NAME. Class match → redactor masks by
+        # rename; injection is block-only (the live blob scan blocks it; no redactor change).
         for kt in key_texts:
             if classes and redact_all_scoped(kt, classes) != kt:
+                return True
+            if want_injection and _detector_injection_match(kt):
                 return True
         return False
 
