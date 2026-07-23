@@ -420,6 +420,8 @@ def _scan_text_tier1_sync(
     server_slug: str,
     tool_name: str,
     actor: dict[str, Any] | None = None,
+    include_policies: bool = True,
+    include_presets: bool = True,
 ) -> tuple[str, list[McpFinding], bool, list[str]]:
     """Run Tier-1 policy + preset evaluation on a single text fragment.
 
@@ -427,6 +429,25 @@ def _scan_text_tier1_sync(
     ``redaction_fields`` (3b) are the named response fields the matched policy
     declared for RBAC masking — surfaced so ``scan_mcp_payload`` can mask them on
     the structured OUTPUT payload (the injection/PII fallbacks declare none).
+
+    PHASE 1 — POLICY OWNS ITS SCOPE (2026-07-23). ``include_policies`` /
+    ``include_presets`` let ``scan_mcp_payload`` run the two Tier-1 lanes as
+    SEPARATE passes so each honours its OWN operator-selected scope:
+
+      * POLICY pass  (include_policies=True, include_presets=False) — evaluated by
+        ``scan_mcp_payload`` against the FULL payload, so a policy authored
+        ``scope=entire`` is honoured on the whole payload and its redaction lands
+        where the POLICY matched — no longer silently narrowed to the scan-control
+        Tier-1 ``target_mode``/``key_path`` binding (the detect-wide/mutate-narrow
+        raw-egress leak: a secret in a field OUTSIDE a key-scoped scan-control was
+        neither detected, tagged, redacted, nor blocked despite a matching
+        entire-scope redact policy).
+      * PRESET pass  (include_policies=False, include_presets=True) — run per
+        scan-control-bound target, so the PRESET scanners keep the operator's
+        scan-control scope.
+
+    The default (both True) is the ORIGINAL combined behaviour — policy match
+    short-circuits the presets — kept intact for every existing direct caller/test.
     """
     if not text:
         return text, [], False, []
@@ -435,51 +456,62 @@ def _scan_text_tier1_sync(
     blocked = False
     mutated = text
     mcp_dir = _direction_label(scan_direction)
-    context = _build_mcp_context(text, scan_direction=scan_direction, full_payload=full_payload)
+    policy_rfields: list[str] = []
 
-    policy_sync = _get_policy_sync()
-    policies: list[dict[str, Any]] = []
-    if policy_sync is not None and org_slug and server_slug:
-        try:
-            policies = policy_sync.get_policies_for_server(org_slug, server_slug, domain="mcp")
-        except Exception as exc:
-            LOG.warning("MCP policy bundle lookup failed: %s", exc)
+    if include_policies:
+        context = _build_mcp_context(text, scan_direction=scan_direction, full_payload=full_payload)
+        policy_sync = _get_policy_sync()
+        policies: list[dict[str, Any]] = []
+        if policy_sync is not None and org_slug and server_slug:
+            try:
+                policies = policy_sync.get_policies_for_server(org_slug, server_slug, domain="mcp")
+            except Exception as exc:
+                LOG.warning("MCP policy bundle lookup failed: %s", exc)
 
-    if policies:
-        eval_result = evaluate_mcp_policies(
-            policies, context, tool_name=tool_name or None, actor=actor
-        )
-        if eval_result.matched_rule_ids:
-            findings.extend(
-                _findings_from_policy_eval(eval_result, scan_direction=scan_direction, text=text)
+        if policies:
+            eval_result = evaluate_mcp_policies(
+                policies, context, tool_name=tool_name or None, actor=actor
             )
-            policy_redacts = eval_result.action == "redact"
-            # A matched rule authored action='block' is an EXPLICIT block intent —
-            # honor it even under a coarser posture (tag/redact), matching the
-            # control-plane engine (engine.py blocks on ``result.action == "block"``)
-            # and the backend HTTP path. Without this, the stdio/websocket adapter
-            # path — which bypasses the backend that would re-enforce the rule —
-            # silently downgrades an actor-scoped block rule to detect-and-tag
-            # under the default 'tag' posture (BACKSTOP_FINDINGS G2 item 3, #3).
-            # A 'monitor' posture is an explicit observe-only override and wins.
-            policy_blocks = eval_result.action == "block"
-            if _enforce_blocks(enforcement) or (
-                policy_blocks and not (enforcement or "").strip().lower() == "monitor"
-            ):
-                # A4 FIX: block posture is a FLOOR (blocks ANY matched rule, even
-                # one authored redact/tag); additionally a rule's own 'block'
-                # action is honored under any non-monitor posture (CHG-0007), including
-                # legacy ``tag``.
-                blocked = True
-            elif policy_redacts and eval_result.redaction_hints and (
-                (enforcement or "").strip().lower() != "monitor"
-            ):
-                # Policy-authored redact rules apply whenever they match — not only
-                # when the server/tool posture is explicitly ``redact``. Skipped under
-                # an explicit per-tier ``monitor`` posture (control-plane parity:
-                # MCPToolCallView skips input redaction when _input_action == monitor).
-                mutated = apply_redaction(text, eval_result.redaction_hints)
-            return mutated, findings, blocked, list(eval_result.redaction_fields)
+            if eval_result.matched_rule_ids:
+                findings.extend(
+                    _findings_from_policy_eval(eval_result, scan_direction=scan_direction, text=text)
+                )
+                policy_redacts = eval_result.action == "redact"
+                # A matched rule authored action='block' is an EXPLICIT block intent —
+                # honor it even under a coarser posture (tag/redact), matching the
+                # control-plane engine (engine.py blocks on ``result.action == "block"``)
+                # and the backend HTTP path. Without this, the stdio/websocket adapter
+                # path — which bypasses the backend that would re-enforce the rule —
+                # silently downgrades an actor-scoped block rule to detect-and-tag
+                # under the default 'tag' posture (BACKSTOP_FINDINGS G2 item 3, #3).
+                # A 'monitor' posture is an explicit observe-only override and wins.
+                policy_blocks = eval_result.action == "block"
+                if _enforce_blocks(enforcement) or (
+                    policy_blocks and not (enforcement or "").strip().lower() == "monitor"
+                ):
+                    # A4 FIX: block posture is a FLOOR (blocks ANY matched rule, even
+                    # one authored redact/tag); additionally a rule's own 'block'
+                    # action is honored under any non-monitor posture (CHG-0007), including
+                    # legacy ``tag``.
+                    blocked = True
+                elif policy_redacts and eval_result.redaction_hints and (
+                    (enforcement or "").strip().lower() != "monitor"
+                ):
+                    # Policy-authored redact rules apply whenever they match — not only
+                    # when the server/tool posture is explicitly ``redact``. Skipped under
+                    # an explicit per-tier ``monitor`` posture (control-plane parity:
+                    # MCPToolCallView skips input redaction when _input_action == monitor).
+                    mutated = apply_redaction(text, eval_result.redaction_hints)
+                policy_rfields = list(eval_result.redaction_fields)
+                if include_presets:
+                    # Combined mode (legacy default): a policy match short-circuits the
+                    # presets — the policy governs this fragment.
+                    return mutated, findings, blocked, policy_rfields
+
+    if not include_presets:
+        # Policy-only pass: return the policy verdict (or a clean pass when no rule
+        # matched); the caller runs the PRESET pass separately on its own scope.
+        return mutated, findings, blocked, policy_rfields
 
     # CHG-0079: deobfuscate INVISIBLE / CONFUSABLE unicode (zero-width, bidi-override,
     # homoglyph, unicode-tag block, combining-mark smuggling) before detection. The chat
@@ -746,14 +778,20 @@ async def _scan_text_tier1(
     server_slug: str,
     tool_name: str,
     actor: dict[str, Any] | None = None,
+    include_policies: bool = True,
+    include_presets: bool = True,
 ) -> tuple[str, list[McpFinding], bool, list[str]]:
     """Async entrypoint for the CPU-bound Tier-1 scan. Offloads a LARGE input to a worker
     thread (CHG-0103) so the synchronous regex scan never blocks the event loop under load;
     a small input runs inline to avoid thread-pool pressure. Same signature/return as the
-    prior async function, so callers + tests are unchanged."""
+    prior async function, so callers + tests are unchanged.
+
+    ``include_policies``/``include_presets`` (Phase 1, 2026-07-23) select the Tier-1 lane —
+    see ``_scan_text_tier1_sync``. Default (both True) is the original combined behaviour."""
     _kwargs = dict(
         scan_direction=scan_direction, enforcement=enforcement, full_payload=full_payload,
         org_slug=org_slug, server_slug=server_slug, tool_name=tool_name, actor=actor,
+        include_policies=include_policies, include_presets=include_presets,
     )
     if len(text) > _TIER1_OFFLOAD_THRESHOLD:
         return await asyncio.to_thread(_scan_text_tier1_sync, text, **_kwargs)
@@ -902,6 +940,78 @@ async def scan_mcp_payload(
         )
         return payload, result
 
+    # ── Tier-1 POLICY pass (Phase 1, 2026-07-23): evaluate policies ONCE against the
+    # FULL payload using each policy's OWN scope, DECOUPLED from the scan-control target
+    # binding below. A policy authored ``scope=entire`` now sees the whole payload and its
+    # redaction lands where the POLICY matched — closing the detect-wide/mutate-narrow
+    # raw-egress leak where a key-scoped scan-control silently narrowed an entire-scope
+    # redact policy so a secret in a sibling field egressed raw, undetected and untagged.
+    # Runs only for an ENABLED tier1 direction (after the disabled-skip above), so direction
+    # isolation is preserved. The scan-control scope still governs the PRESET pass that
+    # follows; each surface honours its OWN operator-selected scope.
+    pol_state, pol_targets = extract_and_bind(payload, target_mode="entire", key_path="")
+    pol_text, pol_setter, _pol_label = pol_targets[0]
+    if pol_text:
+        pol_new, pol_findings, pol_blocked, pol_rfields = await _scan_text_tier1(
+            pol_text,
+            scan_direction=scan_direction,
+            enforcement=tier1_action,
+            full_payload=pol_state[0],
+            org_slug=org_slug,
+            server_slug=server_slug,
+            tool_name=tool_name,
+            actor=actor,
+            include_policies=True,
+            include_presets=False,
+        )
+        for _rf in pol_rfields:
+            if _rf not in field_redaction_union:
+                field_redaction_union.append(_rf)
+        result.findings.extend(pol_findings)
+        if pol_findings:
+            for f in pol_findings:
+                result.compliance_tags = _merge_tags(
+                    result.compliance_tags, _tags_for_finding(f)
+                )
+            if _is_observe_only_posture(tier1_action):
+                result.monitored = True
+        if pol_blocked:
+            result.blocked = True
+            result.scan_trace.append(
+                {
+                    "scan_stage": "tier1_policy", "tier": "tier1",
+                    "direction": scan_direction, "scope": "entire",
+                    "action": tier1_action, "blocked": True,
+                    "finding_count": len(pol_findings), "policy_engine": True,
+                }
+            )
+            return payload, result
+        if pol_new != pol_text:
+            # fail-closed no-op-scrub guard (parity with the preset loop below): a policy
+            # redaction the setter cannot apply must BLOCK, never forward the raw payload.
+            _before = _safe_json(pol_state[0])
+            pol_setter(pol_new)
+            if _safe_json(pol_state[0]) == _before:
+                result.blocked = True
+                result.scan_trace.append(
+                    {
+                        "scan_stage": "noop_scrub_failclosed", "tier": "tier1",
+                        "direction": scan_direction, "scope": "entire",
+                        "reason": "policy_redaction_setter_noop_raw_survived",
+                    }
+                )
+                return payload, result
+            result_redacted = True
+            payload = pol_state[0]  # thread the policy-mutated payload into the preset pass
+        result.scan_trace.append(
+            {
+                "scan_stage": "tier1_policy", "tier": "tier1",
+                "direction": scan_direction, "scope": "entire",
+                "action": tier1_action, "finding_count": len(pol_findings),
+                "policy_engine": True,
+            }
+        )
+
     target_mode = tier1_ctrl.get("target_mode") or "entire"
     key_path = tier1_ctrl.get("key_path") or ""
     state_ref, targets = extract_and_bind(
@@ -916,6 +1026,7 @@ async def scan_mcp_payload(
     for text, setter, path_label in targets:
         if not text:
             continue
+        # PRESET pass only — the POLICY lane already ran once on the full payload above.
         new_text, findings, blocked, rfields = await _scan_text_tier1(
             text,
             scan_direction=scan_direction,
@@ -925,6 +1036,8 @@ async def scan_mcp_payload(
             server_slug=server_slug,
             tool_name=tool_name,
             actor=actor,
+            include_policies=False,
+            include_presets=True,
         )
         for _rf in rfields:
             if _rf not in field_redaction_union:

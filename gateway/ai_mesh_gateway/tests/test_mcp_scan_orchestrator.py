@@ -906,6 +906,10 @@ async def test_chg0046_keypath_nonstring_value_setter_applied_end_to_end():
     }
 
     async def _fake_tier1(text, **kwargs):
+        # Phase 1: the POLICY pass (include_presets=False) is a clean pass-through here
+        # (no policies configured); only the PRESET pass simulates the redaction.
+        if not kwargs.get("include_presets", True):
+            return text, [], False, []
         # Simulate a redaction that changed the text (masked the numeric value).
         return "MASKED", [], False, []
 
@@ -943,6 +947,8 @@ async def test_chg0047_noop_setter_fails_closed():
         return state, [("123456789", _noop_setter, "ssn")]
 
     async def _fake_tier1(text, **kwargs):
+        if not kwargs.get("include_presets", True):
+            return text, [], False, []  # Phase 1 policy pass: no policy, pass-through
         return "MASKED", [], False, []  # tier1 "redacted" the text (new_text != text)
 
     ctrl = {
@@ -987,6 +993,8 @@ async def test_chg0047_real_setter_not_blocked():
         return state, [("123456789", _real_setter, "ssn")]
 
     async def _fake_tier1(text, **kwargs):
+        if not kwargs.get("include_presets", True):
+            return text, [], False, []  # Phase 1 policy pass: no policy, pass-through
         return "MASKED", [], False, []
 
     ctrl = {
