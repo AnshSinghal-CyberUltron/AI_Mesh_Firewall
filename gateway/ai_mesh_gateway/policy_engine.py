@@ -49,15 +49,69 @@ _DETECTOR_ALL_CLASSES = _DETECTOR_CLASS_MAP["all"]
 
 def _resolve_detector_classes(value: Any) -> frozenset[str]:
     """Map an operator ``detector_class`` (str or list) to redact_all_scoped classes.
-    Unknown/empty → the full suite (``all``), the safe/complete default for a detector rule."""
+    Unknown/empty → the full suite (``all``), the safe/complete default for a detector rule.
+    ``injection`` is NOT a redactable class (handled separately) so it contributes nothing here."""
     if isinstance(value, str):
+        if value.strip().lower() == "injection":
+            return frozenset()
         return _DETECTOR_CLASS_MAP.get(value.strip().lower(), _DETECTOR_ALL_CLASSES)
     if isinstance(value, (list, tuple, set)):
         out: set[str] = set()
         for v in value:
             out |= set(_DETECTOR_CLASS_MAP.get(str(v).strip().lower(), frozenset()))
-        return frozenset(out) or _DETECTOR_ALL_CLASSES
+        return frozenset(out)  # empty is legitimate (e.g. injection-only rule)
     return _DETECTOR_ALL_CLASSES
+
+
+def _wants_injection(value: Any) -> bool:
+    """True if a ``detector_class`` requests the injection/jailbreak class (#4). Injection is a
+    BLOCK-oriented, non-maskable class — a server posture blocks prompt-injection/jailbreak via
+    the preset floor, which detector_class=all (pii/credential/ip_leakage) never covered."""
+    if isinstance(value, str):
+        return value.strip().lower() == "injection"
+    if isinstance(value, (list, tuple, set)):
+        return any(str(v).strip().lower() == "injection" for v in value)
+    return False
+
+
+# Injection/jailbreak detection for the detector lane — parity with mcp_scan_orchestrator.
+# _injection_match (keyword substrings + scanner.ATTACK_PATTERNS prompt_injection/jailbreak).
+_DETECTOR_INJECTION_KEYWORDS = (
+    "ignore previous instructions", "ignore all prior", "disregard your instructions",
+    "system prompt", "jailbreak", "do anything now",
+)
+
+
+def _detector_injection_match(text: str) -> bool:
+    lower = text.lower()
+    if any(k in lower for k in _DETECTOR_INJECTION_KEYWORDS):
+        return True
+    try:
+        from scanner import ATTACK_PATTERNS  # local: scanner does not import this module
+        from patterns import compile_pattern
+    except Exception:
+        return False
+    for cat in ("prompt_injection", "jailbreak"):
+        for ps in ATTACK_PATTERNS.get(cat, ()):
+            try:
+                if compile_pattern(ps).search(text):
+                    return True
+            except Exception:  # noqa: BLE001 — never break the scan on a bad pattern
+                continue
+    return False
+
+
+def _encoded_variants(text: str) -> list[str]:
+    """Text-encoding-decoded views (HTML entities, percent/backslash escapes …) so the detector
+    lane catches an ENCODED secret the server posture's encoded-exfil floor caught (#3). Fast-
+    pathed: pure ASCII with no encoding markers has no variants."""
+    if "&" not in text and "%" not in text and "\\" not in text and text.isascii():
+        return []
+    try:
+        from scanner import _decode_text_encoding_variants  # local: avoid import cycle
+        return [v for v in _decode_text_encoding_variants(text) if v and v != text]
+    except Exception:
+        return []
 
 # FINDING-3 (ReDoS): mirror the control-plane write-time guard into the gateway
 # hot path so a catastrophic-backtracking pattern that lands in a compiled
@@ -644,8 +698,10 @@ def _resolve_matcher_dict(rule: dict[str, Any]) -> dict[str, Any]:
     # redact_all_scoped class set; detection reuses the SAME engine (a class matches iff
     # redact_all_scoped changes the text), so detection and redaction can never disagree.
     detector_class = None
+    detect_injection = False
     if rule.get("rule_type") == "detector" or cond.get("detector_class"):
         detector_class = _resolve_detector_classes(cond.get("detector_class"))
+        detect_injection = _wants_injection(cond.get("detector_class"))
     elif preset:
         regex = preset_regex(preset)
     elif rule.get("rule_type") == "keywords":
@@ -668,6 +724,7 @@ def _resolve_matcher_dict(rule: dict[str, Any]) -> dict[str, Any]:
         "keywords": [k for k in (keywords or []) if isinstance(k, str)],
         "preset": preset,
         "detector_class": detector_class,
+        "detect_injection": detect_injection,
         "replacement": replacement,
     }
 
@@ -762,15 +819,26 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
                     return True
         return False
 
-    if matcher["detector_class"]:
+    if matcher["detector_class"] or matcher.get("detect_injection"):
         # A detector rule matches iff the built-in detector SUITE would mask something in this
         # class — reuse the SAME redact_all_scoped engine the rule redacts with, so detection
         # and redaction agree by construction (no detect-on-blob / mask-on-leaf asymmetry).
         from patterns import redact_all_scoped  # local: patterns has no import cycle here
-        classes = set(matcher["detector_class"])
+        classes = set(matcher["detector_class"] or ())
+        want_injection = bool(matcher.get("detect_injection"))
         for text in texts:
-            if redact_all_scoped(text, classes) != text:
+            if classes and redact_all_scoped(text, classes) != text:
                 return True
+            if want_injection and _detector_injection_match(text):
+                return True
+            # #3: a secret hidden by a text-encoding (HTML entity / percent / \\u) that
+            # redact_all_scoped can't mask raw — the posture's encoded-exfil floor caught it, so
+            # DECODE and re-check so the detector lane detects it too (masking of the residual
+            # is handled by the cannot-mask fail-closed under an enforcing posture).
+            if classes:
+                for variant in _encoded_variants(text):
+                    if redact_all_scoped(variant, classes) != variant:
+                        return True
         return False
 
     return False
@@ -829,16 +897,20 @@ def evaluate_mcp_policies(
         # baseline PII-redact policy for that tool (raw egress). The exemption exists to
         # suppress the broad server-wide rule that lives in the SAME seeded policy; other
         # policies stand on their own.
+        # #6: match target_tool case/whitespace/unicode-insensitively (strip + NFKC + casefold),
+        # so a seeded per-tool rule / exemption isn't silently dropped by a name skew between the
+        # registered tool_name and the runtime tool_name.
+        _norm_tool = _normalize_key((tool_name or "").strip()) if tool_name else ""
         policy_exempts = bool(tool_name) and any(
             (r.get("condition") or {}).get("exempt")
-            and (r.get("target_tool") or "") == tool_name
+            and _normalize_key((r.get("target_tool") or "").strip()) == _norm_tool
             and _exempt_dir_applies(r, context)
             for r in rules
         )
 
         for rule in rules:
             rule_target = rule.get("target_tool", "") or ""
-            if rule_target and tool_name and rule_target != tool_name:
+            if rule_target and tool_name and _normalize_key(rule_target.strip()) != _norm_tool:
                 continue
 
             # An exemption rule itself contributes no enforcing action and is not a finding.
