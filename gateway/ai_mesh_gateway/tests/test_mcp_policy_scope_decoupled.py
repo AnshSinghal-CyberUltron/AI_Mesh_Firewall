@@ -306,5 +306,58 @@ async def test_maskable_redact_still_forwards_not_blocked():
     assert _SEC not in json.dumps(scanned)
 
 
+# ───── Bug B: keyword detection ⟺ redaction word-boundary agreement ─────
+def _kw_rule(word, action="redact"):
+    return {"id": 50, "name": "kw", "rule_type": "keywords", "action": action,
+            "condition": {"keywords": [word], "direction": "input", "scope": "entire"},
+            "redaction_config": {}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("posture", ["tag", "redact", "block"])
+async def test_keyword_substring_inside_word_does_not_false_block(posture):
+    """A keyword that appears only as a SUBSTRING inside a larger word (secret→secretary) must
+    NOT match — detection is word-bounded like the redactor, so no false 'unmaskable' block."""
+    ec = _effc(_slot(True, "inherit", target_mode="entire"), _slot(False, direction="output"))
+    payload = {"name": "notify", "arguments": {"note": "The secretary secretly filed it."}}
+    scanned, res = await _scan(payload, ec, [_kw_rule("secret")], enforcement=posture)
+    assert res.blocked is False, f"substring-only keyword must not false-block ({posture})"
+    assert "secretary secretly" in json.dumps(scanned), "benign content forwarded intact"
+
+
+@pytest.mark.asyncio
+async def test_standalone_keyword_still_masks():
+    """Control: a standalone keyword still matches (word-bounded) and is masked."""
+    ec = _effc(_slot(True, "inherit", target_mode="entire"), _slot(False, direction="output"))
+    payload = {"arguments": {"note": "the secret plan is ready"}}
+    scanned, res = await _scan(payload, ec, [_kw_rule("secret")], enforcement="redact")
+    assert res.blocked is False
+    assert "secret" not in json.dumps(scanned), "standalone keyword masked"
+
+
+# ───── Q4: tag/monitor (observe-only) never block, even on a genuine unmaskable match ─────
+@pytest.mark.asyncio
+async def test_unmaskable_match_forwards_under_tag_not_blocks():
+    """Under the default observe-only ``tag`` posture, a genuinely-unmaskable redact match
+    (secret nested past the depth cap) is FORWARDED, never blocked — 'tag never blocks'."""
+    deep = {"x": _SEC}
+    for _ in range(210):
+        deep = {"n": deep}
+    ec = _effc(_slot(True, "inherit", target_mode="entire"), _slot(False, direction="output"))
+    scanned, res = await _scan(deep, ec, [_redact_rule()], enforcement="tag")
+    assert res.blocked is False, "tag posture must never block, even on an unmaskable match"
+
+
+@pytest.mark.asyncio
+async def test_unmaskable_match_fails_closed_under_redact():
+    """Twin: under an ENFORCING posture the same unmaskable match DOES fail closed."""
+    deep = {"x": _SEC}
+    for _ in range(210):
+        deep = {"n": deep}
+    ec = _effc(_slot(True, "inherit", target_mode="entire"), _slot(False, direction="output"))
+    scanned, res = await _scan(deep, ec, [_redact_rule()], enforcement="redact")
+    assert res.blocked is True, "enforcing posture fails closed on an unmaskable match"
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

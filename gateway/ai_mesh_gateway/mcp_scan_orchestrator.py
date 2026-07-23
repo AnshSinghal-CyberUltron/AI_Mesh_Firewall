@@ -912,7 +912,13 @@ def _mcp_policy_pass_sync(
         # masking-crash fail-closed), NOT a redact->block escalation of MASKABLE content
         # (maskable matches redact + forward as before). Numeric leaves are masked above, so
         # this fires only for the genuinely-unmaskable residual (structural regex / deep nest).
-        if hit_cap or not changed:
+        # TAG NEVER BLOCKS (2026-07-23): gate on _is_observe_only_posture, NOT the literal
+        # ``posture != "monitor"`` above — the frozen contract makes ``tag`` an alias of
+        # ``monitor`` for BLOCKING (a3714946 / 4fdf7fcf: "tag/monitor never block"). Under an
+        # observe-only posture the operator chose NOT to enforce, so an unmaskable match is
+        # forwarded (best-effort redact of what WAS maskable still applied), never blocked —
+        # the cannot-mask fail-closed is an ENFORCING-posture behaviour only.
+        if (hit_cap or not changed) and not _is_observe_only_posture(enforcement):
             return full_payload, findings, True, rfields, False
         return new_payload, findings, False, rfields, changed
     return full_payload, findings, False, rfields, False

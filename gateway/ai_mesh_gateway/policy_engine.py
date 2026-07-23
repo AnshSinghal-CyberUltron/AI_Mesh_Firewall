@@ -671,10 +671,22 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
         return False
 
     if matcher["keywords"]:
+        # Keyword DETECTION must agree with apply_redaction's keyword REDACTION, which masks
+        # ``\b{re.escape(kw)}\b`` (word-bounded). A bare substring detect (``kw in text``)
+        # matched a keyword INSIDE a larger word (``secret`` in ``secretary``) that the
+        # word-bounded redactor could never mask → changed=False → cannot-mask fail-closed
+        # BLOCKED benign traffic. Match on the SAME word-bounded pattern so detection and
+        # masking agree on what "matched" means. (Substring intent → use a regex rule.)
         for text in texts:
-            text_lower = text.lower()
-            if any(kw.lower() in text_lower for kw in matcher["keywords"]):
-                return True
+            for kw in matcher["keywords"]:
+                if not kw:
+                    continue
+                try:
+                    if _compile_regex(rf"\b{re.escape(kw)}\b").search(text):
+                        return True
+                except re.error:
+                    if kw.lower() in text.lower():  # uncompilable boundary → substring fallback
+                        return True
         return False
 
     return False
