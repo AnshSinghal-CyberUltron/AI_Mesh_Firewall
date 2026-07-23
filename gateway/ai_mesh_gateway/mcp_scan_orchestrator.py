@@ -819,7 +819,16 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]]) -> tupl
     JSON-RPC ``arguments`` object belongs and (b) collapsed the key-scoped preset + Tier-2
     passes to ZERO targets (a string is not a dict), silently disabling all downstream
     scanning. Redacting leaves in place can never corrupt structure or drop a type — each
-    leaf is a str in and a str out. Returns ``(new_payload, changed)``."""
+    string leaf is a str in and a str out. Returns ``(new_payload, changed)``.
+
+    NUMERIC LEAVES (2026-07-23): detection runs on the SERIALIZED payload, so a secret
+    transmitted as a JSON NUMBER (an SSN/card/account/PIN as an integer — common in MCP
+    tool args/results) IS detected and reported redacted, but a str-only walk would skip
+    masking it → the raw number egresses while findings claim a redact fired (a silent
+    under-redaction LEAK). So a non-string scalar is stringified, run through the same
+    redaction, and — only if it actually changed — returned as the masked STRING (a masked
+    number cannot remain a number; the same type tradeoff CHG-0046 accepted for the preset
+    pass). An UNMATCHED number keeps its original numeric type."""
     changed = False
 
     def _walk(node: Any, depth: int) -> Any:
@@ -835,6 +844,15 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]]) -> tupl
             return [_walk(x, depth + 1) for x in node]
         if isinstance(node, dict):
             return {k: _walk(v, depth + 1) for k, v in node.items()}
+        # Numeric scalar (int/float — NOT bool, whose "true"/"false" carries no secret):
+        # stringify, redact, and mask only if a hint actually matched.
+        if isinstance(node, (int, float)) and not isinstance(node, bool):
+            as_text = _safe_json(node)
+            new = apply_redaction(as_text, hints)
+            if new != as_text:
+                changed = True
+                return new
+            return node
         return node
 
     return _walk(payload, 0), changed

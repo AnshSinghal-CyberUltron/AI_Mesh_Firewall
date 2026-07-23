@@ -197,5 +197,39 @@ async def test_quote_replacement_does_not_corrupt_payload():
     assert "foo@bar.com" not in json.dumps(scanned)
 
 
+# ───────── numeric leaves: detected-but-not-redacted silent leak (2026-07-23) ─────────
+# REGRESSION: _redact_structured_leaves originally only masked isinstance(node, str) leaves.
+# A secret transmitted as a JSON NUMBER (SSN/card/account as an integer) is DETECTED
+# (detection runs on the serialized payload) and reported redacted, but the number was
+# never masked → raw egress while findings claim a redact fired. Found by an adversarial
+# review. Fix: stringify + redact numeric scalars, mask only if a hint matched.
+@pytest.mark.asyncio
+async def test_numeric_leaf_secret_is_masked_not_silently_passed():
+    rule = {"id": 30, "name": "ssn9", "rule_type": "regex", "action": "redact",
+            "condition": {"regex": r"\d{9}", "scope": "key", "key": "ssn", "direction": "input"},
+            "redaction_config": {}}
+    ec = _effc(_slot(True, "redact", target_mode="entire"), _slot(False, direction="output"))
+    payload = {"name": "issue_write", "arguments": {"ssn": 123456789, "note": "clean"}}
+    scanned, res = await _scan(payload, ec, [rule])
+    assert res.blocked is False
+    assert isinstance(scanned, dict)
+    assert "123456789" not in json.dumps(scanned), "numeric SSN must be masked, not egress raw"
+    assert scanned["arguments"]["note"] == "clean", "unrelated field untouched"
+
+
+@pytest.mark.asyncio
+async def test_unmatched_number_keeps_numeric_type():
+    """A number that no hint matches must keep its original numeric type (not be coerced)."""
+    rule = {"id": 31, "name": "aws", "rule_type": "regex", "action": "redact",
+            "condition": {"preset": "aws_access_key", "direction": "input", "scope": "entire"},
+            "redaction_config": {}}
+    ec = _effc(_slot(True, "redact", target_mode="entire"), _slot(False, direction="output"))
+    payload = {"name": "issue_write", "arguments": {"count": 42, "note": f"key {_SEC}"}}
+    scanned, res = await _scan(payload, ec, [rule])
+    assert scanned["arguments"]["count"] == 42, "unmatched number keeps its int type"
+    assert isinstance(scanned["arguments"]["count"], int)
+    assert _SEC not in json.dumps(scanned)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
