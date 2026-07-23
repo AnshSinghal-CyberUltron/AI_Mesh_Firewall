@@ -179,5 +179,54 @@ def test_exemption_is_tool_scoped_never_blanket():
     assert r.action == "redact", "an untargeted exemption must NOT blanket-downgrade enforcement"
 
 
+def _seeded_policy():
+    return {"policy": {"id": 1, "code": "MCP_DETECTOR", "name": "seed", "policy_domain": "mcp"},
+            "rules": [
+                {"id": 1, "action": "redact", "rule_type": "detector",
+                 "condition": {"detector_class": "all", "direction": "both", "scope": "entire"}},
+                {"id": 2, "action": "allow", "rule_type": "detector", "target_tool": "search_docs",
+                 "condition": {"exempt": True, "direction": "both"}},
+            ]}
+
+
+def test_rca_exemption_does_not_wipe_separate_pii_policy():
+    """RC-A: an exemption on the SEEDED policy must NOT clear a SEPARATE PII policy's redaction
+    for the exempt tool (that was a raw-PII-egress regression)."""
+    from policy_engine import evaluate_mcp_policies
+    pii = {"policy": {"id": 2, "code": "PII_MCP", "name": "pii", "policy_domain": "mcp"},
+           "rules": [{"id": 3, "action": "redact", "rule_type": "regex",
+                      "condition": {"preset": "us_ssn", "direction": "both", "scope": "entire"}}]}
+    ctx = {"prompt": "", "response": "", "input_args": {"q": "ssn 123-45-6789"}, "output_data": None}
+    r = evaluate_mcp_policies([_seeded_policy(), pii], ctx, tool_name="search_docs")
+    assert r.action == "redact", "separate PII policy must still redact an exempt tool"
+    assert r.redaction_hints, "PII redaction hints survive the exemption"
+
+
+def test_rca_exemption_does_not_downgrade_separate_block():
+    """RC-A: an exemption must NOT downgrade a SEPARATE operator BLOCK policy for the tool."""
+    from policy_engine import evaluate_mcp_policies
+    blk = {"policy": {"id": 3, "code": "OPBLOCK", "name": "op", "policy_domain": "mcp"},
+           "rules": [{"id": 4, "action": "block", "rule_type": "keywords", "target_tool": "search_docs",
+                      "condition": {"keywords": ["forbidden"], "direction": "both", "scope": "entire"}}]}
+    ctx = {"prompt": "", "response": "", "input_args": {"q": "forbidden op"}, "output_data": None}
+    r = evaluate_mcp_policies([_seeded_policy(), blk], ctx, tool_name="search_docs")
+    assert r.action == "block", "separate operator block must still block an exempt tool"
+
+
+def test_rcb_direction_scoped_exemption_keeps_other_direction_enforced():
+    """RC-B: an output-only exemption must NOT un-enforce the input direction."""
+    from policy_engine import evaluate_mcp_policies
+    seeded = {"policy": {"id": 1, "code": "D", "name": "d", "policy_domain": "mcp"},
+              "rules": [
+                  {"id": 1, "action": "redact", "rule_type": "detector",
+                   "condition": {"detector_class": "all", "direction": "both", "scope": "entire"}},
+                  {"id": 2, "action": "allow", "rule_type": "detector", "target_tool": "t",
+                   "condition": {"exempt": True, "direction": "output"}}]}
+    ci = {"prompt": "", "response": "", "input_args": {"q": f"key {_AWS}"}, "output_data": None}
+    co = {"prompt": "", "response": "", "input_args": None, "output_data": {"q": f"key {_AWS}"}}
+    assert evaluate_mcp_policies([seeded], ci, tool_name="t").action == "redact", "input stays enforced"
+    assert evaluate_mcp_policies([seeded], co, tool_name="t").action == "monitor", "output exempted"
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
