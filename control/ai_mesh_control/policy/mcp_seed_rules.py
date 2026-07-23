@@ -157,6 +157,20 @@ def _per_tool_specs(rows: list, server_id: str, posture: str,
                 by_dir[direction] = {"action": tool_a, "condition": cond}
             elif tr < sr and sr > 0:
                 lowered_dirs.append(direction)
+                # LOWERED but STILL ENFORCING (e.g. a block server lowered to redact for this tool):
+                # the exemption alone would make the tool observe-only, egressing every class RAW
+                # where the live posture MASKED it (red-team F1). Seed the tool's OWN detector rule at
+                # its action so it keeps enforcing; the exemption (below) lifts it out of the stricter
+                # server rule, and the gateway does NOT downgrade a tool's own per-tool rule. A bare
+                # exemption alone is emitted only when the lowered action is observe-only (tag/monitor).
+                if tool_a in _ENFORCING_ACTIONS:
+                    ctrl = eff_tool.get(f"tier1_{direction}") or {}
+                    cond = {"detector_class": "all", "direction": direction}
+                    if (ctrl.get("target_mode") or "entire") == "key_path" and (ctrl.get("key_path") or "").strip():
+                        cond["scope"] = "key"; cond["key"] = ctrl["key_path"].strip()
+                    else:
+                        cond["scope"] = "entire"
+                    by_dir[direction] = {"action": tool_a, "condition": cond}
 
         # Collapse identical input+output raised specs into one ``both`` rule (the common
         # MCPToolRegistration.scan_action override is direction-agnostic).

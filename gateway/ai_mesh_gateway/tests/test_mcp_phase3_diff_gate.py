@@ -106,6 +106,9 @@ _SCENARIOS = [
     ("redact_tool_raised_block", "redact", [], {"getData": "block"}, ["getData", "otherTool"]),
     # tool LOWERED below a block server → per-tool exemption downgrades to observe-only
     ("block_tool_lowered_tag", "block", [], {"getData": "tag"}, ["getData", "otherTool"]),
+    # tool LOWERED but STILL ENFORCING (block server → redact tool): the seed must keep the tool
+    # REDACTING (per-tool rule + exemption), not observe-only, else it egresses raw (red-team F1).
+    ("block_tool_lowered_redact", "block", [], {"getData": "redact"}, ["getData", "otherTool"]),
     # NAME-SKEW: only the EXACT tool name is raised; the case-variant sibling must NOT over-block
     ("redact_nameskew_exact", "redact", [], {"GetData": "block"}, ["GetData", "getData"]),
     # KEY-PATH scope: server redacts, but a tool-scoped key_path control raises one field to block
@@ -378,8 +381,14 @@ async def test_B1_encoded_generic_pii_block_parity(direction):
     payload = {"args": {"note": _enc_entities(_EMAIL)}}
     (lo, lr), (so, sr) = await _pair(payload, posture="block", rows=[], tool_actions={},
                                      tool="t", direction=direction)
-    # LIVE forwards (block floor excludes encoded generic PII); SEEDED blocks. Fails today.
+    # BLOCK parity: neither side blocks (the live block floor excludes encoded generic PII).
     assert bool(lr.blocked) == bool(sr.blocked), f"live={lr.blocked} seed={sr.blocked}"
+    # PINNED intended divergence (red-team F2): the live block floor FORWARDS the encoded generic PII
+    # RAW, while the seeded redact/render-floor MASKS it — a coverage GAIN (safe: closes a mild live
+    # leak, never a leak or over-block). Codified so the intended gain can't silently change.
+    enc = _enc_entities(_EMAIL)
+    assert enc in json.dumps(lo), "live block floor forwards encoded generic PII raw"
+    assert enc not in json.dumps(so), "seeded floor masks it (intended coverage gain)"
 
 
 @pytest.mark.asyncio

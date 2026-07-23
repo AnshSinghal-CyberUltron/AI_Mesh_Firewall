@@ -1095,12 +1095,15 @@ def evaluate_mcp_policies(
                 if isinstance(_rf, str) and _rf and _rf not in result.redaction_fields:
                     result.redaction_fields.append(_rf)
 
-            # This policy is exempt for this tool+direction → its enforcing rules are recorded
-            # (findings above, for audit) and contribute only OBSERVE (monitor: detect + tag,
-            # never mutate/block), NOT their redact/block action. Scoped to THIS policy only —
-            # a higher-rank action from ANOTHER policy (operator BLOCK, baseline PII redact)
-            # still wins via ACTION_ORDER, so exemption can't downgrade other policies.
-            if policy_exempts:
+            # This policy is exempt for this tool+direction → the SERVER-WIDE (and other non-tool)
+            # enforcing rules are recorded (findings above, for audit) and contribute only OBSERVE
+            # (monitor: detect + tag, never mutate/block), NOT their redact/block action. The tool's
+            # OWN per-tool rule (rule_target == tool_name) is NOT downgraded — it carries the tool's
+            # operator-selected LOWERED-but-still-enforcing action (e.g. a block server lowered to
+            # redact for this tool): the exemption lifts the tool out of the stricter server rule,
+            # and the per-tool rule keeps its redaction (red-team F1 — else the tool egressed raw).
+            # Scoped to THIS policy only — a higher-rank action from ANOTHER policy still wins.
+            if policy_exempts and rule_target != tool_name:
                 _mrank = ACTION_ORDER.get("monitor", 1)
                 if _mrank > best_action_rank:
                     best_action_rank = _mrank
