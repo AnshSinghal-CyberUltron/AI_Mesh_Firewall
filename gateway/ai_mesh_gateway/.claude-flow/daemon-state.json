@@ -1,75 +1,75 @@
 {
-  "running": false,
-  "startedAt": "2026-07-11T02:40:56.092Z",
+  "running": true,
+  "startedAt": "2026-07-23T04:18:47.605Z",
   "workers": {
     "map": {
-      "runCount": 244,
-      "successCount": 244,
+      "runCount": 285,
+      "successCount": 285,
       "failureCount": 0,
-      "averageDurationMs": 0.319672131147541,
-      "lastRun": "2026-07-11T14:40:56.237Z",
-      "lastStartedAt": "2026-07-11T14:40:56.237Z",
-      "nextRun": "2026-07-11T14:55:56.238Z",
+      "averageDurationMs": 0.9157894736842105,
+      "lastRun": "2026-07-23T14:18:47.910Z",
+      "lastStartedAt": "2026-07-23T14:18:47.910Z",
+      "nextRun": "2026-07-23T14:33:47.911Z",
       "isRunning": false
     },
     "audit": {
-      "runCount": 305,
-      "successCount": 305,
+      "runCount": 366,
+      "successCount": 366,
       "failureCount": 0,
-      "averageDurationMs": 115632.13770491803,
-      "lastRun": "2026-07-11T14:36:21.896Z",
-      "lastStartedAt": "2026-07-11T14:36:19.495Z",
-      "nextRun": "2026-07-11T14:46:21.896Z",
+      "averageDurationMs": 96360.1693989071,
+      "lastRun": "2026-07-23T14:20:47.795Z",
+      "lastStartedAt": "2026-07-23T14:20:47.794Z",
+      "nextRun": "2026-07-23T14:30:47.795Z",
       "isRunning": false
     },
     "optimize": {
-      "runCount": 214,
-      "successCount": 214,
+      "runCount": 255,
+      "successCount": 255,
       "failureCount": 1,
-      "averageDurationMs": 114635.76168224298,
-      "lastRun": "2026-07-11T14:39:51.795Z",
-      "lastStartedAt": "2026-07-11T14:39:49.523Z",
-      "nextRun": "2026-07-11T14:54:51.795Z",
+      "averageDurationMs": 96204.19215686274,
+      "lastRun": "2026-07-23T14:22:47.733Z",
+      "lastStartedAt": "2026-07-23T14:22:47.732Z",
+      "nextRun": "2026-07-23T14:22:47.730Z",
       "isRunning": false
     },
     "consolidate": {
-      "runCount": 120,
-      "successCount": 120,
+      "runCount": 140,
+      "successCount": 140,
       "failureCount": 0,
-      "averageDurationMs": 2.5416666666666665,
-      "lastRun": "2026-07-11T14:16:56.329Z",
-      "lastStartedAt": "2026-07-11T14:16:56.325Z",
-      "nextRun": "2026-07-11T14:46:56.329Z",
+      "averageDurationMs": 2.7071428571428573,
+      "lastRun": "2026-07-23T13:54:47.730Z",
+      "lastStartedAt": "2026-07-23T13:54:47.727Z",
+      "nextRun": "2026-07-23T14:24:47.730Z",
       "isRunning": false
     },
     "testgaps": {
-      "runCount": 156,
-      "successCount": 156,
+      "runCount": 186,
+      "successCount": 186,
       "failureCount": 1,
-      "averageDurationMs": 192445.70512820513,
-      "lastRun": "2026-07-11T14:23:54.412Z",
-      "lastStartedAt": "2026-07-11T14:23:52.030Z",
-      "nextRun": "2026-07-11T14:43:54.412Z",
+      "averageDurationMs": 161406.11827956984,
+      "lastRun": "2026-07-23T14:06:47.700Z",
+      "lastStartedAt": "2026-07-23T14:06:47.700Z",
+      "nextRun": "2026-07-23T14:26:47.701Z",
       "isRunning": false
     },
     "backup": {
-      "runCount": 3,
-      "successCount": 3,
+      "runCount": 4,
+      "successCount": 4,
       "failureCount": 0,
-      "averageDurationMs": 1,
-      "lastRun": "2026-07-10T15:47:32.571Z",
-      "lastStartedAt": "2026-07-10T15:47:32.570Z",
-      "nextRun": "2026-07-11T15:47:32.571Z",
+      "averageDurationMs": 4.25,
+      "lastRun": "2026-07-23T04:28:47.623Z",
+      "lastStartedAt": "2026-07-23T04:28:47.609Z",
+      "nextRun": "2026-07-24T04:28:47.624Z",
       "isRunning": false
     },
     "harness": {
-      "runCount": 10,
-      "successCount": 10,
+      "runCount": 12,
+      "successCount": 12,
       "failureCount": 0,
-      "averageDurationMs": 2.8,
-      "lastRun": "2026-07-11T08:52:56.102Z",
-      "lastStartedAt": "2026-07-11T08:52:56.101Z",
-      "nextRun": "2026-07-11T14:52:56.102Z",
+      "averageDurationMs": 2.9166666666666665,
+      "lastRun": "2026-07-23T10:30:47.620Z",
+      "lastStartedAt": "2026-07-23T10:30:47.619Z",
+      "nextRun": "2026-07-23T16:30:47.620Z",
       "isRunning": false
     },
     "predict": {
@@ -99,6 +99,7 @@
     },
     "ttlMs": 43200000,
     "idleShutdownMs": 0,
+    "aiWorkersEnabled": false,
     "workers": [
       {
         "type": "map",
@@ -174,5 +175,5 @@
       }
     ]
   },
-  "savedAt": "2026-07-11T14:40:57.816Z"
+  "savedAt": "2026-07-23T14:22:47.733Z"
 }

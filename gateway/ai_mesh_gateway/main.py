@@ -3714,11 +3714,21 @@ def _resolve_routing_hint_model(
     org_config: dict,
     inference_models: list[dict] | None,
 ) -> str:
-    """Map auto/empty to org default_model or first connected inference model."""
+    """Map auto/empty to org default_model or first connected inference model.
+
+    Control plane publishes the UI ``default_model`` as ``litellm_default_model``
+    in the gateway Redis payload (``FirewallConfig.build_gateway_payload``). Look
+    up both keys so auto does not fall through to list-order (often the first
+    free OpenRouter entry) when governance default is set.
+    """
     current = (requested_model or "").strip()
     if not _is_routing_sentinel_model(current):
         return current
-    default = str(org_config.get("default_model") or "").strip()
+    default = str(
+        (org_config or {}).get("default_model")
+        or (org_config or {}).get("litellm_default_model")
+        or ""
+    ).strip()
     if default and not _is_routing_sentinel_model(default):
         return default
     for entry in inference_models or []:
@@ -6404,7 +6414,13 @@ async def proxy_chat(
         if not routing_allowed_models:
             routing_allowed_models = global_allowed_models or key_allowed_models
 
-        if _is_routing_sentinel_model(requested_model) and inference_models:
+        # Preserve the client's literal model for routing honesty. Auto is rewritten
+        # below to an org soft-preference hint for adjudication/allowlists, but the
+        # UI must still show "requested=auto" — not the list-order fallback.
+        _client_model_request = str(requested_model or "").strip()
+        _client_sent_routing_sentinel = _is_routing_sentinel_model(_client_model_request)
+
+        if _client_sent_routing_sentinel and inference_models:
             requested_model = _resolve_routing_hint_model(
                 requested_model, org_config, inference_models
             )
@@ -8486,6 +8502,10 @@ async def proxy_chat(
                 # Remap inactive selections onto highest-scored active candidate;
                 # stamp remapped_from so Requested≠Served is never a silent lie.
                 selection = LLM_ROUTER.resolve_runtime_selection(selection)
+                # Honesty: client sent auto/empty — do not claim they "asked for"
+                # the soft-preference hint (list-order / litellm_default_model).
+                if _client_sent_routing_sentinel:
+                    selection.requested_model = "auto"
                 route_selection = selection
                 requested_model = selection.model_name
                 body["model"] = requested_model

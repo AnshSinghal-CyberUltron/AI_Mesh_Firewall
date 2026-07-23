@@ -10,6 +10,8 @@ import {
   resolveRoutingDecision,
   resolveTotalLatencyMs,
   latencyMsWithinTolerance,
+  extractLastUserPromptSegment,
+  resolveRedactedChatUserText,
 } from "./pipelineTrace.js";
 
 describe("honestStageAction", () => {
@@ -63,5 +65,56 @@ describe("latency parity", () => {
   it("tolerance helper", () => {
     assert.equal(latencyMsWithinTolerance(10.0, 10.05), true);
     assert.equal(latencyMsWithinTolerance(10.0, 10.2), false);
+  });
+});
+
+describe("chat-plane input redaction", () => {
+  it("extracts the last [user] segment", () => {
+    assert.equal(
+      extractLastUserPromptSegment(
+        "[user]: hello\n[assistant]: hi\n[user]: my aadhar card is [REDACTED_AADHAAR]",
+      ),
+      "my aadhar card is [REDACTED_AADHAAR]",
+    );
+  });
+
+  it("updates display from sync input_was_redacted fields", () => {
+    const r = resolveRedactedChatUserText({
+      pipelineTrace: {
+        input_was_redacted: true,
+        input_text: "[user]: my aadhar card is 123412341234",
+        prompt_submitted: "[user]: my aadhar card is [REDACTED_AADHAAR]",
+        input_text_before: "[user]: my aadhar card is 123412341234",
+        input_text_after: "[user]: my aadhar card is [REDACTED_AADHAAR]",
+      },
+    }, "my aadhar card is 123412341234");
+    assert.equal(r.redacted, true);
+    assert.equal(r.display, "my aadhar card is [REDACTED_AADHAAR]");
+    assert.equal(r.display.includes("123412341234"), false);
+  });
+
+  it("detects stream traces that omit input_was_redacted but carry redacted prompt_submitted", () => {
+    const r = resolveRedactedChatUserText({
+      pipelineTrace: {
+        input_was_redacted: false,
+        input_text: "",
+        prompt_submitted: "[user]: my aadhar card is [REDACTED_AADHAAR]",
+        input_text_after: "",
+      },
+    }, "my aadhar card is 123412341234");
+    assert.equal(r.redacted, true);
+    assert.equal(r.display, "my aadhar card is [REDACTED_AADHAAR]");
+  });
+
+  it("leaves clean prompts unchanged", () => {
+    const r = resolveRedactedChatUserText({
+      pipelineTrace: {
+        input_was_redacted: false,
+        prompt_submitted: "[user]: hello",
+        input_text: "[user]: hello",
+      },
+    }, "hello");
+    assert.equal(r.redacted, false);
+    assert.equal(r.display, "hello");
   });
 });

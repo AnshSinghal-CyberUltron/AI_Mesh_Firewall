@@ -1,82 +1,17 @@
 {
-  "timestamp": "2026-07-11T10:15:47.968Z",
-  "mode": "headless",
-  "workerType": "optimize",
-  "model": "sonnet",
-  "durationMs": 72223,
-  "executionId": "optimize_1783764875745_zgidgu",
-  "success": true,
-  "findings": {
-    "sections": [
-      {
-        "title": "N+1 query patterns",
-        "content": "\n**`control/ai_mesh_control/mcp_connector/views.py:1640,1864`** — `MCPScanControl.objects.filter(organization=org)` runs twice per tool call (input scan + output scan), on the hottest control-plane path. A `mcp:scan_ver:{org_slug}` cache-invalidation counter already exists in `signals.py::bump_scan_version` but isn't used here.\n```python\n",
-        "level": 2
-      },
-      {
-        "title": "before: fetched twice per call",
-        "content": "input_controls = MCPScanControl.objects.filter(organization=org)\n...\noutput_controls = MCPScanControl.objects.filter(organization=org)\n\n",
-        "level": 1
-      },
-      {
-        "title": "after: fetch once, reuse; or cache keyed on scan_ver",
-        "content": "controls = list(MCPScanControl.objects.filter(organization=org))\n```\n\n**`control/ai_mesh_control/auth/views.py:676-698` + `auth/serializers.py:197-234`** — `UserManagementListCreateView`'s `platform_role` field touches `user.profile` + `.roles` M2M per row with no `select_related`/`prefetch_related`, and the view isn't paginated. A 300-user org triggers ~600 extra queries on one page load.\n```python\n",
-        "level": 1
-      },
-      {
-        "title": "fix",
-        "content": "User.objects.select_related(\"profile\").prefetch_related(\"roles\")\n```\n\n**`gateway/ai_mesh_gateway/mcp_proxy.py:2814+2842, 3082+3130, 4084+4134`** — `_get_server_config` and `_get_enabled_tools` each independently re-fetch the same 2-key Redis version pair via `_current_scan_version`, duplicating a round trip per tool call at 3 call sites. Resolve the version once per request and pass it down.\n\n",
-        "level": 1
-      },
-      {
-        "title": "Unnecessary React re-renders",
-        "content": "\n**`frontend/src/context/AuthContext.jsx:293`, `context/ThemeContext.jsx:77`** — highest-impact single fix in the frontend. Provider value is a fresh object literal every render, so any state change (e.g. a `loading` flip) re-renders every consumer app-wide, since `useAuth()` is used almost everywhere:\n```jsx\n// before\nreturn <AuthContext.Provider value={{ user, loading, login, logout }}>\n\n// after — matches the correct pattern already used in hooks/useFirewallConfig.jsx:89\nconst value = useMemo(() => ({ user, loading, login, logout }), [user, loading]);\nreturn <AuthContext.Provider value={value}>\n```\n\n**`components/OutputGovernancePanel.jsx`** — `EventRow` (line 51) isn't memoized and gets an inline `onToggle` closure per row (line 259), which defeats memoization even if added; 5 unmemoized `.filter()` passes run over up to 500 events on every render (lines 168-184), compounded by a 10s auto-poll.\n\n**`components/MCPConnectorPanel.jsx`** — 2630 lines (5x this repo's 500-line limit), `renderServerCard` is a plain function rather than an extracted component, so React can't skip reconciliation. Typing in the \"Add Server\" modal re-renders every server card because modal state shares render scope with the list. Extracting `ServerCard` as `React.memo`'d component is the fix.\n\nCodebase-wide: 0/120 `.jsx` files use `React.memo`, only 16/120 use `useMemo`, 36/120 `useCallback`.\n\n",
-        "level": 2
-      },
-      {
-        "title": "Caching opportunities",
-        "content": "\n**`policy/evaluation_views.py:494`** (`PolicyCheckView.post`) — fetches `Policy.objects.filter(...).prefetch_related(\"rules\")` fresh on every prompt/response turn even though policies only change on admin edit. Redis `CACHES[\"default\"]` is configured and idle here — cache keyed on a policy-version counter (same pattern as `bump_scan_version`).\n\n**`gateway/ai_mesh_gateway/config_sync.py:546-594`** (`_reload_llm_models`) and **`policy_sync.py:285-305`** (`_load_initial_bundle`) — both do sequential per-key Redis `GET` in a loop after a `scan_iter`; should batch with `mget`.\n\n",
-        "level": 2
-      },
-      {
-        "title": "Memory leaks",
-        "content": "\n**`gateway/ai_mesh_gateway/mcp_sandbox_client.py:175,214,294`** (`broker_send_jsonrpc`/`broker_send_rpc`) — fresh `httpx.AsyncClient()` created per MCP tool call, the hottest path in the whole MCP chain (verified still present just now). Fix mirrors the already-proven pattern in this same file's sibling `jobs.py`:\n```python\n",
-        "level": 2
-      },
-      {
-        "title": "jobs.py already does this correctly — copy the pattern here",
-        "content": "_CLIENT: httpx.AsyncClient | None = None\ndef _get_client() -> httpx.AsyncClient:\n    global _CLIENT\n    if _CLIENT is None:\n        _CLIENT = httpx.AsyncClient(timeout=_http_timeout(timeout))\n    return _CLIENT\n```\n13 more unpooled sites exist in `mcp_proxy.py` (lines 602–5355, confirmed above) — `mcp_proxy.py:141-150`'s `_control_audit_client` already proves the pooled pattern works (documented ~47 RPS throughput fix); it just wasn't propagated.\n\n**`gateway/ai_mesh_gateway/mcp_oauth.py:65`** `_registered_clients` — written on every `/oauth/register`, never read, never evicted (unlike sibling `_auth_codes`, which has `_cleanup_expired()`). This is unbounded-growth **and** an unauthenticated DoS vector, not just perf.\n\n**`middleware.py`** `_last_used_stamp` and **`mcp_oauth_proxy.py`** `_oauth_tokens` — both unbounded in-memory dicts with no TTL sweep (sibling `_oauth_flows` in the same file does have one).\n\n**Frontend**: zero `AbortController` usage across the entire `src/` tree; only 2/120 files guard `setState`-after-unmount. Every other `useEffect`+fetch (51 files) leaks on fast unmount/route-change.\n\n",
-        "level": 1
-      },
-      {
-        "title": "Redundant computations",
-        "content": "**`gateway/ai_mesh_gateway/rag_pipeline/retriever_stage.py:212-213`** — confirmed just now: `doc.get(\"id\", hashlib.sha256(content.encode()).hexdigest()[:16])` evaluates the SHA-256 eagerly (Python evaluates default args regardless of whether the key exists), then line 213 hashes the same content again unconditionally. Two SHA-256 passes per doc per RAG query, one always wasted:\n```python\ncontent_hash = hashlib.sha256(content.encode()).hexdigest()\ndoc_id = doc.get(\"id\", content_hash[:16])\n```\n\n**`gateway/ai_mesh_gateway/vector_routes.py:409`** — blocking `REDIS_CLIENT.keys(f\"vector:provider:{org_id}:*\")` at 4 call sites (409, 588, 1005, 1222/1324), O(total keys in DB) instead of O(matches). Replace with `SCAN` or an indexed `SET`.\n\n**`ranker_stage.py:220-235`** — per-doc `scan_single_document()` awaited sequentially instead of `asyncio.gather`; `grounding_guard.py` in the same pipeline already does this correctly for embeddings — inconsistent pattern within one pipeline.\n\n**`mcp_scan_orchestrator.py:979-1010`** — Tier-2 loop does sequential Bedrock round-trips per extracted text field instead of `asyncio.gather`.\n\n---\n\n**Highest-priority first fixes** (by impact/effort): AuthContext/ThemeContext `useMemo` (2-line, app-wide render fix) → `mcp_sandbox_client.py` pooled client (hottest MCP path, proven pattern already exists in `jobs.py`) → `retriever_stage.py` double-hash (1-line reorder) → `mcp_oauth.py _registered_clients` (security exposure, not just perf).\n\nNone of this has been fixed yet — say the word if you want me to implement any of these (I'd start with the AuthContext memoization and the sandbox client pooling, since both are small, isolated, high-impact changes).",
-        "level": 2
-      }
-    ],
-    "codeBlocks": [
-      {
-        "language": "python",
-        "code": "# before: fetched twice per call\ninput_controls = MCPScanControl.objects.filter(organization=org)\n...\noutput_controls = MCPScanControl.objects.filter(organization=org)\n\n# after: fetch once, reuse; or cache keyed on scan_ver\ncontrols = list(MCPScanControl.objects.filter(organization=org))"
-      },
-      {
-        "language": "python",
-        "code": "# fix\nUser.objects.select_related(\"profile\").prefetch_related(\"roles\")"
-      },
-      {
-        "language": "jsx",
-        "code": "// before\nreturn <AuthContext.Provider value={{ user, loading, login, logout }}>\n\n// after — matches the correct pattern already used in hooks/useFirewallConfig.jsx:89\nconst value = useMemo(() => ({ user, loading, login, logout }), [user, loading]);\nreturn <AuthContext.Provider value={value}>"
-      },
-      {
-        "language": "python",
-        "code": "# jobs.py already does this correctly — copy the pattern here\n_CLIENT: httpx.AsyncClient | None = None\ndef _get_client() -> httpx.AsyncClient:\n    global _CLIENT\n    if _CLIENT is None:\n        _CLIENT = httpx.AsyncClient(timeout=_http_timeout(timeout))\n    return _CLIENT"
-      },
-      {
-        "language": "python",
-        "code": "content_hash = hashlib.sha256(content.encode()).hexdigest()\ndoc_id = doc.get(\"id\", content_hash[:16])"
-      }
-    ]
+  "timestamp": "2026-07-23T14:11:58.759Z",
+  "mode": "local",
+  "memoryUsage": {
+    "rss": 93884416,
+    "heapTotal": 22171648,
+    "heapUsed": 20063952,
+    "external": 3890644,
+    "arrayBuffers": 100926
   },
-  "rawOutputPreview": "All spot-checks confirm the same-day audit is still accurate against current gateway code (jobs.py leak fix intact, mcp_proxy.py still has the 13 unpooled `httpx.AsyncClient()` sites, retriever_stage.py double-hash bug at lines 212-213, vector_routes.py blocking `KEYS` at line 409). This session is sandboxed to `gateway/`, so frontend/control-plane findings below are carried from the same-day cross-repo audit rather than freshly re-verified this turn.\n\n## N+1 query patterns\n\n**`control/ai_mesh_control/mcp_connector/views.py:1640,1864`** — `MCPScanControl.objects.filter(organization=org)` runs twice per tool call (input scan + output scan), on the hottest control-plane path. A `mcp:scan_ver:{org_slug}` cache-invalidation counter already exists in `signals.py::bump_scan_version` but isn't used here.\n```python\n# before: fetched twice per call\ninput_controls = MCPScanControl.objects.filter(organization=org)\n...\noutput_controls = MCPScanControl.objects.filter(organization=org)\n\n# after: fetch once, reuse; or cache keyed on scan_ver\ncontrols = list(MCPScanControl.objects.filter(organization=org))\n```\n\n**`control/ai_mesh_control/auth/views.py:676-698` + `auth/serializers.py:197-234`** — `UserManagementListCreateView`'s `platform_role` field touches `user.profile` + `.roles` M2M per row with no `select_related`/`prefetch_related`, and the view isn't paginated. A 300-user org triggers ~600 extra queries on one page load.\n```python\n# fix\nUser.objects.select_related(\"profile\").prefetch_related(\"roles\")\n```\n\n**`gateway/ai_mesh_gateway/mcp_proxy.py:2814+2842, 3082+3130, 4084+4134`** — `_get_server_config` and `_get_enabled_tools` each independently re-fetch the same 2-key Redis version pair via `_current_scan_version`, duplicating a round trip per tool call at 3 call sites. Resolve the version once per request and pass it down.\n\n## Unnecessary React re-renders\n\n**`frontend/src/context/AuthContext.jsx:293`, `context/ThemeContext.jsx:77`** — highest-impact single fix in the fronte",
-  "rawOutputLength": 7134
+  "uptime": 30840.267583416,
+  "optimizations": {
+    "cacheHitRate": 0.78,
+    "avgResponseTime": 45
+  },
+  "note": "Install Claude Code CLI for AI-powered optimization suggestions"
 }

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-07-10T11:05:48.222Z",
+  "timestamp": "2026-07-23T14:09:25.789Z",
   "projectRoot": "/home/contact_cyberultron_com/AI_Mesh_Firewall/control/ai_mesh_control",
   "structure": {
     "hasPackageJson": false,
@@ -7,5 +7,5 @@
     "hasClaudeConfig": true,
     "hasClaudeFlow": true
   },
-  "scannedAt": 1783681548222
+  "scannedAt": 1784815765789
 }

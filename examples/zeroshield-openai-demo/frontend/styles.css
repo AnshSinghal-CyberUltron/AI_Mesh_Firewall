@@ -630,6 +630,21 @@ button.chip,
   color: var(--muted-foreground);
 }
 
+.msg .who .redacted-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  background: color-mix(in oklch, var(--muted-foreground) 14%, transparent);
+  border: 1px solid color-mix(in oklch, var(--muted-foreground) 28%, transparent);
+  vertical-align: middle;
+}
+
 .msg .txt {
   background: var(--card);
   border: 1px solid var(--border);

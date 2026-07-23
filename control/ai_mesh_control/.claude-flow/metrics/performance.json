@@ -1,146 +1,17 @@
 {
-  "timestamp": "2026-07-10T11:02:30.938Z",
-  "mode": "headless",
-  "workerType": "optimize",
-  "model": "sonnet",
-  "durationMs": 267321,
-  "executionId": "optimize_1783681083617_0mbe2x",
-  "success": true,
-  "findings": {
-    "sections": [
-      {
-        "title": "Performance Analysis — AI Mesh Firewall (control plane verified live; gateway/frontend from last full-repo audit, flagged accordingly)",
-        "content": "\n**Scope note:** This session is sandboxed to `control/ai_mesh_control`, so backend findings below are freshly re-verified against current code. Frontend and gateway sections are carried from the most recent full-repo audit (2026-07-10) and were **not** re-verified this session — treat line numbers there as approximate until re-checked from a session rooted at the repo root.\n\n---\n\n",
-        "level": 2
-      },
-      {
-        "title": "1. N+1 Query Patterns (Backend — verified live)",
-        "content": "\n**`policy/views.py:400` — `PolicyViewSet` missing `select_related`**\n```python\n",
-        "level": 3
-      },
-      {
-        "title": "current",
-        "content": "queryset = Policy.objects.all().prefetch_related(\"rules\").order_by(\"-priority\", \"code\")\n```\n`PolicyListSerializer` (`policy/serializers.py:207-208`) reads `source=\"mcp_server.server_slug\"` — one query per row on `GET /api/policies/`.\n```python\n",
-        "level": 1
-      },
-      {
-        "title": "fix",
-        "content": "queryset = Policy.objects.select_related(\"mcp_server\").prefetch_related(\"rules\").order_by(\"-priority\", \"code\")\n```\n\n**`mcp_connector/views.py:1640` and `:1864` — duplicate `MCPScanControl` fetch per request**\nBoth the input-scan and output-scan stages of the *same* tool-call request independently run:\n```python\nMCPScanControl.objects.filter(organization=org)\n```\nFetch once per request and pass down, or cache (see §3).\n\n**`policy/evaluation_views.py:1294` — per-event lookup in a loop**\n```python\n",
-        "level": 1
-      },
-      {
-        "title": "EnforcementEventBatchView.post, inside for ev_data in events_data:",
-        "content": "agent = Agent.objects.filter(pk=pk).first()\n```\n```python\n",
-        "level": 1
-      },
-      {
-        "title": "fix — bulk-fetch before the loop",
-        "content": "agent_ids = {ev[\"agent_id\"] for ev in events_data if ev.get(\"agent_id\")}\nagents = Agent.objects.in_bulk(agent_ids)\nfor ev_data in events_data:\n    agent = agents.get(ev_data.get(\"agent_id\"))\n```\n\n**NEW — `policy/evaluation_views.py:980-1005` — `PolicyTestView` double-fetches the same policy**\n```python\npolicy_row = Policy.objects.filter(pk=policy_id, enabled=True, organization=org).prefetch_related(\"rules\").first()\n...\npolicies_qs = Policy.objects.filter(pk=policy_id).prefetch_related(\"rules\")   # line 1005 — re-fetches + re-prefetches\nresult = evaluate(context, policies_qs=policies_qs, ...)\n```\n`policy_row` already has the instance+prefetched rules; `evaluate()` should accept the resolved queryset/instance directly instead of re-querying. This is a new regression introduced in the current uncommitted diff, not present in the last audit.\n\n---\n\n",
-        "level": 1
-      },
-      {
-        "title": "2. Redundant Computation (Backend — verified live)",
-        "content": "\n**`mcp_connector/scan_controls.py:71-129` — `_pick_control` O(N) rescan, called 8x/request**\n```python\ncandidates: list[dict[str, Any]] = []\nfor row in rows:\n    if row.get(\"tier\") != tier:\n        continue\n    ...\n```\n`resolve_effective_controls()` calls this 4x (tier1/tier2 × input/output), and — combined with the duplicate fetch above — the same `rows` list gets rescanned 8 times per tool call to extract 2 values. Fix: pre-bucket once by `(tier, direction, scope)`:\n```python\ndef _bucket_controls(rows):\n    buckets = defaultdict(list)\n    for row in rows:\n        buckets[(row.get(\"tier\"), row.get(\"direction\"))].append(row)\n    return buckets\n```\n\n**`policy/evaluation_views.py:509-510` — re-fetch after evaluation**\n```python\nresult = evaluate(context, policies_qs=policies_qs, domain=policy_domain)  # line 495, already has instances\n...\npolicy = Policy.objects.filter(pk=policy_id).first()   # line 509 — redundant\nrule = Rule.objects.filter(pk=rule_id).first()          # line 510 — redundant\n```\n`EvaluationResult` only carries ids; have `evaluate()` return the matched instances it already iterated instead of ids-to-refetch.\n\n**`policy/engine.py:323` — regex recompiled on every rule evaluation, no `@lru_cache`**\n```python\ncompiled = re.compile(pattern, re.IGNORECASE)\n```\nGateway's own `policy_engine.py:80` already does this correctly — copy the pattern:\n```python\n@lru_cache(maxsize=512)\ndef _compiled_pattern(pattern: str) -> re.Pattern:\n    return re.compile(pattern, re.IGNORECASE)\n```\n\n---\n\n",
-        "level": 3
-      },
-      {
-        "title": "3. Caching Opportunities",
-        "content": "\n**Redis is configured but unused for scan-control resolution** — confirmed live: `main_app/settings.py:257` wires `django_redis.cache.RedisCache` in production, but `mcp_connector/views.py` hits the DB fresh on every request instead of using it.\n```python\nfrom django.core.cache import cache\n\ndef get_org_scan_controls(org):\n    return cache.get_or_set(\n        f\"scan_controls:{org.id}\",\n        lambda: list(MCPScanControl.objects.filter(organization=org).values(...)),\n        timeout=5,  # short TTL — admins can edit controls, keep this tight\n    )\n```\nThis alone removes both the duplicate-fetch (§1) and most of the `_pick_control` rescanning (§2) cost on the hottest MCP endpoint.\n\n**`auth/views.py` `MeView`** — no `select_related`/`prefetch_related` on the user→profile→roles chain; `UserMeSerializer.get_roles` (`auth/serializers.py:90-99`) always issues a separate M2M query. Since this is a low-traffic single-user endpoint, `select_related(\"profile\")` plus `Prefetch(\"profile__roles\")` is a cheap fix but low priority.\n\n**Frontend (from last audit, unverified this session):** `LogViewerPanel.jsx`, `PolicyManagementPanel.jsx`, and `OutputGovernancePanel.jsx` recompute `.filter()`/derived lists on every render with no `useMemo`:\n```jsx\n// current pattern seen across these files\nconst filtered = logs.filter(l => l.severity === selectedSeverity);\n\n// fix\nconst filtered = useMemo(\n  () => logs.filter(l => l.severity === selectedSeverity),\n  [logs, selectedSeverity]\n);\n```\n\n---\n\n",
-        "level": 3
-      },
-      {
-        "title": "4. Unnecessary Re-renders (Frontend — from last audit, unverified this session)",
-        "content": "\n- **0/113 `.jsx` files use `React.memo`** as of the last full sweep.\n- **`firewall/primitives/ConfigSwitch.jsx:8`** — a leaf component instantiated ~26x across settings cards, all driven by one monolithic `config` object from `useFirewallConfig.jsx:27`. Editing any single field re-renders (and re-animates via framer-motion) all 26 switches.\n```jsx\n// fix\nconst ConfigSwitch = React.memo(function ConfigSwitch({ value, onChange, label }) {\n  ...\n});\n```\nThis is the highest-value, lowest-risk fix in the frontend set — cheap component, high fan-out multiplier.\n\n---\n\n",
-        "level": 3
-      },
-      {
-        "title": "5. Memory Leaks",
-        "content": "\n**Gateway `mcp_proxy.py` `ext_mcp_proxy` (from last audit, unverified this session)** — `httpx.AsyncClient` is created without `async with` and `client.aclose()` is only called on the success path and `except httpx.RequestError`. Any other exception (JSON parse error, scan-stage exception) skips cleanup and leaks the connection:\n```python\n",
-        "level": 3
-      },
-      {
-        "title": "fix",
-        "content": "async with httpx.AsyncClient(...) as client:\n    try:\n        ...\n    except httpx.RequestError:\n        ...\n    # aclose() now guaranteed on every exit path\n```\n\n**Gateway `sandbox/routes.py` `_resolve_running_sandbox` (from last audit)** — issues a real blocking Docker daemon call on *every* MCP tool-call RPC, despite an in-memory `SandboxRegistry` dict already tracking `agent_url`/`container_id`. Not a leak, but a redundant-computation hotspot on the single hottest path in the system:\n```python\n",
-        "level": 1
-      },
-      {
-        "title": "fix — check the in-memory registry first",
-        "content": "entry = sandbox_registry.get(org_slug)\nif entry and entry.is_healthy():\n    return entry\ncontainer = await asyncio.to_thread(docker_manager.find_container, org_slug)  # fallback only\n```\n\n**No confirmed memory leaks in the control plane** — `core/signals.py` uses a single bounded (`max_connections=50`) module-level `redis.ConnectionPool`, reused correctly.\n\n---\n\n",
-        "level": 1
-      },
-      {
-        "title": "Priority order",
-        "content": "1. Redis-cache scan controls (`mcp_connector/views.py`) — fixes N+1 + redundant computation together, highest request-volume path.\n2. `PolicyTestView` double-fetch (new regression) — quick, isolated fix.\n3. `PolicyViewSet.select_related(\"mcp_server\")` — one-line fix, dashboard hot path.\n4. `ext_mcp_proxy` connection leak — correctness bug with resource-exhaustion risk under load, not just perf.\n5. `ConfigSwitch.jsx` memoization — cheap, high fan-out win.\n\nFrontend/gateway items should be re-verified from a session rooted at the repo root before acting on exact line numbers, since both trees show uncommitted changes since the last audit.",
-        "level": 3
-      }
-    ],
-    "codeBlocks": [
-      {
-        "language": "python",
-        "code": "# current\nqueryset = Policy.objects.all().prefetch_related(\"rules\").order_by(\"-priority\", \"code\")"
-      },
-      {
-        "language": "python",
-        "code": "# fix\nqueryset = Policy.objects.select_related(\"mcp_server\").prefetch_related(\"rules\").order_by(\"-priority\", \"code\")"
-      },
-      {
-        "language": "python",
-        "code": "MCPScanControl.objects.filter(organization=org)"
-      },
-      {
-        "language": "python",
-        "code": "# EnforcementEventBatchView.post, inside for ev_data in events_data:\nagent = Agent.objects.filter(pk=pk).first()"
-      },
-      {
-        "language": "python",
-        "code": "# fix — bulk-fetch before the loop\nagent_ids = {ev[\"agent_id\"] for ev in events_data if ev.get(\"agent_id\")}\nagents = Agent.objects.in_bulk(agent_ids)\nfor ev_data in events_data:\n    agent = agents.get(ev_data.get(\"agent_id\"))"
-      },
-      {
-        "language": "python",
-        "code": "policy_row = Policy.objects.filter(pk=policy_id, enabled=True, organization=org).prefetch_related(\"rules\").first()\n...\npolicies_qs = Policy.objects.filter(pk=policy_id).prefetch_related(\"rules\")   # line 1005 — re-fetches + re-prefetches\nresult = evaluate(context, policies_qs=policies_qs, ...)"
-      },
-      {
-        "language": "python",
-        "code": "candidates: list[dict[str, Any]] = []\nfor row in rows:\n    if row.get(\"tier\") != tier:\n        continue\n    ..."
-      },
-      {
-        "language": "python",
-        "code": "def _bucket_controls(rows):\n    buckets = defaultdict(list)\n    for row in rows:\n        buckets[(row.get(\"tier\"), row.get(\"direction\"))].append(row)\n    return buckets"
-      },
-      {
-        "language": "python",
-        "code": "result = evaluate(context, policies_qs=policies_qs, domain=policy_domain)  # line 495, already has instances\n...\npolicy = Policy.objects.filter(pk=policy_id).first()   # line 509 — redundant\nrule = Rule.objects.filter(pk=rule_id).first()          # line 510 — redundant"
-      },
-      {
-        "language": "python",
-        "code": "compiled = re.compile(pattern, re.IGNORECASE)"
-      },
-      {
-        "language": "python",
-        "code": "@lru_cache(maxsize=512)\ndef _compiled_pattern(pattern: str) -> re.Pattern:\n    return re.compile(pattern, re.IGNORECASE)"
-      },
-      {
-        "language": "python",
-        "code": "from django.core.cache import cache\n\ndef get_org_scan_controls(org):\n    return cache.get_or_set(\n        f\"scan_controls:{org.id}\",\n        lambda: list(MCPScanControl.objects.filter(organization=org).values(...)),\n        timeout=5,  # short TTL — admins can edit controls, keep this tight\n    )"
-      },
-      {
-        "language": "jsx",
-        "code": "// current pattern seen across these files\nconst filtered = logs.filter(l => l.severity === selectedSeverity);\n\n// fix\nconst filtered = useMemo(\n  () => logs.filter(l => l.severity === selectedSeverity),\n  [logs, selectedSeverity]\n);"
-      },
-      {
-        "language": "jsx",
-        "code": "// fix\nconst ConfigSwitch = React.memo(function ConfigSwitch({ value, onChange, label }) {\n  ...\n});"
-      },
-      {
-        "language": "python",
-        "code": "# fix\nasync with httpx.AsyncClient(...) as client:\n    try:\n        ...\n    except httpx.RequestError:\n        ...\n    # aclose() now guaranteed on every exit path"
-      },
-      {
-        "language": "python",
-        "code": "# fix — check the in-memory registry first\nentry = sandbox_registry.get(org_slug)\nif entry and entry.is_healthy():\n    return entry\ncontainer = await asyncio.to_thread(docker_manager.find_container, org_slug)  # fallback only"
-      }
-    ]
+  "timestamp": "2026-07-23T14:13:25.737Z",
+  "mode": "local",
+  "memoryUsage": {
+    "rss": 85991424,
+    "heapTotal": 21909504,
+    "heapUsed": 19914560,
+    "external": 3890644,
+    "arrayBuffers": 100926
   },
-  "rawOutputPreview": "## Performance Analysis — AI Mesh Firewall (control plane verified live; gateway/frontend from last full-repo audit, flagged accordingly)\n\n**Scope note:** This session is sandboxed to `control/ai_mesh_control`, so backend findings below are freshly re-verified against current code. Frontend and gateway sections are carried from the most recent full-repo audit (2026-07-10) and were **not** re-verified this session — treat line numbers there as approximate until re-checked from a session rooted at the repo root.\n\n---\n\n### 1. N+1 Query Patterns (Backend — verified live)\n\n**`policy/views.py:400` — `PolicyViewSet` missing `select_related`**\n```python\n# current\nqueryset = Policy.objects.all().prefetch_related(\"rules\").order_by(\"-priority\", \"code\")\n```\n`PolicyListSerializer` (`policy/serializers.py:207-208`) reads `source=\"mcp_server.server_slug\"` — one query per row on `GET /api/policies/`.\n```python\n# fix\nqueryset = Policy.objects.select_related(\"mcp_server\").prefetch_related(\"rules\").order_by(\"-priority\", \"code\")\n```\n\n**`mcp_connector/views.py:1640` and `:1864` — duplicate `MCPScanControl` fetch per request**\nBoth the input-scan and output-scan stages of the *same* tool-call request independently run:\n```python\nMCPScanControl.objects.filter(organization=org)\n```\nFetch once per request and pass down, or cache (see §3).\n\n**`policy/evaluation_views.py:1294` — per-event lookup in a loop**\n```python\n# EnforcementEventBatchView.post, inside for ev_data in events_data:\nagent = Agent.objects.filter(pk=pk).first()\n```\n```python\n# fix — bulk-fetch before the loop\nagent_ids = {ev[\"agent_id\"] for ev in events_data if ev.get(\"agent_id\")}\nagents = Agent.objects.in_bulk(agent_ids)\nfor ev_data in events_data:\n    agent = agents.get(ev_data.get(\"agent_id\"))\n```\n\n**NEW — `policy/evaluation_views.py:980-1005` — `PolicyTestView` double-fetches the same policy**\n```python\npolicy_row = Policy.objects.filter(pk=policy_id, enabled=True, organization=org).prefetch_related(\"rules\").first()\n...\np",
-  "rawOutputLength": 8125
+  "uptime": 32640.270078095,
+  "optimizations": {
+    "cacheHitRate": 0.78,
+    "avgResponseTime": 45
+  },
+  "note": "Install Claude Code CLI for AI-powered optimization suggestions"
 }

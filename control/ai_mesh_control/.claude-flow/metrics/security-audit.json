@@ -1,60 +1,12 @@
 {
-  "timestamp": "2026-07-10T11:03:38.951Z",
-  "mode": "headless",
-  "workerType": "audit",
-  "model": "haiku",
-  "durationMs": 181066,
-  "executionId": "audit_1783681237885_r5b8v4",
-  "success": true,
-  "findings": {
-    "vulnerabilities": [
-      {
-        "severity": "high",
-        "file": "mcp_connector/views.py",
-        "line": 1518,
-        "description": "MCPToolCallView trusts the client-supplied X-Gateway-Roles header for policy-engine role scoping. Its permission class (IsAuthenticatedOrGatewayInternal, mcp_connector/views.py:119) allows any JWT-authenticated user to call the endpoint directly (not just the trusted gateway), so a user can forge this header to bypass role-scoped MCP tool policies."
-      },
-      {
-        "severity": "medium",
-        "file": "auth/serializers.py",
-        "line": 251,
-        "description": "UserCreateSerializer.create() calls User.objects.create_user() directly, bypassing Django's validate_password() / AUTH_PASSWORD_VALIDATORS (common-password, complexity, numeric-only checks). Only min_length=12 is enforced for admin-created accounts."
-      },
-      {
-        "severity": "medium",
-        "file": "core/signals.py",
-        "line": 253,
-        "description": "GatewayAPIKey post_delete handler deletes the Redis key synchronously instead of via transaction.on_commit (unlike the KillSwitch/ModelState handlers in the same file). A rolled-back delete transaction leaves Redis and Postgres in disagreement over the key's existence, causing gateway auth state desync."
-      },
-      {
-        "severity": "medium",
-        "file": "policy/evaluation_views.py",
-        "line": 1005,
-        "description": "PolicyTestView validates policy_id with enabled=True (line 981) but re-queries it via Policy.objects.filter(pk=policy_id) without that filter (line 1005); the lazy queryset is evaluated later, so a policy disabled in that window is still applied (TOCTOU)."
-      },
-      {
-        "severity": "low",
-        "file": "main_app/settings.py",
-        "line": 488,
-        "description": "REST_FRAMEWORK DEFAULT_PERMISSION_CLASSES is AllowAny project-wide; every view checked in this scan explicitly overrides it, but this is a fail-open default that will silently expose any future view whose author forgets to set permission_classes."
-      },
-      {
-        "severity": "info",
-        "file": "N/A",
-        "line": 0,
-        "description": "Dependency/package-version audit was not performed — pyproject.toml lives outside this session's permitted directory (control/ai_mesh_control) and was not read. Re-run with access to control/pyproject.toml and frontend/package.json for a real CVE/version check."
-      }
-    ],
-    "riskScore": 58,
-    "recommendations": [
-      "Change MCPToolCallView's permission model so X-Gateway-Roles is only honored on requests authenticated as the trusted gateway (IsGatewayInternalOnly), not on direct end-user JWT calls; for JWT calls, derive roles server-side from the authenticated user's own role assignments.",
-      "Call Django's validate_password(password, user) inside UserCreateSerializer.create() (and any other admin-provisioning path) so the full AUTH_PASSWORD_VALIDATORS chain applies, not just min_length.",
-      "Wrap the GatewayAPIKey post_delete Redis removal in transaction.on_commit to match the KillSwitch/ModelState handlers and eliminate the rollback-desync window.",
-      "In PolicyTestView, either re-fetch policies_qs with the same enabled=True/organization=org filter used for the initial validation, or force evaluation of policy_row itself instead of a separately-filtered queryset.",
-      "Set an explicit restrictive DEFAULT_PERMISSION_CLASSES (e.g. IsAuthenticated) and treat AllowAny as an intentional per-view opt-in, to remove the fail-open default.",
-      "Run a dependency audit (pip-audit / npm audit) against control/pyproject.toml and frontend/package.json — not covered in this pass due to directory sandboxing."
-    ]
+  "timestamp": "2026-07-23T14:21:25.778Z",
+  "mode": "local",
+  "checks": {
+    "envFilesProtected": true,
+    "gitIgnoreExists": false,
+    "noHardcodedSecrets": true
   },
-  "rawOutputPreview": "I did a targeted, evidence-based scan of the Django control-plane app (session sandbox restricts me to `control/ai_mesh_control/`; the frontend and root `pyproject.toml` were outside reach and are called out below as scope gaps rather than guessed at).\n\n## Findings\n\n**Secrets:** No hardcoded secrets. `SECRET_KEY`/`JWT_SIGNING_KEY` are read from env with a fail-closed guard (`main_app/settings.py:57-68`) that refuses to boot on a placeholder/short key when `DEBUG=False`.\n\n**SQL injection:** None found — no `.raw()`, `.extra()`, or `cursor.execute()` anywhere in the app; all queries go through the ORM.\n\n**XSS:** One prior XSS in the MCP OAuth callback (`mcp_connector/views.py:3114`, reflected via `error`/`error_description` GET params into hand-built HTML) is already fixed — output is `django.utils.html.escape()`'d and redirect targets are scheme-restricted. No new instances found in the scanned scope.\n\n**Authorization — confirmed live issues (verified against current file contents, not memory alone):**\n1. `mcp_connector/views.py:1518` — `MCPToolCallView` reads `X-Gateway-Roles` directly from `request.headers` and feeds it into the policy engine's role-scoped authorization decision. Its permission class, `IsAuthenticatedOrGatewayInternal` (`mcp_connector/views.py:119-126`), accepts *either* a trusted gateway or a plain JWT-authenticated user — so any authenticated org user can call this endpoint directly (bypassing the gateway) and forge arbitrary roles in that header to escalate past role-scoped MCP tool policies.\n2. `auth/serializers.py:236-278` — `UserCreateSerializer.create()` calls `User.objects.create_user()` directly with the raw password, never invoking Django's `validate_password()`. Only the field-level `min_length=12` applies; `CommonPasswordValidator`/`PasswordComplexityValidator`/`NumericPasswordValidator` (configured in `AUTH_PASSWORD_VALIDATORS`) are silently bypassed for admin-created accounts.\n3. `policy/evaluation_views.py:980-1005` — `PolicyTestView",
-  "rawOutputLength": 6681
+  "riskLevel": "low",
+  "recommendations": [],
+  "note": "Install Claude Code CLI for AI-powered security analysis"
 }

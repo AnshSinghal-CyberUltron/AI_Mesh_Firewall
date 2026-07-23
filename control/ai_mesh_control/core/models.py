@@ -1087,6 +1087,23 @@ class FirewallConfig(models.Model):
             "Default True per Phase 0 D-G3-v3."
         ),
     )
+    # PHASE 3 (collapse-to-one-surface) per-org cutover flag. When True the MCP scan RETIRES the
+    # server posture / scan-control ACTION as a Tier-1 enforcement input: presets run OBSERVE-ONLY
+    # and the seeded detector POLICIES (their own action) are the sole Tier-1 enforcer. Surfaced
+    # into the gateway ``enabled_info`` as ``mcp_policy_only_enforcement`` and read by
+    # ``mcp_scan_orchestrator._mcp_policy_only_enforcement``. Default FALSE — the posture keeps
+    # enforcing until an operator flips this AFTER the org's detector policies are seeded (the
+    # 0038 data migration backfills every existing org; the org-create signal seeds new ones — so
+    # no org is ever un-seeded at cutover). Flipping it for an un-seeded org would retire the
+    # posture with nothing to replace it.
+    mcp_policy_only_enforcement = models.BooleanField(
+        default=False,
+        help_text=(
+            "Phase 3: retire the MCP server posture / scan-control ACTION as a Tier-1 enforcement "
+            "input — presets observe-only, seeded detector policies enforce. Only flip AFTER the "
+            "org's detector policies are seeded. Tier-2 (LLM judge) is unaffected."
+        ),
+    )
     prompt_injection_threshold = models.FloatField(
         default=0.80,
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
@@ -1380,6 +1397,9 @@ class FirewallConfig(models.Model):
             "mcp_tier2_enabled": self.mcp_tier2_enabled,
             "mcp_ext_scan_action": self.mcp_ext_scan_action,
             "tier2_strict": self.tier2_strict,
+            # Phase 3 per-org cutover: gateway reads this to retire the posture as a Tier-1
+            # enforcement input (presets observe-only, seeded policies enforce).
+            "mcp_policy_only_enforcement": self.mcp_policy_only_enforcement,
             "prompt_injection_threshold": self.prompt_injection_threshold,
             "output_scan_enabled": self.response_filtering_enabled,
             "hallucination_flag_enabled": self.factuality_check_enabled,
