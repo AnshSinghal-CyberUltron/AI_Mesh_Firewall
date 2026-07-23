@@ -441,7 +441,11 @@ def evaluate(
         for rule in rules:
             # Tool-level targeting: skip rules bound to a different tool
             rule_target = rule.get("target_tool", "") or ""
-            if rule_target and tool_name and rule_target != tool_name:
+            # Operator-control #5: a per-tool rule (rule_target set) applies ONLY to its EXACT tool.
+            # The old ``and tool_name`` guard meant an empty/unknown tool_name bypassed the skip, so a
+            # rule the operator bound to one tool enforced on a nameless call. Match exactly; an empty
+            # tool_name matches only server-wide rules (rule_target == "").
+            if rule_target and rule_target != tool_name:
                 continue
 
             if not _evaluate_rule(rule, prompt, response_text):
@@ -1064,7 +1068,11 @@ def evaluate_mcp_policies(
 
         for rule in rules:
             rule_target = rule.get("target_tool", "") or ""
-            if rule_target and tool_name and rule_target != tool_name:
+            # Operator-control #5: a per-tool rule (rule_target set) applies ONLY to its EXACT tool.
+            # The old ``and tool_name`` guard meant an empty/unknown tool_name bypassed the skip, so a
+            # rule the operator bound to one tool enforced on a nameless call. Match exactly; an empty
+            # tool_name matches only server-wide rules (rule_target == "").
+            if rule_target and rule_target != tool_name:
                 continue
 
             # An exemption rule itself contributes no enforcing action and is not a finding.

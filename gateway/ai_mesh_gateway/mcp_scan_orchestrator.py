@@ -319,8 +319,18 @@ def _mcp_policy_only_enforcement(enabled_info: dict[str, Any] | None = None) -> 
     The scan-control ENABLED/direction/scope and Tier-2 enable gating are UNCHANGED — only the
     ACTION is dropped."""
     if enabled_info and "mcp_policy_only_enforcement" in enabled_info:
-        return bool(enabled_info.get("mcp_policy_only_enforcement"))
+        return _coerce_flag(enabled_info.get("mcp_policy_only_enforcement"))
     return _MCP_POLICY_ONLY_ENFORCEMENT_ENV
+
+
+def _coerce_flag(value: Any) -> bool:
+    """Strict truthiness for the cutover flag. A bare ``bool()`` treated ANY non-empty string as
+    True — so a stringly-typed config value of ``'false'``/``'0'``/``'off'``/``'no'`` would silently
+    ACTIVATE the cutover (fail-open), the opposite of the env parser. Match the env parser exactly:
+    only real truthy values (or the canonical truthy strings) activate; everything else is False."""
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
 
 
 _MCP_POLICY_ONLY_ENFORCEMENT_ENV = os.environ.get("MCP_POLICY_ONLY_ENFORCEMENT", "").strip().lower() in (
@@ -968,16 +978,17 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]],
         if depth > _MCP_POLICY_REDACT_MAX_DEPTH:
             # Integration red-team wf_21ddb986 #4: a secret nested past the recursion cap must NOT
             # fail closed — that ESCALATED redact→block (frozen violation) and diverged from the live
-            # preset, which masks the serialized blob depth-INDEPENDENTLY. Mask the unreachable
-            # residual with serialized redaction (redact_all catches a secret at ANY depth within
-            # the subtree, no recursion, no block); a benign residual is preserved as-is (structure
-            # intact) — only a residual that actually held a secret collapses to a masked string
-            # (the CHG-0046 dict→string tradeoff, at pathological >cap depth).
-            _ser = _safe_json(node)
-            _masked = redact_all(_ser)
-            if _masked != _ser:
-                changed = True
-                return _masked
+            # preset, which masks the serialized blob depth-INDEPENDENTLY.
+            # Operator-control #4 (scope fidelity): honor SCOPE at the cap too — only mask the residual
+            # when a hint applies HERE (an entire hint, or a key hint whose path covers this node) or
+            # the render-leak floor covers it; else forward the scoped-out deep subtree RAW (a
+            # key-scoped rule must never mask a sibling that merely sits past the depth cap).
+            if _hints_for(path) or _neutralize_at(path):
+                _ser = _safe_json(node)
+                _masked = redact_all(_ser)
+                if _masked != _ser:
+                    changed = True
+                    return _masked
             return node
         if isinstance(node, str):
             new = _neutralize_render_leaks(node) if _neutralize_at(path) else node
@@ -1156,6 +1167,7 @@ async def _scan_text_tier2(
     org_tier2_override: bool | None,
     org_tier2_strict: bool,
     strict_mode: str,
+    policy_only: bool = False,
 ) -> tuple[str, list[McpFinding], bool, str | None]:
     """Tier-2 Bedrock scan. Returns (text, findings, blocked, fallback_reason)."""
     if scanner is None:
@@ -1171,7 +1183,12 @@ async def _scan_text_tier2(
         )
     except Exception as exc:
         LOG.warning("MCP Tier-2 scan failed: %s", exc)
-        if strict_mode == "strict":
+        # Operator-control #2 (action-fidelity + no-defaults): a scanner CRASH may fail closed ONLY
+        # when the operator selected an ENFORCING Tier-2 action (not observe-only monitor/tag) AND
+        # strict. Merely enabling Tier-2 (action=monitor, strict_mode defaulting to 'strict') must
+        # NOT block a benign call — observe-only never blocks. This mirrors the scanner=None twin,
+        # which already fails open.
+        if strict_mode == "strict" and not _is_observe_only_posture(enforcement):
             return text, [], True, "tier2_error_strict"
         return text, [], False, "tier2_error_fail_open"
 
@@ -1190,6 +1207,21 @@ async def _scan_text_tier2(
                     detail=verdict.detail,
                 )
             )
+    if policy_only:
+        # Operator-control #7 (flow + no-escalation): under the policy-only flag the retired server
+        # posture never substitutes the Tier-2 verdict. Honor the VERDICT directly, bounded by the
+        # operator's own Tier-2 action:
+        #   - 'block'  -> block + the judge's reason (finding.detail), ONLY if the operator granted
+        #                 Tier-2 an enforcing action (not observe-only monitor/tag);
+        #   - 'redact' -> mask, ONLY under an enforcing action (never escalate a redact to a block);
+        #   - 'flag'   -> flag-for-review: recorded in `findings` above, NEVER blocks or mutates;
+        #   - 'allow'  -> pass.
+        observe_only = _is_observe_only_posture(enforcement)
+        if verdict.action == "block" and not observe_only:
+            return text, findings, True, None
+        if verdict.action == "redact" and not observe_only:
+            return redact_all(text), findings, False, None
+        return text, findings, False, None
     if _enforce_blocks(enforcement) and verdict.action in ("block", "redact", "flag"):
         # A4 FIX (Tier-2 parity): block posture blocks on any actionable Bedrock
         # verdict, not only verdict.action == "block".
@@ -1231,10 +1263,11 @@ async def scan_mcp_payload(
     # Coerce the Tier-1 action to the observe-only ``tag`` — the exact world the pre-cutover
     # diff-gate proved the seeded POLICY rules reproduce. The preset pass then only DETECT+TAG; the
     # policy lane (rule-action-driven, unaffected because ``tag`` != ``monitor``) is the sole Tier-1
-    # enforcer. TIER-2 (the LLM judge) is NOT coerced: it has NO seeded-policy equivalent, so
-    # dropping its action would silently lose semantic-injection blocking for a Tier-2-enabled org
-    # (red-team F4) — it stays posture/enable-driven. scan-control enabled/direction/scope and
-    # Tier-2 enable gating are unchanged; only the Tier-1 ACTION is dropped. OFF by default.
+    # enforcer. TIER-2 (the LLM judge) is operator-controlled independently: its ENABLE toggle and
+    # its OWN action are kept (the Tier-2-only settings model), but under the flag its action no
+    # longer FALLS BACK to the retired server posture (operator-control #6) and it honors its own
+    # verdict directly (#7) — see the tier2 block below. scan-control enabled/direction/scope and
+    # Tier-2 enable gating are unchanged; the Tier-1 preset ACTION is dropped. OFF by default.
     _policy_only = _mcp_policy_only_enforcement(enabled_info)
     # Per-tier action: each tier's control row owns its action; 'inherit'/unset
     # defers to the server/tool action passed as ``enforcement``.
@@ -1466,8 +1499,12 @@ async def scan_mcp_payload(
         return _finalize_output(mutable if result_redacted else payload), result
 
     strict_mode = tier2_ctrl.get("strict_mode") or "strict"
-    # NOT coerced under Phase 3 — Tier-2 stays posture/enable-driven (see the tier1 note above).
-    tier2_action = _resolve_tier_action(tier2_ctrl, enforcement)
+    # Operator-control #6 (single-surface): the operator's EXPLICIT Tier-2 action is honored, but
+    # under the policy-only flag an unset ('inherit') Tier-2 action must NOT fall back to the retired
+    # server posture — it resolves observe-only, so a Tier-2-enabled org with no explicit Tier-2
+    # action enforcement neither blocks nor mutates (invariant A: no defaults). The verdict itself is
+    # honored directly in _scan_text_tier2 when policy_only (invariant F: flag never blocks).
+    tier2_action = _resolve_tier_action(tier2_ctrl, "monitor" if _policy_only else enforcement)
     org_strict = bool((enabled_info or {}).get("tier2_strict", True))
 
     for text, setter, path_label in targets:
@@ -1482,6 +1519,7 @@ async def scan_mcp_payload(
             org_tier2_override=org_override,
             org_tier2_strict=org_strict,
             strict_mode=strict_mode,
+            policy_only=_policy_only,
         )
         result.findings.extend(t2_findings)
         if t2_findings:
@@ -1509,11 +1547,19 @@ async def scan_mcp_payload(
             result.blocked = True
             result.monitored = False  # F3: a blocked call is never observe-only
             return payload, result
-        if fallback and strict_mode == "strict" and "strict" in fallback:
+        if (fallback and strict_mode == "strict" and "strict" in fallback
+                and not _is_observe_only_posture(tier2_action)):
+            # Operator-control #2: the strict fail-closed re-block never fires under an observe-only
+            # Tier-2 action (monitor/tag) — matching _scan_text_tier2, which now returns a fail-OPEN
+            # fallback in that case, so "strict" never appears in it. Guarded here for defence in depth.
             result.blocked = True
             result.monitored = False
             return payload, result
-        if new_text != text and tier2_action == "redact":
+        if new_text != text and (tier2_action == "redact" or _policy_only):
+            # Under the policy-only flag _scan_text_tier2 only returns a changed text when the Tier-2
+            # VERDICT was 'redact' AND the operator granted an enforcing action, so applying the mask
+            # whenever it changed honors the verdict without dropping it (a 'redact' verdict under a
+            # 'block' Tier-2 action masks — never escalates, never leaks raw).
             setter(new_text)
             result_redacted = True
 

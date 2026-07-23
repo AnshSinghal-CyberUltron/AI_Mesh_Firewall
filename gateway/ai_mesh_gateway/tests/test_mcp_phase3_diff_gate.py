@@ -714,3 +714,174 @@ def test_INT4_deep_nested_secret_past_cap_masks_not_fails_closed():
         benign = {"n": benign}
     out2, changed2, _ = _redact_structured_leaves(benign, [hint])
     assert not changed2 and "hello world" in json.dumps(out2), "benign deep residual preserved"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
+# OPERATOR-CONTROL red-team (wf_969223b8, 7 confirmed violations) — regression guards.
+# Invariants: (A) no-defaults (B) action-fidelity (C) direction (D) scope (E) server/tool
+# binding (F) Tier-1→Tier-2 flow, flag never blocks (G) single surface under the flag.
+# ═══════════════════════════════════════════════════════════════════════════════════════
+class _FakeVerdict:
+    def __init__(self, action, tier="tier_2", threat_type="prompt_injection",
+                 confidence=0.55, detail="tier-2 judge reason"):
+        self.action, self.tier, self.threat_type = action, tier, threat_type
+        self.confidence, self.detail = confidence, detail
+
+
+class _FakeScanner:
+    """Minimal Tier-2 scanner: returns a fixed verdict, or raises to model a scanner CRASH."""
+    def __init__(self, *, verdict=None, boom=False):
+        self._verdict, self._boom = verdict, boom
+
+    async def scan_prompt_with_tier2(self, text, **kw):
+        if self._boom:
+            raise RuntimeError("tier-2 scanner crashed")
+        return self._verdict
+
+
+def _tier2_controls(action, *, enabled=True, strict_mode="strict", direction):
+    """effective_controls with Tier-1 observe-only (policy lane) + Tier-2 enabled for a direction."""
+    ctrls = _observe_controls()
+    ctrls[f"tier2_{direction}"] = {"tier": "tier2", "enabled": enabled, "action": action,
+                                   "strict_mode": strict_mode, "control_id": 1}
+    return ctrls
+
+
+async def _run_tier2(payload, *, verdict=None, boom=False, tier2_action="inherit",
+                     strict_mode="strict", direction, flag=True, rules=None):
+    """Drive scan_mcp_payload through the Tier-2 lane with a fake scanner + policy sync."""
+    orig_ps, orig_sc = orch._get_policy_sync, orch._get_input_scanner
+    orch._get_policy_sync = lambda: _FakePolicySync(rules or [])
+    orch._get_input_scanner = lambda: _FakeScanner(verdict=verdict, boom=boom)
+    try:
+        return await orch.scan_mcp_payload(
+            payload, scan_direction=direction, enforcement="tag",
+            effective_controls=_tier2_controls(tier2_action, strict_mode=strict_mode,
+                                               direction=direction),
+            tool_name="anyTool",
+            enabled_info={"mcp_policy_only_enforcement": flag} if flag is not None else None,
+            org_slug="o", server_slug="s", actor=None)
+    finally:
+        orch._get_policy_sync, orch._get_input_scanner = orig_ps, orig_sc
+
+
+# ── #1: mcp_proxy static-floor stack goes observe-only under the flag (invariant G) ──────
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+def test_OC1_proxy_floors_observe_only_under_flag(direction):
+    import mcp_proxy
+    on = {"mcp_policy_only_enforcement": True, "default_scan_action": "block"}
+    off = {"mcp_policy_only_enforcement": False, "default_scan_action": "block"}
+    # Under the flag every proxy floor gate resolves observe-only, regardless of a block posture.
+    assert mcp_proxy._resolved_tier1_action("anyTool", on, direction) == "monitor"
+    assert mcp_proxy._explicit_monitor_posture("anyTool", on, direction) is True
+    assert mcp_proxy._static_hardening_floors_enabled("anyTool", on, direction) is False
+    # Flag OFF: the retired posture still governs the legacy path (block → floors enabled).
+    assert mcp_proxy._resolved_tier1_action("anyTool", off, direction) == "block"
+    assert mcp_proxy._static_hardening_floors_enabled("anyTool", off, direction) is True
+
+
+# ── #2: Tier-2 scanner CRASH must NOT block under an observe-only Tier-2 action ───────────
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC2_tier2_strict_crash_no_block_under_observe(direction):
+    # action=monitor (observe-only) + strict + benign payload + scanner crash → must NOT block.
+    out, res = await _run_tier2({"args": {"note": _BENIGN}}, boom=True, tier2_action="monitor",
+                                strict_mode="strict", direction=direction)
+    assert not res.blocked, "observe-only Tier-2 must never fail-closed block a benign call"
+
+
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC2_tier2_strict_crash_blocks_only_when_operator_selected_enforcing(direction):
+    # action=block (operator-selected enforcing) + strict + crash → fail-closed block IS honored.
+    out, res = await _run_tier2({"args": {"note": _BENIGN}}, boom=True, tier2_action="block",
+                                strict_mode="strict", direction=direction)
+    assert res.blocked, "an operator-selected enforcing+strict Tier-2 may fail closed on crash"
+
+
+# ── #6: under the flag, an unset Tier-2 action does NOT fall back to server posture ───────
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC6_tier2_inherit_no_posture_fallback_under_flag(direction):
+    # flag ON, tier2 action='inherit', a real BLOCK verdict → observe-only (no posture) → NOT blocked.
+    out, res = await _run_tier2({"args": {"note": _BENIGN}}, verdict=_FakeVerdict("block"),
+                                tier2_action="inherit", direction=direction)
+    assert not res.blocked, "inherit Tier-2 under the flag must be observe-only, not posture-driven"
+
+
+# ── #7: the Tier-2 VERDICT is honored directly; a 'flag' verdict NEVER blocks (no escalation) ──
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC7_tier2_block_verdict_blocks_under_enforcing_action(direction):
+    out, res = await _run_tier2({"args": {"note": _BENIGN}}, verdict=_FakeVerdict("block"),
+                                tier2_action="block", direction=direction)
+    assert res.blocked, "an enforcing Tier-2 action honors a block verdict"
+
+
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC7_tier2_flag_verdict_never_blocks_even_under_block_action(direction):
+    # The frozen contract: a 'flag' (flag-for-review) verdict must NEVER be escalated to a block,
+    # even when the operator selected a block Tier-2 action. Real ZeroShield emits flag at 0.40-0.69.
+    out, res = await _run_tier2({"args": {"note": _BENIGN}}, verdict=_FakeVerdict("flag"),
+                                tier2_action="block", direction=direction)
+    assert not res.blocked, "flag-for-review must not escalate to a hard block"
+    assert res.findings, "flag verdict is still recorded for review"
+
+
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC7_tier2_allow_verdict_passes(direction):
+    out, res = await _run_tier2({"args": {"note": _BENIGN}}, verdict=_FakeVerdict("allow"),
+                                tier2_action="block", direction=direction)
+    assert not res.blocked
+
+
+# ── flag-parse hardening: a stringly-typed 'false'/'0'/'off' must NOT activate the cutover ──
+@pytest.mark.parametrize("val,want", [
+    (True, True), (False, False), (1, True), (0, False), (None, False), ("", False),
+    ("true", True), ("on", True), ("1", True), ("yes", True),
+    ("false", False), ("0", False), ("off", False), ("no", False),
+])
+def test_flag_parse_strict_truthiness(val, want):
+    assert orch._mcp_policy_only_enforcement({"mcp_policy_only_enforcement": val}) is want
+
+
+# ── #5: an empty/missing tool_name must NOT trigger a per-tool-bound rule (invariant E) ───
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC5_per_tool_rule_does_not_enforce_on_nameless_call(direction):
+    # A rule bound to target_tool='getData' must not block a call whose tool_name is empty.
+    rules = [{"id": 1, "name": "tool-bound-block", "rule_type": "detector", "action": "block",
+              "condition": {"detector_class": ["credential"]}, "target_tool": "getData",
+              "redaction_config": {}}]
+    out, res = await _run(
+        {"args": {"note": _AWS}}, rules=rules, enforcement="tag",
+        effective_controls=_observe_controls(), direction=direction, tool="",
+        enabled_info={"mcp_policy_only_enforcement": True})
+    assert not res.blocked, "a getData-bound rule must not enforce on a nameless (empty tool) call"
+    # And it DOES enforce on its exact tool.
+    out2, res2 = await _run(
+        {"args": {"note": _AWS}}, rules=rules, enforcement="tag",
+        effective_controls=_observe_controls(), direction=direction, tool="getData",
+        enabled_info={"mcp_policy_only_enforcement": True})
+    assert res2.blocked, "the tool-bound rule enforces on its exact target tool"
+
+
+# ── #4: a key-scoped rule must not mask a SIBLING secret nested past the depth cap (invariant D) ──
+def test_OC4_keyscoped_cap_residual_leaves_sibling_untouched():
+    from mcp_scan_orchestrator import _redact_structured_leaves
+    key_hint = {"rule_id": 1, "scope": "key", "key": "target",
+                "config": {"replacement": "[X]", "detector_class": ["credential"]}}
+    deep_under = _AWS
+    for _ in range(501):
+        deep_under = {"n": deep_under}
+    deep_sibling = _AWS
+    for _ in range(501):
+        deep_sibling = {"n": deep_sibling}
+    payload = {"target": deep_under, "other": deep_sibling}
+    out, changed, hit_cap = _redact_structured_leaves(payload, [key_hint])
+    assert not hit_cap
+    # Under the scoped key: masked. The sibling 'other' (outside the key) past the cap: RAW.
+    assert _AWS not in json.dumps(out["target"]), "secret under the scoped key is masked at the cap"
+    assert _AWS in json.dumps(out["other"]), "a sibling outside the key must NOT be masked at the cap"

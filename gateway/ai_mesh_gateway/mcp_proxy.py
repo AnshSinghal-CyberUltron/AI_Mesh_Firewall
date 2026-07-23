@@ -1874,6 +1874,17 @@ def _resolved_tier1_action(
     scan_direction: str,
 ) -> str:
     """Per-direction Tier-1 action from the scan-control matrix (falls back to server/tool default)."""
+    # Operator-control #1 (single-surface, no-defaults): under the Phase-3 policy-only flag the
+    # server posture + scan-control ACTION are RETIRED as enforcement inputs — policies are the sole
+    # Tier-1 enforcer. Every mcp_proxy static-floor gate (cross-block-split, credential force-block,
+    # encoded-exfil defang, E12 result-redaction) resolves its posture through THIS function, so
+    # returning observe-only here is the single canonical point that stops the retired posture from
+    # blocking/mutating traffic that carries no operator policy. Without it the flag only silenced
+    # the Tier-1 preset lane and the proxy floor stack kept enforcing off `default_scan_action`.
+    from mcp_scan_orchestrator import _mcp_policy_only_enforcement
+
+    if _mcp_policy_only_enforcement(enabled_info):
+        return "monitor"
     fallback = _effective_scan_action(tool_name, enabled_info)
     effective = _effective_scan_controls_for_tool(enabled_info, tool_name)
     if not effective.get("scan_controls_configured"):
