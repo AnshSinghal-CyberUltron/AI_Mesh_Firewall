@@ -776,6 +776,18 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
     return False
 
 
+def _exempt_dir_applies(rule: dict[str, Any], context: dict[str, Any]) -> bool:
+    """An exemption's direction (input/output/both) must match the ACTIVE scan direction, so a
+    tool lowered in ONE direction is not un-enforced in the other (#5 / RC-B). The MCP context
+    is built per scan_direction: input → input_args set / output_data None; output → vice-versa."""
+    d = str((rule.get("condition") or {}).get("direction") or "both").strip().lower()
+    if d == "input":
+        return context.get("input_args") is not None or bool(context.get("prompt"))
+    if d == "output":
+        return context.get("output_data") is not None or bool(context.get("response"))
+    return True  # "both" / unknown → applies to any direction
+
+
 def evaluate_mcp_policies(
     compiled_policies: list[dict[str, Any]],
     context: dict[str, Any],
@@ -792,7 +804,6 @@ def evaluate_mcp_policies(
     best_action_rank = -1
     _blocker_policy_name = ""
     _blocker_rule_name = ""
-    _tool_exempted = False  # Phase 2b #5: a tool-scoped exemption downgrades enforcement
 
     # M-04: MCP context already carries user_id/agent_id; reuse them as the
     # actor when the caller didn't pass one explicitly. Missing keys -> None.
@@ -811,9 +822,27 @@ def evaluate_mcp_policies(
         if not _policy_applies_to_actor(policy, actor):
             continue
 
+        # POLICY-SCOPED EXEMPTION (#5, RC-A fix): an exemption downgrades ONLY the enforcing
+        # rules of ITS OWN policy for this tool + direction — NOT the whole evaluation. The
+        # earlier global override wiped every policy's action/hints, so an exemption on the
+        # SEEDED server-detector policy also killed an operator's explicit BLOCK and the org
+        # baseline PII-redact policy for that tool (raw egress). The exemption exists to
+        # suppress the broad server-wide rule that lives in the SAME seeded policy; other
+        # policies stand on their own.
+        policy_exempts = bool(tool_name) and any(
+            (r.get("condition") or {}).get("exempt")
+            and (r.get("target_tool") or "") == tool_name
+            and _exempt_dir_applies(r, context)
+            for r in rules
+        )
+
         for rule in rules:
             rule_target = rule.get("target_tool", "") or ""
             if rule_target and tool_name and rule_target != tool_name:
+                continue
+
+            # An exemption rule itself contributes no enforcing action and is not a finding.
+            if (rule.get("condition") or {}).get("exempt"):
                 continue
 
             if not _evaluate_rule_mcp(rule, context):
@@ -834,12 +863,17 @@ def evaluate_mcp_policies(
                 if isinstance(_rf, str) and _rf and _rf not in result.redaction_fields:
                     result.redaction_fields.append(_rf)
 
-            # A tool-scoped EXEMPTION (#5): the operator lowered THIS tool to observe-only,
-            # overriding broader (server-wide) enforcement. Requires an explicit target_tool
-            # match so it can never blanket-exempt everything.
-            if (rule.get("condition") or {}).get("exempt") and rule_target and rule_target == tool_name:
-                _tool_exempted = True
-                continue  # an exemption never contributes an enforcing action itself
+            # This policy is exempt for this tool+direction → its enforcing rules are recorded
+            # (findings above, for audit) and contribute only OBSERVE (monitor: detect + tag,
+            # never mutate/block), NOT their redact/block action. Scoped to THIS policy only —
+            # a higher-rank action from ANOTHER policy (operator BLOCK, baseline PII redact)
+            # still wins via ACTION_ORDER, so exemption can't downgrade other policies.
+            if policy_exempts:
+                _mrank = ACTION_ORDER.get("monitor", 1)
+                if _mrank > best_action_rank:
+                    best_action_rank = _mrank
+                    result.action = "monitor"
+                continue
 
             action = rule.get("action", "monitor")
             rank = ACTION_ORDER.get(action, 0)
@@ -871,17 +905,6 @@ def evaluate_mcp_policies(
                         "config": config,
                         "condition": rule.get("condition") or {},
                     })
-
-    # Per-tool EXEMPTION override (#5): the operator explicitly lowered this tool to
-    # observe-only, so downgrade any broader enforcement to ``monitor`` (detect + tag, never
-    # mutate/block) and drop the redaction hints. This is the operator's explicit per-tool
-    # sovereignty winning over a broader (e.g. server-wide seeded) rule — the additive model
-    # otherwise can't un-enforce a tool. Detection/findings are preserved for the audit trail.
-    if _tool_exempted:
-        result.action = "monitor"
-        result.redaction_hints = []
-        result.message = "Tool exempted by operator (observe-only)"
-        return result
 
     if result.action == "block" and result.matched_rule_ids:
         # Prefer the rule whose action actually BLOCKED; fall back to the last

@@ -136,7 +136,7 @@ def _per_tool_specs(rows: list, server_id: str, posture: str,
     for tool, tool_scan_action in tool_actions.items():
         eff_tool = resolve_effective_controls(rows, server_id=server_id, tool_name=tool)
         by_dir: dict[str, dict] = {}   # direction -> raised detector spec
-        lowered = False
+        lowered_dirs: list[str] = []   # directions the tool is lowered below the server (#5/RC-B)
         for direction in ("input", "output"):
             srv_a = _resolved_dir_action(eff_server.get(f"tier1_{direction}") or {}, None, posture) or "monitor"
             tool_a = _resolved_dir_action(eff_tool.get(f"tier1_{direction}") or {}, tool_scan_action, posture) or "monitor"
@@ -150,7 +150,7 @@ def _per_tool_specs(rows: list, server_id: str, posture: str,
                     cond["scope"] = "entire"
                 by_dir[direction] = {"action": tool_a, "condition": cond}
             elif tr < sr and sr > 0:
-                lowered = True
+                lowered_dirs.append(direction)
 
         # Collapse identical input+output raised specs into one ``both`` rule (the common
         # MCPToolRegistration.scan_action override is direction-agnostic).
@@ -165,10 +165,18 @@ def _per_tool_specs(rows: list, server_id: str, posture: str,
                 if by_dir.get(d):
                     specs.append({**by_dir[d], "target_tool": tool})
 
-        if lowered:  # one blanket exemption for an observe-only tool below an enforcing server
-            specs.append({"action": "allow",
-                          "condition": {"exempt": True, "direction": "both"},
-                          "target_tool": tool})
+        # PER-DIRECTION exemption (#5/RC-B): exempt ONLY the direction(s) the operator lowered,
+        # so the still-enforcing direction (equal-to-server, or an explicitly raised per-tool
+        # control emitted above) keeps its live action. Collapse to ``both`` when both lowered.
+        if lowered_dirs:
+            exempt_dir = "both" if set(lowered_dirs) == {"input", "output"} else lowered_dirs[0]
+            if exempt_dir == "both":
+                specs.append({"action": "allow", "condition": {"exempt": True, "direction": "both"},
+                              "target_tool": tool})
+            else:
+                for d in lowered_dirs:
+                    specs.append({"action": "allow", "condition": {"exempt": True, "direction": d},
+                                  "target_tool": tool})
     return specs
 
 
