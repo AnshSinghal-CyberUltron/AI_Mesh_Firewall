@@ -824,7 +824,14 @@ async def _scan_text_tier1(
 # floor does). Past the cap, leaves are returned unredacted rather than crashing —
 # the preset pass (its own scope) and, for the result direction, the E12 floor still
 # run, so this is a depth backstop, not a silent redaction skip for normal payloads.
-_MCP_POLICY_REDACT_MAX_DEPTH = 200
+# Aligned to policy_engine._KEY_COLLECT_MAX_DEPTH (500): the DETECTION walk admits depth 500, so a
+# lower REDACTION cap (was 200) left a secret nested 201-500 deep DETECTED-but-unmasked → it egressed
+# raw under the Phase-3 observe-only path while the live blob scan masked it (B2/B3 red-team finding).
+# Matching the caps makes detection⟺redaction consistent (no cannot-mask window); a secret past 500
+# is unseen by BOTH (consistent). Recursion at 500 is safe under CPython's 1000-frame default even
+# beneath a deep async stack (verified); a pathological over-limit fails CLOSED (the request errors —
+# no raw egress), never leaks.
+_MCP_POLICY_REDACT_MAX_DEPTH = 500
 
 
 def _compile_key_matcher(key: str) -> tuple[str, tuple[str, ...]] | None:
@@ -1309,7 +1316,12 @@ async def scan_mcp_payload(
             result.compliance_tags = _merge_tags(
                 result.compliance_tags, _tags_for_finding(f)
             )
-        if _is_observe_only_posture(tier1_action):
+        # F3 AUDIT HONESTY: under the Phase-3 flag ``tier1_action`` is the observe-only ``tag``,
+        # but the POLICY lane still enforces via the rule's own action. ``monitored`` means "nothing
+        # was enforced" — so it is set ONLY when the policy neither blocked nor redacted (else an
+        # enforced call would be mislabelled observe-only), and the trace ``action`` below reflects
+        # the POLICY's real enforcement, not the coerced tier action.
+        if _is_observe_only_posture(tier1_action) and not pol_blocked and not pol_redacted:
             result.monitored = True
     if pol_blocked:
         result.blocked = True
@@ -1317,7 +1329,7 @@ async def scan_mcp_payload(
             {
                 "scan_stage": "tier1_policy", "tier": "tier1",
                 "direction": scan_direction, "scope": "entire",
-                "action": tier1_action, "blocked": True,
+                "action": "block", "blocked": True,
                 "finding_count": len(pol_findings), "policy_engine": True,
             }
         )
@@ -1330,8 +1342,8 @@ async def scan_mcp_payload(
             {
                 "scan_stage": "tier1_policy", "tier": "tier1",
                 "direction": scan_direction, "scope": "entire",
-                "action": tier1_action, "finding_count": len(pol_findings),
-                "policy_engine": True,
+                "action": ("redact" if pol_redacted else tier1_action),
+                "finding_count": len(pol_findings), "policy_engine": True,
             }
         )
 
@@ -1371,7 +1383,9 @@ async def scan_mcp_payload(
                 result.compliance_tags = _merge_tags(
                     result.compliance_tags, _tags_for_finding(f)
                 )
-            if _is_observe_only_posture(tier1_action):
+            # F3: observe-only only if nothing has enforced yet (a prior policy block/redact means
+            # the call WAS enforced — don't mislabel it observe-only).
+            if _is_observe_only_posture(tier1_action) and not result.blocked and not result_redacted:
                 result.monitored = True
         if blocked:
             tier1_blocked = True
@@ -1463,7 +1477,7 @@ async def scan_mcp_payload(
                 result.compliance_tags = _merge_tags(
                     result.compliance_tags, _tags_for_finding(f)
                 )
-            if _is_observe_only_posture(tier2_action):
+            if _is_observe_only_posture(tier2_action) and not result.blocked and not result_redacted:
                 result.monitored = True
         result.scan_trace.append(
             {

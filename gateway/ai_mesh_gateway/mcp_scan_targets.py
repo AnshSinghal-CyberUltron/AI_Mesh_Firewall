@@ -63,20 +63,29 @@ def collect_key_values(obj: Any, key: str) -> list[str]:
 
 
 def _get_by_dot_path(obj: Any, path: str) -> list[Any]:
-    """Return values at a dot-separated path (e.g. arguments.email)."""
+    """Return values at a dot-separated path (e.g. arguments.email).
+
+    Key comparison is NFKC-casefolded (B2 live-binder fix): the detection binder
+    (``policy_engine._collect_dot_path_values``), the seed redaction, and the plain-key walk all
+    normalize, so an EXACT match here under-masked a case/NFKC-variant payload key (a raw credential
+    egressed while the collapsed seed masked it). An all-blank path (``.``/``..``) yields no parts →
+    ``[]`` (parity with the collector), rather than returning the WHOLE payload as one target."""
     if not path:
         return []
     parts = [p for p in path.split(".") if p]
+    if not parts:
+        return []
     nodes: list[Any] = [obj]
     for part in parts:
+        pn = _normalize_key(part)
         next_nodes: list[Any] = []
         for node in nodes:
-            if isinstance(node, dict) and part in node:
-                next_nodes.append(node[part])
+            if isinstance(node, dict):
+                next_nodes.extend(v for k, v in node.items() if _normalize_key(k) == pn)
             elif isinstance(node, list):
                 for item in node:
-                    if isinstance(item, dict) and part in item:
-                        next_nodes.append(item[part])
+                    if isinstance(item, dict):
+                        next_nodes.extend(v for k, v in item.items() if _normalize_key(k) == pn)
         nodes = next_nodes
         if not nodes:
             return []
@@ -166,22 +175,37 @@ def extract_scan_targets(
 
 
 def _mutate_dot_path(root: Any, path: str, index: int, new_value: str) -> None:
-    """Replace the index-th value along a dot path (best-effort)."""
+    """Replace the index-th value along a dot path (best-effort). NFKC-casefolded key match, so the
+    setter writes back the SAME case/NFKC-variant key the getter matched (B2 live-binder fix)."""
     parts = [p for p in path.split(".") if p]
     if not parts or not isinstance(root, dict):
         return
+
+    def _find_key(d: dict, part: str):
+        pn = _normalize_key(part)
+        for k in d:
+            if _normalize_key(k) == pn:
+                return k
+        return None
+
     node: Any = root
     for part in parts[:-1]:
-        if not isinstance(node, dict) or part not in node:
+        if not isinstance(node, dict):
             return
-        node = node[part]
-    last = parts[-1]
-    if isinstance(node, dict) and last in node:
-        cur = node[last]
-        if isinstance(cur, list) and 0 <= index < len(cur):
-            node[last][index] = new_value
-        elif index == 0:
-            node[last] = new_value
+        k = _find_key(node, part)
+        if k is None:
+            return
+        node = node[k]
+    if not isinstance(node, dict):
+        return
+    last = _find_key(node, parts[-1])
+    if last is None:
+        return
+    cur = node[last]
+    if isinstance(cur, list) and 0 <= index < len(cur):
+        node[last][index] = new_value
+    elif index == 0:
+        node[last] = new_value
 
 
 def apply_target_updates(payload: Any, updates: list[tuple[Callable[[str], None], str]]) -> Any:

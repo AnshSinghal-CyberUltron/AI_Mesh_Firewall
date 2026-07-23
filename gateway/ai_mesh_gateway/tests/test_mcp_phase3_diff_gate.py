@@ -612,3 +612,41 @@ async def test_B3_benign_keys_and_keyword_rules_untouched(direction):
     assert bool(lr.blocked) == bool(sr.blocked)
     sb = json.dumps(so)
     assert '"password"' in sb and '"note"' in sb, "benign structural keys must not be renamed"
+
+
+# ── Deferred-hardening regression guards (F3 telemetry, B2 case-variant key) ──────────────
+@pytest.mark.parametrize("posture,want_blocked,want_action", [("block", True, "block"), ("redact", False, "redact")])
+@pytest.mark.asyncio
+async def test_F3_flag_audit_trail_reports_real_enforcement(posture, want_blocked, want_action):
+    """F3: under the Phase-3 flag the coerced tier action is observe-only 'tag', but a policy
+    block/redact must be AUDITED honestly — result.monitored False (the call WAS enforced) and the
+    policy scan-trace 'action' the real enforcement, not 'tag'."""
+    seeded = _seeded_rules(posture, [], {})
+    eff = resolve_effective_controls([], server_id=_SID, tool_name="t")
+    _, res = await _run({"args": {"note": _AWS}}, rules=seeded, enforcement=posture,
+                        effective_controls=eff, direction="input", tool="t",
+                        enabled_info={"mcp_policy_only_enforcement": True})
+    assert bool(res.blocked) == want_blocked
+    assert res.monitored is False, "an enforced call must not be audited observe-only"
+    pol_actions = [t.get("action") for t in res.scan_trace if t.get("policy_engine")]
+    assert want_action in pol_actions, f"trace must report {want_action}, got {pol_actions}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.parametrize("payload_key", ["Secret", "ｓecret"])  # case + NFKC-fullwidth variant
+async def test_B2_dotted_keypath_case_nfkc_variant_matches_live(payload_key, direction):
+    """B2 live-binder: a dotted key_path whose payload key differs by case / NFKC form must mask on
+    BOTH lanes (the live getter/setter now NFKC-casefold like the detection binder + seed) — no live
+    under-mask of a case-variant credential key."""
+    rows = [_row(direction="input", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret"),
+            _row(direction="output", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret")]
+    payload = {"args": {payload_key: _AWS, "who": _EMAIL}}
+    (lo, lr), (so, sr) = await _pair(payload, posture="redact", rows=rows,
+                                     tool_actions={"getData": "inherit"}, tool="getData",
+                                     direction=direction)
+    assert bool(lr.blocked) == bool(sr.blocked)
+    assert (_AWS in json.dumps(lo)) == (_AWS in json.dumps(so)), "case/NFKC-variant key must match live"
+    assert _AWS not in json.dumps(so), "the case-variant credential key is masked"
