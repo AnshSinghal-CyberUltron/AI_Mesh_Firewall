@@ -867,7 +867,7 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
         # A detector rule matches iff the built-in detector SUITE would mask something in this
         # class — reuse the SAME redact_all_scoped engine the rule redacts with, so detection
         # and redaction agree by construction (no detect-on-blob / mask-on-leaf asymmetry).
-        from patterns import redact_all_scoped  # local: patterns has no import cycle here
+        from patterns import redact_all_scoped, _dec_has_infra  # local: patterns has no import cycle here
         classes = set(matcher["detector_class"] or ())
         want_injection = bool(matcher.get("detect_injection"))
         # #3/#1: encoded-exfil detection drives BLOCK ONLY. The masker can't mask an HTML-entity
@@ -878,21 +878,27 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
         # block — the exact escalation the frozen decision removed. So only a BLOCK rule checks
         # the decoded surface; a redact rule masks the raw forms and forwards, posture-identical.
         encoded_check = (rule.get("action") == "block")
-        # #3/B1: the encoded-variant BLOCK check EXCLUDES generic PII — the live encoded-exfil
-        # block floor (mcp_scan_orchestrator.py:663-666) only withholds decoded SECRET/CREDENTIAL
-        # /INFRA-network-IP, deliberately NOT entity-encoded generic PII (email/ssn/phone/cc), to
-        # avoid false-blocking legitimate entity-encoded scraped HTML. A block detector rule that
-        # decoded-and-blocked an encoded email OVER-BLOCKED vs the posture; the render-leak floor
-        # (render_floor) MASKS encoded generic PII instead, matching the posture's mask+forward.
-        encoded_classes = classes - {"pii"}
+        # #3/B1: the encoded-variant BLOCK check mirrors the live encoded-exfil block floor
+        # (mcp_scan_orchestrator.py:645-666) KEY-for-KEY: it withholds only a decoded
+        # SECRET/CREDENTIAL or an INFRA-NETWORK address — deliberately NOT entity-encoded generic
+        # PII (email/ssn/phone/cc), and NOT the flag-tier ip_leakage kinds like file paths
+        # (``_INFRA_NETWORK_KEYS`` excludes ``file_path_*`` as FP-prone; the live floor forwards
+        # them). An earlier class-level ``classes - {"pii"}`` retained the whole ip_leakage class,
+        # so an encoded internal FILE PATH under a block rule OVER-BLOCKED vs the posture (which
+        # forwards it). Gate on the rule's own classes; the render_floor mask+forwards whatever
+        # this does not withhold, matching the posture's mask+forward.
+        want_cred = "credential" in classes
+        want_infra = "ip_leakage" in classes
         for text in texts:
             if classes and redact_all_scoped(text, classes) != text:
                 return True
             if want_injection and _detector_injection_match(text):
                 return True
-            if encoded_classes and encoded_check:
+            if encoded_check and (want_cred or want_infra):
                 for variant in _encoded_variants(text):
-                    if redact_all_scoped(variant, encoded_classes) != variant:
+                    if want_cred and redact_all_scoped(variant, {"credential"}) != variant:
+                        return True
+                    if want_infra and _dec_has_infra(variant):
                         return True
         return False
 
