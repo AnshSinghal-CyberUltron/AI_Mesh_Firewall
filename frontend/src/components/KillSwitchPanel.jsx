@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
+import { syncModule2AfterContainmentChange } from "../utils/crossModuleSync";
 import { KillSwitchModelCombobox } from "./KillSwitchModelCombobox";
 import {
   KILL_SWITCH_GLOBAL_SCOPE,
@@ -236,6 +237,7 @@ export function KillSwitchPanel() {
       }
       setModalOpen(false);
       await fetchKillSwitches();
+      syncModule2AfterContainmentChange("kill-switch-save");
     } catch {
       setSubmitError("Network error saving kill-switch.");
     } finally {
@@ -255,6 +257,7 @@ export function KillSwitchPanel() {
         return;
       }
       await fetchKillSwitches();
+      syncModule2AfterContainmentChange("kill-switch-activate");
     } catch {
       setActionError("Network error activating kill-switch.");
     } finally {
@@ -274,6 +277,7 @@ export function KillSwitchPanel() {
         return;
       }
       await fetchKillSwitches();
+      syncModule2AfterContainmentChange("kill-switch-deactivate");
     } catch {
       setActionError("Network error deactivating kill-switch.");
     } finally {
@@ -293,6 +297,7 @@ export function KillSwitchPanel() {
         return;
       }
       await fetchKillSwitches();
+      syncModule2AfterContainmentChange("kill-switch-delete");
     } catch {
       setActionError("Network error deleting kill-switch.");
     } finally {

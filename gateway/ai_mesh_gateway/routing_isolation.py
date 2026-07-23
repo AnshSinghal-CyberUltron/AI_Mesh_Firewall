@@ -46,8 +46,25 @@ def fallback_profile_key(
     data_sensitivity: str = "public",
     compliance_tags: list[str] | None = None,
 ) -> str:
-    tags = ",".join(sorted(t for t in (compliance_tags or []) if t))
-    return f"{data_sensitivity}|{tags}"
+    sens = str(data_sensitivity or "public").strip().lower()
+    tags = ",".join(
+        sorted(_compliance_tag_key(t) for t in (compliance_tags or []) if _compliance_tag_key(t))
+    )
+    return f"{sens}|{tags}"
+
+
+def _compliance_tag_key(tag: object) -> str:
+    """Normalize compliance tag for case-insensitive matching (HIPAA == hipaa)."""
+    return str(tag or "").strip().lower()
+
+
+def compliance_tags_satisfied(model_tags: list | None, required_tags: list[str] | None) -> bool:
+    """True when model carries every required compliance tag (case-insensitive)."""
+    required = [_compliance_tag_key(t) for t in (required_tags or []) if _compliance_tag_key(t)]
+    if not required:
+        return True
+    have = {_compliance_tag_key(t) for t in (model_tags or []) if _compliance_tag_key(t)}
+    return all(tag in have for tag in required)
 
 
 def model_passes_hard_filters(
@@ -67,10 +84,8 @@ def model_passes_hard_filters(
         if model_name.lower() not in lower and model_id.lower() not in lower:
             return False
     required_tags = [t for t in (required_compliance or []) if t]
-    if required_tags:
-        model_tags = model.get("compliance_tags") or []
-        if not all(tag in model_tags for tag in required_tags):
-            return False
+    if required_tags and not compliance_tags_satisfied(model.get("compliance_tags"), required_tags):
+        return False
     # Caller sensitivity fails CLOSED on unknown/mis-cased values; model level
     # defaults to public (low clearance) so an unknown model level can't qualify
     # for a high request.

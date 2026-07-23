@@ -513,6 +513,9 @@ class PolicyCheckView(APIView):
                     "matched_policy_codes": result.matched_policy_codes,
                     "matched_rule_names": result.matched_rule_names,
                 }
+                prefix = str(metadata.get("key_prefix") or metadata.get("api_key_prefix") or "").strip()
+                if prefix:
+                    ev_metadata["key_prefix"] = prefix
                 audit_enabled = getattr(settings, "POLICY_AUDIT_STORE_PROMPT_RESPONSE", False)
                 snippet_len = getattr(settings, "POLICY_AUDIT_SNIPPET_LENGTH", 500)
                 if audit_enabled:
@@ -525,6 +528,12 @@ class PolicyCheckView(APIView):
                     prompt, response_text, mcp_data, None, ev_metadata, audit_enabled, snippet_len
                 )
                 ev_metadata.update(forensics)
+                lineage = forensics.get("prompt_lineage") or []
+                if lineage and not str(ev_metadata.get("prompt_snippet") or "").strip():
+                    first = lineage[0] if isinstance(lineage[0], dict) else {}
+                    snippet = str(first.get("prompt") or "").strip()
+                    if snippet:
+                        ev_metadata["prompt_snippet"] = snippet[:snippet_len]
                 ev = EnforcementEvent.objects.create(
                     policy=policy,
                     rule=rule,

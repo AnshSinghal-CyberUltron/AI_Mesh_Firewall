@@ -41,16 +41,9 @@ def main() -> None:
 
     for item in items if isinstance(items, list) else []:
         if item.get("collection_name") == COLLECTION and item.get("enabled"):
-            if item.get("vector_db_type") != "chroma":
-                _req(
-                    "PATCH",
-                    f"/api/vector-policies/{item['id']}/",
-                    token=access,
-                    body={"vector_db_type": "chroma"},
-                )
-                print(f"Updated vector policy '{COLLECTION}' vector_db_type -> chroma")
-            else:
-                print(f"Vector policy for '{COLLECTION}' already exists (id={item.get('id')})")
+            # Policy vector_db_type must stay "custom" (control model choices); the gateway
+            # resolves custom -> org chroma provider at runtime.
+            print(f"Vector policy for '{COLLECTION}' already exists (id={item.get('id')})")
             break
     else:
         created = _req(
@@ -80,11 +73,26 @@ def main() -> None:
 
     providers = _req("GET", "/api/vector-providers/", token=access)
     plist = providers if isinstance(providers, list) else providers.get("results", [])
+    # Gateway resolves org providers from inside Docker — default to the compose service.
     chroma_url = os.environ.get("CHROMA_URL", "http://chromadb:8000")
     chroma = next((p for p in (plist or []) if p.get("provider_type") == "chroma"), None)
     custom = next((p for p in (plist or []) if p.get("provider_type") == "custom"), None)
-    if chroma and chroma.get("is_active"):
-        print(f"Chroma vector provider already configured (id={chroma.get('id')}).")
+    if chroma:
+        current_url = str(chroma.get("connection_url") or "").strip()
+        if current_url != chroma_url or not chroma.get("is_active"):
+            _req(
+                "PATCH",
+                f"/api/vector-providers/{chroma['id']}/",
+                token=access,
+                body={
+                    "display_name": chroma.get("display_name") or "Demo Chroma",
+                    "connection_url": chroma_url,
+                    "is_active": True,
+                },
+            )
+            print(f"Updated chroma provider id={chroma.get('id')} url={chroma_url}")
+        else:
+            print(f"Chroma vector provider ok (id={chroma.get('id')}, url={current_url}).")
     elif custom:
         _req(
             "PATCH",

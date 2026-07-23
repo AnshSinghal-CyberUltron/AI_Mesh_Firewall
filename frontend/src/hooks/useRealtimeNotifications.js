@@ -29,6 +29,18 @@ function realtimeGloballyEnabled() {
     : true;
 }
 
+let devRealtimeWarned = false;
+
+function warnDevRealtimeDisabled() {
+  if (devRealtimeWarned || !import.meta.env.DEV || realtimeGloballyEnabled()) return;
+  if (!anySubscriberWantsConnection()) return;
+  devRealtimeWarned = true;
+  console.warn(
+    '[zeroshield] Module 2 live WebSocket updates are disabled in dev. '
+    + 'Set VITE_ENABLE_REALTIME_NOTIFICATIONS=true in .env for realtime enforcement notifications.',
+  );
+}
+
 function anySubscriberWantsConnection() {
   if (!realtimeGloballyEnabled() || !shared.auth.isAuthenticated) return false;
   for (const subRef of shared.subscribers) {
@@ -149,6 +161,7 @@ async function ensureSharedSocket() {
 
 function subscribe(subscriberRef) {
   shared.subscribers.add(subscriberRef);
+  warnDevRealtimeDisabled();
   ensureSharedSocket();
   return () => {
     shared.subscribers.delete(subscriberRef);

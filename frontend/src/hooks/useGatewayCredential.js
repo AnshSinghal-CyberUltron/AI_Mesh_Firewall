@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useGatewayConfig } from "./useGatewayConfig";
+import { SIMULATOR_KEY_CHANGED_EVENT, readOrgScopedGatewayKey } from "../api/gatewayContext";
 
 // Org-scoped storage prevents one org's simulator key leaking to another on a
 // shared browser. Mirrors the keys written by useSimulatorEngine so the two
@@ -101,6 +102,19 @@ export function useGatewayCredential() {
     if (!orgId) return;
     const cached = readStoredGatewayKey(orgId);
     if (cached) setGatewayKey(cached);
+  }, [orgId]);
+
+  useEffect(() => {
+    if (!orgId) return undefined;
+    const onSimulatorKeyChanged = () => {
+      const cached = readOrgScopedGatewayKey(orgId);
+      if (cached) {
+        setGatewayKey(cached);
+        setError(null);
+      }
+    };
+    window.addEventListener(SIMULATOR_KEY_CHANGED_EVENT, onSimulatorKeyChanged);
+    return () => window.removeEventListener(SIMULATOR_KEY_CHANGED_EVENT, onSimulatorKeyChanged);
   }, [orgId]);
 
   // Lazily provision the per-org simulator key. The backend returns plaintext

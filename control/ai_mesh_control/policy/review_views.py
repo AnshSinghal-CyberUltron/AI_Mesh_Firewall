@@ -13,6 +13,19 @@ from policy.models import HumanReviewItem, SecurityIncident
 logger = logging.getLogger(__name__)
 
 
+def _security_incident_for_request(request, pk):
+    """Resolve a SecurityIncident for mutate endpoints with org scoping."""
+    from auth.utils import get_request_organization
+
+    org = get_request_organization(request)
+    qs = SecurityIncident.objects.filter(pk=pk)
+    if org:
+        qs = qs.filter(organization=org)
+    elif not getattr(request.user, "is_superuser", False):
+        return None
+    return qs.first()
+
+
 class HumanReviewSerializer(serializers.ModelSerializer):
     event_action = serializers.CharField(source="enforcement_event.action", read_only=True)
     event_metadata = serializers.JSONField(source="enforcement_event.metadata", read_only=True)
@@ -125,15 +138,72 @@ class SecurityIncidentEscalateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        org = getattr(getattr(request.user, "profile", None), "organization", None)
-        try:
-            incident = SecurityIncident.objects.get(pk=pk, organization=org)
-        except SecurityIncident.DoesNotExist:
+        incident = _security_incident_for_request(request, pk)
+        if incident is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         incident.status = "escalated"
         incident.notes = request.data.get("notes", incident.notes)
         incident.save()
+        from module2.analytics import invalidate_incident_summary_cache
+        from ws.notify import send_enforcement_notification
+
+        invalidate_incident_summary_cache(incident.organization_id)
+        try:
+            send_enforcement_notification(
+                {
+                    "type": "escalation_event",
+                    "security_incident_id": str(incident.id),
+                    "incident_id": str(incident.enforcement_event_id or incident.id),
+                    "incident_status": "escalated",
+                    "escalated_by_id": request.user.id,
+                    "escalated_at": timezone.now().isoformat(),
+                    "organization_id": incident.organization_id,
+                },
+                organization_id=incident.organization_id,
+            )
+        except Exception:
+            logger.warning("Failed to broadcast escalation for security incident %s", incident.id)
+        return Response(SecurityIncidentSerializer(incident).data)
+
+
+class SecurityIncidentInvestigateView(APIView):
+    """POST /api/security/incidents/{id}/investigate-incident/ — claim case for triage."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        incident = _security_incident_for_request(request, pk)
+        if incident is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if incident.status == "resolved":
+            return Response({"detail": "Resolved incidents cannot be reopened via investigate."}, status=status.HTTP_400_BAD_REQUEST)
+        if incident.status != "open":
+            return Response(SecurityIncidentSerializer(incident).data)
+
+        incident.status = "investigating"
+        if incident.assigned_to_id is None:
+            incident.assigned_to = request.user
+        incident.notes = request.data.get("notes", incident.notes)
+        incident.save(update_fields=["status", "assigned_to", "notes", "updated_at"])
+        from module2.analytics import invalidate_incident_summary_cache
+        from ws.notify import send_enforcement_notification
+
+        invalidate_incident_summary_cache(incident.organization_id)
+        try:
+            send_enforcement_notification(
+                {
+                    "type": "investigation_event",
+                    "security_incident_id": str(incident.id),
+                    "incident_id": str(incident.enforcement_event_id or incident.id),
+                    "incident_status": "investigating",
+                    "assigned_to_id": request.user.id,
+                    "organization_id": incident.organization_id,
+                },
+                organization_id=incident.organization_id,
+            )
+        except Exception:
+            logger.warning("Failed to broadcast investigation for security incident %s", incident.id)
         return Response(SecurityIncidentSerializer(incident).data)
 
 
@@ -143,14 +213,31 @@ class SecurityIncidentResolveView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        org = getattr(getattr(request.user, "profile", None), "organization", None)
-        try:
-            incident = SecurityIncident.objects.get(pk=pk, organization=org)
-        except SecurityIncident.DoesNotExist:
+        incident = _security_incident_for_request(request, pk)
+        if incident is None:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         incident.status = "resolved"
         incident.resolved_at = timezone.now()
         incident.notes = request.data.get("notes", incident.notes)
         incident.save()
+        from module2.analytics import invalidate_incident_summary_cache
+        from ws.notify import send_enforcement_notification
+
+        invalidate_incident_summary_cache(incident.organization_id)
+        try:
+            send_enforcement_notification(
+                {
+                    "type": "resolution_event",
+                    "security_incident_id": str(incident.id),
+                    "incident_id": str(incident.enforcement_event_id or incident.id),
+                    "incident_status": "resolved",
+                    "resolved_by_id": request.user.id,
+                    "resolved_at": incident.resolved_at.isoformat(),
+                    "organization_id": incident.organization_id,
+                },
+                organization_id=incident.organization_id,
+            )
+        except Exception:
+            logger.warning("Failed to broadcast resolution for security incident %s", incident.id)
         return Response(SecurityIncidentSerializer(incident).data)

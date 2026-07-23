@@ -4,6 +4,7 @@ import {
   RefreshCw, Upload, Shield, Lock,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { syncModule2AfterTelemetryChange } from "../utils/crossModuleSync";
 import { InfoTooltip } from "./InfoTooltip";
 import { PolicyDomainSwitcher } from "./PolicyDomainSwitcher";
 import { DEFAULT_VECTOR_PROVIDER, VECTOR_PROVIDERS } from "../constants/vectorProviders";
@@ -459,6 +460,7 @@ export function VectorPolicyPanel({
       setCreateModalOpen(false);
       setForm({ ...EMPTY_FORM });
       await fetchPolicies();
+      syncModule2AfterTelemetryChange("vector-policy-create");
     } catch (err) {
       setFormError(err.message || "Failed to create policy");
     } finally {
@@ -502,6 +504,7 @@ export function VectorPolicyPanel({
       setEditPolicyId(null);
       setForm({ ...EMPTY_FORM });
       await fetchPolicies();
+      syncModule2AfterTelemetryChange("vector-policy-edit");
     } catch (err) {
       setFormError(err.message || "Failed to update policy");
     } finally {
@@ -549,6 +552,7 @@ export function VectorPolicyPanel({
       }
       setLoadError(null);
       await fetchPolicies();
+      syncModule2AfterTelemetryChange("vector-policy-delete");
     } catch (err) {
       setLoadError(err.message || "Failed to delete policy");
     } finally {
@@ -563,6 +567,7 @@ export function VectorPolicyPanel({
       const res = await fetchWithAuth("/api/vector-policies/compile/", { method: "POST" });
       if (res.ok) {
         setCompileStatus({ success: true });
+        syncModule2AfterTelemetryChange("vector-policy-compile");
       } else {
         // Bundle Z1 — parse JSON body for ``detail`` instead of dumping
         // raw HTML (auth/throttle responses) into the toast. Falls back

@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 import secrets
 import uuid
@@ -331,6 +332,17 @@ class GatewayAPIKey(models.Model):
     rate_limit_tokens_per_minute = models.PositiveIntegerField(
         default=DEFAULT_RATE_LIMIT_TPM, help_text="Rate limit in Tokens Per Minute (TPM)."
     )
+    KEY_PURPOSE_CHOICES = [
+        ("production", "Production"),
+        ("test", "Test"),
+        ("simulator", "Simulator"),
+        ("scanner", "Scanner"),
+    ]
+    UEBA_MODE_CHOICES = [
+        ("learning", "Learning"),
+        ("active", "Active"),
+    ]
+
     # UNIT (M-25a): FRACTION in [0.0, 1.0]. This is NOT the same scale as
     # ModelState.risk_score, which is a PERCENTAGE in [0.0, 100.0]. Never
     # compare or assign one to the other without an explicit conversion:
@@ -343,8 +355,32 @@ class GatewayAPIKey(models.Model):
     risk_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
-        help_text="Baseline risk score (0.0 = trusted, 1.0 = highest risk).",
+        help_text="Unified UEBA final risk score (0.0 = trusted, 1.0 = highest risk). Written by scoring engine.",
     )
+    key_purpose = models.CharField(
+        max_length=16,
+        choices=KEY_PURPOSE_CHOICES,
+        default="production",
+        db_index=True,
+    )
+    ueba_mode = models.CharField(
+        max_length=16,
+        choices=UEBA_MODE_CHOICES,
+        default="learning",
+        db_index=True,
+    )
+    ueba_graduation_requests = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Override org default minimum requests before active mode.",
+    )
+    ueba_graduation_days = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Override org default minimum days before active mode.",
+    )
+    ueba_lifetime_request_count = models.PositiveIntegerField(default=0)
+    ueba_baseline_locked_at = models.DateTimeField(null=True, blank=True)
     max_context_tokens = models.PositiveIntegerField(
         default=0,
         help_text="Max context tokens per request. 0 = unlimited.",
@@ -601,6 +637,37 @@ class GatewayAPIKey(models.Model):
         return instance, raw_key
 
     @classmethod
+    def promote_as_org_simulator(
+        cls, organization, key: "GatewayAPIKey"
+    ) -> tuple["GatewayAPIKey", str | None]:
+        """Bind an existing key as the org's single active simulator credential."""
+        if key.organization_id != organization.pk:
+            raise ValueError("Key does not belong to organization")
+        project_id = f"simulator-{organization.slug}"
+        with transaction.atomic():
+            type(organization).objects.select_for_update().get(pk=organization.pk)
+            simulator_filter = (
+                models.Q(project_id=project_id)
+                | models.Q(name="simulator")
+                | models.Q(name__startswith="simulator-")
+                | models.Q(project_id__startswith="simulator-")
+            )
+            for other in (
+                cls.objects.select_for_update()
+                .filter(organization=organization, is_active=True)
+                .filter(simulator_filter)
+                .exclude(pk=key.pk)
+            ):
+                other.is_active = False
+                other.save(update_fields=["is_active"])
+            key.project_id = project_id
+            if not str(key.name or "").strip():
+                key.name = "simulator"
+            key.is_active = True
+            key.save(update_fields=["project_id", "name", "is_active"])
+            return key, key.recover_secret()
+
+    @classmethod
     def ensure_isolation_playground_for_org(
         cls, organization, owner
     ) -> tuple["GatewayAPIKey", str | None]:
@@ -772,6 +839,8 @@ class KillSwitch(models.Model):
     """
 
     SCOPE_GLOBAL = "__global__"
+    # Credential-wide: block all models for a single API key prefix.
+    SCOPE_CREDENTIAL = "__credential__"
 
     organization = models.ForeignKey(
         "auth_api.Organization",
@@ -839,6 +908,8 @@ class KillSwitch(models.Model):
         if self.model_name == self.SCOPE_GLOBAL:
             return f"kill_switch:{prefix}:global"
         credential_prefix = (self.api_key_prefix or "").strip()
+        if credential_prefix and self.model_name == self.SCOPE_CREDENTIAL:
+            return f"kill_switch:{prefix}:credential:{credential_prefix}"
         if credential_prefix:
             return f"kill_switch:{prefix}:credential:{credential_prefix}:model:{self.model_name}"
         return f"kill_switch:{prefix}:model:{self.model_name}"
@@ -1471,6 +1542,39 @@ def is_platform_managed_llm_model_name(model_name: str) -> bool:
     return _canonical_guard_model_name(model_name) in platform_guard_model_names()
 
 
+_BEDROCK_FOUNDATION_PREFIXES = (
+    "anthropic.",
+    "global.anthropic",
+    "global.amazon",
+    "amazon.",
+    "meta.",
+    "openai.",
+    "cohere.",
+    "ai21.",
+    "mistral.",
+)
+
+
+def is_bedrock_foundation_model_id(name: str) -> bool:
+    """True for AWS Bedrock foundation model IDs (mirrors gateway platform_models)."""
+    normalized = (name or "").strip().lower()
+    return any(normalized.startswith(p) for p in _BEDROCK_FOUNDATION_PREFIXES)
+
+
+def is_reserved_inference_model_name(model_name: str, model_id: str = "") -> bool:
+    """True when a model must never enter org routing pools (mirrors gateway is_platform_model_name)."""
+    if is_platform_managed_llm_model_name(model_name):
+        return True
+    for candidate in (model_name, model_id):
+        normalized = (candidate or "").strip().lower()
+        if not normalized:
+            continue
+        bare = normalized.split("/", 1)[1] if normalized.startswith("bedrock/") else normalized
+        if is_bedrock_foundation_model_id(bare):
+            return True
+    return False
+
+
 LLM_PROVIDER_CHOICES = [
     ("openai", "OpenAI"),
     ("anthropic", "Anthropic"),
@@ -1684,10 +1788,38 @@ class LLMModelConfig(models.Model):
 
     def build_litellm_entry(self) -> dict[str, Any]:
         """Build a LiteLLM model_list entry for organization-owned inference."""
-        from ai_mesh_shared.litellm_byok import normalize_litellm_params
+        from ai_mesh_shared.litellm_byok import normalize_litellm_params, resolve_bedrock_model_id
 
-        params: dict[str, Any] = {"model": self.model_id}
-        if self.encrypted_api_key:
+        provider_key = str(self.provider or "").lower()
+        bedrock_region = (self.region or "").strip()
+        model_id = self.model_id
+        if provider_key == "aws_bedrock":
+            if not bedrock_region:
+                import os
+
+                bedrock_region = (
+                    os.environ.get("BEDROCK_REGION", "")
+                    or os.environ.get("AWS_DEFAULT_REGION", "")
+                ).strip()
+            model_id = resolve_bedrock_model_id(self.model_id, region=bedrock_region)
+        params: dict[str, Any] = {"model": model_id}
+        if provider_key == "aws_bedrock":
+            # Bedrock uses gateway AWS env credentials by default (see apply_bedrock_env_credentials).
+            # Optional per-org BYOK override is stored encrypted when explicitly provided.
+            if self.encrypted_api_key:
+                params["api_key_encrypted"] = self.encrypted_api_key
+            if self.region:
+                params["aws_region_name"] = self.region
+            else:
+                import os
+
+                default_region = (
+                    os.environ.get("BEDROCK_REGION", "")
+                    or os.environ.get("AWS_DEFAULT_REGION", "")
+                ).strip()
+                if default_region:
+                    params["aws_region_name"] = default_region
+        elif self.encrypted_api_key:
             params["api_key_encrypted"] = self.encrypted_api_key
         elif self.api_key_env_var:
             params["api_key"] = f"os.environ/{self.api_key_env_var}"

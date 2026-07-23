@@ -8,9 +8,11 @@
 
 ## Guardrail demo procedure
 
-1. **Guardrails** tab → injection prompt → expect block
-2. Safe prompt → expect allow with output_guardrail stage = allow
-3. Inspect `pipeline.stages` for `output_guardrail` action
+See [GUARDRAIL_VALIDATION.md](GUARDRAIL_VALIDATION.md) for the full attack/safe/sensitive matrix and executable gates.
+
+1. **Guardrails** tab → select **Attack** vector → **Run Governance Check** → expect block
+2. Select **Safe** → **Run Safe Prompt** → expect allow with `output_guardrail` stage = allow
+3. Inspect `pipeline.stages` for `input_scan` and `output_guardrail` actions
 
 ## SDK behavior
 

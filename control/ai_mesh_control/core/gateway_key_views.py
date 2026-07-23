@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
 from core.gateway_serializers import (
@@ -435,4 +436,47 @@ class GatewayAPIKeyViewSet(ModelViewSet):
         return Response(
             {"deleted": len(deleted_ids), "ids": deleted_ids},
             status=status.HTTP_200_OK,
+        )
+
+
+class GatewayKeyContextView(APIView):
+    """POST /api/gateways/keys/context/ — resolve plaintext key to UEBA fleet identity."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        raw = str(request.data.get("api_key") or "").strip()
+        if not raw:
+            return Response({"detail": "api_key is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from auth.utils import get_request_organization
+
+        org = get_request_organization(request.user)
+        key_hash = GatewayAPIKey.hash_raw_key(raw)
+        qs = GatewayAPIKey.objects.filter(key_hash=key_hash, is_active=True)
+        if org:
+            qs = qs.filter(organization=org)
+        elif not getattr(request.user, "is_superuser", False):
+            qs = qs.filter(owner=request.user)
+
+        key = qs.first()
+        if key is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        project_id = str(key.project_id or "")
+        is_simulator = project_id.startswith("simulator-") or key.name == "simulator"
+        storage_key = (
+            f"zeroshield_gateway_key:{key.organization_id}"
+            if key.organization_id
+            else "zeroshield_gateway_key"
+        )
+        return Response(
+            {
+                "prefix": key.prefix,
+                "key_id": str(key.id),
+                "name": key.name,
+                "project_id": key.project_id,
+                "is_simulator_default": is_simulator,
+                "storage_key": storage_key,
+            }
         )

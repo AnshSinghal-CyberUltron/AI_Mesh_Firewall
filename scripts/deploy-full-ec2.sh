@@ -80,7 +80,7 @@ set -a && source .env && set +a
 
 command -v docker >/dev/null 2>&1 || die "docker not installed"
 command -v aws >/dev/null 2>&1 || die "aws CLI not installed"
-command -v rsync >/dev/null 2>&1 || die "rsync not installed"
+command -v scp >/dev/null 2>&1 || die "scp not installed (install OpenSSH or Git for Windows)"
 command -v ssh >/dev/null 2>&1 || die "ssh not installed"
 
 _resolve_tag() {

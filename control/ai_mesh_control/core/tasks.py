@@ -260,6 +260,11 @@ def _build_enforcement_metadata(event: dict) -> dict:
     prompt_snippet = event.get("prompt_snippet", "")
     if prompt_snippet:
         result["prompt_lineage"] = [{"prompt": prompt_snippet, "risk_score": security_risk_score}]
+        result["prompt_snippet"] = prompt_snippet
+
+    _ctx_src = event_metadata.get("context_source")
+    if _ctx_src:
+        result["context_source"] = _ctx_src
 
     # Scan Detail Report / Activity Preview: hoist gateway enrichments to metadata top-level
     # so LogDetailPage can render pipeline stages, I/O, and incident correlation without
@@ -284,6 +289,11 @@ def _build_enforcement_metadata(event: dict) -> dict:
     for _resp_key in ("response_snippet", "sanitized_output", "raw_output"):
         if event_metadata.get(_resp_key):
             result[_resp_key] = event_metadata[_resp_key]
+
+    if str(event_type).startswith("rag"):
+        for key in ("collection", "vector_collection", "vector_namespace", "vector_db_type", "blocked_at_stage"):
+            if event_metadata.get(key):
+                result[key] = event_metadata[key]
 
     if event_type == "model_routed":
         extra = result.get("extra") or {}
@@ -830,6 +840,26 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
                     exc_info=True,
                 )
 
+            try:
+                from module2.ueba_behavior_profile import (
+                    append_prompt_samples_for_events,
+                    prefixes_from_events,
+                )
+                from module2.ueba_metrics import increment_lifetime_request_counts
+                from module2.tasks import reassess_ueba_keys_for_prefixes
+
+                increment_lifetime_request_counts(events_to_create)
+                append_prompt_samples_for_events(events_to_create)
+                org_prefixes = prefixes_from_events(events_to_create)
+                for org_id, prefixes in org_prefixes.items():
+                    if prefixes:
+                        reassess_ueba_keys_for_prefixes.delay(org_id, sorted(prefixes))
+            except Exception:
+                logger.warning(
+                    "drain_telemetry_from_redis: UEBA reassess hook failed",
+                    exc_info=True,
+                )
+
         # Clear the processing queue after a clean iteration — even when
         # events_to_create is empty. A batch of all-skipped events (unscoped /
         # duplicate) is intentionally discarded, not retried; leaving the delete
@@ -1140,6 +1170,15 @@ def cleanup_old_audit_logs() -> dict:
 
 @shared_task
 def update_risk_scores_from_telemetry() -> dict:
+    """
+    Legacy beat entry — superseded by module2.tasks.reassess_all_active_ueba_keys.
+    Kept as a no-op so existing beat schedules do not crash workers.
+    """
+    logger.debug("update_risk_scores_from_telemetry: deprecated; use reassess_all_active_ueba_keys")
+    return {"deprecated": True, "keys_updated": 0, "updates": {}}
+
+
+def _update_risk_scores_from_telemetry_legacy() -> dict:
     """
     Scan recent EnforcementEvents for blocked threats and increment the
     risk_score on the associated GatewayAPIKey. Runs periodically via

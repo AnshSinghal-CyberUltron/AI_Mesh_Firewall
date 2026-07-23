@@ -41,7 +41,7 @@ export function SimulatorModelSelector({
     return (
       <div className="rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50/80 dark:bg-violet-900/20 px-3 py-2.5 text-xs text-violet-900 dark:text-violet-100">
         <span className="font-medium">No inference model connected.</span>{" "}
-        Add a model under <strong>Model Connection</strong> with an API key, then return here.
+        Add a model under <strong>Model Connection</strong> (API key or AWS Bedrock via gateway .env), then return here.
       </div>
     );
   }

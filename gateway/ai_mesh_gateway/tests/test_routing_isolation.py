@@ -26,10 +26,23 @@ def test_model_passes_hard_filters():
         data_sensitivity="confidential",
         required_compliance=["hipaa"],
     )
+    assert model_passes_hard_filters(
+        model,
+        data_sensitivity="confidential",
+        required_compliance=["HIPAA"],
+    )
     assert not model_passes_hard_filters(
         model,
         data_sensitivity="restricted",
         required_compliance=["hipaa"],
+    )
+
+
+def test_fallback_profile_key_normalizes_case():
+    from ai_mesh_gateway.routing_isolation import fallback_profile_key
+
+    assert fallback_profile_key("restricted", ["HIPAA"]) == fallback_profile_key(
+        "RESTRICTED", ["hipaa"]
     )
 
 
