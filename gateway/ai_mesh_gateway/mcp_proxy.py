@@ -1881,6 +1881,17 @@ def _resolved_tier1_action(
     from mcp_scan_orchestrator import _effective_control, _resolve_tier_action
 
     ctrl = _effective_control(effective, "tier1", scan_direction)
+    # DIRECTION ISOLATION (2026-07-23): when the org HAS scan-control rows but NONE
+    # matches this tier+direction, the control-plane returns the slot with
+    # ``enabled=False`` ("an output-only row must not imply a baseline input scan, and
+    # vice versa" — scan_controls._pick_control). The operator did NOT select
+    # enforcement for THIS direction, so it is observe-only. Returning the server
+    # posture here (via _resolve_tier_action's ``inherit`` fallback) let an input-only
+    # control's server posture leak into the OUTPUT floors: a cross-block-split /
+    # encoded secret in a tool RESULT was still redacted under an INPUT-ONLY config.
+    # A disabled direction resolves to observe-only so NO floor enforces on it.
+    if not ctrl.get("enabled", True):
+        return "monitor"
     return _resolve_tier_action(ctrl, fallback)
 
 
