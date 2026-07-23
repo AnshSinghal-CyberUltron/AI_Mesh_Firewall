@@ -30,7 +30,7 @@ from patterns import (
     redact_all,
     redact_all_scoped,
 )
-from policy_engine import apply_field_redaction, apply_redaction, evaluate_mcp_policies
+from policy_engine import apply_field_redaction, apply_redaction, evaluate_mcp_policies, _normalize_key
 
 LOG = logging.getLogger("gateway.mcp_scan")
 
@@ -806,8 +806,29 @@ async def _scan_text_tier1(
 _MCP_POLICY_REDACT_MAX_DEPTH = 200
 
 
+def _compile_key_matcher(key: str) -> tuple[str, tuple[str, ...]] | None:
+    """Compile a scope=key ``key`` into a leaf-path matcher, mirroring the detection binders:
+    a DOTTED key → ("dot", parts) prefix-from-root (``_collect_dot_path_values``); a plain key →
+    ("name", (name,)) matched at ANY depth (``_collect_key_values``). Returns None for an empty key."""
+    key = str(key or "").strip()
+    if not key:
+        return None
+    if "." in key:
+        parts = tuple(_normalize_key(p) for p in key.split(".") if p)
+        return ("dot", parts) if parts else None
+    return ("name", (_normalize_key(key),))
+
+
+def _key_matcher_covers(matcher: tuple[str, tuple[str, ...]], path: tuple[str, ...]) -> bool:
+    kind, parts = matcher
+    if kind == "dot":
+        return path[:len(parts)] == parts
+    return parts[0] in path  # plain key name matched at any depth
+
+
 def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]],
-                              *, neutralize: bool = False) -> tuple[Any, bool]:
+                              *, neutralize: bool = False,
+                              neutralize_keys: list[str] | None = None) -> tuple[Any, bool]:
     """Apply policy ``redaction_hints`` to every STRING LEAF of ``payload`` IN PLACE,
     preserving structure.
 
@@ -822,6 +843,13 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]],
     payload is still visible (mirrors the preset's ``_neutralize_exfil_deep`` → ``redact_all``
     order). It is a MASK transform only — a STRICT no-op on benign leaves — and never blocks, so
     the frozen "redact/floor never escalates to block" invariant holds.
+
+    SCOPED FLOOR (B2, 2026-07-23): ``neutralize_keys`` carries the ``key`` paths of enforcing
+    scope=KEY detector rules (``EvaluationResult.render_floor_keys``). The render-leak floor then
+    runs ONLY on leaves UNDER those keys — so an encoded credential / zero-click beacon inside the
+    operator's key-scoped field is neutralized (parity with the live posture, whose scoped preset
+    pass ran the neutralizers on that field) WITHOUT touching siblings. Without this a key-scoped
+    redact rule left encoded/beacon content in its own protected field egressing raw at cutover.
 
     CRITICAL (2026-07-23): the previous policy pass serialized the whole payload to a
     JSON string, ran ``apply_redaction`` (a blind ``regex.sub``) over it, and reparsed
@@ -846,37 +874,86 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]],
     ``hit_cap`` is True if the walk stopped at a leaf below ``_MCP_POLICY_REDACT_MAX_DEPTH``
     (a pathologically nested payload) — the caller fails CLOSED rather than forward that
     subtree unredacted, since the policy lane has no downstream backstop. Returns
-    ``(new_payload, changed, hit_cap)``."""
+    ``(new_payload, changed, hit_cap)``.
+
+    SCOPE=KEY (B2, 2026-07-23): a hint carrying ``scope=key`` is applied ONLY to leaves UNDER its
+    ``key`` path. The previous walk applied EVERY hint to EVERY leaf, so a key_path-scoped detector
+    rule (which the live posture scopes to a single field via ``extract_and_bind(key_path=...)``)
+    OVER-MASKED sibling fields the posture forwards raw. A leaf's path is the tuple of NFKC-casefolded
+    dict keys from the root. Matching MIRRORS the two detection binders exactly:
+      * a DOTTED ``key`` (``args.body``) is a path FROM ROOT (``_collect_dot_path_values``) — covered
+        iff the key parts are a PREFIX of the leaf path;
+      * a plain ``key`` (``title``) is a key NAME matched at ANY depth (``_collect_key_values`` —
+        recursive key-name walk) — covered iff that name appears as ANY segment of the leaf path.
+    Using a prefix match for a plain key would only mask a TOP-LEVEL key, leaving a nested match
+    detected-but-unmasked → a spurious cannot-mask block. ``scope=entire`` applies to every leaf.
+
+    LISTS are TRANSPARENT to the key path (a path part matches inside each list item, parity with
+    the ``_collect_dot_path_values`` detection binding), so a key_path value nested in a list is
+    best-effort MASKED — NOT forwarded raw. The live posture, whose dict-only setter cannot write
+    through a list, instead fails CLOSED and BLOCKS that call (cannot-mask). Under Phase 3 the policy
+    lane runs observe-only (``tag``), where the frozen contract forbids blocking, so best-effort
+    masking of the maskable keyed value is the correct — and strictly safer — Phase-3 equivalent (no
+    raw egress; siblings still preserved). This is the one intended posture→observe divergence."""
     changed = False
     hit_cap = False
 
-    def _walk(node: Any, depth: int) -> Any:
+    # Split hints once: entire-scope apply everywhere; key-scope carry their compiled matcher.
+    entire_hints: list[dict[str, Any]] = []
+    keyed_hints: list[tuple[tuple[str, tuple[str, ...]], dict[str, Any]]] = []
+    for h in hints:
+        km = _compile_key_matcher(h.get("key") or "") if (isinstance(h, dict) and h.get("scope") == "key") else None
+        if km is not None:
+            keyed_hints.append((km, h))
+        else:
+            entire_hints.append(h)
+
+    # B2 scoped floor: compile the key-scoped render-floor keys into leaf-path matchers.
+    neu_matchers = [m for m in (_compile_key_matcher(k) for k in (neutralize_keys or [])) if m is not None]
+
+    def _hints_for(path: tuple[str, ...]) -> list[dict[str, Any]]:
+        if not keyed_hints:
+            return hints  # fast path: no key-scoped hints → original behavior
+        applicable = list(entire_hints)
+        for km, h in keyed_hints:
+            if _key_matcher_covers(km, path):
+                applicable.append(h)
+        return applicable
+
+    def _neutralize_at(path: tuple[str, ...]) -> bool:
+        if neutralize:
+            return True  # entire-scope floor
+        return any(_key_matcher_covers(m, path) for m in neu_matchers)  # scoped floor
+
+    def _walk(node: Any, depth: int, path: tuple[str, ...]) -> Any:
         nonlocal changed, hit_cap
         if depth > _MCP_POLICY_REDACT_MAX_DEPTH:
             hit_cap = True
             return node
         if isinstance(node, str):
-            new = _neutralize_render_leaks(node) if neutralize else node
-            new = apply_redaction(new, hints)
+            new = _neutralize_render_leaks(node) if _neutralize_at(path) else node
+            new = apply_redaction(new, _hints_for(path))
             if new != node:
                 changed = True
             return new
         if isinstance(node, list):
-            return [_walk(x, depth + 1) for x in node]
+            # A list is TRANSPARENT to the key path (a path part matches inside each list item,
+            # parity with _collect_dot_path_values) — do not extend ``path``.
+            return [_walk(x, depth + 1, path) for x in node]
         if isinstance(node, dict):
-            return {k: _walk(v, depth + 1) for k, v in node.items()}
+            return {k: _walk(v, depth + 1, path + (_normalize_key(k),)) for k, v in node.items()}
         # Numeric scalar (int/float — NOT bool, whose "true"/"false" carries no secret):
         # stringify, redact, and mask only if a hint actually matched.
         if isinstance(node, (int, float)) and not isinstance(node, bool):
             as_text = _safe_json(node)
-            new = apply_redaction(as_text, hints)
+            new = apply_redaction(as_text, _hints_for(path))
             if new != as_text:
                 changed = True
                 return new
             return node
         return node
 
-    return _walk(payload, 0), changed, hit_cap
+    return _walk(payload, 0, ()), changed, hit_cap
 
 
 def _mcp_policy_pass_sync(
@@ -901,10 +978,11 @@ def _mcp_policy_pass_sync(
     context = _build_mcp_context(serialized, scan_direction=scan_direction, full_payload=full_payload)
 
     eval_result = evaluate_mcp_policies(policies, context, tool_name=tool_name or None, actor=actor)
-    # B1: an enforcing detector rule can arm the render-leak floor WITHOUT any class match
+    # B1/B2: an enforcing detector rule can arm the render-leak floor WITHOUT any class match
     # (an HTML-entity-encoded credential the class detector can't see) — so the no-match
-    # short-circuit must also check ``render_floor``, else the encoded secret egresses raw.
-    if not eval_result.matched_rule_ids and not eval_result.render_floor:
+    # short-circuit must also check ``render_floor`` (entire) and ``render_floor_keys`` (scoped),
+    # else the encoded secret egresses raw.
+    if not eval_result.matched_rule_ids and not eval_result.render_floor and not eval_result.render_floor_keys:
         return full_payload, [], False, [], False
 
     findings = _findings_from_policy_eval(eval_result, scan_direction=scan_direction, text=serialized)
@@ -921,11 +999,14 @@ def _mcp_policy_pass_sync(
     # posture (the Phase-3 world) still neutralizes, because the DETECTOR rule — not the retired
     # posture — is the enforcer. Never blocks.
     render_floor = bool(eval_result.render_floor) and posture != "monitor"
+    # B2 scoped floor: key-scoped detector rules neutralize only their own field's leaves.
+    neutralize_keys = list(eval_result.render_floor_keys) if posture != "monitor" else []
     # Policy-authored redact applies whenever matched (not only under a redact posture);
     # skipped only under an explicit observe-only 'monitor'.
     if eval_result.action == "redact" and eval_result.redaction_hints and posture != "monitor":
         new_payload, changed, hit_cap = _redact_structured_leaves(
-            full_payload, eval_result.redaction_hints, neutralize=render_floor)
+            full_payload, eval_result.redaction_hints, neutralize=render_floor,
+            neutralize_keys=neutralize_keys)
         # CANNOT-MASK FAIL-CLOSED (2026-07-23): the operator's redact rule MATCHED (detection
         # runs on the serialized payload) but the leaf-walk could not mask it — either the
         # match spans a JSON boundary / structural context no single leaf reproduces (e.g. a
@@ -951,8 +1032,9 @@ def _mcp_policy_pass_sync(
     # class-detect, or an encoded generic-PII / beacon under a block rule that the #3 exclusion
     # kept from blocking). Neutralize the render-leak surface on the leaves — a MASK only, never
     # a block — so the encoded secret / beacon does not egress raw once the posture is retired.
-    if render_floor:
-        new_payload, changed, _hc = _redact_structured_leaves(full_payload, [], neutralize=True)
+    if render_floor or neutralize_keys:
+        new_payload, changed, _hc = _redact_structured_leaves(
+            full_payload, [], neutralize=render_floor, neutralize_keys=neutralize_keys)
         if changed:
             findings.append(McpFinding(
                 entity_type="render_reconstruction", score=0.9, start=0, end=len(serialized),
