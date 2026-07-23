@@ -966,7 +966,18 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]],
     def _walk(node: Any, depth: int, path: tuple[str, ...]) -> Any:
         nonlocal changed, hit_cap
         if depth > _MCP_POLICY_REDACT_MAX_DEPTH:
-            hit_cap = True
+            # Integration red-team wf_21ddb986 #4: a secret nested past the recursion cap must NOT
+            # fail closed — that ESCALATED redact→block (frozen violation) and diverged from the live
+            # preset, which masks the serialized blob depth-INDEPENDENTLY. Mask the unreachable
+            # residual with serialized redaction (redact_all catches a secret at ANY depth within
+            # the subtree, no recursion, no block); a benign residual is preserved as-is (structure
+            # intact) — only a residual that actually held a secret collapses to a masked string
+            # (the CHG-0046 dict→string tradeoff, at pathological >cap depth).
+            _ser = _safe_json(node)
+            _masked = redact_all(_ser)
+            if _masked != _ser:
+                changed = True
+                return _masked
             return node
         if isinstance(node, str):
             new = _neutralize_render_leaks(node) if _neutralize_at(path) else node
