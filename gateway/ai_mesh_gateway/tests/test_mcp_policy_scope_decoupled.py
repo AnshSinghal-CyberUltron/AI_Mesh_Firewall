@@ -283,16 +283,20 @@ async def test_keyword_matching_only_a_key_name_does_not_false_block():
 
 
 @pytest.mark.asyncio
-async def test_deeply_nested_unmaskable_redact_fails_closed():
-    """A secret nested past the redaction depth cap is detected but the leaf-walk stops short
-    → must fail closed rather than forward the deep subtree raw."""
+async def test_deeply_nested_secret_within_cap_is_masked():
+    """B3: the redaction depth cap is now ALIGNED to the detection cap (500), so a deeply-nested
+    secret that detection finds is also REACHED and MASKED by the leaf-walk — no detected-but-
+    unmasked-by-depth window (that gap forwarded raw under the observe-only Phase-3 path). A secret
+    past 500 is unseen by BOTH detection and redaction (consistent); deeper still, the pipeline's
+    own deepcopy limit fails closed."""
     deep = {"x": _SEC}
-    for _ in range(210):
+    for _ in range(400):  # within the aligned 500 cap (and the pipeline's deepcopy limit)
         deep = {"n": deep}
     rule = _redact_rule()  # aws_access_key, scope=entire
     ec = _effc(_slot(True, "redact", target_mode="key_path", key_path="nonexistent"), _slot(False, direction="output"))
     scanned, res = await _scan(deep, ec, [rule])
-    assert res.blocked is True, "unmaskable deep-nested redact match must fail closed"
+    assert res.blocked is False, "a deep-nested secret within the cap masks (not fail-closed)"
+    assert _SEC not in json.dumps(scanned), "the deep-nested secret is masked"
 
 
 @pytest.mark.asyncio
@@ -368,26 +372,31 @@ async def test_standalone_keyword_still_masks():
 
 # ───── Q4: tag/monitor (observe-only) never block, even on a genuine unmaskable match ─────
 @pytest.mark.asyncio
-async def test_unmaskable_match_forwards_under_tag_not_blocks():
-    """Under the default observe-only ``tag`` posture, a genuinely-unmaskable redact match
-    (secret nested past the depth cap) is FORWARDED, never blocked — 'tag never blocks'."""
+async def test_deep_secret_within_cap_masks_under_tag_never_blocks():
+    """B3 (caps aligned to 500): a deeply-nested secret within the cap is now MASKED, and under the
+    observe-only ``tag`` posture the call is forwarded (never blocked) — 'tag never blocks' holds and
+    the value is masked best-effort. (The depth-triggered cannot-mask fail-closed no longer exists —
+    detection and redaction reach the same depth; the fail-closed backstop remains in code for a
+    genuine unmaskable residual.)"""
     deep = {"x": _SEC}
-    for _ in range(210):
+    for _ in range(400):  # within the aligned 500 cap
         deep = {"n": deep}
     ec = _effc(_slot(True, "inherit", target_mode="entire"), _slot(False, direction="output"))
     scanned, res = await _scan(deep, ec, [_redact_rule()], enforcement="tag")
-    assert res.blocked is False, "tag posture must never block, even on an unmaskable match"
+    assert res.blocked is False, "tag posture must never block"
+    assert _SEC not in json.dumps(scanned), "the deep secret is masked best-effort under tag"
 
 
 @pytest.mark.asyncio
-async def test_unmaskable_match_fails_closed_under_redact():
-    """Twin: under an ENFORCING posture the same unmaskable match DOES fail closed."""
+async def test_deep_secret_within_cap_masks_under_redact():
+    """Twin under an ENFORCING posture: the deep secret within the aligned cap is reached and MASKED
+    (no longer fail-closed-by-depth, because redaction now reaches as deep as detection)."""
     deep = {"x": _SEC}
-    for _ in range(210):
+    for _ in range(400):  # within the aligned 500 cap
         deep = {"n": deep}
     ec = _effc(_slot(True, "inherit", target_mode="entire"), _slot(False, direction="output"))
     scanned, res = await _scan(deep, ec, [_redact_rule()], enforcement="redact")
-    assert res.blocked is True, "enforcing posture fails closed on an unmaskable match"
+    assert res.blocked is False and _SEC not in json.dumps(scanned), "deep secret masked, not blocked"
 
 
 @pytest.mark.asyncio

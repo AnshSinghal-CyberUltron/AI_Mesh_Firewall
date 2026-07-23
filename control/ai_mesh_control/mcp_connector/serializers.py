@@ -387,6 +387,12 @@ class MCPScanControlSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"server": "Must be empty for org scope."})
         if target_mode == "key_path" and not key_path:
             raise serializers.ValidationError({"key_path": "Required when target_mode is key_path."})
+        # B2 live-binder: reject an all-blank-segment key_path ('.', '..', '. '). It resolves to NO
+        # target (the gateway binder yields []), so the seeded detector policy would scan nothing
+        # while the live posture failed closed — a degenerate config that must not be persisted.
+        if target_mode == "key_path" and key_path and not [p for p in key_path.split(".") if p.strip()]:
+            raise serializers.ValidationError(
+                {"key_path": "Must contain at least one non-empty path segment."})
         if target_mode == "entire" and key_path:
             attrs["key_path"] = ""
         return attrs
