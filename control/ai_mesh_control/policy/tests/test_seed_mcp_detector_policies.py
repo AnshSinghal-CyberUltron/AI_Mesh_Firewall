@@ -7,7 +7,7 @@ from __future__ import annotations
 from django.test import TestCase
 
 from auth.models import Organization
-from mcp_connector.models import MCPScanControl, MCPServerRegistration
+from mcp_connector.models import MCPScanControl, MCPServerRegistration, MCPToolRegistration
 from policy.mcp_seed import (
     _detector_rules_for_server,
     detector_policy_code,
@@ -137,3 +137,56 @@ class DetectorSeedReconcileTests(TestCase):
         seed_mcp_detector_policies(self.org)  # re-seed
         self.assertTrue(pol.rules.filter(description="operator-authored").exists(),
                         "operator-added rule must survive reconcile")
+
+
+class PerToolSeedTests(TestCase):
+    """Red-team #2 (raised) + #5 (lowered): per-tool overrides via MCPToolRegistration.scan_action."""
+
+    def setUp(self):
+        self.org = Organization.objects.create(name="Acme", slug="acme")
+
+    def _server(self, name, posture):
+        return MCPServerRegistration.objects.create(organization=self.org, name=name, default_scan_action=posture)
+
+    def _tool(self, server, name, action):
+        return MCPToolRegistration.objects.create(server=server, tool_name=name, scan_action=action)
+
+    def test_raised_tool_gets_per_tool_detector_rule(self):
+        # server observe-only (tag), but a tool RAISED to redact -> must get coverage (else leak).
+        srv = self._server("gh", "tag")
+        self._tool(srv, "wire_transfer", "redact")
+        seed_mcp_detector_policies(self.org)
+        pol = Policy.objects.filter(code=detector_policy_code(self.org.id, srv.id)).first()
+        self.assertIsNotNone(pol, "raised tool must produce a seeded policy even under tag posture")
+        r = pol.rules.get()
+        self.assertEqual(r.action, "redact")
+        self.assertEqual(r.target_tool, "wire_transfer")
+        self.assertEqual(r.condition.get("detector_class"), "all")
+
+    def test_lowered_tool_gets_exemption(self):
+        # server redact, a tool LOWERED to tag -> server-wide rule + a per-tool exemption.
+        srv = self._server("gh", "redact")
+        self._tool(srv, "search_docs", "tag")
+        seed_mcp_detector_policies(self.org)
+        pol = Policy.objects.get(code=detector_policy_code(self.org.id, srv.id))
+        rules = list(pol.rules.all())
+        server_wide = [r for r in rules if not r.target_tool]
+        exemptions = [r for r in rules if (r.condition or {}).get("exempt") and r.target_tool == "search_docs"]
+        self.assertTrue(server_wide, "server-wide detector rule present (covers all + future tools)")
+        self.assertEqual(len(exemptions), 1, "lowered tool gets exactly one exemption")
+        self.assertEqual(exemptions[0].action, "allow")
+
+    def test_tool_matching_server_needs_no_per_tool_rule(self):
+        srv = self._server("gh", "redact")
+        self._tool(srv, "same", "inherit")  # inherits server redact -> no override
+        seed_mcp_detector_policies(self.org)
+        pol = Policy.objects.get(code=detector_policy_code(self.org.id, srv.id))
+        self.assertFalse(pol.rules.filter(target_tool="same").exists(), "matching tool needs no per-tool rule")
+
+    def test_per_tool_reseed_idempotent(self):
+        srv = self._server("gh", "tag")
+        self._tool(srv, "wire_transfer", "block")
+        seed_mcp_detector_policies(self.org)
+        seed_mcp_detector_policies(self.org)
+        pol = Policy.objects.get(code=detector_policy_code(self.org.id, srv.id))
+        self.assertEqual(pol.rules.filter(target_tool="wire_transfer").count(), 1, "no per-tool duplicate")

@@ -23,10 +23,11 @@ from django.db import transaction
 logger = logging.getLogger(__name__)
 
 
-def _rule_sig(action: str, condition: dict) -> tuple:
+def _rule_sig(action: str, condition: dict, target_tool: str = "") -> tuple:
     """Hashable identity of a rule for reconcile/dedup — condition may hold list values
-    (keywords), so JSON-serialize it (sorted) rather than hashing its items tuple."""
-    return (action, json.dumps(condition or {}, sort_keys=True, default=str))
+    (keywords), so JSON-serialize it (sorted) rather than hashing its items tuple. target_tool
+    is part of the identity so a per-tool rule doesn't collide with the server-wide one."""
+    return (action, target_tool or "", json.dumps(condition or {}, sort_keys=True, default=str))
 
 # (preset key, rule action, direction, human label)
 # direction "both" => evaluated on tool input args AND tool output.
@@ -91,11 +92,83 @@ def _detector_rules_for_server(posture: str, effective: dict) -> list[dict]:
             {k: v for k, v in inp["condition"].items() if k != "direction"} == \
             {k: v for k, v in out["condition"].items() if k != "direction"}:
         merged = dict(inp["condition"]); merged["direction"] = "both"
-        specs.append({"action": inp["action"], "condition": merged})
+        specs.append({"action": inp["action"], "condition": merged, "target_tool": ""})
     else:
         for d in ("input", "output"):
             if by_dir.get(d):
-                specs.append(by_dir[d])
+                specs.append({**by_dir[d], "target_tool": ""})
+    return specs
+
+
+# Action severity for RAISED/LOWERED per-tool comparison (observe-only = 0).
+_ACTION_RANK = {"tag": 0, "monitor": 0, "": 0, "inherit": 0, "allow": 0, "redact": 1, "block": 2}
+
+
+def _resolved_dir_action(ctrl: dict, tool_scan_action: str | None, posture: str) -> str | None:
+    """Effective action for one direction with the full inherit chain:
+    scan-control action → per-tool MCPToolRegistration.scan_action → server posture → observe.
+    Returns None for a disabled direction (enforces nothing)."""
+    if not ctrl.get("enabled", True):
+        return None
+    a = (ctrl.get("action") or "inherit").strip().lower()
+    if a in ("inherit", ""):
+        a = (tool_scan_action or "").strip().lower()
+    if a in ("inherit", ""):
+        a = (posture or "").strip().lower()
+    return a or "monitor"
+
+
+def _per_tool_specs(rows: list, server_id: str, posture: str,
+                    tool_actions: dict[str, str]) -> list[dict]:
+    """Per-tool overrides vs the server baseline (red-team #2 raised + #5 lowered).
+
+    For each tool whose effective enforcement DIFFERS from the server-wide baseline:
+      * RAISED (tool more severe) → a per-tool ``target_tool`` detector rule at the tool's
+        action (else the elevated coverage is LOST — a leak once posture is retired).
+      * LOWERED (tool observe-only below an enforcing server) → a per-tool EXEMPTION rule the
+        gateway honours to downgrade the server-wide rule to observe-only for that tool (the
+        additive model can't otherwise un-enforce a tool).
+    Tools matching the server baseline need nothing (the server-wide rule covers them)."""
+    from mcp_connector.scan_controls import resolve_effective_controls
+
+    eff_server = resolve_effective_controls(rows, server_id=server_id, tool_name="")
+    specs: list[dict] = []
+    for tool, tool_scan_action in tool_actions.items():
+        eff_tool = resolve_effective_controls(rows, server_id=server_id, tool_name=tool)
+        by_dir: dict[str, dict] = {}   # direction -> raised detector spec
+        lowered = False
+        for direction in ("input", "output"):
+            srv_a = _resolved_dir_action(eff_server.get(f"tier1_{direction}") or {}, None, posture) or "monitor"
+            tool_a = _resolved_dir_action(eff_tool.get(f"tier1_{direction}") or {}, tool_scan_action, posture) or "monitor"
+            sr, tr = _ACTION_RANK.get(srv_a, 0), _ACTION_RANK.get(tool_a, 0)
+            if tr > sr and tool_a in _ENFORCING_ACTIONS:
+                ctrl = eff_tool.get(f"tier1_{direction}") or {}
+                cond = {"detector_class": "all", "direction": direction}
+                if (ctrl.get("target_mode") or "entire") == "key_path" and (ctrl.get("key_path") or "").strip():
+                    cond["scope"] = "key"; cond["key"] = ctrl["key_path"].strip()
+                else:
+                    cond["scope"] = "entire"
+                by_dir[direction] = {"action": tool_a, "condition": cond}
+            elif tr < sr and sr > 0:
+                lowered = True
+
+        # Collapse identical input+output raised specs into one ``both`` rule (the common
+        # MCPToolRegistration.scan_action override is direction-agnostic).
+        inp, out = by_dir.get("input"), by_dir.get("output")
+        if inp and out and inp["action"] == out["action"] and \
+                {k: v for k, v in inp["condition"].items() if k != "direction"} == \
+                {k: v for k, v in out["condition"].items() if k != "direction"}:
+            merged = dict(inp["condition"]); merged["direction"] = "both"
+            specs.append({"action": inp["action"], "condition": merged, "target_tool": tool})
+        else:
+            for d in ("input", "output"):
+                if by_dir.get(d):
+                    specs.append({**by_dir[d], "target_tool": tool})
+
+        if lowered:  # one blanket exemption for an observe-only tool below an enforcing server
+            specs.append({"action": "allow",
+                          "condition": {"exempt": True, "direction": "both"},
+                          "target_tool": tool})
     return specs
 
 
@@ -109,15 +182,34 @@ def seed_mcp_detector_policies(organization, *, reset_rules: bool = False):
     SAME action at the SAME scope the posture/scan-control already do, so the extra policy
     lane is behavior-identical (idempotent redaction) until Phase 3 retires the posture."""
     from policy.models import Policy, Rule
-    from mcp_connector.models import MCPScanControl, MCPServerRegistration
+    from mcp_connector.models import (
+        MCPScanControl,
+        MCPServerRegistration,
+        MCPToolRegistration,
+    )
     from mcp_connector.scan_controls import resolve_effective_controls, serialize_control
 
-    rows = [serialize_control(c) for c in MCPScanControl.objects.filter(organization=organization)]
+    all_rows = [serialize_control(c) for c in MCPScanControl.objects.filter(organization=organization)]
     results: list[tuple[str, bool, int]] = []
 
     for server in MCPServerRegistration.objects.filter(organization=organization, is_active=True):
-        effective = resolve_effective_controls(rows, server_id=str(server.id), tool_name="")
-        specs = _detector_rules_for_server(server.default_scan_action, effective)
+        sid = str(server.id)
+        posture = server.default_scan_action
+        rows = all_rows  # resolve_effective_controls scopes by server_id/tool_name internally
+        effective = resolve_effective_controls(rows, server_id=sid, tool_name="")
+        specs = _detector_rules_for_server(posture, effective)
+
+        # Per-tool overrides (#2 raised / #5 lowered): the tools an operator gave a different
+        # action via MCPToolRegistration.scan_action or a tool-scoped MCPScanControl.
+        tool_actions: dict[str, str] = {}
+        for treg in MCPToolRegistration.objects.filter(server=server, enabled=True):
+            tool_actions[treg.tool_name] = treg.scan_action
+        for r in rows:
+            if (r.get("scope_type") == "tool" and str(r.get("server_id")) == sid
+                    and (r.get("tool_name") or "")):
+                tool_actions.setdefault(r["tool_name"], "inherit")
+        specs = specs + _per_tool_specs(rows, sid, posture, tool_actions)
+
         code = detector_policy_code(organization.id, server.id)
 
         if not specs:
@@ -160,10 +252,10 @@ def seed_mcp_detector_policies(organization, *, reset_rules: bool = False):
         # set (a stale rule from a prior posture/scan-control config would otherwise keep
         # enforcing the OLD action — drift / over- or under-enforcement). Operator-added rules
         # (without the seed marker) are preserved.
-        current_sigs = {_rule_sig(s["action"], s["condition"]) for s in specs}
+        current_sigs = {_rule_sig(s["action"], s["condition"], s.get("target_tool", "")) for s in specs}
         existing_sigs = set()
         for r in policy.rules.all():
-            sig = _rule_sig(r.action, r.condition or {})
+            sig = _rule_sig(r.action, r.condition or {}, r.target_tool or "")
             if (r.description or "").startswith(_SEED_MARKER):
                 if sig not in current_sigs:
                     r.delete()  # stale seeded rule → retire it
@@ -172,16 +264,23 @@ def seed_mcp_detector_policies(organization, *, reset_rules: bool = False):
 
         new_rules = []
         for idx, spec in enumerate(specs):
-            sig = _rule_sig(spec["action"], spec["condition"])
+            tt = spec.get("target_tool", "")
+            sig = _rule_sig(spec["action"], spec["condition"], tt)
             if sig in existing_sigs:
                 continue
+            if (spec["condition"] or {}).get("exempt"):
+                name = f"Exempt {tt} (observe-only)"
+            else:
+                name = (f"Detector {spec['condition'].get('detector_class', 'all')} "
+                        f"({spec['condition'].get('direction', 'both')})"
+                        + (f" @ {tt}" if tt else ""))
             new_rules.append(Rule(
                 policy=policy,
-                name=f"Detector {spec['condition'].get('detector_class', 'all')} "
-                     f"({spec['condition'].get('direction', 'both')})",
+                name=name,
                 rule_type="detector",
                 condition=spec["condition"],
                 action=spec["action"],
+                target_tool=tt,
                 redaction_config={},
                 priority=len(specs) - idx,
                 enabled=True,
