@@ -520,6 +520,43 @@ def _collect_key_values(obj: Any, key: str) -> list[str]:
     return out
 
 
+def _leaf_value_texts(obj: Any) -> list[str]:
+    """Collect the string (and stringified numeric) VALUE leaves of a structured payload —
+    value content only, NEVER key names. Iterative + bounded (mirrors _collect_key_values).
+
+    scope=entire MCP detection used to scan ``_safe_json(input_args)`` — the whole serialized
+    blob, INCLUDING key names and JSON punctuation. That made detection see content the
+    value-leaf redaction can never mask: a redact rule whose keyword/regex hit a KEY NAME
+    (``arguments``, ``password``, ``url`` …) or a cross-field ``"key":"val"`` structure matched
+    in detection but nothing in the values, so the cannot-mask fail-closed BLOCKED benign
+    traffic, or a structural regex claimed a redact it couldn't fulfil. Scanning value leaves
+    makes detection consistent with redaction: a rule matches iff its pattern is in actual
+    value content, which is exactly what the value-leaf redactor can mask."""
+    out: list[str] = []
+    stack: list[tuple[Any, int]] = [(obj, 0)]
+    nodes = 0
+    while stack:
+        cur, depth = stack.pop()
+        if depth > _KEY_COLLECT_MAX_DEPTH:
+            continue
+        nodes += 1
+        if nodes > _KEY_COLLECT_MAX_NODES:
+            break
+        if isinstance(cur, str):
+            out.append(cur)
+        elif isinstance(cur, bool):
+            continue  # "true"/"false" carries no secret
+        elif isinstance(cur, (int, float)):
+            out.append(_safe_json(cur))  # numeric secret (SSN/card as a number)
+        elif isinstance(cur, dict):
+            for v in cur.values():  # values only — keys are never scanned
+                stack.append((v, depth + 1))
+        elif isinstance(cur, list):
+            for item in cur:
+                stack.append((item, depth + 1))
+    return out
+
+
 def _resolve_matcher_dict(rule: dict[str, Any]) -> dict[str, Any]:
     cond = rule.get("condition") or {}
     raw_dir = str(cond.get("direction") or cond.get("field") or "both").strip().lower()
@@ -584,12 +621,28 @@ def _candidate_texts_mcp(context: dict[str, Any], matcher: dict[str, Any]) -> li
         if scope == "key":
             texts.extend(_collect_key_values(input_args, key))
         else:
-            texts.append(prompt or _safe_json(input_args))
+            # entire: scan VALUE leaves (not the serialized blob's key names) so detection
+            # matches only maskable value content — consistent with the value-leaf redactor.
+            # Fall back to the chat-style ``prompt`` when input_args yields no leaves
+            # (empty/None), then to a raw serialization for a non-container scalar.
+            leaves = _leaf_value_texts(input_args) if isinstance(input_args, (dict, list)) else []
+            if leaves:
+                texts.extend(leaves)
+            elif prompt:
+                texts.append(prompt)
+            elif input_args is not None:
+                texts.append(_safe_json(input_args))
     if want_output:
         if scope == "key":
             texts.extend(_collect_key_values(output_data, key))
         else:
-            texts.append(response or _safe_json(output_data))
+            leaves = _leaf_value_texts(output_data) if isinstance(output_data, (dict, list)) else []
+            if leaves:
+                texts.extend(leaves)
+            elif response:
+                texts.append(response)
+            elif output_data is not None:
+                texts.append(_safe_json(output_data))
 
     return [t for t in texts if t]
 
