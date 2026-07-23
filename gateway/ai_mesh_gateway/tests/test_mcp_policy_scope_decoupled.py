@@ -314,15 +314,46 @@ def _kw_rule(word, action="redact"):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("posture", ["tag", "redact", "block"])
-async def test_keyword_substring_inside_word_does_not_false_block(posture):
-    """A keyword that appears only as a SUBSTRING inside a larger word (secret→secretary) must
-    NOT match — detection is word-bounded like the redactor, so no false 'unmaskable' block."""
+@pytest.mark.parametrize("posture", ["tag", "redact"])
+async def test_keyword_substring_inside_word_masks_not_cannot_mask_blocks(posture):
+    """A keyword rule means "redact this literal string wherever it appears" (SUBSTRING).
+    Under an observe/redact posture, ``secret`` inside ``secretary`` is MASKED (over-mask, the
+    safe direction), NOT hit by the cannot-mask fail-closed. Detection (substring) and redaction
+    (substring-fallback) agree, so cannot-mask never fires. (Under the ``block`` posture, block
+    is a floor and any match blocks by design — covered separately.)"""
     ec = _effc(_slot(True, "inherit", target_mode="entire"), _slot(False, direction="output"))
     payload = {"name": "notify", "arguments": {"note": "The secretary secretly filed it."}}
     scanned, res = await _scan(payload, ec, [_kw_rule("secret")], enforcement=posture)
-    assert res.blocked is False, f"substring-only keyword must not false-block ({posture})"
-    assert "secretary secretly" in json.dumps(scanned), "benign content forwarded intact"
+    assert res.blocked is False, f"substring keyword must mask, never cannot-mask-block ({posture})"
+    assert "secretary" not in json.dumps(scanned), "the matched substring is masked (safe over-mask)"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kw,val", [
+    ("ghp_", "ghp_ABCDEFGHIJKLMNOP1234"),
+    ("AKIA", "AKIAIOSFODNN7EXAMPLE"),
+    ("-----BEGIN", "-----BEGIN RSA PRIVATE KEY-----"),
+])
+@pytest.mark.parametrize("posture", ["tag", "redact", "block"])
+async def test_boundary_hostile_credential_keyword_is_never_silently_bypassed(kw, val, posture):
+    """CRITICAL regression guard: a credential-prefix keyword (no word boundary after it) must
+    be DETECTED and either masked or blocked — never forwarded raw with zero findings. A
+    word-bounded DETECTION silently missed these under every posture."""
+    ec = _effc(_slot(True, "inherit", target_mode="entire"), _slot(False, direction="output"))
+    scanned, res = await _scan({"a": {"tok": val}}, ec, [_kw_rule(kw)], enforcement=posture)
+    leaked = (val in json.dumps(scanned)) and not res.blocked
+    assert not leaked, f"boundary-hostile keyword {kw!r} must not silently egress the secret ({posture})"
+    assert res.findings, "the keyword match must be detected + recorded, never a silent bypass"
+
+
+@pytest.mark.asyncio
+async def test_empty_keyword_does_not_match_everything():
+    """An empty-string keyword must NOT match every payload (detection) nor mask it (redaction)."""
+    ec = _effc(_slot(True, "inherit", target_mode="entire"), _slot(False, direction="output"))
+    payload = {"arguments": {"note": "the weather is sunny"}}
+    scanned, res = await _scan(payload, ec, [_kw_rule("")], enforcement="redact")
+    assert res.blocked is False
+    assert "the weather is sunny" in json.dumps(scanned), "empty keyword is a no-op"
 
 
 @pytest.mark.asyncio
