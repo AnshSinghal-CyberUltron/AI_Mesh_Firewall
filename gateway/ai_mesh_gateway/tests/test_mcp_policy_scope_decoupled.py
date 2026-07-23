@@ -231,5 +231,49 @@ async def test_unmatched_number_keeps_numeric_type():
     assert _SEC not in json.dumps(scanned)
 
 
+# ───── cannot-mask fail-closed: detected-but-unmaskable must withhold, not leak ─────
+# ROOT CAUSE (adversarial review): the policy lane has NO downstream backstop — its findings
+# carry threat_type='redact', which the E12 result floor's _findings_have_secret_or_pii never
+# matches. So a redact rule that MATCHES detection (on the serialized payload) but that the
+# leaf-walk cannot mask (a JSON-structural/cross-boundary regex, or a payload nested past the
+# depth cap) would forward RAW while claiming a redact fired. Fix: fail closed (cannot-mask
+# exception) rather than leak — WITHOUT escalating maskable content (which still redacts).
+@pytest.mark.asyncio
+async def test_cross_boundary_regex_match_fails_closed():
+    """A regex that only matches across a JSON boundary (needs the "key":"val" context) is
+    detected on the serialized blob but unmaskable per-leaf → must fail closed, not egress raw."""
+    rule = {"id": 40, "name": "kv", "rule_type": "regex", "action": "redact",
+            "condition": {"regex": r'"internal_api_key"\s*:\s*"[^"]*"', "direction": "input", "scope": "entire"},
+            "redaction_config": {}}
+    ec = _effc(_slot(True, "redact", target_mode="key_path", key_path="nonexistent"), _slot(False, direction="output"))
+    payload = {"internal_api_key": "sk-live-abc123XYZ", "note": "clean"}
+    scanned, res = await _scan(payload, ec, [rule])
+    assert res.blocked is True, "unmaskable cross-boundary redact match must fail closed"
+
+
+@pytest.mark.asyncio
+async def test_deeply_nested_unmaskable_redact_fails_closed():
+    """A secret nested past the redaction depth cap is detected but the leaf-walk stops short
+    → must fail closed rather than forward the deep subtree raw."""
+    deep = {"x": _SEC}
+    for _ in range(210):
+        deep = {"n": deep}
+    rule = _redact_rule()  # aws_access_key, scope=entire
+    ec = _effc(_slot(True, "redact", target_mode="key_path", key_path="nonexistent"), _slot(False, direction="output"))
+    scanned, res = await _scan(deep, ec, [rule])
+    assert res.blocked is True, "unmaskable deep-nested redact match must fail closed"
+
+
+@pytest.mark.asyncio
+async def test_maskable_redact_still_forwards_not_blocked():
+    """Control: ordinary maskable content redacts + forwards (the cannot-mask fail-closed must
+    NOT escalate maskable redactions to a block)."""
+    ec = _effc(_slot(True, "redact", target_mode="entire"), _slot(False, direction="output"))
+    payload = {"name": "issue_write", "arguments": {"title": f"note {_SEC} end"}}
+    scanned, res = await _scan(payload, ec, [_redact_rule()])
+    assert res.blocked is False, "maskable content must redact + forward, never block"
+    assert _SEC not in json.dumps(scanned)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
