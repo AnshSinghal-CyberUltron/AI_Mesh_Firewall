@@ -33,6 +33,32 @@ ACTION_ORDER: dict[str, int] = {
 }
 DEFAULT_REDACTION_PLACEHOLDER = "[REDACTED]"
 
+# Phase 2 (2026-07-23): the "detector" rule type. An operator-facing detector class maps to
+# the redact_all_scoped class set (classify_pattern_key → "pii"/"credential"/"ip_leakage";
+# secrets fold into "credential" via the SECRET compliance tag). ``all`` = every class.
+# ``secret`` is accepted as an operator-friendly alias of ``credential``.
+_DETECTOR_CLASS_MAP: dict[str, frozenset[str]] = {
+    "pii": frozenset({"pii"}),
+    "credential": frozenset({"credential"}),
+    "secret": frozenset({"credential"}),
+    "ip_leakage": frozenset({"ip_leakage"}),
+    "all": frozenset({"pii", "credential", "ip_leakage"}),
+}
+_DETECTOR_ALL_CLASSES = _DETECTOR_CLASS_MAP["all"]
+
+
+def _resolve_detector_classes(value: Any) -> frozenset[str]:
+    """Map an operator ``detector_class`` (str or list) to redact_all_scoped classes.
+    Unknown/empty → the full suite (``all``), the safe/complete default for a detector rule."""
+    if isinstance(value, str):
+        return _DETECTOR_CLASS_MAP.get(value.strip().lower(), _DETECTOR_ALL_CLASSES)
+    if isinstance(value, (list, tuple, set)):
+        out: set[str] = set()
+        for v in value:
+            out |= set(_DETECTOR_CLASS_MAP.get(str(v).strip().lower(), frozenset()))
+        return frozenset(out) or _DETECTOR_ALL_CLASSES
+    return _DETECTOR_ALL_CLASSES
+
 # FINDING-3 (ReDoS): mirror the control-plane write-time guard into the gateway
 # hot path so a catastrophic-backtracking pattern that lands in a compiled
 # bundle cannot pin the worker thread evaluating it.
@@ -578,7 +604,15 @@ def _resolve_matcher_dict(rule: dict[str, Any]) -> dict[str, Any]:
     preset = cond.get("preset")
     regex = None
     keywords = None
-    if preset:
+    # Phase 2 (2026-07-23): a ``detector`` rule invokes the built-in detector SUITE (the
+    # full 63-pattern detect_* engine) for an operator-facing class, so a single policy rule
+    # can carry the coverage a server posture used to provide. detector_class resolves to the
+    # redact_all_scoped class set; detection reuses the SAME engine (a class matches iff
+    # redact_all_scoped changes the text), so detection and redaction can never disagree.
+    detector_class = None
+    if rule.get("rule_type") == "detector" or cond.get("detector_class"):
+        detector_class = _resolve_detector_classes(cond.get("detector_class"))
+    elif preset:
         regex = preset_regex(preset)
     elif rule.get("rule_type") == "keywords":
         keywords = cond.get("keywords") or cond.get("keywords_list") or []
@@ -599,6 +633,7 @@ def _resolve_matcher_dict(rule: dict[str, Any]) -> dict[str, Any]:
         "regex": regex,
         "keywords": [k for k in (keywords or []) if isinstance(k, str)],
         "preset": preset,
+        "detector_class": detector_class,
         "replacement": replacement,
     }
 
@@ -689,6 +724,17 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
                         return True
         return False
 
+    if matcher["detector_class"]:
+        # A detector rule matches iff the built-in detector SUITE would mask something in this
+        # class — reuse the SAME redact_all_scoped engine the rule redacts with, so detection
+        # and redaction agree by construction (no detect-on-blob / mask-on-leaf asymmetry).
+        from patterns import redact_all_scoped  # local: patterns has no import cycle here
+        classes = set(matcher["detector_class"])
+        for text in texts:
+            if redact_all_scoped(text, classes) != text:
+                return True
+        return False
+
     return False
 
 
@@ -765,7 +811,10 @@ def evaluate_mcp_policies(
                     config["regex"] = matcher["regex"]
                 if matcher["keywords"]:
                     config["keywords"] = matcher["keywords"]
-                if matcher["regex"] or matcher["keywords"]:
+                if matcher["detector_class"]:
+                    # sorted list for a stable, JSON-serializable hint
+                    config["detector_class"] = sorted(matcher["detector_class"])
+                if matcher["regex"] or matcher["keywords"] or matcher["detector_class"]:
                     result.redaction_hints.append({
                         "rule_id": rule.get("id"),
                         "rule_name": rule.get("name"),
@@ -989,6 +1038,15 @@ def apply_redaction(
         config = hint.get("config") or {}
         condition = hint.get("condition") or {}
         repl = config.get("replacement") or placeholder
+
+        # Phase 2: a ``detector`` hint masks its class(es) with the SAME redact_all_scoped
+        # engine detection used — smart per-class masking of the full 63-pattern suite.
+        detector_class = config.get("detector_class") or condition.get("detector_class")
+        if detector_class:
+            from patterns import redact_all_scoped  # local: no import cycle
+            classes = set(_resolve_detector_classes(detector_class))
+            result = redact_all_scoped(result, classes)
+            continue
 
         regex_pattern = (
             config.get("regex")
