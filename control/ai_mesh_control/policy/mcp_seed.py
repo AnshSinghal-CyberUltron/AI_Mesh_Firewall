@@ -113,11 +113,14 @@ def _augment_injection_specs(specs: list[dict]) -> list[dict]:
     for s in specs:
         cond = s.get("condition") or {}
         if s.get("action") == "block" and cond.get("detector_class") == "all":
-            extra.append({
-                "action": "block",
-                "condition": {"detector_class": "injection", "direction": cond.get("direction", "both")},
-                "target_tool": s.get("target_tool", ""),
-            })
+            # Mirror the source block rule's SCOPE binding (#3): a key_path-scoped block must
+            # scope injection to the SAME fragment, else injection widens to the whole payload
+            # (over-block on fields the posture never scanned).
+            inj = {"detector_class": "injection", "direction": cond.get("direction", "both"),
+                   "scope": cond.get("scope", "entire")}
+            if cond.get("key"):
+                inj["key"] = cond["key"]
+            extra.append({"action": "block", "condition": inj, "target_tool": s.get("target_tool", "")})
     return specs + extra
 
 

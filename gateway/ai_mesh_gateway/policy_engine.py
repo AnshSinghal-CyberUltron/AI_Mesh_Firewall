@@ -104,12 +104,17 @@ def _detector_injection_match(text: str) -> bool:
 def _encoded_variants(text: str) -> list[str]:
     """Text-encoding-decoded views (HTML entities, percent/backslash escapes …) so the detector
     lane catches an ENCODED secret the server posture's encoded-exfil floor caught (#3). Fast-
-    pathed: pure ASCII with no encoding markers has no variants."""
+    pathed: pure ASCII with no encoding markers has no variants. Bounded (#4): skip a huge
+    fragment (the decode + per-variant re-scan is O(text) each) so a marker-heavy tool result
+    can't amplify CPU — the raw scan already covers plain content; a >budget fragment is a
+    resource anomaly the enforcing posture also caps."""
+    if len(text) > _MAX_MATCH_INPUT_LEN:
+        return []
     if "&" not in text and "%" not in text and "\\" not in text and text.isascii():
         return []
     try:
         from scanner import _decode_text_encoding_variants  # local: avoid import cycle
-        return [v for v in _decode_text_encoding_variants(text) if v and v != text]
+        return [v for v in _decode_text_encoding_variants(text) if v and v != text][:4]
     except Exception:
         return []
 
@@ -826,16 +831,20 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
         from patterns import redact_all_scoped  # local: patterns has no import cycle here
         classes = set(matcher["detector_class"] or ())
         want_injection = bool(matcher.get("detect_injection"))
+        # #3/#1: encoded-exfil detection drives BLOCK ONLY. The masker can't mask an HTML-entity
+        # /percent/\\u-encoded secret, and the FROZEN 2026-07-22 decision is that ``redact``
+        # best-effort masks raw + FORWARDS (never escalates to block). The posture matches this:
+        # it BLOCKS encoded-exfil under a block posture but FORWARDS under redact. Detecting the
+        # encoded form for a REDACT rule would fail-closed the raw-unmaskable residual into a
+        # block — the exact escalation the frozen decision removed. So only a BLOCK rule checks
+        # the decoded surface; a redact rule masks the raw forms and forwards, posture-identical.
+        encoded_check = (rule.get("action") == "block")
         for text in texts:
             if classes and redact_all_scoped(text, classes) != text:
                 return True
             if want_injection and _detector_injection_match(text):
                 return True
-            # #3: a secret hidden by a text-encoding (HTML entity / percent / \\u) that
-            # redact_all_scoped can't mask raw — the posture's encoded-exfil floor caught it, so
-            # DECODE and re-check so the detector lane detects it too (masking of the residual
-            # is handled by the cannot-mask fail-closed under an enforcing posture).
-            if classes:
+            if classes and encoded_check:
                 for variant in _encoded_variants(text):
                     if redact_all_scoped(variant, classes) != variant:
                         return True
@@ -897,20 +906,23 @@ def evaluate_mcp_policies(
         # baseline PII-redact policy for that tool (raw egress). The exemption exists to
         # suppress the broad server-wide rule that lives in the SAME seeded policy; other
         # policies stand on their own.
-        # #6: match target_tool case/whitespace/unicode-insensitively (strip + NFKC + casefold),
-        # so a seeded per-tool rule / exemption isn't silently dropped by a name skew between the
-        # registered tool_name and the runtime tool_name.
-        _norm_tool = _normalize_key((tool_name or "").strip()) if tool_name else ""
+        # #6/#2: match target_tool by EXACT equality — the same case-sensitive semantics the
+        # server posture (_effective_scan_action) and scan-controls use. An earlier NFKC/casefold
+        # normalization made the seed STRICTER than the posture: two distinct tools that fold
+        # together (``GetData``/``getData``/fullwidth homoglyph) collided, so a per-tool rule or
+        # exemption for one wrongly applied to the other (over-block / wrong exemption). The
+        # seeded target_tool comes from MCPToolRegistration.tool_name and the runtime tool_name is
+        # the same registered name, so exact equality matches in practice AND matches the posture.
         policy_exempts = bool(tool_name) and any(
             (r.get("condition") or {}).get("exempt")
-            and _normalize_key((r.get("target_tool") or "").strip()) == _norm_tool
+            and (r.get("target_tool") or "") == tool_name
             and _exempt_dir_applies(r, context)
             for r in rules
         )
 
         for rule in rules:
             rule_target = rule.get("target_tool", "") or ""
-            if rule_target and tool_name and _normalize_key(rule_target.strip()) != _norm_tool:
+            if rule_target and tool_name and rule_target != tool_name:
                 continue
 
             # An exemption rule itself contributes no enforcing action and is not a finding.
