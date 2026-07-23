@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useGatewayConfig } from "./useGatewayConfig";
 import { useAuth } from "../context/AuthContext";
 import { resolveGatewayHealthUrl } from "../utils/environmentUrls";
-import { SIMULATOR_KEY_CHANGED_EVENT, readOrgScopedGatewayKey } from "../api/gatewayContext";
 
 const HEALTH_POLL_INTERVAL = 15000;
 const GATEWAY_KEY_STORAGE_LEGACY = "zeroshield_gateway_key";
@@ -154,16 +153,6 @@ export function useSimulatorEngine() {
     if (cached) {
       setGatewayKey(cached);
     }
-  }, [orgId]);
-
-  useEffect(() => {
-    if (!orgId) return undefined;
-    const onSimulatorKeyChanged = () => {
-      const cached = readOrgScopedGatewayKey(orgId);
-      if (cached) setGatewayKey(cached);
-    };
-    window.addEventListener(SIMULATOR_KEY_CHANGED_EVENT, onSimulatorKeyChanged);
-    return () => window.removeEventListener(SIMULATOR_KEY_CHANGED_EVENT, onSimulatorKeyChanged);
   }, [orgId]);
 
   // Lazy-provision per-org simulator key (POST returns plaintext once at creation).

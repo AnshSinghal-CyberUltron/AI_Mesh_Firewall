@@ -56,12 +56,6 @@ async def check_kill_switch(
                 f"kill_switch:{prefix}:{CREDENTIAL_KEY_PREFIX}{key_prefix}:{MODEL_KEY_PREFIX}{model_name}",
             )
         )
-        keys.append(
-            (
-                "credential_all",
-                f"kill_switch:{prefix}:{CREDENTIAL_KEY_PREFIX}{key_prefix}",
-            )
-        )
     keys.append(("org_model", f"kill_switch:{prefix}:{MODEL_KEY_PREFIX}{model_name}"))
     keys.append(("org_global", f"kill_switch:{prefix}:{GLOBAL_SUFFIX}"))
 
@@ -124,9 +118,7 @@ async def check_kill_switch(
                 fallback,
                 reason,
             )
-            scope_label = (
-                "credential" if scope_name in ("credential", "credential_all") else "org_model"
-            )
+            scope_label = "credential" if scope_name == "credential" else "org_model"
             return KillSwitchVerdict(
                 is_killed=True,
                 action=action,

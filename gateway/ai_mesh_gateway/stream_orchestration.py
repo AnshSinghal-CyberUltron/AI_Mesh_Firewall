@@ -115,7 +115,6 @@ class StreamLaunchContext:
     org_slug: str
     model: str
     key_hash: str = ""
-    key_prefix: str = ""
     rate_limit_tpm: int = 0
     estimated_tokens: int = 20
     org_tpm_limit: int = 0
@@ -396,12 +395,10 @@ async def finalize_stream(
                 model=model,
                 user_id=ctx.user_id,
                 project_id=ctx.project_id,
-                key_prefix=ctx.key_prefix or (ctx.key_hash[:8] if ctx.key_hash else ""),
                 latency_ms=elapsed_ms,
                 action=_sc_action,
                 risk_score=_sc_risk,
                 threat_type=_sc_threat,
-                prompt_snippet=_prompt_snip[:500] if _prompt_snip else "",
                 metadata={
                     "ttft_ms": round(metrics.ttft_ms, 2),
                     "chunks": metrics.chunks_emitted,

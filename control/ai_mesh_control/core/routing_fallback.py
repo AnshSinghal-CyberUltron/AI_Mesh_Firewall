@@ -19,28 +19,13 @@ _SENSITIVITY_ORDER = {
 FALLBACK_CHAIN_SCHEMA_VERSION = 1
 
 
-def _compliance_tag_key(tag: object) -> str:
-    return str(tag or "").strip().lower()
-
-
-def _compliance_tags_satisfied(model_tags: list | None, required_tags: list[str]) -> bool:
-    required = [_compliance_tag_key(t) for t in required_tags if _compliance_tag_key(t)]
-    if not required:
-        return True
-    have = {_compliance_tag_key(t) for t in (model_tags or []) if _compliance_tag_key(t)}
-    return all(tag in have for tag in required)
-
-
 def fallback_profile_key(
     data_sensitivity: str = "public",
     compliance_tags: list[str] | None = None,
 ) -> str:
     """Stable profile id for chain lookup (data-class + compliance set)."""
-    sens = str(data_sensitivity or "public").strip().lower()
-    tags = ",".join(
-        sorted(_compliance_tag_key(t) for t in (compliance_tags or []) if _compliance_tag_key(t))
-    )
-    return f"{sens}|{tags}"
+    tags = ",".join(sorted(t for t in (compliance_tags or []) if t))
+    return f"{data_sensitivity}|{tags}"
 
 
 def _model_passes_hard_filters(
@@ -52,12 +37,11 @@ def _model_passes_hard_filters(
     if not model.get("is_active", True):
         return False
     if required_tags:
-        if not _compliance_tags_satisfied(model.get("compliance_tags"), required_tags):
+        model_tags = model.get("compliance_tags") or []
+        if not all(tag in model_tags for tag in required_tags):
             return False
-    req_level = _SENSITIVITY_ORDER.get(str(data_sensitivity or "public").strip().lower(), 0)
-    model_level = _SENSITIVITY_ORDER.get(
-        str(model.get("data_sensitivity_level", "public")).strip().lower(), 0
-    )
+    req_level = _SENSITIVITY_ORDER.get(data_sensitivity, 0)
+    model_level = _SENSITIVITY_ORDER.get(model.get("data_sensitivity_level", "public"), 0)
     return model_level >= req_level
 
 

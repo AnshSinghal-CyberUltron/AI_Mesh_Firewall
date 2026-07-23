@@ -48,9 +48,7 @@ services:
   # collections survive container recreates.
   chromadb:
     profiles: ["chroma"]
-    # Pin to the same major line as gateway chromadb client (uv.lock ~1.5.x). The
-    # legacy 0.5.x server image lacks stable /api/v2 routes and breaks ingest.
-    image: chromadb/chroma:1.5.0
+    image: chromadb/chroma:0.5.20
     ports: ["8001:8000"]
     environment:
       IS_PERSISTENT: "TRUE"
@@ -58,7 +56,7 @@ services:
       PERSIST_DIRECTORY: /chroma/chroma
     volumes: [chroma_data:/chroma/chroma]
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v2/heartbeat', timeout=2).status==200 else 1)\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/heartbeat', timeout=2).status==200 else 1)\""]
       interval: 10s
       timeout: 5s
       retries: 8
@@ -66,20 +64,13 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management
-    restart: unless-stopped
     ports: ["5772:5672", "15772:15672"]
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      # Cold start on Windows Docker can exceed 2 min; allow enough grace before marking unhealthy.
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 15s
-      timeout: 10s
-      retries: 12
-      start_period: 180s
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
 
   mongo:
     image: mongo:7
@@ -124,18 +115,16 @@ services:
       redis: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=5)"]
-      # Bedrock scanner warmup + migrate/collectstatic on cold Windows Docker can exceed 2 min;
-      # workers/gateway depend_on control:service_healthy — keep grace long enough to avoid false unhealthy.
-      interval: 15s
-      timeout: 10s
-      retries: 12
-      start_period: 300s
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 45s
 
   workers:
+    profiles: ["workers"]
     build:
       context: .
       dockerfile: workers/Dockerfile
-    restart: unless-stopped
     environment:
       DJANGO_SETTINGS_MODULE: main_app.settings
       DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
@@ -146,15 +135,14 @@ services:
       POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
     depends_on:
       postgres: { condition: service_healthy }
-      rabbitmq: { condition: service_started }
+      rabbitmq: { condition: service_healthy }
       redis: { condition: service_healthy }
-      control: { condition: service_healthy }
 
   workers-beat:
+    profiles: ["workers"]
     build:
       context: .
       dockerfile: workers/Dockerfile
-    restart: unless-stopped
     command: celery -A ai_mesh_workers.celery_app beat --loglevel=info
     environment:
       DJANGO_SETTINGS_MODULE: main_app.settings
@@ -168,9 +156,8 @@ services:
       POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
     depends_on:
       postgres: { condition: service_healthy }
-      rabbitmq: { condition: service_started }
+      rabbitmq: { condition: service_healthy }
       redis: { condition: service_healthy }
-      control: { condition: service_healthy }
 
   gateway:
     build:
@@ -400,26 +387,17 @@ services:
   frontend:
     image: node:22-alpine
     working_dir: /app
-    restart: unless-stopped
-    # Use entrypoint placeholder so :8180 responds during npm install (avoids ERR_EMPTY_RESPONSE).
-    command: ["sh", "/app/docker-entrypoint.sh"]
-    volumes: ["./frontend:/app", "frontend_node_modules:/app/node_modules"]
-    ports: ["127.0.0.1:8180:5173"]
-    env_file:
-      - .env
+    command: sh -c "npm install && npm run dev"
+    volumes: ["./frontend:/app", "/app/node_modules"]
+    ports: ["8180:5173"]
     environment:
       VITE_CONTROL_PROXY: http://control:8000
       VITE_GATEWAY_PROXY: http://gateway:8300
       VITE_DEMO_PROXY: http://demo:8770
       VITE_GATEWAY_BASE_URL: ${VITE_GATEWAY_BASE_URL:-http://127.0.0.1:8180}
       VITE_BACKEND_BASE_URL: ${VITE_BACKEND_BASE_URL:-http://127.0.0.1:8180}
+      # Module 2 (prodtest): live SOC / enforcement notification channel
       VITE_ENABLE_REALTIME_NOTIFICATIONS: ${VITE_ENABLE_REALTIME_NOTIFICATIONS:-true}
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:5173/ || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 24
-      start_period: 120s
     depends_on:
       control: { condition: service_healthy }
       demo: { condition: service_started }
@@ -427,12 +405,10 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  rabbitmq_data:
   mongo_data:
   chroma_data:
   npm_cache:
   uv_cache:
-  frontend_node_modules:
 
 networks:
   # Pre-created by tests/manual broker runs; external avoids compose label conflicts

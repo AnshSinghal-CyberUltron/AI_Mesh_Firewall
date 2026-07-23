@@ -471,12 +471,16 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=3, minute=0),
     },
     "update-risk-scores": {
-        "task": "module2.tasks.reassess_all_active_ueba_keys",
+        "task": "core.tasks.update_risk_scores_from_telemetry",
         "schedule": 300.0,
     },
     "generate-compliance-report": {
         "task": "core.tasks.generate_compliance_report",
         "schedule": crontab(hour=2, minute=0),
+    },
+    "module2-ueba-reassess": {
+        "task": "module2.tasks.reassess_all_active_ueba_keys",
+        "schedule": 300.0,
     },
     "module2-evaluate-alerts": {
         "task": "module2.tasks.evaluate_all_org_alerts",

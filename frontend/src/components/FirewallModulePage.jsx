@@ -101,22 +101,6 @@ export function FirewallModulePage({
 
   return (
     <div className="ai-mesh-shell space-y-8 pb-6">
-      {firewallData.error ? (
-        <div
-          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-100"
-          role="alert"
-        >
-          <p className="font-medium">Telemetry for this module could not be loaded.</p>
-          <p className="mt-1 text-xs opacity-90">{firewallData.error}</p>
-          <button
-            type="button"
-            onClick={() => firewallData.refetch?.()}
-            className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700"
-          >
-            Retry telemetry
-          </button>
-        </div>
-      ) : null}
       <section className="ai-mesh-card-strong ai-mesh-grid-bg ai-mesh-sheen relative overflow-hidden rounded-[30px] px-6 py-7 lg:px-8 lg:py-8">
         <div className="ai-mesh-hero-glow left-[-5rem] top-[-4rem] h-48 w-48 bg-sky-500/20" />
         <div className="ai-mesh-hero-glow bottom-[-6rem] right-[-4rem] h-56 w-56 bg-teal-500/20" />

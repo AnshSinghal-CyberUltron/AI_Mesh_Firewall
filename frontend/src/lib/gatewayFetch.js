@@ -15,15 +15,12 @@
 //   - Scoped to the simulator-key gateway calls that pass `reprovision`; it is
 //     never wired into the JWT/control fetch path.
 
-const STALE_KEY_RE = /(not valid for any token type|invalid api key|key_disabled|api_key_invalid)/i;
+const DISABLED_KEY_RE = /(api key is disabled|key is disabled|not valid for any token type|invalid api key|key_disabled|api_key_invalid)/i;
 
-async function bodyIndicatesStaleKey(res) {
+async function bodyIndicatesDisabledKey(res) {
   try {
     const text = await res.clone().text();
-    if (/api key is disabled|api key has expired/i.test(text)) {
-      return false;
-    }
-    return STALE_KEY_RE.test(text);
+    return DISABLED_KEY_RE.test(text);
   } catch {
     return false;
   }
@@ -48,7 +45,7 @@ export async function gatewayFetch(url, options = {}, { key, reprovision } = {})
   let res = await fetch(url, withKey(key));
 
   if ((res.status === 401 || res.status === 403) && typeof reprovision === "function") {
-    if (res.status === 401 || await bodyIndicatesStaleKey(res)) {
+    if (await bodyIndicatesDisabledKey(res)) {
       const fresh = await reprovision();
       // Retry once, only if we actually got a different key.
       if (fresh && fresh !== key) {

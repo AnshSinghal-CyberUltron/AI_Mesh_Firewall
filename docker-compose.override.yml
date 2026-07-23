@@ -1,6 +1,4 @@
-# LOCAL-ONLY overrides (safe to delete for prod-like runs).
-# - Email kill-switch (no real Graph sends from dev)
-# See docker-compose.yml for base stack.
+# LOCAL-ONLY overrides (see docker-compose.yml for base stack).
 # Reversible: delete this file, then `docker compose up -d`.
 services:
   control:
@@ -8,6 +6,8 @@ services:
       VECTOR_PROVIDER_ALLOW_PRIVATE: "1"
   gateway:
     environment:
+      # Demo/local: synchronous RAG ingest so documents are queryable without
+      # the vector.index Celery worker profile.
       GATEWAY_ASYNC_VECTOR_INGEST: "false"
       VECTOR_PROVIDER_ALLOW_PRIVATE: "1"
       # Outbound HTTPS to OpenAI/BYOK providers inside the container.

@@ -274,25 +274,10 @@ export function resolveBackendBaseUrl() {
 }
 
 export function resolveWebSocketBaseUrl() {
-  // Same-origin /ws proxy (Vite dev :8180 or prod firewall nginx) — do not use
-  // VITE_BACKEND_BASE_URL from a shared prod .env when the browser is on localhost.
-  if (typeof window !== "undefined") {
-    if (isLocalBrowserHost() || isProductionFirewallHost()) {
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      return `${protocol}//${window.location.host}`;
-    }
-  }
-
   const explicit = trimTrailingSlash(import.meta.env?.VITE_WS_BASE_URL || "");
-  if (explicit && isBrowserReachableUrl(explicit)) {
-    if (explicit.startsWith("https://")) return explicit.replace("https://", "wss://");
-    if (explicit.startsWith("http://")) return explicit.replace("http://", "ws://");
-    return explicit;
-  }
+  if (explicit) return explicit;
 
-  const apiBase = trimTrailingSlash(
-    import.meta.env?.VITE_API_BASE_URL || resolveBrowserBackendBaseUrl() || resolveBackendBaseUrl(),
-  );
+  const apiBase = trimTrailingSlash(import.meta.env?.VITE_API_BASE_URL || resolveBackendBaseUrl());
   if (apiBase.startsWith("https://")) return apiBase.replace("https://", "wss://");
   if (apiBase.startsWith("http://")) return apiBase.replace("http://", "ws://");
 

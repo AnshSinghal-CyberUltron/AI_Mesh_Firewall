@@ -118,7 +118,6 @@ services:
     ports: !override ["127.0.0.1:8100:8000"]
     # Do NOT override command — image CMD is server-entrypoint.sh (cgroup-aware
     # worker count). Pin via CONTROL_WEB_CONCURRENCY (4 fits the 4-CPU limit).
-    working_dir: /app/control
     environment:
       DEBUG: ${DEBUG:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -312,18 +311,9 @@ services:
       # Optional fallback only (unused when users log in):
       ZEROSHIELD_API_KEY: ${DEMO_GATEWAY_KEY:-}
       RAG_COLLECTION: ${RAG_COLLECTION:-zeroshield-rag-e2e}
-      ZEROSHIELD_TIMEOUT: ${DEMO_ZEROSHIELD_TIMEOUT:-60}
-      ZEROSHIELD_MAX_RETRIES: ${DEMO_ZEROSHIELD_MAX_RETRIES:-2}
     depends_on:
       control: { condition: service_started }
       gateway: { condition: service_started }
-      control: { condition: service_healthy }
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8770/api/health', timeout=5)\""]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
     deploy:
       resources:
         limits:

@@ -3,7 +3,6 @@ import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { InactivityWarningModal } from "../InactivityWarningModal";
 import { useInactivityLogout } from "../../hooks/useInactivityLogout";
-import { Module2DiagnosticsBanner } from "../module2/Module2DiagnosticsBanner";
 
 export function DashboardLayout({
   children,
@@ -56,10 +55,7 @@ export function DashboardLayout({
           onMobileMenuToggle={() => setMobileSidebarOpen((open) => !open)}
         />
         <main ref={contentRef} className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 sm:py-5 md:px-6 lg:px-8">
-          <div className="mx-auto w-full max-w-[1700px]">
-            {activeTab?.startsWith("m2-") ? <Module2DiagnosticsBanner /> : null}
-            {children}
-          </div>
+          <div className="mx-auto w-full max-w-[1700px]">{children}</div>
         </main>
       </div>
       <InactivityWarningModal

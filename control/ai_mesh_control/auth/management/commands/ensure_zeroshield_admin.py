@@ -91,7 +91,6 @@ class Command(BaseCommand):
         User = get_user_model()
         user = User.objects.filter(email__iexact=email).first()
         user_created = False
-        password_set = False
         if user is None:
             username = email.split("@")[0]
             base_username = username
@@ -107,11 +106,9 @@ class Command(BaseCommand):
                 is_superuser=True,
             )
             user_created = True
-            password_set = True
         else:
-            if options["reset_password"] or not user.has_usable_password():
+            if options["reset_password"]:
                 user.set_password(password)
-                password_set = True
             user.is_staff = True
             user.is_superuser = True
             user.is_active = True
@@ -141,6 +138,6 @@ class Command(BaseCommand):
         self.stdout.write(f"  Organization : {org.name} (slug={org.slug})")
         self.stdout.write(f"  Email        : {email}")
         self.stdout.write(f"  User created : {user_created}")
-        self.stdout.write(f"  Password set : {password_set}")
+        self.stdout.write(f"  Password set : {user_created or options['reset_password']}")
         self.stdout.write("  Login        : POST /api/auth/token/ with email + password")
         self.stdout.write("  UI           : http://127.0.0.1:8180/login")

@@ -6,7 +6,6 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
 import { getPolicyDomainUi, resolvePolicyCreateBehavior } from "../utils/policyCreateBehavior";
-import { syncModule2AfterTelemetryChange } from "../utils/crossModuleSync";
 import { PolicyDomainSwitcher } from "./PolicyDomainSwitcher";
 
 const PIPELINE_STAGE_OPTIONS = [
@@ -1124,7 +1123,6 @@ export function PolicyManagementPanel({
       setCreateModalOpen(false);
       setPolicyForm({ ...EMPTY_POLICY_FORM });
       await fetchPolicies();
-      syncModule2AfterTelemetryChange("policy-create");
     } catch (err) {
       setFormError(err.message || "Failed to create policy");
     } finally {
@@ -1152,7 +1150,6 @@ export function PolicyManagementPanel({
       setEditPolicyId(null);
       setPolicyForm({ ...EMPTY_POLICY_FORM });
       await fetchPolicies();
-      syncModule2AfterTelemetryChange("policy-edit");
     } catch (err) {
       setFormError(err.message || "Failed to update policy");
     } finally {
@@ -1206,7 +1203,6 @@ export function PolicyManagementPanel({
       setPolicies((prev) => prev.map((p) => (p.id === policy.id ? { ...p, ...updated } : p)));
       // Signals debounce compile; admins can nudge gateway sync immediately.
       fetchWithAuth("/api/policies/compile/", { method: "POST" }).catch(() => {});
-      syncModule2AfterTelemetryChange("policy-toggle");
     } catch (err) {
       setPolicies((prev) => prev.map((p) => (p.id === policy.id ? { ...p, enabled: previous } : p)));
       setFormError(err.message || "Failed to update policy status");
@@ -1240,7 +1236,6 @@ export function PolicyManagementPanel({
         [policyId]: (prev[policyId] || []).map((r) => (r.id === rule.id ? { ...r, ...updated } : r)),
       }));
       fetchWithAuth("/api/policies/compile/", { method: "POST" }).catch(() => {});
-      syncModule2AfterTelemetryChange("policy-rule-toggle");
     } catch (err) {
       setPolicyRules((prev) => ({
         ...prev,
@@ -1279,7 +1274,6 @@ export function PolicyManagementPanel({
         throw new Error(detail);
       }
       await fetchPolicies();
-      syncModule2AfterTelemetryChange("policy-delete");
     } catch (err) {
       setFormError(err.message || "Failed to delete policy");
     } finally {
@@ -1306,7 +1300,6 @@ export function PolicyManagementPanel({
       setEditRuleId(null);
       setRuleForm({ ...EMPTY_RULE_FORM });
       await fetchRules(ruleTargetPolicyId);
-      syncModule2AfterTelemetryChange("policy-rule-create");
     } catch (err) {
       setFormError(err.message || "Failed to create rule");
     } finally {
@@ -1333,7 +1326,6 @@ export function PolicyManagementPanel({
       setEditRuleId(null);
       setRuleForm({ ...EMPTY_RULE_FORM });
       await fetchRules(ruleTargetPolicyId);
-      syncModule2AfterTelemetryChange("policy-rule-edit");
     } catch (err) {
       setFormError(err.message || "Failed to update rule");
     } finally {
@@ -1368,7 +1360,6 @@ export function PolicyManagementPanel({
         throw new Error(detail);
       }
       await fetchRules(policyId);
-      syncModule2AfterTelemetryChange("policy-rule-delete");
     } catch (err) {
       setFormError(err.message || "Failed to delete rule");
     }
@@ -1431,7 +1422,6 @@ export function PolicyManagementPanel({
             },
           });
         }
-        syncModule2AfterTelemetryChange("policy-compile");
       } else {
         const text = await res.text();
         setCompileStatus({ success: false, error: text || "Compilation failed" });

@@ -1,5 +1,4 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { setModule2CacheScope } from '../api/module2';
 
 const AuthContext = createContext(null);
 
@@ -50,13 +49,6 @@ function clearStoredTokens() {
       .filter((key) => key.startsWith('zeroshield_gateway_key:'))
       .forEach((key) => localStorage.removeItem(key));
   } catch {}
-}
-
-function authCacheScopeKey(user) {
-  if (!user) return 'anon';
-  const orgId = user.organization_id ?? user.organization?.id ?? 'no-org';
-  const userId = user.id ?? user.email ?? user.username ?? 'unknown-user';
-  return `${orgId}:${userId}`;
 }
 
 /** Return true if token is expired or will expire within bufferSeconds. */
@@ -188,10 +180,6 @@ export function AuthProvider({ children }) {
     loadUser();
   }, [loadUser]);
 
-  useEffect(() => {
-    setModule2CacheScope(authCacheScopeKey(user));
-  }, [user]);
-
   const login = useCallback(async (email, password) => {
     const res = await fetch('/api/auth/token/', {
       method: 'POST',
@@ -242,7 +230,6 @@ export function AuthProvider({ children }) {
     
     // Always clear tokens locally, regardless of server response
     clearStoredTokens();
-    setModule2CacheScope('anon');
     setUser(null);
   }, []);
 
