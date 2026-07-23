@@ -980,6 +980,16 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
                 return True
             if want_injection and _detector_injection_match(kt):
                 return True
+            # Integration red-team wf_21ddb986 #2: the live entire-mode preset decodes the SERIALIZED
+            # blob (key names included), so an ENCODED credential/infra address smuggled as a key
+            # name blocks live but evaded the seed. Mirror the value-lane encoded-BLOCK check onto
+            # key names (block rules only; credential/infra, never generic PII — same exclusions).
+            if encoded_check and (want_cred or want_infra):
+                for variant in _encoded_variants(kt):
+                    if want_cred and redact_all_scoped(variant, {"credential"}) != variant:
+                        return True
+                    if want_infra and _dec_has_infra(variant):
+                        return True
         return False
 
     return False
@@ -1064,10 +1074,14 @@ def evaluate_mcp_policies(
             # B1 render-leak floor: an ENFORCING entire-scope detector rule arms the neutralizer
             # floor whether or not its CLASS matched this payload (the live posture neutralized
             # encoded-PII / beacons independent of class match). Skip when the policy is exempt
-            # for this tool (the operator lowered it to observe-only). Recorded before the
-            # class-match ``continue`` so an encoded credential a redact detector rule can't
-            # class-match still neutralizes downstream instead of egressing raw.
-            if not policy_exempts:
+            # for this tool — BUT the exemption lifts the tool only out of the stricter SERVER-WIDE
+            # rules, NOT its OWN per-tool rule (mirroring the action logic below at rule_target ==
+            # tool_name). Integration red-team wf_21ddb986 #1: a tool LOWERED to redact carries an
+            # exemption; the blanket skip suppressed the floor for the tool's own still-enforcing
+            # redact rule too, so an encoded credential the class masker can't reach egressed RAW.
+            # Arm the floor from the tool's OWN rule even under exemption; server-wide floors stay
+            # suppressed. Recorded before the class-match ``continue``.
+            if (not policy_exempts) or (rule_target and rule_target == tool_name):
                 _floor = _detector_floor_action(rule, context)
                 if _floor is not None:
                     _f_action, _f_key = _floor

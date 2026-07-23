@@ -665,3 +665,52 @@ def test_B2_fold_colliding_sibling_keys_all_masked():
         setter("[MASKED]")
     assert payload["arguments"]["email"] == "[MASKED]" and payload["arguments"]["Email"] == "[MASKED]", \
         "every fold-colliding key is masked — no raw egress of the 2nd"
+
+
+# ── Integration red-team (wf_21ddb986) composition guards ─────────────────────────────────
+@pytest.mark.asyncio
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+async def test_INT1_encoded_cred_on_lowered_to_redact_tool_masked(direction):
+    """Integration #1 (HIGH): a tool LOWERED block→redact carries an exemption; it must NOT suppress
+    the B1 render-leak floor for the tool's OWN redact rule — an encoded credential inside must be
+    neutralized (parity with the live redact posture), not egress raw."""
+    enc = _enc_entities(_AWS)
+    payload = {"args": {"note": "cfg " + enc, "who": _EMAIL}}
+    (lo, lr), (so, sr) = await _pair(payload, posture="block", rows=[], tool_actions={"getData": "redact"},
+                                     tool="getData", direction=direction)
+    assert (enc in json.dumps(lo)) == (enc in json.dumps(so)), "encoded cred survival must match live"
+    assert enc not in json.dumps(so), "encoded credential on a lowered-to-redact tool must be neutralized"
+
+
+@pytest.mark.parametrize("tok,want_block", [(_AWS, True), (_IP, True), (_EMAIL, False)])
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_INT2_encoded_secret_as_key_name_block_parity(tok, want_block, direction):
+    """Integration #2 (MED): an ENCODED credential/infra address smuggled as a JSON KEY NAME blocks
+    live under a block posture (the blob scan decodes keys) — the seed's key-name scan must run the
+    same encoded-variant BLOCK check. Encoded generic PII stays excluded (forwarded)."""
+    payload = {"args": {_enc_entities(tok): "x"}}
+    (lo, lr), (so, sr) = await _pair(payload, posture="block", rows=[], tool_actions={},
+                                     tool="t", direction=direction)
+    assert bool(lr.blocked) == bool(sr.blocked), f"live={lr.blocked} seed={sr.blocked}"
+    assert bool(sr.blocked) == want_block
+
+
+def test_INT4_deep_nested_secret_past_cap_masks_not_fails_closed():
+    """Integration #4 (invariant-break): a secret nested PAST the redaction depth cap must be MASKED
+    via the serialized residual (redact_all) — NOT trigger the cannot-mask fail-closed that escalated
+    redact→block. A benign residual keeps its structure. (Unit-level: an end-to-end deep payload hits
+    the pipeline's own deepcopy RecursionError, which fails closed on both lanes = parity.)"""
+    from mcp_scan_orchestrator import _redact_structured_leaves
+    hint = {"rule_id": 1, "scope": "entire", "key": "",
+            "config": {"replacement": "[X]", "detector_class": ["credential"]}}
+    deep = _AWS
+    for _ in range(501):  # past the 500 cap
+        deep = {"n": deep}
+    out, changed, hit_cap = _redact_structured_leaves(deep, [hint])
+    assert changed and not hit_cap and _AWS not in json.dumps(out), "deep secret masked, no cannot-mask"
+    benign = "hello world"
+    for _ in range(501):
+        benign = {"n": benign}
+    out2, changed2, _ = _redact_structured_leaves(benign, [hint])
+    assert not changed2 and "hello world" in json.dumps(out2), "benign deep residual preserved"

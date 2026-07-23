@@ -68,6 +68,29 @@ def _seed_mcp_detector_policies_on_server_save(sender, instance, **kwargs):
     _reseed_org_detectors(getattr(instance, "organization", None), why="server_save")
 
 
+@receiver(post_delete, sender="mcp_connector.MCPServerRegistration",
+          dispatch_uid="delete_mcp_detector_policy_on_server_delete")
+def _delete_mcp_detector_policy_on_server_delete(sender, instance, **kwargs):
+    """Integration red-team wf_21ddb986 #3: deleting a server ORPHANS its seeded detector policy —
+    ``Policy.mcp_server`` is SET_NULL, so the system policy stays ENABLED and keeps enforcing its
+    block/redact rules ORG-WIDE (mcp_server=NULL matches every server). Hard-delete the orphan on
+    server delete, capturing the org + server id from the instance (still populated in post_delete)."""
+    org = getattr(instance, "organization", None)
+    org_id = getattr(org, "id", None)
+    if org is None or org_id is None:
+        return
+    try:
+        from policy.mcp_seed import detector_policy_code
+        from policy.models import Policy
+
+        Policy.objects.filter(
+            code=detector_policy_code(org_id, instance.id), organization=org
+        ).delete()
+    except Exception:  # pragma: no cover
+        logger.warning("Failed to delete orphan MCP detector policy on server delete for org=%s",
+                       org_id, exc_info=True)
+
+
 # The detector policies replicate the server posture AND the Tier-1 SCAN-CONTROL / per-tool ACTIONS,
 # so those surfaces must ALSO re-seed on change — else an operator scan-control/tool edit after the
 # backfill drifts the seeded policies STALE, and flipping the Phase-3 flag retires the posture +

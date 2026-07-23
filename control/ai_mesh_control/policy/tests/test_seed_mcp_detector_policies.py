@@ -105,6 +105,20 @@ class DetectorSeedSignalTests(TestCase):
         # The MCPScanControl post_save signal re-seeded → the enforcing redact rule now exists.
         self.assertTrue(Policy.objects.filter(code=code, rules__action="redact").exists())
 
+    def test_server_delete_removes_orphan_detector_policy(self):
+        """Integration red-team wf_21ddb986 #3: deleting a server must HARD-DELETE its seeded detector
+        policy — else Policy.mcp_server SET_NULL leaves the system policy enabled, enforcing its
+        block/redact rules ORG-WIDE (mcp_server=NULL matches every server)."""
+        org = Organization.objects.create(name="Del", slug="del")
+        srv = MCPServerRegistration.objects.create(
+            organization=org, name="gh", default_scan_action="block",
+        )
+        code = detector_policy_code(org.id, srv.id)
+        self.assertTrue(Policy.objects.filter(code=code).exists())
+        srv.delete()
+        # The post_delete signal removed the orphan — no dangling org-wide enforcer.
+        self.assertFalse(Policy.objects.filter(code=code).exists())
+
     def test_per_tool_action_change_reseeds(self):
         """A per-tool scan_action override must re-seed too (it feeds the seeder)."""
         org = Organization.objects.create(name="Sig4", slug="sig4")
