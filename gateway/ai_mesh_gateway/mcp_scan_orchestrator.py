@@ -819,12 +819,28 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]]) -> tupl
     JSON-RPC ``arguments`` object belongs and (b) collapsed the key-scoped preset + Tier-2
     passes to ZERO targets (a string is not a dict), silently disabling all downstream
     scanning. Redacting leaves in place can never corrupt structure or drop a type — each
-    leaf is a str in and a str out. Returns ``(new_payload, changed)``."""
+    string leaf is a str in and a str out. Returns ``(new_payload, changed)``.
+
+    NUMERIC LEAVES (2026-07-23): detection runs on the SERIALIZED payload, so a secret
+    transmitted as a JSON NUMBER (an SSN/card/account/PIN as an integer — common in MCP
+    tool args/results) IS detected and reported redacted, but a str-only walk would skip
+    masking it → the raw number egresses while findings claim a redact fired (a silent
+    under-redaction LEAK). So a non-string scalar is stringified, run through the same
+    redaction, and — only if it actually changed — returned as the masked STRING (a masked
+    number cannot remain a number; the same type tradeoff CHG-0046 accepted for the preset
+    pass). An UNMATCHED number keeps its original numeric type.
+
+    ``hit_cap`` is True if the walk stopped at a leaf below ``_MCP_POLICY_REDACT_MAX_DEPTH``
+    (a pathologically nested payload) — the caller fails CLOSED rather than forward that
+    subtree unredacted, since the policy lane has no downstream backstop. Returns
+    ``(new_payload, changed, hit_cap)``."""
     changed = False
+    hit_cap = False
 
     def _walk(node: Any, depth: int) -> Any:
-        nonlocal changed
+        nonlocal changed, hit_cap
         if depth > _MCP_POLICY_REDACT_MAX_DEPTH:
+            hit_cap = True
             return node
         if isinstance(node, str):
             new = apply_redaction(node, hints)
@@ -835,9 +851,18 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]]) -> tupl
             return [_walk(x, depth + 1) for x in node]
         if isinstance(node, dict):
             return {k: _walk(v, depth + 1) for k, v in node.items()}
+        # Numeric scalar (int/float — NOT bool, whose "true"/"false" carries no secret):
+        # stringify, redact, and mask only if a hint actually matched.
+        if isinstance(node, (int, float)) and not isinstance(node, bool):
+            as_text = _safe_json(node)
+            new = apply_redaction(as_text, hints)
+            if new != as_text:
+                changed = True
+                return new
+            return node
         return node
 
-    return _walk(payload, 0), changed
+    return _walk(payload, 0), changed, hit_cap
 
 
 def _mcp_policy_pass_sync(
@@ -875,7 +900,20 @@ def _mcp_policy_pass_sync(
     # Policy-authored redact applies whenever matched (not only under a redact posture);
     # skipped only under an explicit observe-only 'monitor'.
     if eval_result.action == "redact" and eval_result.redaction_hints and posture != "monitor":
-        new_payload, changed = _redact_structured_leaves(full_payload, eval_result.redaction_hints)
+        new_payload, changed, hit_cap = _redact_structured_leaves(full_payload, eval_result.redaction_hints)
+        # CANNOT-MASK FAIL-CLOSED (2026-07-23): the operator's redact rule MATCHED (detection
+        # runs on the serialized payload) but the leaf-walk could not mask it — either the
+        # match spans a JSON boundary / structural context no single leaf reproduces (e.g. a
+        # regex requiring ``"key":"...")``, or the payload nests past the depth cap. The
+        # policy lane has NO downstream backstop: its findings carry threat_type='redact',
+        # which the E12 result-redaction floor's _findings_have_secret_or_pii never matches,
+        # so forwarding raw is a SILENT leak while telemetry claims a redact fired. Withhold
+        # instead — the "cannot mask" exception (a system limitation, mirroring the existing
+        # masking-crash fail-closed), NOT a redact->block escalation of MASKABLE content
+        # (maskable matches redact + forward as before). Numeric leaves are masked above, so
+        # this fires only for the genuinely-unmaskable residual (structural regex / deep nest).
+        if hit_cap or not changed:
+            return full_payload, findings, True, rfields, False
         return new_payload, findings, False, rfields, changed
     return full_payload, findings, False, rfields, False
 
