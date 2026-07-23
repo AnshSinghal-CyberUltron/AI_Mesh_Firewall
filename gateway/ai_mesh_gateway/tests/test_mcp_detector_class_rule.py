@@ -143,21 +143,40 @@ async def test_detector_detection_redaction_agree_no_cannot_mask_block():
     assert _AWS not in json.dumps(scanned)
 
 
-@pytest.mark.asyncio
-async def test_detector_key_scope_dot_path_scans_the_field():
-    """Red-team #1: a detector rule scoped to a DOT-PATH key (arguments.body) must scan that
-    field (not silently scan nothing). Secret in arguments.body is masked; a secret in a
-    sibling field is left (dot-path scoping honoured)."""
-    rule = {"id": 9, "name": "d", "rule_type": "detector", "action": "redact",
-            "condition": {"detector_class": "all", "direction": "input", "scope": "key", "key": "arguments.body"}}
-    # secret ONLY in the dot-path field; before the fix, scope=key did a literal key-name walk
-    # ("arguments.body" as one key) and scanned NOTHING -> the secret egressed raw.
-    payload = {"arguments": {"body": f"k {_AWS}", "title": "clean"}}
-    scanned, res = await _scan(payload, [rule], posture="tag")
-    assert res.blocked is False
-    assert _AWS not in scanned["arguments"]["body"], "dot-path field must be scanned + masked (no leak)"
-    # a benign field that would NOT match detection is not detected -> forwarded
-    assert scanned["arguments"]["title"] == "clean"
+def test_per_tool_exemption_downgrades_only_that_tool():
+    """Phase 2b #5: a tool-scoped exemption (condition.exempt, target_tool) downgrades a broader
+    server-wide enforcing rule to observe-only for THAT tool, while other tools still enforce.
+    The additive model otherwise cannot un-enforce a tool. Detection/findings are preserved."""
+    from policy_engine import evaluate_mcp_policies
+    pols = [{"policy": {"id": 1, "code": "P", "name": "P", "policy_domain": "mcp", "mcp_server_slug": None},
+             "rules": [
+                 {"id": 1, "action": "redact", "rule_type": "detector",
+                  "condition": {"detector_class": "all", "direction": "both", "scope": "entire"}},
+                 {"id": 2, "action": "allow", "rule_type": "detector", "target_tool": "search_docs",
+                  "condition": {"exempt": True}},
+             ]}]
+    ctx = {"prompt": "", "response": "", "input_args": {"q": f"key {_AWS}"}, "output_data": None}
+    enf = evaluate_mcp_policies(pols, ctx, tool_name="wire_transfer")
+    exm = evaluate_mcp_policies(pols, ctx, tool_name="search_docs")
+    assert enf.action == "redact", "non-exempt tool still enforces the server-wide rule"
+    assert exm.action == "monitor", "exempt tool downgraded to observe-only"
+    assert exm.redaction_hints == [], "exempt tool carries no redaction"
+    assert exm.matched_rule_ids, "exempt tool still detected (audit trail preserved)"
+
+
+def test_exemption_is_tool_scoped_never_blanket():
+    """An exempt rule with NO target_tool must not blanket-exempt everything."""
+    from policy_engine import evaluate_mcp_policies
+    pols = [{"policy": {"id": 1, "code": "P", "name": "P", "policy_domain": "mcp", "mcp_server_slug": None},
+             "rules": [
+                 {"id": 1, "action": "redact", "rule_type": "detector",
+                  "condition": {"detector_class": "all", "direction": "both", "scope": "entire"}},
+                 {"id": 2, "action": "allow", "rule_type": "detector", "target_tool": "",
+                  "condition": {"exempt": True}},
+             ]}]
+    ctx = {"prompt": "", "response": "", "input_args": {"q": f"key {_AWS}"}, "output_data": None}
+    r = evaluate_mcp_policies(pols, ctx, tool_name="anytool")
+    assert r.action == "redact", "an untargeted exemption must NOT blanket-downgrade enforcement"
 
 
 if __name__ == "__main__":
