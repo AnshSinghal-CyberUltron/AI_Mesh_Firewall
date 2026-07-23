@@ -276,6 +276,11 @@ class EvaluationResult:
     # to the leaves when this is set — a MASK only, never a block (frozen: redact/floor never
     # escalates to block). Empty when no enforcing entire-scope detector rule applies.
     render_floor: str = ""
+    # B2: the ``key`` paths of enforcing scope=KEY detector rules applicable to this scan. The
+    # render-leak floor is applied ONLY to leaves under these keys (encoded/beacon content inside
+    # the operator's protected field is neutralized without touching siblings). Distinct from
+    # ``render_floor`` (entire-scope). Deduped, order-preserving.
+    render_floor_keys: list[str] = field(default_factory=list)
     message: str = ""
 
 def _policy_applies_to_actor(
@@ -789,32 +794,34 @@ def _candidate_texts_mcp(context: dict[str, Any], matcher: dict[str, Any]) -> li
     return [t for t in texts if t]
 
 
-def _detector_floor_action(rule: dict[str, Any], context: dict[str, Any]) -> str:
-    """B1: return this rule's action ("redact"/"block") if it is an ENFORCING, entire-scope
-    DETECTOR rule that is APPLICABLE to the active scan (its direction/scope yields candidate
-    text), else "".
+def _detector_floor_action(rule: dict[str, Any], context: dict[str, Any]) -> tuple[str, str] | None:
+    """B1/B2: return ``(action, key)`` if this is an ENFORCING DETECTOR rule APPLICABLE to the
+    active scan (its direction/scope yields candidate text), else ``None``. ``action`` is
+    "redact"/"block"; ``key`` is "" for an entire-scope rule or the ``key`` path for a scope=key
+    rule.
 
-    This drives the render-leak MASK FLOOR (the orchestrator neutralizes encoded-PII /
-    markdown-split / exfil-beacon surfaces on the leaves) — applied whenever such a rule is
-    PRESENT, regardless of whether its class-detection matched, because the live posture ran
-    that neutralization as an enforcing floor independent of class match. A key_path-scoped
-    detector rule is EXCLUDED (returns "") — scoped-floor parity is B2's concern, and running a
-    whole-payload floor for a key-scoped rule would over-mask siblings. Applicability reuses
-    ``_candidate_texts_mcp`` (the same direction/scope gate ``_evaluate_rule_mcp`` uses), so an
-    input-only rule never arms the floor on an output scan (or vice-versa)."""
+    This drives the render-leak MASK FLOOR — the orchestrator neutralizes encoded-PII /
+    markdown-split / exfil-beacon surfaces, applied whenever such a rule is PRESENT regardless of
+    whether its class-detection matched (the live posture ran that neutralization as an enforcing
+    floor independent of class match). B2: a key_path-scoped rule arms the floor ONLY on the leaves
+    UNDER its ``key`` (the live posture scopes the preset pass to that field via extract_and_bind),
+    so encoded/beacon content inside the operator's protected field is neutralized without touching
+    siblings. Applicability reuses ``_candidate_texts_mcp`` (the same direction/scope gate
+    ``_evaluate_rule_mcp`` uses), so an input-only rule never arms the floor on an output scan."""
     cond = rule.get("condition") or {}
     if not (rule.get("rule_type") == "detector" or cond.get("detector_class")):
-        return ""
+        return None
     action = rule.get("action", "")
     if action not in ("redact", "block"):
-        return ""
-    scope = (cond.get("scope") or "entire")
-    if scope not in ("entire", "", None):
-        return ""  # key_path-scoped floor is B2
+        return None
     matcher = _resolve_matcher_dict(rule)
     if not _candidate_texts_mcp(context, matcher):
-        return ""  # not applicable to this scan direction
-    return action
+        return None  # not applicable to this scan direction
+    scope = (cond.get("scope") or "entire")
+    key = str(cond.get("key") or "").strip() if scope == "key" else ""
+    if scope == "key" and not key:
+        return None  # malformed key-scope rule arms nothing
+    return (action, key)
 
 
 def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
@@ -989,8 +996,13 @@ def evaluate_mcp_policies(
             # class-match still neutralizes downstream instead of egressing raw.
             if not policy_exempts:
                 _floor = _detector_floor_action(rule, context)
-                if _floor and ACTION_ORDER.get(_floor, 0) > ACTION_ORDER.get(result.render_floor, -1):
-                    result.render_floor = _floor
+                if _floor is not None:
+                    _f_action, _f_key = _floor
+                    if _f_key:
+                        if _f_key not in result.render_floor_keys:
+                            result.render_floor_keys.append(_f_key)
+                    elif ACTION_ORDER.get(_f_action, 0) > ACTION_ORDER.get(result.render_floor, -1):
+                        result.render_floor = _f_action
 
             if not _evaluate_rule_mcp(rule, context):
                 continue

