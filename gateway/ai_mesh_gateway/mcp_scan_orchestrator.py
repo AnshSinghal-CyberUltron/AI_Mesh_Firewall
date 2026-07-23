@@ -798,6 +798,123 @@ async def _scan_text_tier1(
     return _scan_text_tier1_sync(text, **_kwargs)
 
 
+# Bound the structured-redaction walk so a pathologically deep payload can't
+# RecursionError mid-scan (the input path has no upstream depth guard; the result
+# floor does). Past the cap, leaves are returned unredacted rather than crashing —
+# the preset pass (its own scope) and, for the result direction, the E12 floor still
+# run, so this is a depth backstop, not a silent redaction skip for normal payloads.
+_MCP_POLICY_REDACT_MAX_DEPTH = 200
+
+
+def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]]) -> tuple[Any, bool]:
+    """Apply policy ``redaction_hints`` to every STRING LEAF of ``payload`` IN PLACE,
+    preserving structure.
+
+    CRITICAL (2026-07-23): the previous policy pass serialized the whole payload to a
+    JSON string, ran ``apply_redaction`` (a blind ``regex.sub``) over it, and reparsed
+    with ``json.loads``. An operator-authored replacement containing a ``"`` — or a
+    non-anchored redact regex (e.g. ``Bearer\\s+.*``) that swallows a JSON delimiter —
+    produced INVALID json, and ``extract_and_bind``'s ``_set_entire`` silently stored the
+    raw corrupted STRING as the payload. That (a) forwarded a garbled string where the
+    JSON-RPC ``arguments`` object belongs and (b) collapsed the key-scoped preset + Tier-2
+    passes to ZERO targets (a string is not a dict), silently disabling all downstream
+    scanning. Redacting leaves in place can never corrupt structure or drop a type — each
+    leaf is a str in and a str out. Returns ``(new_payload, changed)``."""
+    changed = False
+
+    def _walk(node: Any, depth: int) -> Any:
+        nonlocal changed
+        if depth > _MCP_POLICY_REDACT_MAX_DEPTH:
+            return node
+        if isinstance(node, str):
+            new = apply_redaction(node, hints)
+            if new != node:
+                changed = True
+            return new
+        if isinstance(node, list):
+            return [_walk(x, depth + 1) for x in node]
+        if isinstance(node, dict):
+            return {k: _walk(v, depth + 1) for k, v in node.items()}
+        return node
+
+    return _walk(payload, 0), changed
+
+
+def _mcp_policy_pass_sync(
+    full_payload: Any,
+    *,
+    policies: list[dict[str, Any]],
+    serialized: str,
+    scan_direction: str,
+    enforcement: str,
+    tool_name: str,
+    actor: dict[str, Any] | None,
+) -> tuple[Any, list[McpFinding], bool, list[str], bool]:
+    """Tier-1 POLICY lane over the FULL structured payload (Phase 1, decoupled from the
+    scan-control target binding). DETECTION uses the serialized payload (read-only);
+    REDACTION is applied to string leaves via ``_redact_structured_leaves`` — never a
+    serialize-and-reparse round trip. Returns
+    ``(new_payload, findings, blocked, redaction_fields, redacted)``. ``policies`` is
+    resolved (and emptiness short-circuited) by the async wrapper so a zero-policy org
+    never pays the full-payload serialization."""
+    if not serialized or not policies:
+        return full_payload, [], False, [], False
+    context = _build_mcp_context(serialized, scan_direction=scan_direction, full_payload=full_payload)
+
+    eval_result = evaluate_mcp_policies(policies, context, tool_name=tool_name or None, actor=actor)
+    if not eval_result.matched_rule_ids:
+        return full_payload, [], False, [], False
+
+    findings = _findings_from_policy_eval(eval_result, scan_direction=scan_direction, text=serialized)
+    rfields = list(eval_result.redaction_fields)
+    posture = (enforcement or "").strip().lower()
+    # A rule authored action='block' is an explicit block intent honored under any
+    # non-monitor posture; a block posture is a floor over any matched rule.
+    if _enforce_blocks(enforcement) or (eval_result.action == "block" and posture != "monitor"):
+        return full_payload, findings, True, rfields, False
+    # Policy-authored redact applies whenever matched (not only under a redact posture);
+    # skipped only under an explicit observe-only 'monitor'.
+    if eval_result.action == "redact" and eval_result.redaction_hints and posture != "monitor":
+        new_payload, changed = _redact_structured_leaves(full_payload, eval_result.redaction_hints)
+        return new_payload, findings, False, rfields, changed
+    return full_payload, findings, False, rfields, False
+
+
+async def _mcp_policy_pass(
+    full_payload: Any,
+    *,
+    scan_direction: str,
+    enforcement: str,
+    org_slug: str,
+    server_slug: str,
+    tool_name: str,
+    actor: dict[str, Any] | None,
+) -> tuple[Any, list[McpFinding], bool, list[str], bool]:
+    """Async wrapper: resolve the org's MCP policies FIRST and short-circuit a zero-policy
+    org BEFORE serializing (so it never pays the full-payload ``_safe_json`` cost the old
+    entire-binding always paid); then offload the policy lane to a worker thread for a
+    LARGE payload (detection regex + leaf walk are CPU-bound), inline otherwise."""
+    policy_sync = _get_policy_sync()
+    if policy_sync is None or not org_slug or not server_slug:
+        return full_payload, [], False, [], False
+    try:
+        policies = policy_sync.get_policies_for_server(org_slug, server_slug, domain="mcp")
+    except Exception as exc:
+        LOG.warning("MCP policy bundle lookup failed: %s", exc)
+        policies = []
+    if not policies:
+        return full_payload, [], False, [], False
+
+    serialized = full_payload if isinstance(full_payload, str) else _safe_json(full_payload)
+    kw = dict(
+        policies=policies, serialized=serialized, scan_direction=scan_direction,
+        enforcement=enforcement, tool_name=tool_name, actor=actor,
+    )
+    if len(serialized) > _TIER1_OFFLOAD_THRESHOLD:
+        return await asyncio.to_thread(_mcp_policy_pass_sync, full_payload, **kw)
+    return _mcp_policy_pass_sync(full_payload, **kw)
+
+
 async def _scan_text_tier2(
     text: str,
     *,
@@ -943,66 +1060,50 @@ async def scan_mcp_payload(
     # ── Tier-1 POLICY pass (Phase 1, 2026-07-23): evaluate policies ONCE against the
     # FULL payload using each policy's OWN scope, DECOUPLED from the scan-control target
     # binding below. A policy authored ``scope=entire`` now sees the whole payload and its
-    # redaction lands where the POLICY matched — closing the detect-wide/mutate-narrow
+    # redaction lands on the payload's string leaves — closing the detect-wide/mutate-narrow
     # raw-egress leak where a key-scoped scan-control silently narrowed an entire-scope
     # redact policy so a secret in a sibling field egressed raw, undetected and untagged.
+    # Redaction is applied IN-PLACE to string leaves (never a serialize-and-reparse round
+    # trip), so a policy redaction can never corrupt the payload structure or drop it to a
+    # raw string — which would have silently disabled the key-scoped preset + Tier-2 passes.
     # Runs only for an ENABLED tier1 direction (after the disabled-skip above), so direction
     # isolation is preserved. The scan-control scope still governs the PRESET pass that
     # follows; each surface honours its OWN operator-selected scope.
-    pol_state, pol_targets = extract_and_bind(payload, target_mode="entire", key_path="")
-    pol_text, pol_setter, _pol_label = pol_targets[0]
-    if pol_text:
-        pol_new, pol_findings, pol_blocked, pol_rfields = await _scan_text_tier1(
-            pol_text,
-            scan_direction=scan_direction,
-            enforcement=tier1_action,
-            full_payload=pol_state[0],
-            org_slug=org_slug,
-            server_slug=server_slug,
-            tool_name=tool_name,
-            actor=actor,
-            include_policies=True,
-            include_presets=False,
-        )
-        for _rf in pol_rfields:
-            if _rf not in field_redaction_union:
-                field_redaction_union.append(_rf)
-        result.findings.extend(pol_findings)
-        if pol_findings:
-            for f in pol_findings:
-                result.compliance_tags = _merge_tags(
-                    result.compliance_tags, _tags_for_finding(f)
-                )
-            if _is_observe_only_posture(tier1_action):
-                result.monitored = True
-        if pol_blocked:
-            result.blocked = True
-            result.scan_trace.append(
-                {
-                    "scan_stage": "tier1_policy", "tier": "tier1",
-                    "direction": scan_direction, "scope": "entire",
-                    "action": tier1_action, "blocked": True,
-                    "finding_count": len(pol_findings), "policy_engine": True,
-                }
+    pol_payload, pol_findings, pol_blocked, pol_rfields, pol_redacted = await _mcp_policy_pass(
+        payload,
+        scan_direction=scan_direction,
+        enforcement=tier1_action,
+        org_slug=org_slug,
+        server_slug=server_slug,
+        tool_name=tool_name,
+        actor=actor,
+    )
+    for _rf in pol_rfields:
+        if _rf not in field_redaction_union:
+            field_redaction_union.append(_rf)
+    result.findings.extend(pol_findings)
+    if pol_findings:
+        for f in pol_findings:
+            result.compliance_tags = _merge_tags(
+                result.compliance_tags, _tags_for_finding(f)
             )
-            return payload, result
-        if pol_new != pol_text:
-            # fail-closed no-op-scrub guard (parity with the preset loop below): a policy
-            # redaction the setter cannot apply must BLOCK, never forward the raw payload.
-            _before = _safe_json(pol_state[0])
-            pol_setter(pol_new)
-            if _safe_json(pol_state[0]) == _before:
-                result.blocked = True
-                result.scan_trace.append(
-                    {
-                        "scan_stage": "noop_scrub_failclosed", "tier": "tier1",
-                        "direction": scan_direction, "scope": "entire",
-                        "reason": "policy_redaction_setter_noop_raw_survived",
-                    }
-                )
-                return payload, result
-            result_redacted = True
-            payload = pol_state[0]  # thread the policy-mutated payload into the preset pass
+        if _is_observe_only_posture(tier1_action):
+            result.monitored = True
+    if pol_blocked:
+        result.blocked = True
+        result.scan_trace.append(
+            {
+                "scan_stage": "tier1_policy", "tier": "tier1",
+                "direction": scan_direction, "scope": "entire",
+                "action": tier1_action, "blocked": True,
+                "finding_count": len(pol_findings), "policy_engine": True,
+            }
+        )
+        return payload, result
+    if pol_redacted:
+        result_redacted = True
+        payload = pol_payload  # thread the policy-redacted payload into the preset pass
+    if pol_findings:
         result.scan_trace.append(
             {
                 "scan_stage": "tier1_policy", "tier": "tier1",

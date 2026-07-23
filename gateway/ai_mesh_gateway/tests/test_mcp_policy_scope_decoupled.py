@@ -154,5 +154,48 @@ async def test_policy_lane_runs_on_enabled_direction():
     assert _SEC not in json.dumps(scanned)
 
 
+# ───────── structured redaction: no serialize/reparse JSON corruption (2026-07-23) ─────────
+# REGRESSION: the policy pass used to serialize the whole payload to JSON, apply_redaction
+# (a blind regex.sub) over the STRING, then json.loads it back. A greedy/non-anchored redact
+# regex (or a replacement containing a quote) produced invalid JSON, and the setter silently
+# stored the raw corrupted STRING as the payload — which (a) forwarded a garbled string where
+# the JSON-RPC arguments object belongs and (b) collapsed the key-scoped preset + Tier-2
+# passes to ZERO targets, silently disabling ALL downstream scanning. Both hunters reproduced
+# it. Fix: redact string leaves IN PLACE (structure preserved; a str stays a str).
+def _greedy_rule():
+    # non-anchored regex that, applied to a serialized JSON blob, would swallow a delimiter
+    return {"id": 20, "name": "auth", "rule_type": "regex", "action": "redact",
+            "condition": {"regex": r"Bearer\s+.*", "direction": "input", "scope": "entire"},
+            "redaction_config": {"replacement": "[REDACTED]"}}
+
+
+@pytest.mark.asyncio
+async def test_greedy_policy_redaction_does_not_corrupt_payload_or_skip_presets():
+    """A greedy redact regex must NOT corrupt the payload into a string nor skip the preset
+    pass. The auth header is masked (own leaf only) AND the SSN in a key-scoped sibling is
+    still scanned + redacted by the preset pass (payload stayed a dict)."""
+    ec = _effc(_slot(True, "redact", target_mode="key_path", key_path="title"), _slot(False, direction="output"))
+    payload = {"auth_header": "Bearer sk_live_abcdef1234567890", "title": "urgent SSN 123-45-6789"}
+    scanned, res = await _scan(payload, ec, [_greedy_rule()], enforcement="tag")
+    assert isinstance(scanned, dict), "payload structure must be preserved (not a corrupted string)"
+    assert res.blocked is False
+    assert "Bearer sk_live" not in json.dumps(scanned), "auth header masked in its own leaf"
+    assert "123-45-6789" not in json.dumps(scanned), "sibling SSN still scanned by the preset pass"
+    assert scanned["title"].startswith("urgent SSN"), "only the SSN masked, structure/text intact"
+
+
+@pytest.mark.asyncio
+async def test_quote_replacement_does_not_corrupt_payload():
+    """An operator replacement containing a double-quote must not break JSON structure."""
+    rule = {"id": 21, "name": "email", "rule_type": "regex", "action": "redact",
+            "condition": {"preset": "email", "direction": "input", "scope": "entire"},
+            "redaction_config": {"replacement": 'X"X'}}
+    ec = _effc(_slot(True, "redact", target_mode="key_path", key_path="note"), _slot(False, direction="output"))
+    payload = {"contact": "reach me at foo@bar.com", "note": "clean"}
+    scanned, res = await _scan(payload, ec, [rule])
+    assert isinstance(scanned, dict), "quote in replacement must not corrupt structure"
+    assert "foo@bar.com" not in json.dumps(scanned)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
