@@ -30,7 +30,7 @@ from patterns import (
     redact_all,
     redact_all_scoped,
 )
-from policy_engine import apply_field_redaction, apply_redaction, evaluate_mcp_policies
+from policy_engine import apply_field_redaction, apply_redaction, evaluate_mcp_policies, _normalize_key
 
 LOG = logging.getLogger("gateway.mcp_scan")
 
@@ -846,37 +846,88 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]],
     ``hit_cap`` is True if the walk stopped at a leaf below ``_MCP_POLICY_REDACT_MAX_DEPTH``
     (a pathologically nested payload) — the caller fails CLOSED rather than forward that
     subtree unredacted, since the policy lane has no downstream backstop. Returns
-    ``(new_payload, changed, hit_cap)``."""
+    ``(new_payload, changed, hit_cap)``.
+
+    SCOPE=KEY (B2, 2026-07-23): a hint carrying ``scope=key`` is applied ONLY to leaves UNDER its
+    ``key`` path. The previous walk applied EVERY hint to EVERY leaf, so a key_path-scoped detector
+    rule (which the live posture scopes to a single field via ``extract_and_bind(key_path=...)``)
+    OVER-MASKED sibling fields the posture forwards raw. A leaf's path is the tuple of NFKC-casefolded
+    dict keys from the root. Matching MIRRORS the two detection binders exactly:
+      * a DOTTED ``key`` (``args.body``) is a path FROM ROOT (``_collect_dot_path_values``) — covered
+        iff the key parts are a PREFIX of the leaf path;
+      * a plain ``key`` (``title``) is a key NAME matched at ANY depth (``_collect_key_values`` —
+        recursive key-name walk) — covered iff that name appears as ANY segment of the leaf path.
+    Using a prefix match for a plain key would only mask a TOP-LEVEL key, leaving a nested match
+    detected-but-unmasked → a spurious cannot-mask block. ``scope=entire`` applies to every leaf.
+
+    LISTS are TRANSPARENT to the key path (a path part matches inside each list item, parity with
+    the ``_collect_dot_path_values`` detection binding), so a key_path value nested in a list is
+    best-effort MASKED — NOT forwarded raw. The live posture, whose dict-only setter cannot write
+    through a list, instead fails CLOSED and BLOCKS that call (cannot-mask). Under Phase 3 the policy
+    lane runs observe-only (``tag``), where the frozen contract forbids blocking, so best-effort
+    masking of the maskable keyed value is the correct — and strictly safer — Phase-3 equivalent (no
+    raw egress; siblings still preserved). This is the one intended posture→observe divergence."""
     changed = False
     hit_cap = False
 
-    def _walk(node: Any, depth: int) -> Any:
+    # Split hints once: entire-scope apply everywhere; key-scope carry their matcher.
+    # ``kind`` is "dot" (prefix-from-root, dotted path) or "name" (recursive key-name, plain key).
+    entire_hints: list[dict[str, Any]] = []
+    keyed_hints: list[tuple[str, tuple[str, ...], dict[str, Any]]] = []
+    for h in hints:
+        key = (h.get("key") or "") if isinstance(h, dict) else ""
+        if (isinstance(h, dict) and h.get("scope") == "key") and key:
+            if "." in str(key):
+                parts = tuple(_normalize_key(p) for p in str(key).split(".") if p)
+                if parts:
+                    keyed_hints.append(("dot", parts, h))
+                    continue
+            else:
+                keyed_hints.append(("name", (_normalize_key(key),), h))
+                continue
+        entire_hints.append(h)
+
+    def _hints_for(path: tuple[str, ...]) -> list[dict[str, Any]]:
+        if not keyed_hints:
+            return hints  # fast path: no key-scoped hints → original behavior
+        applicable = list(entire_hints)
+        for kind, parts, h in keyed_hints:
+            if kind == "dot":
+                if path[:len(parts)] == parts:
+                    applicable.append(h)
+            elif parts[0] in path:  # plain key name matched at any depth
+                applicable.append(h)
+        return applicable
+
+    def _walk(node: Any, depth: int, path: tuple[str, ...]) -> Any:
         nonlocal changed, hit_cap
         if depth > _MCP_POLICY_REDACT_MAX_DEPTH:
             hit_cap = True
             return node
         if isinstance(node, str):
             new = _neutralize_render_leaks(node) if neutralize else node
-            new = apply_redaction(new, hints)
+            new = apply_redaction(new, _hints_for(path))
             if new != node:
                 changed = True
             return new
         if isinstance(node, list):
-            return [_walk(x, depth + 1) for x in node]
+            # A list is TRANSPARENT to the key path (a path part matches inside each list item,
+            # parity with _collect_dot_path_values) — do not extend ``path``.
+            return [_walk(x, depth + 1, path) for x in node]
         if isinstance(node, dict):
-            return {k: _walk(v, depth + 1) for k, v in node.items()}
+            return {k: _walk(v, depth + 1, path + (_normalize_key(k),)) for k, v in node.items()}
         # Numeric scalar (int/float — NOT bool, whose "true"/"false" carries no secret):
         # stringify, redact, and mask only if a hint actually matched.
         if isinstance(node, (int, float)) and not isinstance(node, bool):
             as_text = _safe_json(node)
-            new = apply_redaction(as_text, hints)
+            new = apply_redaction(as_text, _hints_for(path))
             if new != as_text:
                 changed = True
                 return new
             return node
         return node
 
-    return _walk(payload, 0), changed, hit_cap
+    return _walk(payload, 0, ()), changed, hit_cap
 
 
 def _mcp_policy_pass_sync(
