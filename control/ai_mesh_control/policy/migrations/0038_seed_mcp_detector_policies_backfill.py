@@ -28,24 +28,26 @@ logger = logging.getLogger(__name__)
 
 
 def _backfill_detector_policies(apps, schema_editor):
-    Organization = apps.get_model("auth_api", "Organization")
-    # Live seeding logic (uses current model classes); imported lazily so a stale import never
-    # breaks migration discovery.
+    # The seeder (``seed_mcp_detector_policies``) queries LIVE model classes throughout
+    # (MCPScanControl/MCPServerRegistration/Policy/Rule + resolve_effective_controls), so we must
+    # feed it LIVE Organization instances — a historical ``apps.get_model`` org fails Django's
+    # cross-model identity check. Imported lazily so migration DISCOVERY never breaks on a stale
+    # import; a per-org guard keeps one org's failure from aborting the deploy.
     try:
+        from auth.models import Organization
         from policy.mcp_seed import seed_mcp_detector_policies
     except Exception:  # pragma: no cover - if the seeder can't import, skip the backfill entirely
-        logger.warning("0038 backfill: seed_mcp_detector_policies unavailable; skipping", exc_info=True)
+        logger.warning("0038 backfill: seeder unavailable; skipping", exc_info=True)
         return
 
     seeded = 0
-    for org_id in Organization.objects.filter(is_active=True).values_list("id", flat=True):
+    for org in Organization.objects.filter(is_active=True):
         try:
-            org = Organization.objects.get(id=org_id)
             seed_mcp_detector_policies(org)
             seeded += 1
         except Exception:  # pragma: no cover - never abort the deploy on one org's seeding
             logger.warning("0038 backfill: failed to seed MCP detector policies for org=%s",
-                           org_id, exc_info=True)
+                           org.id, exc_info=True)
     logger.info("0038 backfill: seeded MCP detector policies for %d active org(s)", seeded)
 
 
