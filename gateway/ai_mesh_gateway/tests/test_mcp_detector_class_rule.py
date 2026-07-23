@@ -143,5 +143,22 @@ async def test_detector_detection_redaction_agree_no_cannot_mask_block():
     assert _AWS not in json.dumps(scanned)
 
 
+@pytest.mark.asyncio
+async def test_detector_key_scope_dot_path_scans_the_field():
+    """Red-team #1: a detector rule scoped to a DOT-PATH key (arguments.body) must scan that
+    field (not silently scan nothing). Secret in arguments.body is masked; a secret in a
+    sibling field is left (dot-path scoping honoured)."""
+    rule = {"id": 9, "name": "d", "rule_type": "detector", "action": "redact",
+            "condition": {"detector_class": "all", "direction": "input", "scope": "key", "key": "arguments.body"}}
+    # secret ONLY in the dot-path field; before the fix, scope=key did a literal key-name walk
+    # ("arguments.body" as one key) and scanned NOTHING -> the secret egressed raw.
+    payload = {"arguments": {"body": f"k {_AWS}", "title": "clean"}}
+    scanned, res = await _scan(payload, [rule], posture="tag")
+    assert res.blocked is False
+    assert _AWS not in scanned["arguments"]["body"], "dot-path field must be scanned + masked (no leak)"
+    # a benign field that would NOT match detection is not detected -> forwarded
+    assert scanned["arguments"]["title"] == "clean"
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
