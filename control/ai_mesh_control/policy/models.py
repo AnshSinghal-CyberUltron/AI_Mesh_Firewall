@@ -115,6 +115,9 @@ class Rule(models.Model):
         ("regex", "Regex"),
         ("keywords", "Keywords"),
         ("pattern", "Pattern"),
+        # Phase 2 (2026-07-23): invoke the gateway's built-in detector SUITE for a class.
+        # condition = {"detector_class": "pii"|"credential"|"ip_leakage"|"all", ...}.
+        ("detector", "Detector class"),
     ]
     ACTION_CHOICES = [
         ("block", "Block"),
