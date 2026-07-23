@@ -806,9 +806,22 @@ async def _scan_text_tier1(
 _MCP_POLICY_REDACT_MAX_DEPTH = 200
 
 
-def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]]) -> tuple[Any, bool]:
+def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]],
+                              *, neutralize: bool = False) -> tuple[Any, bool]:
     """Apply policy ``redaction_hints`` to every STRING LEAF of ``payload`` IN PLACE,
     preserving structure.
+
+    RENDER-LEAK FLOOR (B1, 2026-07-23): when ``neutralize`` is set (an enforcing entire-scope
+    DETECTOR rule is applicable — ``EvaluationResult.render_floor``), each string leaf is run
+    through ``_neutralize_render_leaks`` — the SAME encoded-PII / markdown-split / zero-click
+    exfil-beacon neutralization the live PRESET pass applied under an enforcing posture
+    (CHG-0096/0099). Without it, once Phase 3 retires the posture the seeded detector policy
+    forwards an HTML-entity-encoded credential/PII / render beacon RAW (a LEAK), because the
+    class masker never sees the encoded surface — and the class DETECTION can't match it either,
+    so the rule doesn't even fire. Runs BEFORE the class ``apply_redaction`` so the beacon's
+    payload is still visible (mirrors the preset's ``_neutralize_exfil_deep`` → ``redact_all``
+    order). It is a MASK transform only — a STRICT no-op on benign leaves — and never blocks, so
+    the frozen "redact/floor never escalates to block" invariant holds.
 
     CRITICAL (2026-07-23): the previous policy pass serialized the whole payload to a
     JSON string, ran ``apply_redaction`` (a blind ``regex.sub``) over it, and reparsed
@@ -843,7 +856,8 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]]) -> tupl
             hit_cap = True
             return node
         if isinstance(node, str):
-            new = apply_redaction(node, hints)
+            new = _neutralize_render_leaks(node) if neutralize else node
+            new = apply_redaction(new, hints)
             if new != node:
                 changed = True
             return new
@@ -887,7 +901,10 @@ def _mcp_policy_pass_sync(
     context = _build_mcp_context(serialized, scan_direction=scan_direction, full_payload=full_payload)
 
     eval_result = evaluate_mcp_policies(policies, context, tool_name=tool_name or None, actor=actor)
-    if not eval_result.matched_rule_ids:
+    # B1: an enforcing detector rule can arm the render-leak floor WITHOUT any class match
+    # (an HTML-entity-encoded credential the class detector can't see) — so the no-match
+    # short-circuit must also check ``render_floor``, else the encoded secret egresses raw.
+    if not eval_result.matched_rule_ids and not eval_result.render_floor:
         return full_payload, [], False, [], False
 
     findings = _findings_from_policy_eval(eval_result, scan_direction=scan_direction, text=serialized)
@@ -897,10 +914,18 @@ def _mcp_policy_pass_sync(
     # non-monitor posture; a block posture is a floor over any matched rule.
     if _enforce_blocks(enforcement) or (eval_result.action == "block" and posture != "monitor"):
         return full_payload, findings, True, rfields, False
+    # B1 render-leak floor: a posture-replicating enforcing entire-scope DETECTOR rule is
+    # applicable → neutralize encoded-PII / markdown-split / exfil-beacon surfaces on the leaves,
+    # a MASK the live posture applied as a floor independent of class match. Gated on the same
+    # observe-only rule the redact branch uses (a 'monitor' posture withholds mutation); a 'tag'
+    # posture (the Phase-3 world) still neutralizes, because the DETECTOR rule — not the retired
+    # posture — is the enforcer. Never blocks.
+    render_floor = bool(eval_result.render_floor) and posture != "monitor"
     # Policy-authored redact applies whenever matched (not only under a redact posture);
     # skipped only under an explicit observe-only 'monitor'.
     if eval_result.action == "redact" and eval_result.redaction_hints and posture != "monitor":
-        new_payload, changed, hit_cap = _redact_structured_leaves(full_payload, eval_result.redaction_hints)
+        new_payload, changed, hit_cap = _redact_structured_leaves(
+            full_payload, eval_result.redaction_hints, neutralize=render_floor)
         # CANNOT-MASK FAIL-CLOSED (2026-07-23): the operator's redact rule MATCHED (detection
         # runs on the serialized payload) but the leaf-walk could not mask it — either the
         # match spans a JSON boundary / structural context no single leaf reproduces (e.g. a
@@ -921,6 +946,21 @@ def _mcp_policy_pass_sync(
         if (hit_cap or not changed) and not _is_observe_only_posture(enforcement):
             return full_payload, findings, True, rfields, False
         return new_payload, findings, False, rfields, changed
+    # STANDALONE render-leak floor: an enforcing detector rule applies but its CLASS did not
+    # match this payload (e.g. an HTML-entity-encoded credential/PII a redact rule can't
+    # class-detect, or an encoded generic-PII / beacon under a block rule that the #3 exclusion
+    # kept from blocking). Neutralize the render-leak surface on the leaves — a MASK only, never
+    # a block — so the encoded secret / beacon does not egress raw once the posture is retired.
+    if render_floor:
+        new_payload, changed, _hc = _redact_structured_leaves(full_payload, [], neutralize=True)
+        if changed:
+            findings.append(McpFinding(
+                entity_type="render_reconstruction", score=0.9, start=0, end=len(serialized),
+                direction=_direction_label(scan_direction), tier="tier1", threat_type="exfil",
+                detail=("Neutralized a render-time reconstruction leak (zero-click exfil beacon "
+                        "/ encoded-PII / markdown-split PII-secret) via the seeded detector floor"),
+            ))
+            return new_payload, findings, False, rfields, True
     return full_payload, findings, False, rfields, False
 
 

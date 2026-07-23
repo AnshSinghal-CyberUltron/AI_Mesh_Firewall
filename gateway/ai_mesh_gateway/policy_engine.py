@@ -265,6 +265,17 @@ class EvaluationResult:
     # FIX-1.2a: the winning model_downgrade rule's target model. Empty when the
     # final action is not model_downgrade (or the rule carries no downgrade_to).
     model_downgrade_target: str = ""
+    # B1 render-leak floor (2026-07-23): the strongest action ("block" > "redact") of an
+    # ENFORCING, entire-scope DETECTOR rule that is APPLICABLE to this context (passes
+    # actor/target_tool/direction filters) — set REGARDLESS of whether its class-detection
+    # matched. The live server posture ran the render-leak neutralizers (encoded-PII /
+    # markdown-split / zero-click exfil beacon) as a MASK FLOOR whenever it was enforcing,
+    # independent of any class match; a seeded detector policy replaces the posture, so the
+    # policy lane must reproduce that floor or an encoded credential/PII / render beacon
+    # egresses RAW at Phase-3 cutover. The orchestrator applies `_neutralize_render_leaks`
+    # to the leaves when this is set — a MASK only, never a block (frozen: redact/floor never
+    # escalates to block). Empty when no enforcing entire-scope detector rule applies.
+    render_floor: str = ""
     message: str = ""
 
 def _policy_applies_to_actor(
@@ -778,6 +789,34 @@ def _candidate_texts_mcp(context: dict[str, Any], matcher: dict[str, Any]) -> li
     return [t for t in texts if t]
 
 
+def _detector_floor_action(rule: dict[str, Any], context: dict[str, Any]) -> str:
+    """B1: return this rule's action ("redact"/"block") if it is an ENFORCING, entire-scope
+    DETECTOR rule that is APPLICABLE to the active scan (its direction/scope yields candidate
+    text), else "".
+
+    This drives the render-leak MASK FLOOR (the orchestrator neutralizes encoded-PII /
+    markdown-split / exfil-beacon surfaces on the leaves) — applied whenever such a rule is
+    PRESENT, regardless of whether its class-detection matched, because the live posture ran
+    that neutralization as an enforcing floor independent of class match. A key_path-scoped
+    detector rule is EXCLUDED (returns "") — scoped-floor parity is B2's concern, and running a
+    whole-payload floor for a key-scoped rule would over-mask siblings. Applicability reuses
+    ``_candidate_texts_mcp`` (the same direction/scope gate ``_evaluate_rule_mcp`` uses), so an
+    input-only rule never arms the floor on an output scan (or vice-versa)."""
+    cond = rule.get("condition") or {}
+    if not (rule.get("rule_type") == "detector" or cond.get("detector_class")):
+        return ""
+    action = rule.get("action", "")
+    if action not in ("redact", "block"):
+        return ""
+    scope = (cond.get("scope") or "entire")
+    if scope not in ("entire", "", None):
+        return ""  # key_path-scoped floor is B2
+    matcher = _resolve_matcher_dict(rule)
+    if not _candidate_texts_mcp(context, matcher):
+        return ""  # not applicable to this scan direction
+    return action
+
+
 def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
     # Per-tool EXEMPTION (Phase 2b #5): a blanket "this tool is observe-only" marker. It
     # matches unconditionally (regardless of content) so it always applies to its target_tool,
@@ -828,7 +867,7 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
         # A detector rule matches iff the built-in detector SUITE would mask something in this
         # class — reuse the SAME redact_all_scoped engine the rule redacts with, so detection
         # and redaction agree by construction (no detect-on-blob / mask-on-leaf asymmetry).
-        from patterns import redact_all_scoped  # local: patterns has no import cycle here
+        from patterns import redact_all_scoped, _dec_has_infra  # local: patterns has no import cycle here
         classes = set(matcher["detector_class"] or ())
         want_injection = bool(matcher.get("detect_injection"))
         # #3/#1: encoded-exfil detection drives BLOCK ONLY. The masker can't mask an HTML-entity
@@ -839,14 +878,27 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
         # block — the exact escalation the frozen decision removed. So only a BLOCK rule checks
         # the decoded surface; a redact rule masks the raw forms and forwards, posture-identical.
         encoded_check = (rule.get("action") == "block")
+        # #3/B1: the encoded-variant BLOCK check mirrors the live encoded-exfil block floor
+        # (mcp_scan_orchestrator.py:645-666) KEY-for-KEY: it withholds only a decoded
+        # SECRET/CREDENTIAL or an INFRA-NETWORK address — deliberately NOT entity-encoded generic
+        # PII (email/ssn/phone/cc), and NOT the flag-tier ip_leakage kinds like file paths
+        # (``_INFRA_NETWORK_KEYS`` excludes ``file_path_*`` as FP-prone; the live floor forwards
+        # them). An earlier class-level ``classes - {"pii"}`` retained the whole ip_leakage class,
+        # so an encoded internal FILE PATH under a block rule OVER-BLOCKED vs the posture (which
+        # forwards it). Gate on the rule's own classes; the render_floor mask+forwards whatever
+        # this does not withhold, matching the posture's mask+forward.
+        want_cred = "credential" in classes
+        want_infra = "ip_leakage" in classes
         for text in texts:
             if classes and redact_all_scoped(text, classes) != text:
                 return True
             if want_injection and _detector_injection_match(text):
                 return True
-            if classes and encoded_check:
+            if encoded_check and (want_cred or want_infra):
                 for variant in _encoded_variants(text):
-                    if redact_all_scoped(variant, classes) != variant:
+                    if want_cred and redact_all_scoped(variant, {"credential"}) != variant:
+                        return True
+                    if want_infra and _dec_has_infra(variant):
                         return True
         return False
 
@@ -928,6 +980,17 @@ def evaluate_mcp_policies(
             # An exemption rule itself contributes no enforcing action and is not a finding.
             if (rule.get("condition") or {}).get("exempt"):
                 continue
+
+            # B1 render-leak floor: an ENFORCING entire-scope detector rule arms the neutralizer
+            # floor whether or not its CLASS matched this payload (the live posture neutralized
+            # encoded-PII / beacons independent of class match). Skip when the policy is exempt
+            # for this tool (the operator lowered it to observe-only). Recorded before the
+            # class-match ``continue`` so an encoded credential a redact detector rule can't
+            # class-match still neutralizes downstream instead of egressing raw.
+            if not policy_exempts:
+                _floor = _detector_floor_action(rule, context)
+                if _floor and ACTION_ORDER.get(_floor, 0) > ACTION_ORDER.get(result.render_floor, -1):
+                    result.render_floor = _floor
 
             if not _evaluate_rule_mcp(rule, context):
                 continue
