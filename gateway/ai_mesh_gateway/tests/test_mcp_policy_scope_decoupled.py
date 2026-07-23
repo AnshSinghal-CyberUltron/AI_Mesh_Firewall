@@ -239,16 +239,47 @@ async def test_unmatched_number_keeps_numeric_type():
 # depth cap) would forward RAW while claiming a redact fired. Fix: fail closed (cannot-mask
 # exception) rather than leak — WITHOUT escalating maskable content (which still redacts).
 @pytest.mark.asyncio
-async def test_cross_boundary_regex_match_fails_closed():
-    """A regex that only matches across a JSON boundary (needs the "key":"val" context) is
-    detected on the serialized blob but unmaskable per-leaf → must fail closed, not egress raw."""
+async def test_cross_boundary_structural_regex_is_a_noop_not_a_false_block():
+    """entire-scope detection scans VALUE LEAVES, not the serialized blob. A structural regex
+    that needs the ``"key":"val"`` JSON context therefore matches NO value leaf → it is a
+    no-op: no false 'redacted' claim and, crucially, no false-block of benign traffic. (Real
+    secret VALUES are caught by their own value pattern / the preset + detector-class lanes;
+    a structural regex is an anti-pattern the value-based model deliberately no-ops.)"""
     rule = {"id": 40, "name": "kv", "rule_type": "regex", "action": "redact",
             "condition": {"regex": r'"internal_api_key"\s*:\s*"[^"]*"', "direction": "input", "scope": "entire"},
             "redaction_config": {}}
     ec = _effc(_slot(True, "redact", target_mode="key_path", key_path="nonexistent"), _slot(False, direction="output"))
     payload = {"internal_api_key": "sk-live-abc123XYZ", "note": "clean"}
     scanned, res = await _scan(payload, ec, [rule])
-    assert res.blocked is True, "unmaskable cross-boundary redact match must fail closed"
+    assert res.blocked is False, "a structural regex matching no value leaf must not false-block"
+
+
+@pytest.mark.asyncio
+async def test_value_pattern_regex_masks_the_secret_value():
+    """Twin of the above: the CORRECT rule shape (a value pattern) matches the value leaf and
+    masks it — proving the value-based model redacts real secrets, just not structural regexes."""
+    rule = {"id": 41, "name": "sk", "rule_type": "regex", "action": "redact",
+            "condition": {"regex": r"sk-live-\w+", "direction": "input", "scope": "entire"},
+            "redaction_config": {}}
+    ec = _effc(_slot(True, "redact", target_mode="key_path", key_path="nonexistent"), _slot(False, direction="output"))
+    payload = {"internal_api_key": "sk-live-abc123XYZ", "note": "clean"}
+    scanned, res = await _scan(payload, ec, [rule])
+    assert res.blocked is False
+    assert "sk-live-abc123XYZ" not in json.dumps(scanned), "value-pattern rule masks the secret value"
+
+
+@pytest.mark.asyncio
+async def test_keyword_matching_only_a_key_name_does_not_false_block():
+    """F1 regression: a redact keyword that coincides with a JSON KEY NAME (arguments/password/
+    url) must NOT match (keys aren't scanned) and must NOT block benign traffic."""
+    rule = {"id": 42, "name": "kw", "rule_type": "keywords", "action": "redact",
+            "condition": {"keywords": ["arguments"], "direction": "input", "scope": "entire"},
+            "redaction_config": {}}
+    ec = _effc(_slot(True, "redact", target_mode="entire"), _slot(False, direction="output"))
+    payload = {"name": "issue_write", "arguments": {"title": "benign weather report"}}
+    scanned, res = await _scan(payload, ec, [rule], enforcement="tag")
+    assert res.blocked is False, "keyword matching only a key name must not false-block"
+    assert "benign weather report" in json.dumps(scanned), "benign content forwarded intact"
 
 
 @pytest.mark.asyncio
