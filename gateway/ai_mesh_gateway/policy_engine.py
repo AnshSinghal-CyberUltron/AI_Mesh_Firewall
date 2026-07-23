@@ -683,6 +683,12 @@ def _candidate_texts_mcp(context: dict[str, Any], matcher: dict[str, Any]) -> li
 
 
 def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
+    # Per-tool EXEMPTION (Phase 2b #5): a blanket "this tool is observe-only" marker. It
+    # matches unconditionally (regardless of content) so it always applies to its target_tool,
+    # letting evaluate_mcp_policies downgrade a broader server-wide rule to observe for the
+    # operator-lowered tool — the additive model can't otherwise UN-enforce a tool.
+    if (rule.get("condition") or {}).get("exempt"):
+        return True
     matcher = _resolve_matcher_dict(rule)
     texts = _candidate_texts_mcp(context, matcher)
     if not texts:
@@ -752,6 +758,7 @@ def evaluate_mcp_policies(
     best_action_rank = -1
     _blocker_policy_name = ""
     _blocker_rule_name = ""
+    _tool_exempted = False  # Phase 2b #5: a tool-scoped exemption downgrades enforcement
 
     # M-04: MCP context already carries user_id/agent_id; reuse them as the
     # actor when the caller didn't pass one explicitly. Missing keys -> None.
@@ -793,6 +800,13 @@ def evaluate_mcp_policies(
                 if isinstance(_rf, str) and _rf and _rf not in result.redaction_fields:
                     result.redaction_fields.append(_rf)
 
+            # A tool-scoped EXEMPTION (#5): the operator lowered THIS tool to observe-only,
+            # overriding broader (server-wide) enforcement. Requires an explicit target_tool
+            # match so it can never blanket-exempt everything.
+            if (rule.get("condition") or {}).get("exempt") and rule_target and rule_target == tool_name:
+                _tool_exempted = True
+                continue  # an exemption never contributes an enforcing action itself
+
             action = rule.get("action", "monitor")
             rank = ACTION_ORDER.get(action, 0)
             if rank > best_action_rank:
@@ -823,6 +837,17 @@ def evaluate_mcp_policies(
                         "config": config,
                         "condition": rule.get("condition") or {},
                     })
+
+    # Per-tool EXEMPTION override (#5): the operator explicitly lowered this tool to
+    # observe-only, so downgrade any broader enforcement to ``monitor`` (detect + tag, never
+    # mutate/block) and drop the redaction hints. This is the operator's explicit per-tool
+    # sovereignty winning over a broader (e.g. server-wide seeded) rule — the additive model
+    # otherwise can't un-enforce a tool. Detection/findings are preserved for the audit trail.
+    if _tool_exempted:
+        result.action = "monitor"
+        result.redaction_hints = []
+        result.message = "Tool exempted by operator (observe-only)"
+        return result
 
     if result.action == "block" and result.matched_rule_ids:
         # Prefer the rule whose action actually BLOCKED; fall back to the last
