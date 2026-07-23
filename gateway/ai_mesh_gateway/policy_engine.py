@@ -519,9 +519,43 @@ _KEY_COLLECT_MAX_DEPTH = 500
 _KEY_COLLECT_MAX_NODES = 2_000_000
 
 
+def _collect_dot_path_values(obj: Any, path: str) -> list[str]:
+    """Collect string (and stringified) values at a DOT-separated path (e.g.
+    ``arguments.body``), mirroring the scan-control ``key_path`` binding
+    (mcp_scan_targets._get_by_dot_path). A ``scope=key`` policy rule whose ``key`` is a
+    dot-path must traverse the path — the plain ``_collect_key_values`` recursive key-name
+    walk never matched a dotted key, so a detector policy SEEDED from a dot-path scan-control
+    scanned NOTHING and the field egressed raw (Phase-2b red-team #1)."""
+    parts = [p for p in path.split(".") if p]
+    if not parts:
+        return []
+    nodes: list[Any] = [obj]
+    for part in parts:
+        nxt: list[Any] = []
+        pn = _normalize_key(part)
+        for node in nodes:
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    if _normalize_key(k) == pn:
+                        nxt.append(v)
+            elif isinstance(node, list):
+                for item in node:
+                    if isinstance(item, dict):
+                        for k, v in item.items():
+                            if _normalize_key(k) == pn:
+                                nxt.append(v)
+        nodes = nxt
+        if not nodes:
+            return []
+    return [n if isinstance(n, str) else _safe_json(n) for n in nodes]
+
+
 def _collect_key_values(obj: Any, key: str) -> list[str]:
     if not key:
         return []
+    # A dotted key is a PATH (scan-control key_path parity), not a literal key name.
+    if "." in key:
+        return _collect_dot_path_values(obj, key)
     target = _normalize_key(key)
     out: list[str] = []
     stack: list[tuple[Any, int]] = [(obj, 0)]

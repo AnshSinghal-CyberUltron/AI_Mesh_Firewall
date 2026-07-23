@@ -94,3 +94,46 @@ class SeedMcpDetectorPoliciesDBTests(TestCase):
         pol = Policy.objects.get(code=detector_policy_code(self.org.id, srv.id))
         self.assertEqual(pol.rules.count(), 1, "re-run must not duplicate rules")
         self.assertEqual(pol.rules.get().action, "block")
+
+
+class DetectorSeedReconcileTests(TestCase):
+    """Red-team #6/#7: re-seed converges to the CURRENT config (no stale rules)."""
+
+    def setUp(self):
+        self.org = Organization.objects.create(name="Acme", slug="acme")
+
+    def _server(self, name, posture):
+        return MCPServerRegistration.objects.create(organization=self.org, name=name, default_scan_action=posture)
+
+    def test_posture_change_reconciles_not_appends(self):
+        srv = self._server("gh", "redact")
+        seed_mcp_detector_policies(self.org)
+        srv.default_scan_action = "block"
+        srv.save()
+        seed_mcp_detector_policies(self.org)  # re-seed after change
+        pol = Policy.objects.get(code=detector_policy_code(self.org.id, srv.id))
+        self.assertEqual(pol.rules.count(), 1, "must reconcile to one rule, not append")
+        self.assertEqual(pol.rules.get().action, "block", "stale redact rule retired, block seeded")
+
+    def test_downgrade_to_tag_retires_seeded_rule(self):
+        srv = self._server("gh", "redact")
+        seed_mcp_detector_policies(self.org)
+        srv.default_scan_action = "tag"
+        srv.save()
+        seed_mcp_detector_policies(self.org)
+        pol = Policy.objects.filter(code=detector_policy_code(self.org.id, srv.id)).first()
+        # policy may remain but must carry NO enforcing seeded rules
+        n = pol.rules.count() if pol else 0
+        self.assertEqual(n, 0, "posture redact->tag must retire the stale seeded enforcing rule")
+
+    def test_operator_added_rule_preserved_on_reseed(self):
+        from policy.models import Rule
+        srv = self._server("gh", "redact")
+        seed_mcp_detector_policies(self.org)
+        pol = Policy.objects.get(code=detector_policy_code(self.org.id, srv.id))
+        Rule.objects.create(policy=pol, name="operator", rule_type="keywords",
+                            condition={"keywords": ["custom"]}, action="block",
+                            description="operator-authored")
+        seed_mcp_detector_policies(self.org)  # re-seed
+        self.assertTrue(pol.rules.filter(description="operator-authored").exists(),
+                        "operator-added rule must survive reconcile")
