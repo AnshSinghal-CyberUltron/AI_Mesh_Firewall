@@ -307,6 +307,27 @@ def _enforce_blocks(enforcement: str) -> bool:
     return enforcement == "block"
 
 
+def _mcp_policy_only_enforcement(enabled_info: dict[str, Any] | None = None) -> bool:
+    """PHASE 3 (collapse-to-one-surface): when True the MCP scan RETIRES the server posture /
+    scan-control ACTION as an enforcement input — presets and Tier-2 run OBSERVE-ONLY and the
+    seeded policy RULES (their own action) are the sole enforcer. This is exactly the
+    ``enforcement="tag"`` world the pre-cutover diff-gate proved reproduces the posture verdict
+    byte-for-byte, so flipping it loses no coverage FOR AN ORG WHOSE DETECTOR POLICIES ARE SEEDED
+    (Phase 2b). It is OFF by default: activate only after seeding, per-org via
+    ``enabled_info['mcp_policy_only_enforcement']`` (preferred — lets an operator cut over one
+    seeded org at a time) or gateway-wide via the ``MCP_POLICY_ONLY_ENFORCEMENT`` env kill-switch.
+    The scan-control ENABLED/direction/scope and Tier-2 enable gating are UNCHANGED — only the
+    ACTION is dropped."""
+    if enabled_info and "mcp_policy_only_enforcement" in enabled_info:
+        return bool(enabled_info.get("mcp_policy_only_enforcement"))
+    return _MCP_POLICY_ONLY_ENFORCEMENT_ENV
+
+
+_MCP_POLICY_ONLY_ENFORCEMENT_ENV = os.environ.get("MCP_POLICY_ONLY_ENFORCEMENT", "").strip().lower() in (
+    "1", "true", "yes", "on",
+)
+
+
 def _resolve_tier_action(ctrl: dict[str, Any] | None, fallback: str) -> str:
     """Resolve the enforcement action for a single tier from its control row.
 
@@ -1188,9 +1209,18 @@ async def scan_mcp_payload(
     result = McpScanResult()
     tier1_ctrl = _effective_control(effective_controls, "tier1", scan_direction)
     tier2_ctrl = _effective_control(effective_controls, "tier2", scan_direction)
+    # PHASE 3: retire the posture / scan-control ACTION as the TIER-1 (preset) enforcement input.
+    # Coerce the Tier-1 action to the observe-only ``tag`` — the exact world the pre-cutover
+    # diff-gate proved the seeded POLICY rules reproduce. The preset pass then only DETECT+TAG; the
+    # policy lane (rule-action-driven, unaffected because ``tag`` != ``monitor``) is the sole Tier-1
+    # enforcer. TIER-2 (the LLM judge) is NOT coerced: it has NO seeded-policy equivalent, so
+    # dropping its action would silently lose semantic-injection blocking for a Tier-2-enabled org
+    # (red-team F4) — it stays posture/enable-driven. scan-control enabled/direction/scope and
+    # Tier-2 enable gating are unchanged; only the Tier-1 ACTION is dropped. OFF by default.
+    _policy_only = _mcp_policy_only_enforcement(enabled_info)
     # Per-tier action: each tier's control row owns its action; 'inherit'/unset
     # defers to the server/tool action passed as ``enforcement``.
-    tier1_action = _resolve_tier_action(tier1_ctrl, enforcement)
+    tier1_action = "tag" if _policy_only else _resolve_tier_action(tier1_ctrl, enforcement)
     result_redacted = False
     # 3b: accumulate the named response fields that matched actor-scoped policies
     # declared for RBAC masking (deduped, order-preserving). Applied to the
@@ -1410,6 +1440,7 @@ async def scan_mcp_payload(
         return _finalize_output(mutable if result_redacted else payload), result
 
     strict_mode = tier2_ctrl.get("strict_mode") or "strict"
+    # NOT coerced under Phase 3 — Tier-2 stays posture/enable-driven (see the tier1 note above).
     tier2_action = _resolve_tier_action(tier2_ctrl, enforcement)
     org_strict = bool((enabled_info or {}).get("tier2_strict", True))
 
