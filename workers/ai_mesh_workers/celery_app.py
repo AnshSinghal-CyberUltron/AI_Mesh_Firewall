@@ -29,17 +29,21 @@ django.setup()
 # Import the package (whose __init__ imports every submodule) as a belt-and-suspenders
 # guarantee that handlers register even if `include` import timing changes.
 app.autodiscover_tasks(["ai_mesh_workers"])
+# Workers-local tasks plus all Django INSTALLED_APPS tasks (module2, core, policy, …).
+app.autodiscover_tasks(["ai_mesh_workers.tasks"])
+app.autodiscover_tasks()
 
-app.conf.beat_schedule = {
+# Merge Django CELERY_BEAT_SCHEDULE with workers-only entries — never replace the full schedule.
+from django.conf import settings
+
+_workers_beat = {
     "scan-model-risk-scores": {
         "task": "isolation.scan_model_risk_scores",
         "schedule": 60.0,
     },
     # Drain the gateway:jobs queue (async envelopes incl. vector_ingest) and
-    # dispatch the routed handler tasks. This beat is the ONLY scheduler in the
-    # stack (workers-beat); assigning app.conf.beat_schedule REPLACES the
-    # settings CELERY_BEAT_SCHEDULE, so the gateway-jobs drainer must be listed
-    # here explicitly or async RAG ingest never persists.
+    # dispatch the routed handler tasks. Listed here so async RAG ingest persists
+    # even if settings omit this beat (workers-beat is the stack scheduler).
     "process-gateway-jobs": {
         "task": "core.tasks.process_gateway_jobs_batch",
         "schedule": 2.0,
@@ -58,6 +62,10 @@ app.conf.beat_schedule = {
         "task": "core.tasks.reconcile_routing_state",
         "schedule": float(os.environ.get("ROUTING_RECONCILE_INTERVAL_SEC", "120")),
     },
+}
+app.conf.beat_schedule = {
+    **getattr(settings, "CELERY_BEAT_SCHEDULE", {}),
+    **_workers_beat,
 }
 
 
