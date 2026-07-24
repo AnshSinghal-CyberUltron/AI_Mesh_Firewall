@@ -34,9 +34,9 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { toAbsoluteGatewayUrl, resolveMcpGatewayBaseUrl } from "../utils/environmentUrls";
-import { MCPScanControlMatrix } from "./MCPScanControlMatrix";
 import { ServerTier2Manager } from "./ServerTier2Manager";
 import { PolicyManagementPanel } from "./PolicyManagementPanel";
+import { ZEROSHIELD_TIER2_LABEL } from "../constants/zeroshieldBrand";
 
 import { Card, CardContent } from "./ui/Card";
 import { Button } from "./ui/Button";
@@ -355,12 +355,21 @@ function StatCard({ icon: Icon, label, value, sub, tone = "slate" }) {
 
 const EVENTS_PAGE_SIZE = 50;
 
+// Org Tier-2 master (null=Inherit, true=Enabled, false=Disabled). Relocated to the
+// MCP Servers tab header when the standalone "Scan Controls" tab was retired — the
+// gateway gates ALL per-server Tier-2 scans on this org flag, so it must stay
+// reachable alongside each server's "Manage Tier-2" button.
+const TIER2_MASTER_OPTIONS = [
+  { value: "inherit", label: "Inherit" },
+  { value: "enabled", label: "Enabled" },
+  { value: "disabled", label: "Disabled" },
+];
+const TIER2_MASTER_PAYLOAD = { inherit: null, enabled: true, disabled: false };
+
 const TABS = [
   { id: "servers", label: "MCP Servers", icon: Server },
   { id: "tools", label: "Tool Discovery", icon: Wrench },
   { id: "execute", label: "Tool Execution", icon: Play },
-  { id: "scan-matrix", label: "Scan Controls", icon: Layers },
-  { id: "protection", label: "MCP Security Policies", icon: Shield },
   { id: "observability", label: "Observability", icon: BarChart3 },
 ];
 
@@ -397,8 +406,10 @@ function MCPConnectorPanelInner() {
   const [executeResult, setExecuteResult] = useState(null);
   const [executeBusy, setExecuteBusy] = useState(false);
 
-  /* ── MCP policy server filter ── */
-  const [policyServerFilter, setPolicyServerFilter] = useState("");
+  /* ── org Tier-2 master (Inherit/Enabled/Disabled) — relocated from the retired
+     Scan Controls tab; gates ALL per-server Tier-2 scans org-wide ── */
+  const [mcpTier2, setMcpTier2] = useState(null); // null=inherit, true=enabled, false=disabled
+  const [tier2Saving, setTier2Saving] = useState(false);
 
   /* ── health ── */
   const [health, setHealth] = useState(null);
@@ -456,6 +467,19 @@ function MCPConnectorPanelInner() {
       setScanControlsConfigured(rows.length > 0);
     } catch {
       // leave prior value; do not flip honesty banner on transient failure
+    }
+  }, [fetchWithAuth]);
+
+  // Org Tier-2 master (firewall/config.mcp_tier2_enabled). The gateway gates ALL
+  // per-server Tier-2 scans on this org flag, so the MCP Servers tab surfaces it.
+  const loadTier2Master = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth("/api/firewall/config/");
+      if (!res.ok) return;
+      const data = await res.json();
+      setMcpTier2(data.mcp_tier2_enabled ?? null);
+    } catch {
+      /* optional — leave prior value on transient failure */
     }
   }, [fetchWithAuth]);
 
@@ -572,13 +596,11 @@ function MCPConnectorPanelInner() {
 
   /* ── tab-switched loaders ── */
   useEffect(() => {
-    if (tab === "servers") { loadServers(); loadOrgGatewayKey(); loadHealth(); loadScanControlsConfigured(); }
+    if (tab === "servers") { loadServers(); loadOrgGatewayKey(); loadHealth(); loadScanControlsConfigured(); loadTier2Master(); }
     if (tab === "tools") loadTools();
     if (tab === "execute") loadTools();
-    if (tab === "protection") { loadServers(); }
     if (tab === "observability") { loadEvents(); }
-    if (tab === "scan-matrix") { loadScanControlsConfigured(); }
-  }, [tab, loadServers, loadTools, loadHealth, loadEvents, loadOrgGatewayKey, loadScanControlsConfigured]);
+  }, [tab, loadServers, loadTools, loadHealth, loadEvents, loadOrgGatewayKey, loadScanControlsConfigured, loadTier2Master]);
 
   /* The header-strip decision StatCards (Allowed / Blocked / Redact·Monitor)
      are ALWAYS visible regardless of the active tab, so the decision summary
@@ -824,10 +846,55 @@ function MCPConnectorPanelInner() {
     }
   };
 
+  /* ── org Tier-2 master save ── */
+  // PUT only the changed field (documented partial update) — re-sending the whole
+  // config re-validates unrelated siblings and can 400 for reasons unrelated to
+  // Tier-2. value: null=Inherit, true=Enabled, false=Disabled.
+  const saveTier2Master = async (value) => {
+    if (tier2Saving) return;
+    setTier2Saving(true);
+    const prev = mcpTier2;
+    setMcpTier2(value); // optimistic
+    try {
+      const res = await fetchWithAuth("/api/firewall/config/", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mcp_tier2_enabled: value }),
+      });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const err = await res.json();
+          detail = err?.mcp_tier2_enabled?.[0] || err?.detail || detail;
+        } catch {
+          /* keep status */
+        }
+        throw new Error(detail);
+      }
+      const updated = await res.json().catch(() => ({ mcp_tier2_enabled: value }));
+      setMcpTier2(updated.mcp_tier2_enabled ?? value);
+      loadHealth(); // refresh the "Tier-2 MCP scan" status card
+      toast(
+        value === null
+          ? "Tier-2 set to Inherit (org default)"
+          : value
+            ? "Tier-2 enabled for this org"
+            : "Tier-2 disabled for this org",
+        { tone: "success" }
+      );
+    } catch (e) {
+      setMcpTier2(prev); // rollback
+      toast(e.message || "Failed to save Tier-2 setting", { tone: "error" });
+    } finally {
+      setTier2Saving(false);
+    }
+  };
+
   // NOTE (MCP collapse — Phase 4): per-tool `scan_action` and server
   // `default_scan_action` enforcement were retired from this surface. A
-  // server's/tool's enforcement action is now a single Policy concern — see the
-  // "MCP Security Policies" tab. Registration + enable/disable is the gate here.
+  // server's/tool's enforcement action is now a single Policy concern — managed
+  // per-server via each row's "Manage Tier-1" button (org-wide view lives on the
+  // separate Policy Management page). Registration + enable/disable is the gate here.
 
   const copyEndpoint = (endpoint) => {
     navigator.clipboard.writeText(endpoint).then(() => {
@@ -1663,6 +1730,41 @@ function MCPConnectorPanelInner() {
 
       {renderGatewayKeyBanner()}
 
+      {/* Org Tier-2 master — relocated from the retired "Scan Controls" tab. The
+          gateway gates ALL per-server Tier-2 scans on this org flag, so it stays
+          reachable here next to each server's "Manage Tier-2" button. */}
+      <Card>
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-300">
+              <Sparkles className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Tier-2 ({ZEROSHIELD_TIER2_LABEL}) — org master
+                </h3>
+                <Badge variant={mcpTier2 === null ? "secondary" : mcpTier2 ? "success" : "danger"}>
+                  {mcpTier2 === null ? "Inherit (org default)" : mcpTier2 ? "Enabled" : "Disabled"}
+                </Badge>
+              </div>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Must be enabled for the org before any per-server Tier-2 scan runs.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            {tier2Saving && <Spinner className="h-4 w-4 text-violet-500" />}
+            <SegmentedControl
+              aria-label="Org MCP Tier-2 mode"
+              value={mcpTier2 === null ? "inherit" : mcpTier2 ? "enabled" : "disabled"}
+              onChange={(v) => saveTier2Master(TIER2_MASTER_PAYLOAD[v])}
+              options={TIER2_MASTER_OPTIONS}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {servers.length === 0 && !loading ? (
         <EmptyState
           icon={Server}
@@ -2130,61 +2232,6 @@ function MCPConnectorPanelInner() {
       )}
     </div>
   );
-
-  const renderPolicies = () => {
-    const selectedServer = servers.find((s) => s.server_slug === policyServerFilter);
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter policies by server:</label>
-          <div className="min-w-[220px]">
-            <Select
-              value={policyServerFilter}
-              onChange={(e) => setPolicyServerFilter(e.target.value)}
-              aria-label="Filter policies by server"
-            >
-              <option value="">All MCP servers (org-wide)</option>
-              {servers.map((s) => (
-                <option key={s.id} value={s.server_slug}>{s.name} ({s.server_slug})</option>
-              ))}
-            </Select>
-          </div>
-          {policyServerFilter && (
-            <Badge variant="info">
-              <Server className="w-3 h-3 mr-1" />
-              Filtering: {selectedServer?.name || policyServerFilter}
-            </Badge>
-          )}
-        </div>
-        <PolicyManagementPanel
-          key={policyServerFilter || "__all__"}
-          title="MCP Security Policies"
-          description={
-            policyServerFilter
-              ? `Active rules for "${selectedServer?.name || policyServerFilter}" plus org-wide MCP policies — the single enforcement layer for every MCP tool call.`
-              : "Organization-wide MCP policies — the single enforcement layer applied in-band to every MCP tool call across all servers."
-          }
-          scope="mcp"
-          mcpServerSlug={policyServerFilter || null}
-          mcpServerId={selectedServer?.id || null}
-          servers={servers}
-          showCompileButton={true}
-          showFilters={true}
-        />
-      </div>
-    );
-  };
-
-  const renderScanMatrix = () => (
-    <MCPScanControlMatrix
-      fetchWithAuth={fetchWithAuth}
-      servers={servers}
-      onControlsChanged={loadScanControlsConfigured}
-      onOpenPolicies={() => setTab("protection")}
-    />
-  );
-
-  const renderProtection = () => renderPolicies();
 
   const renderExecute = () => (
     <div className="space-y-4">
@@ -2654,8 +2701,6 @@ function MCPConnectorPanelInner() {
             <TabsContent value="servers">{renderServers()}</TabsContent>
             <TabsContent value="tools">{renderTools()}</TabsContent>
             <TabsContent value="execute">{renderExecute()}</TabsContent>
-            <TabsContent value="scan-matrix">{renderScanMatrix()}</TabsContent>
-            <TabsContent value="protection">{renderProtection()}</TabsContent>
             <TabsContent value="observability">{renderObservability()}</TabsContent>
           </div>
         )}
