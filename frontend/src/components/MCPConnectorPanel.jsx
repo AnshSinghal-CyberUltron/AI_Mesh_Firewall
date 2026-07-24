@@ -29,11 +29,13 @@ import {
   Key,
   Layers,
   ArrowRight,
+  Sparkles,
   X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { toAbsoluteGatewayUrl, resolveMcpGatewayBaseUrl } from "../utils/environmentUrls";
 import { MCPScanControlMatrix } from "./MCPScanControlMatrix";
+import { ServerTier2Manager } from "./ServerTier2Manager";
 import { PolicyManagementPanel } from "./PolicyManagementPanel";
 
 import { Card, CardContent } from "./ui/Card";
@@ -419,6 +421,11 @@ function MCPConnectorPanelInner() {
   // Scan-controls row count — when 0, gateway skips Tier-1/Tier-2; the
   // read-only server scan-state badge must not imply active scanning (UI honesty).
   const [scanControlsConfigured, setScanControlsConfigured] = useState(null);
+
+  // Per-server, server-centric control modals opened from each server card's
+  // "Manage Tier-1" / "Manage Tier-2" buttons. Each holds the target server obj.
+  const [tier1Server, setTier1Server] = useState(null);
+  const [tier2Server, setTier2Server] = useState(null);
 
   /* ── OAuth polling interval (BUG FIX a: tracked + cleaned up) ── */
   const oauthPollRef = useRef(null);
@@ -1476,16 +1483,28 @@ function MCPConnectorPanelInner() {
                   Scanning off
                 </Badge>
               )}
+              {/* Server-centric control lane: focused per-server management for
+                  each tier. Tier-1 = MCP Security Policies bound to this server;
+                  Tier-2 = the ZeroShield model scan on/off + tool scoping. */}
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
-                onClick={() => setTab("protection")}
+                onClick={() => setTier1Server(srv)}
                 className="text-[11px] text-indigo-600 dark:text-indigo-400"
-                title="This server's enforcement action is governed by MCP Security Policies"
+                title="Manage the MCP Security Policies that apply to this server (Tier-1)"
               >
                 <Shield className="w-3 h-3" />
-                Manage enforcement in Policies
-                <ArrowRight className="w-3 h-3" />
+                Manage Tier-1
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTier2Server(srv)}
+                className="text-[11px] text-violet-600 dark:text-violet-400"
+                title="Manage the ZeroShield model scan for this server (Tier-2)"
+              >
+                <Sparkles className="w-3 h-3" />
+                Manage Tier-2
               </Button>
               {serverNeedsOAuth(srv) && (
                 <Tooltip content="Authorize OAuth — opens popup for upstream provider login">
@@ -1991,6 +2010,63 @@ function MCPConnectorPanelInner() {
               : "Register"}
           </Button>
         </DialogFooter>
+      </Dialog>
+
+      {/* ── Manage Tier-2 (per-server ZeroShield model scan) ── */}
+      <Dialog
+        open={!!tier2Server}
+        onClose={() => setTier2Server(null)}
+        labelledBy="mcp-tier2-manage-title"
+      >
+        {tier2Server && (
+          <>
+            <DialogHeader
+              id="mcp-tier2-manage-title"
+              title={`Tier-2 scan · ${tier2Server.name}`}
+              description="Turn the ZeroShield model scan on for this server; when on, choose all tools or specific tools."
+              onClose={() => setTier2Server(null)}
+            />
+            <DialogBody>
+              <ServerTier2Manager
+                server={tier2Server}
+                fetchWithAuth={fetchWithAuth}
+                onChanged={loadScanControlsConfigured}
+              />
+            </DialogBody>
+          </>
+        )}
+      </Dialog>
+
+      {/* ── Manage Tier-1 (per-server MCP Security Policies) ── */}
+      <Dialog
+        open={!!tier1Server}
+        onClose={() => setTier1Server(null)}
+        labelledBy="mcp-tier1-manage-title"
+        className="max-w-5xl"
+      >
+        {tier1Server && (
+          <>
+            <DialogHeader
+              id="mcp-tier1-manage-title"
+              title={`Tier-1 policies · ${tier1Server.name}`}
+              description="Enable/disable the policies and rules that apply to this server. Each rule targets this server's tools, Apply-To, scope, and action."
+              onClose={() => setTier1Server(null)}
+            />
+            <DialogBody>
+              <PolicyManagementPanel
+                key={tier1Server.id}
+                title={`Policies · ${tier1Server.name}`}
+                description="Enable/disable the policies and rules that apply to this server. Each rule targets this server's tools, Apply-To, scope, and action."
+                scope="mcp"
+                mcpServerSlug={tier1Server.server_slug}
+                mcpServerId={tier1Server.id}
+                servers={servers}
+                showCompileButton
+                showFilters
+              />
+            </DialogBody>
+          </>
+        )}
       </Dialog>
     </div>
   );
