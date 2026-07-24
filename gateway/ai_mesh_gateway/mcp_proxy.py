@@ -1104,7 +1104,17 @@ def _ext_proxy_enabled_info(org_slug: str) -> dict | None:
         mod = _gateway_app_module()
         sync = getattr(mod, "CONFIG_SYNC", None) if mod is not None else None
         if sync is not None:
-            cfg = sync.get_config(org_slug) or {}
+            # STRICT per-org (2026-07-24): read ONLY this org's own synced config.
+            # ``get_config`` falls back to the ``default``/global config when the org is
+            # absent, which made an unsynced org INHERIT another org's ext posture —
+            # enforcing redact/block this operator never selected, the exact no-defaults
+            # violation this function's docstring forbids. ``get_own_config`` returns
+            # None for an org that has not synced a posture, so it resolves to
+            # observe-only below (a SELECTION, never an assumption). Older ConfigSync
+            # builds without the strict accessor degrade to observe-only, never to
+            # inherited enforcement.
+            _own = getattr(sync, "get_own_config", None)
+            cfg = (_own(org_slug) if callable(_own) else None) or {}
             action = (cfg.get("mcp_ext_scan_action") or "tag").strip().lower()
     except Exception as exc:  # pragma: no cover - defensive; never 500 the proxy
         LOG.warning(

@@ -222,6 +222,21 @@ class ConfigSync:
             return self._config_by_org["default"]
         return self._config
 
+    def get_own_config(self, org_slug: str) -> Optional[dict[str, Any]]:
+        """Return ONLY this org's own synced config, or ``None`` if it has not synced.
+
+        Unlike :meth:`get_config`, this NEVER falls back to the ``default``/global
+        config. A security-sensitive per-org SELECTION (e.g. the transparent MCP
+        ext-proxy posture) must not be inherited from another org's config: an
+        org that has not chosen a posture must resolve to its own safe default
+        (observe-only), never silently adopt the platform/default org's enforcing
+        action. Callers that need the lenient inheriting lookup keep using
+        :meth:`get_config`.
+        """
+        if org_slug and org_slug in self._config_by_org:
+            return self._config_by_org[org_slug]
+        return None
+
     def get_model_routing(self, org_slug: str = "") -> list[dict]:
         """Return org-specific model routing metadata."""
         if org_slug and org_slug in self._model_routing_by_org:
