@@ -431,7 +431,8 @@ function MCPConnectorPanelInner() {
   const [orgGatewayKey, setOrgGatewayKey] = useState(null); // { has_gateway_key, prefix, key, ... }
   // Scan-controls row count — when 0, gateway skips Tier-1/Tier-2; the
   // read-only server scan-state badge must not imply active scanning (UI honesty).
-  const [scanControlsConfigured, setScanControlsConfigured] = useState(null);
+  const [scanControlsByServer, setScanControlsByServer] = useState(null); // Set<server_id> with rows; null = loading
+  const [scanControlsOrgWide, setScanControlsOrgWide] = useState(false);
 
   // Per-server, server-centric control modals opened from each server card's
   // "Manage Tier-1" / "Manage Tier-2" buttons. Each holds the target server obj.
@@ -464,7 +465,18 @@ function MCPConnectorPanelInner() {
       if (!res.ok) return;
       const data = await res.json();
       const rows = Array.isArray(data) ? data : data.results ?? [];
-      setScanControlsConfigured(rows.length > 0);
+      // Per-server honesty (red-team wf_66e76405): a per-server scan-control row governs ONLY its own
+      // server; an org-wide row (no server) applies to every server. The old single org-wide boolean
+      // made one server's Tier-2 row light up "Scanning on" on EVERY other server card.
+      const perServer = new Set();
+      let orgWide = false;
+      for (const r of rows) {
+        const sid = r.server_id ?? r.server ?? null;
+        if (sid == null || sid === "") orgWide = true;
+        else perServer.add(String(sid));
+      }
+      setScanControlsByServer(perServer);
+      setScanControlsOrgWide(orgWide);
     } catch {
       // leave prior value; do not flip honesty banner on transient failure
     }
@@ -1532,23 +1544,24 @@ function MCPConnectorPanelInner() {
               {/* MCP collapse (Phase 4): a server's enforcement action is now a
                   single Policy concern. Show a compact read-only scan state plus
                   a CTA that routes to the MCP Security Policies tab. */}
-              {scanControlsConfigured === true && (
-                <Badge
-                  variant="success"
-                  className="text-[10px]"
-                  title="Detection is active for this server. Enforcement actions are defined in MCP Security Policies."
-                >
-                  Scanning on
-                </Badge>
-              )}
-              {scanControlsConfigured === false && (
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] text-amber-700 dark:text-amber-300"
-                  title="Zero scan-control rows — gateway skips Tier-1/Tier-2 entirely"
-                >
-                  Scanning off
-                </Badge>
+              {scanControlsByServer !== null && (
+                (scanControlsByServer.has(String(srv.id)) || scanControlsOrgWide) ? (
+                  <Badge
+                    variant="success"
+                    className="text-[10px]"
+                    title="A Tier-2 scan is configured for this server (or an org-wide scan control). Tier-1 enforcement is defined in this server's Policies (Manage Tier-1)."
+                  >
+                    Tier-2 on
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] text-amber-700 dark:text-amber-300"
+                    title="No Tier-2 scan configured for this server. Configure Tier-1 (Policies) and Tier-2 per server below."
+                  >
+                    Tier-2 off
+                  </Badge>
+                )
               )}
               {/* Server-centric control lane: focused per-server management for
                   each tier. Tier-1 = MCP Security Policies bound to this server;
