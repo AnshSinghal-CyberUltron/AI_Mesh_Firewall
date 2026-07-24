@@ -188,9 +188,30 @@ class PolicySync:
             policy = entry.get("policy", {})
             p_domain = _normalize_policy_domain(policy.get("policy_domain"))
             p_server = policy.get("mcp_server_slug")
-            if p_domain == normalized_domain:
-                if p_server is None or p_server == server_slug:
-                    result.append(entry)
+            if p_domain != normalized_domain:
+                continue
+            # Per-server enablement override (server-centric "Manage Tier-1"): an operator can turn a
+            # policy ON or OFF for THIS server independent of its default binding. server_states maps
+            # server_slug -> enabled; when this server has an entry it WINS over the default
+            # applicability, else fall back to (org-wide OR bound-to-this-server). Absent map =
+            # {} = pure default = byte-identical to the pre-override behavior.
+            server_states = policy.get("server_states") or {}
+            if server_slug in server_states:
+                applies = bool(server_states[server_slug])
+            else:
+                applies = p_server is None or p_server == server_slug
+            if not applies:
+                continue
+            # Per-server RULE override: drop rules this server disabled (rule.server_states[slug] is
+            # False). Absent entry = the rule's global enabled (already applied at compile time).
+            rules = entry.get("rules") or []
+            kept_rules = [
+                r for r in rules
+                if (r.get("server_states") or {}).get(server_slug, True)
+            ]
+            if kept_rules is not rules and len(kept_rules) != len(rules):
+                entry = {**entry, "rules": kept_rules}
+            result.append(entry)
         return result
 
     @property

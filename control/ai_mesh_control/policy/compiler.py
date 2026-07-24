@@ -496,6 +496,23 @@ class PolicyCompiler:
         mcp_server_slug = None
         if policy.mcp_server_id:
             mcp_server_slug = policy.mcp_server.server_slug if policy.mcp_server else None
+        # Per-server enablement overrides (server-centric "Manage Tier-1"): emit the {server_slug:
+        # enabled} maps the gateway consults in get_policies_for_server to include/exclude this policy
+        # and each rule per server. ADDITIVE — empty maps = the policy's default applicability, so a
+        # bundle with no overrides is byte-identical to before.
+        from policy.models import MCPServerPolicyState, MCPServerRuleState  # local: avoid import cycle
+        policy_server_states = {
+            s.server.server_slug: s.enabled
+            for s in MCPServerPolicyState.objects.filter(policy=policy).select_related("server")
+            if s.server and s.server.server_slug
+        }
+        rule_server_states: dict[int, dict[str, bool]] = {}
+        for rs in (MCPServerRuleState.objects.filter(rule__policy=policy)
+                   .select_related("server", "rule")):
+            if rs.server and rs.server.server_slug:
+                rule_server_states.setdefault(rs.rule_id, {})[rs.server.server_slug] = rs.enabled
+        for _r in enabled_rules:
+            _r["server_states"] = rule_server_states.get(_r["id"], {})
         return {
             "policy": {
                 "id": policy.id,
@@ -510,6 +527,7 @@ class PolicyCompiler:
                 "version": policy.version,
                 "policy_domain": policy.policy_domain,
                 "mcp_server_slug": mcp_server_slug,
+                "server_states": policy_server_states,
                 # M-04: actor-scoping allowlists + response field redaction.
                 # These were defined on the model + serializers but never
                 # serialized into the compiled bundle, so enforcement was a

@@ -157,3 +157,38 @@ def recompile_on_rule_delete(
         changed_policy_id=instance.policy_id,
         organization_id=org_id,
     )
+
+
+# ── Per-server enablement overrides (server-centric "Manage Tier-1") ──────────────────────
+# A per-(server, policy)/(server, rule) override changes which policies/rules the compiled
+# bundle stamps for that server, so it must trigger the same debounced recompile as a
+# Policy/Rule edit — else the gateway keeps serving the old server_states map.
+def _recompile_on_server_state(instance, verb):
+    from policy.models import MCPServerPolicyState
+
+    org_id = getattr(instance, "organization_id", None)
+    policy_id = (
+        instance.policy_id if isinstance(instance, MCPServerPolicyState)
+        else getattr(getattr(instance, "rule", None), "policy_id", None)
+    )
+    _trigger_recompilation(
+        sender_name=f"{type(instance).__name__}.{verb}",
+        instance_repr=str(instance),
+        changed_policy_id=policy_id,
+        organization_id=org_id,
+    )
+
+
+def _register_server_state_signals():
+    from policy.models import MCPServerPolicyState, MCPServerRuleState
+
+    for _model in (MCPServerPolicyState, MCPServerRuleState):
+        receiver(post_save, sender=_model,
+                 dispatch_uid=f"recompile_on_{_model.__name__}_save")(
+            lambda sender, instance, **kw: _recompile_on_server_state(instance, "post_save"))
+        receiver(post_delete, sender=_model,
+                 dispatch_uid=f"recompile_on_{_model.__name__}_delete")(
+            lambda sender, instance, **kw: _recompile_on_server_state(instance, "post_delete"))
+
+
+_register_server_state_signals()

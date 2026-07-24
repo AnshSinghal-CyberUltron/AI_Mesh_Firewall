@@ -497,4 +497,78 @@ class ComplianceTag(models.Model):
         return f"{self.code} ({self.severity})"
 
 
+class MCPServerPolicyState(models.Model):
+    """Per-(server, policy) enablement override for the server-centric MCP control lane.
+
+    The base model binds a policy to ONE server (``Policy.mcp_server``) or leaves it org-wide
+    (applies to every server). This table lets an operator, from a server's "Manage Tier-1" view,
+    turn an individual policy ON or OFF for THAT specific server without affecting other servers —
+    the founder's "enable/disable policy for that specific MCP server". ADDITIVE: absence of a row =
+    the policy's default applicability (org-wide → applies; bound → applies to its server), so with
+    no rows the compiled bundle + gateway resolution are byte-identical to before. The global
+    ``Policy.enabled`` remains the master ceiling — a globally-disabled policy is never compiled.
+    """
+    organization = models.ForeignKey(
+        "auth_api.Organization",
+        on_delete=models.CASCADE,
+        related_name="mcp_server_policy_states",
+    )
+    server = models.ForeignKey(
+        "mcp_connector.MCPServerRegistration",
+        on_delete=models.CASCADE,
+        related_name="policy_states",
+    )
+    policy = models.ForeignKey(
+        Policy, on_delete=models.CASCADE, related_name="server_states"
+    )
+    enabled = models.BooleanField(
+        default=True,
+        help_text="True = this policy applies to this server; False = excluded from this server.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("server", "policy")]
+        indexes = [models.Index(fields=["organization", "server"])]
+
+    def __str__(self):
+        return f"policy={self.policy_id} server={self.server_id} enabled={self.enabled}"
+
+
+class MCPServerRuleState(models.Model):
+    """Per-(server, rule) enablement override — the rule-level twin of MCPServerPolicyState.
+
+    Lets an operator disable an individual rule for one server while it stays active elsewhere.
+    ADDITIVE: absence of a row = the rule's global ``enabled`` (the master ceiling — a globally
+    disabled rule is never compiled). A row can only turn a globally-enabled rule OFF for a server.
+    """
+    organization = models.ForeignKey(
+        "auth_api.Organization",
+        on_delete=models.CASCADE,
+        related_name="mcp_server_rule_states",
+    )
+    server = models.ForeignKey(
+        "mcp_connector.MCPServerRegistration",
+        on_delete=models.CASCADE,
+        related_name="rule_states",
+    )
+    rule = models.ForeignKey(
+        Rule, on_delete=models.CASCADE, related_name="server_states"
+    )
+    enabled = models.BooleanField(
+        default=True,
+        help_text="True = this rule runs on this server; False = skipped for this server.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("server", "rule")]
+        indexes = [models.Index(fields=["organization", "server"])]
+
+    def __str__(self):
+        return f"rule={self.rule_id} server={self.server_id} enabled={self.enabled}"
+
+
 from policy.vector_models import VectorCollectionPolicy  # noqa: E402, F401
