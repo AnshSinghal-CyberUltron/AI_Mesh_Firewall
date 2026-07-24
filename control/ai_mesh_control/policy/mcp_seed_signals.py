@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 
-from django.db.models.signals import post_delete, post_save
+from django.db.models.signals import post_delete, post_save, pre_delete
 from django.dispatch import receiver
 
 from auth.models import Organization
@@ -66,6 +66,31 @@ def _seed_mcp_detector_policies_on_server_save(sender, instance, **kwargs):
     Phase-3 cutover. Seeding is idempotent (reconciles to the current posture + scan-controls), so
     re-running on every save is safe; a failure is logged and never blocks the server save."""
     _reseed_org_detectors(getattr(instance, "organization", None), why="server_save")
+
+
+@receiver(pre_delete, sender="mcp_connector.MCPServerRegistration",
+          dispatch_uid="disable_user_policies_on_server_delete")
+def _disable_user_policies_on_server_delete(sender, instance, **kwargs):
+    """Server/tool-binding red-team (wf_9ca3814d): ``Policy.mcp_server`` is SET_NULL, so deleting a
+    server NULLs the FK of every policy bound to it — and the compiler stamps a NULL ``mcp_server`` as
+    ORG-WIDE, so a user's server-SCOPED rule SILENTLY begins enforcing on every OTHER server (invariant
+    E cross-server bleed: a block/redact over-enforces org-wide; an allow/exemption becomes an org-wide
+    bypass). The seeded detector policy is hard-deleted by the post_delete handler below, but a
+    USER-authored (``is_system=False``) policy has a different ``code`` and survives with
+    ``mcp_server=NULL``. Capture those HERE in pre_delete (the FK is still set) and DISABLE them, so the
+    deleted server's scope can never silently widen to org-wide. Disable (not delete) preserves the
+    operator's authored rule; re-enabling an unbound policy is then an explicit, visible operator
+    action, not a silent conversion. Runs before SET_NULL + the seeded-delete recompile, so the next
+    compile already excludes the disabled rule."""
+    try:
+        from policy.models import Policy
+
+        Policy.objects.filter(
+            mcp_server=instance, is_system=False, enabled=True
+        ).update(enabled=False)
+    except Exception:  # pragma: no cover
+        logger.warning("Failed to disable server-bound user policies on server delete for server=%s",
+                       getattr(instance, "id", "?"), exc_info=True)
 
 
 @receiver(post_delete, sender="mcp_connector.MCPServerRegistration",
