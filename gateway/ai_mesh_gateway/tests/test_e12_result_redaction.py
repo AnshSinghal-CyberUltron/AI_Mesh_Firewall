@@ -297,7 +297,7 @@ def _field_rbac_policy(fields, keyword):
         "policy": {"id": 9, "code": "RBAC", "name": "field-rbac", "priority": 10,
                    "severity": "medium", "redaction_fields": list(fields)},
         "rules": [{"id": 91, "name": "kw", "rule_type": "keywords",
-                   "condition": {"keywords": [keyword]}, "action": "monitor"}],
+                   "condition": {"keywords": [keyword]}, "action": "redact"}],
     }]
 
 

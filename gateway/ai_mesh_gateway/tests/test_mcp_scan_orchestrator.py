@@ -514,11 +514,14 @@ async def test_field_redaction_masks_named_output_fields():
     """A matched policy's redaction_fields mask the named OUTPUT fields (values
     replaced with the placeholder) while sibling fields survive — under a
     non-monitor posture, output direction. Original payload is not mutated."""
+    # Operator model: field-RBAC masks ONLY under a REDACT action ("tag/redact means exactly that").
+    # The match keyword ("ACME") lives in a redaction_fields field (account), so the redact action's
+    # primary content masking never touches the sibling ``note`` — isolating the field-RBAC behavior.
     payload = {"account": "ACME-123", "ssn": "123-45-6789",
-               "note": "please flagme this record"}
+               "note": "please keep this record"}
     with (
         patch("mcp_scan_orchestrator._get_policy_sync",
-              return_value=_field_sync(_field_policy(["ssn", "account"]))),
+              return_value=_field_sync(_field_policy(["ssn", "account"], action="redact", keyword="ACME"))),
         patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
     ):
         out, result = await scan_mcp_payload(
@@ -529,7 +532,7 @@ async def test_field_redaction_masks_named_output_fields():
     assert result.blocked is False
     assert out["ssn"] == "[REDACTED]"
     assert out["account"] == "[REDACTED]"
-    assert out["note"] == "please flagme this record"      # sibling untouched
+    assert out["note"] == "please keep this record"        # sibling untouched
     assert result.redacted_fields == ["ssn", "account"]
     assert any(t.get("scan_stage") == "field_redaction" for t in result.scan_trace)
     assert payload["ssn"] == "123-45-6789"                 # non-mutating (audit-safe)
@@ -553,6 +556,41 @@ async def test_field_redaction_suppressed_under_monitor_posture():
     assert out["ssn"] == "123-45-6789"                     # observe-only, unmasked
     assert result.redacted_fields == []
     assert not any(t.get("scan_stage") == "field_redaction" for t in result.scan_trace)
+
+
+@pytest.mark.asyncio
+async def test_field_redaction_suppressed_under_scan_control_monitor_action():
+    """Red-team LANE-A-01: field RBAC must be suppressed when the operator selected an
+    observe-only ``monitor`` action ON THE SCAN-CONTROL ROW — not only when ``monitor`` is
+    passed as the raw ``enforcement`` posture.
+
+    The real proxy path (``_scan_tool_result_floor`` -> ``_mcp_security_scan`` ->
+    ``scan_mcp_payload``) passes ``enforcement = _effective_scan_action`` = the SERVER
+    POSTURE, whose choices are only tag/redact/block — it never carries 'monitor'. The
+    operator's observe-only selection lives in the scan-control row's ``action='monitor'``,
+    resolved into ``tier1_action``. The sibling test above pins ``enforcement='monitor'``
+    (a value the proxy never produces), so it passed while production still masked the
+    OUTPUT payload under an observe-only selection. Here ``enforcement='tag'`` (a real
+    posture) + a ``tier1_output`` control ``action='monitor'`` must leave the field RAW.
+    """
+    controls = _ctrl("output")
+    controls["tier1_output"]["action"] = "monitor"  # operator selected observe-only for output
+    payload = {"ssn": "123-45-6789", "note": "please flagme this record"}
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync",
+              return_value=_field_sync(_field_policy(["ssn"]))),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="tag",
+            effective_controls=controls,
+            org_slug="demo", server_slug="stub", tool_name="get_user_record",
+        )
+    assert out["ssn"] == "123-45-6789"       # observe-only monitor: NOT masked
+    assert result.redacted_fields == []
+    assert not any(t.get("scan_stage") == "field_redaction" for t in result.scan_trace)
+    # Audit honesty: nothing was mutated, so the monitor selection is not misreported.
+    assert result.blocked is False
 
 
 @pytest.mark.asyncio
@@ -597,7 +635,7 @@ async def test_field_redaction_empty_list_is_noop():
 async def test_field_redaction_scoped_to_actor_role():
     """RBAC dimension: redaction_fields only surface (and mask) for the actor the
     policy is scoped to — a non-scoped actor's response is left intact."""
-    compiled = _field_policy(["ssn"], roles=["support"])
+    compiled = _field_policy(["ssn"], roles=["support"], action="redact")  # field-RBAC masks under redact only
 
     async def _run(actor_roles):
         with (
@@ -620,6 +658,33 @@ async def test_field_redaction_scoped_to_actor_role():
     other_out, other_res = await _run(["admin"])
     assert other_out["ssn"] == "123-45-6789"     # policy skipped -> no masking
     assert other_res.redacted_fields == []
+
+
+@pytest.mark.parametrize("action,masked", [
+    ("redact", True), ("tag", False), ("allow", False), ("monitor", False)])
+@pytest.mark.asyncio
+async def test_field_redaction_only_under_redact_action(action, masked):
+    """OPERATOR MODEL (Ansh 2026-07-24): a policy's ``redaction_fields`` (actor-scoped RBAC field
+    masking) mask the OUTPUT ONLY when the matched rule's action is ``redact``. Under tag / allow /
+    monitor the field is forwarded RAW — "tag/redact means exactly that, no confusing hidden masking".
+    Previously field-RBAC fired on any match regardless of action (masking under a tag rule)."""
+    payload = {"ssn": "123-45-6789", "note": "flagme"}
+    with (
+        patch("mcp_scan_orchestrator._get_policy_sync",
+              return_value=_field_sync(_field_policy(["ssn"], action=action))),
+        patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
+    ):
+        out, result = await scan_mcp_payload(
+            payload, scan_direction="output", enforcement="tag",
+            effective_controls=_ctrl("output"),
+            org_slug="demo", server_slug="stub", tool_name="get_user_record",
+        )
+    if masked:
+        assert out["ssn"] == "[REDACTED]", "redact action masks the RBAC field"
+        assert result.redacted_fields == ["ssn"]
+    else:
+        assert out["ssn"] == "123-45-6789", f"{action} must forward the field RAW (no hidden masking)"
+        assert result.redacted_fields == []
 
 
 def test_apply_field_redaction_nested_homoglyph_and_nonmutating():
@@ -778,7 +843,7 @@ async def test_policy_redaction_fields_surfaced_on_input_scan_not_applied():
     but does NOT mask the input args itself."""
     with (
         patch("mcp_scan_orchestrator._get_policy_sync",
-              return_value=_field_sync(_field_policy(["ssn"], keyword="flagme"))),
+              return_value=_field_sync(_field_policy(["ssn"], keyword="flagme", action="redact"))),
         patch("mcp_scan_orchestrator._get_input_scanner", return_value=MagicMock()),
     ):
         out, result = await scan_mcp_payload(
