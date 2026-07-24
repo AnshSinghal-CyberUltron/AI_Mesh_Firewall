@@ -536,20 +536,11 @@ function UebaApiKeysPageInner() {
           refreshSignal={refreshSignal}
           simulatorKeyId={simulatorCtx.keyId}
           simulatorKeyPrefix={simulatorCtx.prefix}
-          orgId={orgId}
           riskCalculation={
             riskCalc
               ? { settings: riskCalc.settings, formula_reference: riskCalc.formula_reference }
               : null
           }
-          onSimulatorKeyAdopted={(ctx) => {
-            setSimulatorCtx(ctx);
-            if (ctx?.keyId) {
-              const row = findRegistryRow(ctx.keyId);
-              if (row) openProfile(row);
-              else selectKey(ctx.keyId);
-            }
-          }}
           onActionComplete={handleActionComplete}
           loading={loading}
           liveConnected={wsConnected}

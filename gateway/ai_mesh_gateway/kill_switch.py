@@ -15,6 +15,11 @@ GLOBAL_SUFFIX = "global"
 MODEL_KEY_PREFIX = "model:"
 CREDENTIAL_KEY_PREFIX = "credential:"
 
+# Credential-wide sentinel (Module 2 SOC containment + control KillSwitch.SCOPE_CREDENTIAL).
+# Redis key: kill_switch:{org}:credential:{prefix}:model:__credential__
+# Applies to ALL models for that API key when no per-model credential switch matches.
+CREDENTIAL_WIDE_MODEL = "__credential__"
+
 # Mirrors control's KILL_SWITCH_ACTION_CHOICES (core/models.py). Any other
 # value in a Redis payload indicates corruption and the entry is ignored.
 VALID_ACTIONS = frozenset({"disable", "reroute"})
@@ -40,7 +45,11 @@ async def check_kill_switch(
     """
     Check kill switches via Redis pipeline (per-request canonical read).
 
-    Precedence: credential-scoped > per-model > global.
+    Precedence:
+      credential + requested model
+      > credential + ``__credential__`` (all models for that API key)
+      > org per-model
+      > org global
     On Redis failure, fail-closed (disable).
     Malformed payloads (non-dict JSON, unknown/missing action, reroute
     without fallback) are ignored — FAIL-OPEN — so a corrupt entry cannot
@@ -56,6 +65,19 @@ async def check_kill_switch(
                 f"kill_switch:{prefix}:{CREDENTIAL_KEY_PREFIX}{key_prefix}:{MODEL_KEY_PREFIX}{model_name}",
             )
         )
+        # Module 2 "Activate Kill Switch" writes model:__credential__ so one
+        # switch covers every model for that key. Skip duplicate get when the
+        # request already targets the sentinel name.
+        if model_name != CREDENTIAL_WIDE_MODEL:
+            keys.append(
+                (
+                    "credential",
+                    (
+                        f"kill_switch:{prefix}:{CREDENTIAL_KEY_PREFIX}{key_prefix}:"
+                        f"{MODEL_KEY_PREFIX}{CREDENTIAL_WIDE_MODEL}"
+                    ),
+                )
+            )
     keys.append(("org_model", f"kill_switch:{prefix}:{MODEL_KEY_PREFIX}{model_name}"))
     keys.append(("org_global", f"kill_switch:{prefix}:{GLOBAL_SUFFIX}"))
 

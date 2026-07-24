@@ -33,6 +33,91 @@ ACTION_ORDER: dict[str, int] = {
 }
 DEFAULT_REDACTION_PLACEHOLDER = "[REDACTED]"
 
+# Phase 2 (2026-07-23): the "detector" rule type. An operator-facing detector class maps to
+# the redact_all_scoped class set (classify_pattern_key → "pii"/"credential"/"ip_leakage";
+# secrets fold into "credential" via the SECRET compliance tag). ``all`` = every class.
+# ``secret`` is accepted as an operator-friendly alias of ``credential``.
+_DETECTOR_CLASS_MAP: dict[str, frozenset[str]] = {
+    "pii": frozenset({"pii"}),
+    "credential": frozenset({"credential"}),
+    "secret": frozenset({"credential"}),
+    "ip_leakage": frozenset({"ip_leakage"}),
+    "all": frozenset({"pii", "credential", "ip_leakage"}),
+}
+_DETECTOR_ALL_CLASSES = _DETECTOR_CLASS_MAP["all"]
+
+
+def _resolve_detector_classes(value: Any) -> frozenset[str]:
+    """Map an operator ``detector_class`` (str or list) to redact_all_scoped classes.
+    Unknown/empty → the full suite (``all``), the safe/complete default for a detector rule.
+    ``injection`` is NOT a redactable class (handled separately) so it contributes nothing here."""
+    if isinstance(value, str):
+        if value.strip().lower() == "injection":
+            return frozenset()
+        return _DETECTOR_CLASS_MAP.get(value.strip().lower(), _DETECTOR_ALL_CLASSES)
+    if isinstance(value, (list, tuple, set)):
+        out: set[str] = set()
+        for v in value:
+            out |= set(_DETECTOR_CLASS_MAP.get(str(v).strip().lower(), frozenset()))
+        return frozenset(out)  # empty is legitimate (e.g. injection-only rule)
+    return _DETECTOR_ALL_CLASSES
+
+
+def _wants_injection(value: Any) -> bool:
+    """True if a ``detector_class`` requests the injection/jailbreak class (#4). Injection is a
+    BLOCK-oriented, non-maskable class — a server posture blocks prompt-injection/jailbreak via
+    the preset floor, which detector_class=all (pii/credential/ip_leakage) never covered."""
+    if isinstance(value, str):
+        return value.strip().lower() == "injection"
+    if isinstance(value, (list, tuple, set)):
+        return any(str(v).strip().lower() == "injection" for v in value)
+    return False
+
+
+# Injection/jailbreak detection for the detector lane — parity with mcp_scan_orchestrator.
+# _injection_match (keyword substrings + scanner.ATTACK_PATTERNS prompt_injection/jailbreak).
+_DETECTOR_INJECTION_KEYWORDS = (
+    "ignore previous instructions", "ignore all prior", "disregard your instructions",
+    "system prompt", "jailbreak", "do anything now",
+)
+
+
+def _detector_injection_match(text: str) -> bool:
+    lower = text.lower()
+    if any(k in lower for k in _DETECTOR_INJECTION_KEYWORDS):
+        return True
+    try:
+        from scanner import ATTACK_PATTERNS  # local: scanner does not import this module
+        from patterns import compile_pattern
+    except Exception:
+        return False
+    for cat in ("prompt_injection", "jailbreak"):
+        for ps in ATTACK_PATTERNS.get(cat, ()):
+            try:
+                if compile_pattern(ps).search(text):
+                    return True
+            except Exception:  # noqa: BLE001 — never break the scan on a bad pattern
+                continue
+    return False
+
+
+def _encoded_variants(text: str) -> list[str]:
+    """Text-encoding-decoded views (HTML entities, percent/backslash escapes …) so the detector
+    lane catches an ENCODED secret the server posture's encoded-exfil floor caught (#3). Fast-
+    pathed: pure ASCII with no encoding markers has no variants. Bounded (#4): skip a huge
+    fragment (the decode + per-variant re-scan is O(text) each) so a marker-heavy tool result
+    can't amplify CPU — the raw scan already covers plain content; a >budget fragment is a
+    resource anomaly the enforcing posture also caps."""
+    if len(text) > _MAX_MATCH_INPUT_LEN:
+        return []
+    if "&" not in text and "%" not in text and "\\" not in text and text.isascii():
+        return []
+    try:
+        from scanner import _decode_text_encoding_variants  # local: avoid import cycle
+        return [v for v in _decode_text_encoding_variants(text) if v and v != text][:4]
+    except Exception:
+        return []
+
 # FINDING-3 (ReDoS): mirror the control-plane write-time guard into the gateway
 # hot path so a catastrophic-backtracking pattern that lands in a compiled
 # bundle cannot pin the worker thread evaluating it.
@@ -180,6 +265,22 @@ class EvaluationResult:
     # FIX-1.2a: the winning model_downgrade rule's target model. Empty when the
     # final action is not model_downgrade (or the rule carries no downgrade_to).
     model_downgrade_target: str = ""
+    # B1 render-leak floor (2026-07-23): the strongest action ("block" > "redact") of an
+    # ENFORCING, entire-scope DETECTOR rule that is APPLICABLE to this context (passes
+    # actor/target_tool/direction filters) — set REGARDLESS of whether its class-detection
+    # matched. The live server posture ran the render-leak neutralizers (encoded-PII /
+    # markdown-split / zero-click exfil beacon) as a MASK FLOOR whenever it was enforcing,
+    # independent of any class match; a seeded detector policy replaces the posture, so the
+    # policy lane must reproduce that floor or an encoded credential/PII / render beacon
+    # egresses RAW at Phase-3 cutover. The orchestrator applies `_neutralize_render_leaks`
+    # to the leaves when this is set — a MASK only, never a block (frozen: redact/floor never
+    # escalates to block). Empty when no enforcing entire-scope detector rule applies.
+    render_floor: str = ""
+    # B2: the ``key`` paths of enforcing scope=KEY detector rules applicable to this scan. The
+    # render-leak floor is applied ONLY to leaves under these keys (encoded/beacon content inside
+    # the operator's protected field is neutralized without touching siblings). Distinct from
+    # ``render_floor`` (entire-scope). Deduped, order-preserving.
+    render_floor_keys: list[str] = field(default_factory=list)
     message: str = ""
 
 def _policy_applies_to_actor(
@@ -340,7 +441,11 @@ def evaluate(
         for rule in rules:
             # Tool-level targeting: skip rules bound to a different tool
             rule_target = rule.get("target_tool", "") or ""
-            if rule_target and tool_name and rule_target != tool_name:
+            # Operator-control #5: a per-tool rule (rule_target set) applies ONLY to its EXACT tool.
+            # The old ``and tool_name`` guard meant an empty/unknown tool_name bypassed the skip, so a
+            # rule the operator bound to one tool enforced on a nameless call. Match exactly; an empty
+            # tool_name matches only server-wide rules (rule_target == "").
+            if rule_target and rule_target != tool_name:
                 continue
 
             if not _evaluate_rule(rule, prompt, response_text):
@@ -493,11 +598,42 @@ _KEY_COLLECT_MAX_DEPTH = 500
 _KEY_COLLECT_MAX_NODES = 2_000_000
 
 
-def _collect_key_values(obj: Any, key: str) -> list[str]:
+def _collect_dot_path_nodes(obj: Any, path: str) -> list[Any]:
+    """Resolve a DOT-separated ``key_path`` to the bound subtree NODES (raw, un-stringified),
+    mirroring ``mcp_scan_targets._get_by_dot_path`` (lists transparent)."""
+    parts = [p for p in path.split(".") if p]
+    if not parts:
+        return []
+    nodes: list[Any] = [obj]
+    for part in parts:
+        nxt: list[Any] = []
+        pn = _normalize_key(part)
+        for node in nodes:
+            if isinstance(node, dict):
+                for k, v in node.items():
+                    if _normalize_key(k) == pn:
+                        nxt.append(v)
+            elif isinstance(node, list):
+                for item in node:
+                    if isinstance(item, dict):
+                        for k, v in item.items():
+                            if _normalize_key(k) == pn:
+                                nxt.append(v)
+        nodes = nxt
+        if not nodes:
+            return []
+    return nodes
+
+
+def _collect_key_nodes(obj: Any, key: str) -> list[Any]:
+    """Resolve a scope=key ``key`` to the bound subtree NODES. Dotted key → path from root; plain
+    key → recursive key-name match (collect the matched value, do NOT descend into it)."""
     if not key:
         return []
+    if "." in key:
+        return _collect_dot_path_nodes(obj, key)
     target = _normalize_key(key)
-    out: list[str] = []
+    out: list[Any] = []
     stack: list[tuple[Any, int]] = [(obj, 0)]
     nodes = 0
     while stack:
@@ -510,13 +646,113 @@ def _collect_key_values(obj: Any, key: str) -> list[str]:
         if isinstance(cur, dict):
             for k, v in cur.items():
                 if _normalize_key(k) == target:
-                    # Matched key: collect but do NOT descend (original semantics).
-                    out.append(v if isinstance(v, str) else _safe_json(v))
+                    out.append(v)  # matched key: collect its value, do NOT descend
                 else:
                     stack.append((v, depth + 1))
         elif isinstance(cur, list):
             for item in cur:
                 stack.append((item, depth + 1))
+    return out
+
+
+def _collect_dot_path_values(obj: Any, path: str) -> list[str]:
+    """String (and stringified) values at a DOT-separated ``key_path`` — see
+    ``_collect_dot_path_nodes``. A ``scope=key`` detector rule whose ``key`` is a dot-path must
+    traverse the path (a detector SEEDED from a dot-path scan-control else scanned NOTHING —
+    Phase-2b red-team #1)."""
+    return [n if isinstance(n, str) else _safe_json(n) for n in _collect_dot_path_nodes(obj, path)]
+
+
+def _collect_key_values(obj: Any, key: str) -> list[str]:
+    return [n if isinstance(n, str) else _safe_json(n) for n in _collect_key_nodes(obj, key)]
+
+
+def _leaf_value_texts(obj: Any) -> list[str]:
+    """Collect the string (and stringified numeric) VALUE leaves of a structured payload —
+    value content only, NEVER key names. Iterative + bounded (mirrors _collect_key_values).
+
+    scope=entire MCP detection used to scan ``_safe_json(input_args)`` — the whole serialized
+    blob, INCLUDING key names and JSON punctuation. That made detection see content the
+    value-leaf redaction can never mask: a redact rule whose keyword/regex hit a KEY NAME
+    (``arguments``, ``password``, ``url`` …) or a cross-field ``"key":"val"`` structure matched
+    in detection but nothing in the values, so the cannot-mask fail-closed BLOCKED benign
+    traffic, or a structural regex claimed a redact it couldn't fulfil. Scanning value leaves
+    makes detection consistent with redaction: a rule matches iff its pattern is in actual
+    value content, which is exactly what the value-leaf redactor can mask."""
+    out: list[str] = []
+    stack: list[tuple[Any, int]] = [(obj, 0)]
+    nodes = 0
+    while stack:
+        cur, depth = stack.pop()
+        if depth > _KEY_COLLECT_MAX_DEPTH:
+            continue
+        nodes += 1
+        if nodes > _KEY_COLLECT_MAX_NODES:
+            break
+        if isinstance(cur, str):
+            out.append(cur)
+        elif isinstance(cur, bool):
+            continue  # "true"/"false" carries no secret
+        elif isinstance(cur, (int, float)):
+            out.append(_safe_json(cur))  # numeric secret (SSN/card as a number)
+        elif isinstance(cur, dict):
+            for v in cur.values():  # values only — keys are never scanned
+                stack.append((v, depth + 1))
+        elif isinstance(cur, list):
+            for item in cur:
+                stack.append((item, depth + 1))
+    return out
+
+
+def _leaf_key_names(obj: Any) -> list[str]:
+    """Collect the KEY NAMES of a structured payload (recursive, bounded — mirrors
+    ``_leaf_value_texts``). A secret can be smuggled as a JSON KEY (``{"AKIA…": "x"}``); the live
+    entire-mode preset scans the serialized blob and catches it, but the value-leaf detection
+    misses it (B3). Used ONLY by the detector-class check — a real secret PATTERN in a key — never
+    by keyword/regex rules, so PR#19's key-name false-block (a keyword matching a STRUCTURAL key
+    like ``password``/``arguments``) cannot recur; and the redactor masks a matched key by RENAME,
+    so detection⟺redaction still agree (no cannot-mask)."""
+    out: list[str] = []
+    stack: list[tuple[Any, int]] = [(obj, 0)]
+    nodes = 0
+    while stack:
+        cur, depth = stack.pop()
+        if depth > _KEY_COLLECT_MAX_DEPTH:
+            continue
+        nodes += 1
+        if nodes > _KEY_COLLECT_MAX_NODES:
+            break
+        if isinstance(cur, dict):
+            for k, v in cur.items():
+                if isinstance(k, str):
+                    out.append(k)
+                stack.append((v, depth + 1))
+        elif isinstance(cur, list):
+            for item in cur:
+                stack.append((item, depth + 1))
+    return out
+
+
+def _detector_key_name_texts(context: dict[str, Any], matcher: dict[str, Any]) -> list[str]:
+    """KEY NAMES to add to the DETECTOR-class scan, honoring direction. For scope=entire, every key
+    name in the payload; for scope=key, the key names UNDER the bound ``key`` subtree (so a secret
+    smuggled as a key name INSIDE the operator's protected field is caught — parity with the live
+    scoped preset pass, which serializes and blob-scans that subtree). The orchestrator masks a
+    matched key by rename at the same scope, keeping detection⟺redaction agreement."""
+    scope = matcher.get("scope")
+    key = matcher.get("key") or ""
+    out: list[str] = []
+    for direction, src_key in (("input", "input_args"), ("output", "output_data")):
+        if matcher["direction"] not in (direction, "both"):
+            continue
+        src = context.get(src_key)
+        if not isinstance(src, (dict, list)):
+            continue
+        if scope == "key":
+            for node in _collect_key_nodes(src, key):
+                out.extend(_leaf_key_names(node))
+        else:
+            out.extend(_leaf_key_names(src))
     return out
 
 
@@ -541,7 +777,17 @@ def _resolve_matcher_dict(rule: dict[str, Any]) -> dict[str, Any]:
     preset = cond.get("preset")
     regex = None
     keywords = None
-    if preset:
+    # Phase 2 (2026-07-23): a ``detector`` rule invokes the built-in detector SUITE (the
+    # full 63-pattern detect_* engine) for an operator-facing class, so a single policy rule
+    # can carry the coverage a server posture used to provide. detector_class resolves to the
+    # redact_all_scoped class set; detection reuses the SAME engine (a class matches iff
+    # redact_all_scoped changes the text), so detection and redaction can never disagree.
+    detector_class = None
+    detect_injection = False
+    if rule.get("rule_type") == "detector" or cond.get("detector_class"):
+        detector_class = _resolve_detector_classes(cond.get("detector_class"))
+        detect_injection = _wants_injection(cond.get("detector_class"))
+    elif preset:
         regex = preset_regex(preset)
     elif rule.get("rule_type") == "keywords":
         keywords = cond.get("keywords") or cond.get("keywords_list") or []
@@ -562,6 +808,8 @@ def _resolve_matcher_dict(rule: dict[str, Any]) -> dict[str, Any]:
         "regex": regex,
         "keywords": [k for k in (keywords or []) if isinstance(k, str)],
         "preset": preset,
+        "detector_class": detector_class,
+        "detect_injection": detect_injection,
         "replacement": replacement,
     }
 
@@ -584,20 +832,78 @@ def _candidate_texts_mcp(context: dict[str, Any], matcher: dict[str, Any]) -> li
         if scope == "key":
             texts.extend(_collect_key_values(input_args, key))
         else:
-            texts.append(prompt or _safe_json(input_args))
+            # entire: scan VALUE leaves (not the serialized blob's key names) so detection
+            # matches only maskable value content — consistent with the value-leaf redactor.
+            # Fall back to the chat-style ``prompt`` when input_args yields no leaves
+            # (empty/None), then to a raw serialization for a non-container scalar.
+            leaves = _leaf_value_texts(input_args) if isinstance(input_args, (dict, list)) else []
+            if leaves:
+                texts.extend(leaves)
+            elif prompt:
+                texts.append(prompt)
+            elif input_args is not None:
+                texts.append(_safe_json(input_args))
     if want_output:
         if scope == "key":
             texts.extend(_collect_key_values(output_data, key))
         else:
-            texts.append(response or _safe_json(output_data))
+            leaves = _leaf_value_texts(output_data) if isinstance(output_data, (dict, list)) else []
+            if leaves:
+                texts.extend(leaves)
+            elif response:
+                texts.append(response)
+            elif output_data is not None:
+                texts.append(_safe_json(output_data))
 
     return [t for t in texts if t]
 
 
+def _detector_floor_action(rule: dict[str, Any], context: dict[str, Any]) -> tuple[str, str] | None:
+    """B1/B2: return ``(action, key)`` if this is an ENFORCING DETECTOR rule APPLICABLE to the
+    active scan (its direction/scope yields candidate text), else ``None``. ``action`` is
+    "redact"/"block"; ``key`` is "" for an entire-scope rule or the ``key`` path for a scope=key
+    rule.
+
+    This drives the render-leak MASK FLOOR — the orchestrator neutralizes encoded-PII /
+    markdown-split / exfil-beacon surfaces, applied whenever such a rule is PRESENT regardless of
+    whether its class-detection matched (the live posture ran that neutralization as an enforcing
+    floor independent of class match). B2: a key_path-scoped rule arms the floor ONLY on the leaves
+    UNDER its ``key`` (the live posture scopes the preset pass to that field via extract_and_bind),
+    so encoded/beacon content inside the operator's protected field is neutralized without touching
+    siblings. Applicability reuses ``_candidate_texts_mcp`` (the same direction/scope gate
+    ``_evaluate_rule_mcp`` uses), so an input-only rule never arms the floor on an output scan."""
+    cond = rule.get("condition") or {}
+    if not (rule.get("rule_type") == "detector" or cond.get("detector_class")):
+        return None
+    action = rule.get("action", "")
+    if action not in ("redact", "block"):
+        return None
+    matcher = _resolve_matcher_dict(rule)
+    if not _candidate_texts_mcp(context, matcher):
+        return None  # not applicable to this scan direction
+    scope = (cond.get("scope") or "entire")
+    key = str(cond.get("key") or "").strip() if scope == "key" else ""
+    if scope == "key" and not key:
+        return None  # malformed key-scope rule arms nothing
+    return (action, key)
+
+
 def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
+    # Per-tool EXEMPTION (Phase 2b #5): a blanket "this tool is observe-only" marker. It
+    # matches unconditionally (regardless of content) so it always applies to its target_tool,
+    # letting evaluate_mcp_policies downgrade a broader server-wide rule to observe for the
+    # operator-lowered tool — the additive model can't otherwise UN-enforce a tool.
+    if (rule.get("condition") or {}).get("exempt"):
+        return True
     matcher = _resolve_matcher_dict(rule)
     texts = _candidate_texts_mcp(context, matcher)
-    if not texts:
+    # B3: a DETECTOR-class OR injection rule ALSO scans KEY NAMES for scope=entire (a secret /
+    # prompt-injection smuggled as a JSON key that the live entire-mode blob scan catches).
+    # Value-only for keyword/regex (PR#19). A pure-injection rule has an EMPTY detector_class
+    # frozenset (falsy) — gate on detect_injection too, else its key names are never collected.
+    key_texts = (_detector_key_name_texts(context, matcher)
+                 if (matcher["detector_class"] or matcher.get("detect_injection")) else [])
+    if not texts and not key_texts:
         return False
 
     if matcher["regex"]:
@@ -618,13 +924,91 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
         return False
 
     if matcher["keywords"]:
+        # Keyword DETECTION is SUBSTRING (``kw in text``), and apply_redaction masks the same
+        # substring occurrence (word-bounded first, then a literal-substring fallback), so the
+        # two agree on what "matched" means. An earlier word-bounded DETECTION silently missed
+        # boundary-hostile credential keywords (``ghp_``/``AKIA``/``-----BEGIN``: ``\bghp_\b``
+        # can't match ``ghp_ABC…`` — no word boundary after ``_``), so those redact rules
+        # DETECTED NOTHING and forwarded the secret RAW under every posture with no telemetry —
+        # a far worse regression than the ``secret``-in-``secretary`` false-block it fixed
+        # (now handled by the substring-fallback masking, not by narrowing detection). Empty
+        # keywords are skipped (``"" in text`` is always True → would match every payload).
         for text in texts:
-            text_lower = text.lower()
-            if any(kw.lower() in text_lower for kw in matcher["keywords"]):
+            tl = text.lower()
+            for kw in matcher["keywords"]:
+                if kw and kw.lower() in tl:
+                    return True
+        return False
+
+    if matcher["detector_class"] or matcher.get("detect_injection"):
+        # A detector rule matches iff the built-in detector SUITE would mask something in this
+        # class — reuse the SAME redact_all_scoped engine the rule redacts with, so detection
+        # and redaction agree by construction (no detect-on-blob / mask-on-leaf asymmetry).
+        from patterns import redact_all_scoped, _dec_has_infra  # local: patterns has no import cycle here
+        classes = set(matcher["detector_class"] or ())
+        want_injection = bool(matcher.get("detect_injection"))
+        # #3/#1: encoded-exfil detection drives BLOCK ONLY. The masker can't mask an HTML-entity
+        # /percent/\\u-encoded secret, and the FROZEN 2026-07-22 decision is that ``redact``
+        # best-effort masks raw + FORWARDS (never escalates to block). The posture matches this:
+        # it BLOCKS encoded-exfil under a block posture but FORWARDS under redact. Detecting the
+        # encoded form for a REDACT rule would fail-closed the raw-unmaskable residual into a
+        # block — the exact escalation the frozen decision removed. So only a BLOCK rule checks
+        # the decoded surface; a redact rule masks the raw forms and forwards, posture-identical.
+        encoded_check = (rule.get("action") == "block")
+        # #3/B1: the encoded-variant BLOCK check mirrors the live encoded-exfil block floor
+        # (mcp_scan_orchestrator.py:645-666) KEY-for-KEY: it withholds only a decoded
+        # SECRET/CREDENTIAL or an INFRA-NETWORK address — deliberately NOT entity-encoded generic
+        # PII (email/ssn/phone/cc), and NOT the flag-tier ip_leakage kinds like file paths
+        # (``_INFRA_NETWORK_KEYS`` excludes ``file_path_*`` as FP-prone; the live floor forwards
+        # them). An earlier class-level ``classes - {"pii"}`` retained the whole ip_leakage class,
+        # so an encoded internal FILE PATH under a block rule OVER-BLOCKED vs the posture (which
+        # forwards it). Gate on the rule's own classes; the render_floor mask+forwards whatever
+        # this does not withhold, matching the posture's mask+forward.
+        want_cred = "credential" in classes
+        want_infra = "ip_leakage" in classes
+        for text in texts:
+            if classes and redact_all_scoped(text, classes) != text:
                 return True
+            if want_injection and _detector_injection_match(text):
+                return True
+            if encoded_check and (want_cred or want_infra):
+                for variant in _encoded_variants(text):
+                    if want_cred and redact_all_scoped(variant, {"credential"}) != variant:
+                        return True
+                    if want_infra and _dec_has_infra(variant):
+                        return True
+        # B3: a secret OR prompt-injection in a JSON KEY NAME. Class match → redactor masks by
+        # rename; injection is block-only (the live blob scan blocks it; no redactor change).
+        for kt in key_texts:
+            if classes and redact_all_scoped(kt, classes) != kt:
+                return True
+            if want_injection and _detector_injection_match(kt):
+                return True
+            # Integration red-team wf_21ddb986 #2: the live entire-mode preset decodes the SERIALIZED
+            # blob (key names included), so an ENCODED credential/infra address smuggled as a key
+            # name blocks live but evaded the seed. Mirror the value-lane encoded-BLOCK check onto
+            # key names (block rules only; credential/infra, never generic PII — same exclusions).
+            if encoded_check and (want_cred or want_infra):
+                for variant in _encoded_variants(kt):
+                    if want_cred and redact_all_scoped(variant, {"credential"}) != variant:
+                        return True
+                    if want_infra and _dec_has_infra(variant):
+                        return True
         return False
 
     return False
+
+
+def _exempt_dir_applies(rule: dict[str, Any], context: dict[str, Any]) -> bool:
+    """An exemption's direction (input/output/both) must match the ACTIVE scan direction, so a
+    tool lowered in ONE direction is not un-enforced in the other (#5 / RC-B). The MCP context
+    is built per scan_direction: input → input_args set / output_data None; output → vice-versa."""
+    d = str((rule.get("condition") or {}).get("direction") or "both").strip().lower()
+    if d == "input":
+        return context.get("input_args") is not None or bool(context.get("prompt"))
+    if d == "output":
+        return context.get("output_data") is not None or bool(context.get("response"))
+    return True  # "both" / unknown → applies to any direction
 
 
 def evaluate_mcp_policies(
@@ -661,10 +1045,59 @@ def evaluate_mcp_policies(
         if not _policy_applies_to_actor(policy, actor):
             continue
 
+        # POLICY-SCOPED EXEMPTION (#5, RC-A fix): an exemption downgrades ONLY the enforcing
+        # rules of ITS OWN policy for this tool + direction — NOT the whole evaluation. The
+        # earlier global override wiped every policy's action/hints, so an exemption on the
+        # SEEDED server-detector policy also killed an operator's explicit BLOCK and the org
+        # baseline PII-redact policy for that tool (raw egress). The exemption exists to
+        # suppress the broad server-wide rule that lives in the SAME seeded policy; other
+        # policies stand on their own.
+        # #6/#2: match target_tool by EXACT equality — the same case-sensitive semantics the
+        # server posture (_effective_scan_action) and scan-controls use. An earlier NFKC/casefold
+        # normalization made the seed STRICTER than the posture: two distinct tools that fold
+        # together (``GetData``/``getData``/fullwidth homoglyph) collided, so a per-tool rule or
+        # exemption for one wrongly applied to the other (over-block / wrong exemption). The
+        # seeded target_tool comes from MCPToolRegistration.tool_name and the runtime tool_name is
+        # the same registered name, so exact equality matches in practice AND matches the posture.
+        policy_exempts = bool(tool_name) and any(
+            (r.get("condition") or {}).get("exempt")
+            and (r.get("target_tool") or "") == tool_name
+            and _exempt_dir_applies(r, context)
+            for r in rules
+        )
+
         for rule in rules:
             rule_target = rule.get("target_tool", "") or ""
-            if rule_target and tool_name and rule_target != tool_name:
+            # Operator-control #5: a per-tool rule (rule_target set) applies ONLY to its EXACT tool.
+            # The old ``and tool_name`` guard meant an empty/unknown tool_name bypassed the skip, so a
+            # rule the operator bound to one tool enforced on a nameless call. Match exactly; an empty
+            # tool_name matches only server-wide rules (rule_target == "").
+            if rule_target and rule_target != tool_name:
                 continue
+
+            # An exemption rule itself contributes no enforcing action and is not a finding.
+            if (rule.get("condition") or {}).get("exempt"):
+                continue
+
+            # B1 render-leak floor: an ENFORCING entire-scope detector rule arms the neutralizer
+            # floor whether or not its CLASS matched this payload (the live posture neutralized
+            # encoded-PII / beacons independent of class match). Skip when the policy is exempt
+            # for this tool — BUT the exemption lifts the tool only out of the stricter SERVER-WIDE
+            # rules, NOT its OWN per-tool rule (mirroring the action logic below at rule_target ==
+            # tool_name). Integration red-team wf_21ddb986 #1: a tool LOWERED to redact carries an
+            # exemption; the blanket skip suppressed the floor for the tool's own still-enforcing
+            # redact rule too, so an encoded credential the class masker can't reach egressed RAW.
+            # Arm the floor from the tool's OWN rule even under exemption; server-wide floors stay
+            # suppressed. Recorded before the class-match ``continue``.
+            if (not policy_exempts) or (rule_target and rule_target == tool_name):
+                _floor = _detector_floor_action(rule, context)
+                if _floor is not None:
+                    _f_action, _f_key = _floor
+                    if _f_key:
+                        if _f_key not in result.render_floor_keys:
+                            result.render_floor_keys.append(_f_key)
+                    elif ACTION_ORDER.get(_f_action, 0) > ACTION_ORDER.get(result.render_floor, -1):
+                        result.render_floor = _f_action
 
             if not _evaluate_rule_mcp(rule, context):
                 continue
@@ -684,6 +1117,21 @@ def evaluate_mcp_policies(
                 if isinstance(_rf, str) and _rf and _rf not in result.redaction_fields:
                     result.redaction_fields.append(_rf)
 
+            # This policy is exempt for this tool+direction → the SERVER-WIDE (and other non-tool)
+            # enforcing rules are recorded (findings above, for audit) and contribute only OBSERVE
+            # (monitor: detect + tag, never mutate/block), NOT their redact/block action. The tool's
+            # OWN per-tool rule (rule_target == tool_name) is NOT downgraded — it carries the tool's
+            # operator-selected LOWERED-but-still-enforcing action (e.g. a block server lowered to
+            # redact for this tool): the exemption lifts the tool out of the stricter server rule,
+            # and the per-tool rule keeps its redaction (red-team F1 — else the tool egressed raw).
+            # Scoped to THIS policy only — a higher-rank action from ANOTHER policy still wins.
+            if policy_exempts and rule_target != tool_name:
+                _mrank = ACTION_ORDER.get("monitor", 1)
+                if _mrank > best_action_rank:
+                    best_action_rank = _mrank
+                    result.action = "monitor"
+                continue
+
             action = rule.get("action", "monitor")
             rank = ACTION_ORDER.get(action, 0)
             if rank > best_action_rank:
@@ -700,7 +1148,10 @@ def evaluate_mcp_policies(
                     config["regex"] = matcher["regex"]
                 if matcher["keywords"]:
                     config["keywords"] = matcher["keywords"]
-                if matcher["regex"] or matcher["keywords"]:
+                if matcher["detector_class"]:
+                    # sorted list for a stable, JSON-serializable hint
+                    config["detector_class"] = sorted(matcher["detector_class"])
+                if matcher["regex"] or matcher["keywords"] or matcher["detector_class"]:
                     result.redaction_hints.append({
                         "rule_id": rule.get("id"),
                         "rule_name": rule.get("name"),
@@ -925,6 +1376,15 @@ def apply_redaction(
         condition = hint.get("condition") or {}
         repl = config.get("replacement") or placeholder
 
+        # Phase 2: a ``detector`` hint masks its class(es) with the SAME redact_all_scoped
+        # engine detection used — smart per-class masking of the full 63-pattern suite.
+        detector_class = config.get("detector_class") or condition.get("detector_class")
+        if detector_class:
+            from patterns import redact_all_scoped  # local: no import cycle
+            classes = set(_resolve_detector_classes(detector_class))
+            result = redact_all_scoped(result, classes)
+            continue
+
         regex_pattern = (
             config.get("regex")
             or config.get("pattern")
@@ -966,10 +1426,25 @@ def apply_redaction(
             or []
         )
         for kw in keywords:
-            if not isinstance(kw, str):
+            # A keyword rule masks the LITERAL SUBSTRING wherever it appears — the same
+            # semantics keyword DETECTION uses (``kw in text``), so a detected keyword is
+            # ALWAYS fully masked (every occurrence, standalone AND embedded). This closes:
+            #   * the prefix-credential SILENT BYPASS (``ghp_``/``AKIA``/``-----BEGIN`` — a
+            #     word-bounded ``\b{kw}\b`` never matched them, so they egressed raw);
+            #   * the partial-mask gap where a word-bounded pass masked one occurrence and
+            #     skipped a second embedded one (``key`` in ``api_keyXYZ``).
+            # Empty keywords are skipped (an empty ``.sub`` would blanket the whole text —
+            # Finding B); the compile is guarded (a >_MAX_REGEX_LEN keyword raises re.error,
+            # which used to crash the whole scan uncaught — Finding C). ``re.escape`` makes the
+            # pattern a pure literal, so no ReDoS. Over-masking a benign word that contains the
+            # keyword (``secret`` in ``secretary``) is the operator's substring choice and the
+            # safe direction.
+            if not isinstance(kw, str) or not kw:
                 continue
-            pattern = rf"\b{re.escape(kw)}\b"
-            result = _compile_regex(pattern).sub(repl, result)
+            try:
+                result = _compile_regex(re.escape(kw)).sub(repl, result)
+            except re.error:
+                continue
 
     return result
 

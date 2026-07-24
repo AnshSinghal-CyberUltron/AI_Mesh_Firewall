@@ -2,7 +2,11 @@
 
 import { notifyContainmentChanged } from "../utils/containmentEvents.js";
 
-/** Blocks all models for a credential (matches control KillSwitch.SCOPE_CREDENTIAL). */
+/**
+ * Blocks all models for a credential.
+ * Matches control KillSwitch.SCOPE_CREDENTIAL and gateway CREDENTIAL_WIDE_MODEL.
+ * Redis: kill_switch:{org}:credential:{prefix}:model:__credential__
+ */
 export const CREDENTIAL_WIDE_MODEL_SCOPE = "__credential__";
 
 export function buildCredentialKillSwitchPayload({

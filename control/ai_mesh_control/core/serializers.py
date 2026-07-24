@@ -352,6 +352,27 @@ class KillSwitchCreateSerializer(serializers.ModelSerializer):
                     )
                 }
             )
+        # Credential-wide sentinel requires a real API key prefix (Module 2 SOC
+        # containment). Without a prefix the Redis key would be org-model scoped
+        # under the fake name '__credential__' and would not enforce as intended.
+        if model_name == KillSwitch.SCOPE_CREDENTIAL and not api_key_prefix:
+            raise serializers.ValidationError(
+                {
+                    "api_key_prefix": (
+                        "Credential-wide ('__credential__') kill-switch requires "
+                        "api_key_prefix (gateway API key prefix)."
+                    )
+                }
+            )
+        if model_name == KillSwitch.SCOPE_CREDENTIAL and action == "reroute":
+            raise serializers.ValidationError(
+                {
+                    "action": (
+                        "Credential-wide ('__credential__') kill-switch supports "
+                        "action='disable' only."
+                    )
+                }
+            )
         request = self.context.get("request")
         # Duplicate guard: the DB has unique_together (organization, model_name,
         # api_key_prefix), but `organization` is NOT a serializer field (it is
@@ -385,7 +406,14 @@ class KillSwitchCreateSerializer(serializers.ModelSerializer):
         # Warning is advisory-only: keep it gated on a model_name actually
         # supplied in the payload (always true on create) so a PATCH that
         # does not touch model_name never injects the warning sentinel.
-        if request and "model_name" in attrs and model_name and model_name != KillSwitch.SCOPE_GLOBAL:
+        # Skip for credential-wide sentinel (not a real LLM model name).
+        if (
+            request
+            and "model_name" in attrs
+            and model_name
+            and model_name != KillSwitch.SCOPE_GLOBAL
+            and model_name != KillSwitch.SCOPE_CREDENTIAL
+        ):
             org = getattr(getattr(request.user, "profile", None), "organization", None)
             if org:
                 from core.models import LLMModelConfig

@@ -3,8 +3,6 @@ import {
   AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Loader2, Power, PowerOff, ShieldAlert, Zap,
 } from "lucide-react";
 import { createModule2Api } from "../../api/module2";
-import { adoptSimulatorKeyById } from "../../api/gatewayContext";
-import { syncModule2AfterGatewayKeyChange } from "../../utils/crossModuleSync";
 import { TELEMETRY_ACTIVITY_EVENT, TELEMETRY_STORAGE_KEY } from "../../utils/telemetryEvents";
 import {
   buildCredentialKillSwitchPayload,
@@ -55,7 +53,8 @@ function KillSwitchModal({ row, onClose, onConfirm, loading, simulatorKeyId = ""
             Attack Simulator is currently using{" "}
             <span className="font-mono font-semibold">{simulatorKeyPrefix || "another key"}</span>.
             Kill switch on <span className="font-mono font-semibold">{row.prefix}</span> will not stop
-            simulator traffic until you adopt this key (Create API Key → Use in Attack Simulator).
+            simulator traffic. Activate a kill switch on the Simulator-badged key (or disable that
+            credential) to block Module 1 Attack Simulator runs.
           </div>
         )}
         {isActiveSimulatorKey && (
@@ -85,40 +84,12 @@ function KillSwitchModal({ row, onClose, onConfirm, loading, simulatorKeyId = ""
 function FleetRowActions({
   row,
   fetchWithAuth,
-  orgId,
-  simulatorKeyId,
   onActionComplete,
   onKillSwitchClick,
   onFlash,
-  onSimulatorKeyAdopted,
 }) {
   const api = useMemo(() => createKillSwitchApi(fetchWithAuth), [fetchWithAuth]);
   const [loading, setLoading] = useState(null);
-  const isSimulatorKey = simulatorKeyId && row.key_id === simulatorKeyId;
-
-  const handleSetAsSimulator = async () => {
-    if (!orgId) return;
-    const confirmed = window.confirm(
-      `Use API key ${row.prefix} as the Attack Simulator credential? `
-      + "Module 1 simulators and API Key & Identity Risk will track traffic under this key.",
-    );
-    if (!confirmed) return;
-    setLoading("simulator");
-    try {
-      const ctx = await adoptSimulatorKeyById(fetchWithAuth, row.key_id, orgId);
-      syncModule2AfterGatewayKeyChange("adopt-simulator", {
-        prefix: ctx.prefix,
-        key_id: ctx.keyId,
-      });
-      onSimulatorKeyAdopted?.(ctx);
-      onFlash?.(`Simulator key set to ${ctx.prefix}.`, "success");
-      onActionComplete?.();
-    } catch (err) {
-      onFlash?.(err.message || "Failed to set simulator key.", "error");
-    } finally {
-      setLoading(null);
-    }
-  };
 
   const handleToggleActive = async () => {
     const disabling = row.is_active !== false;
@@ -162,18 +133,6 @@ function FleetRowActions({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {row.is_active !== false && !isSimulatorKey && (
-        <button
-          type="button"
-          disabled={!!loading}
-          onClick={handleSetAsSimulator}
-          className="inline-flex items-center gap-1 rounded-md border border-teal-300 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60 dark:border-teal-700 dark:bg-teal-950/30 dark:text-teal-200"
-          title="Bind this key to Module 1 Attack Simulator"
-        >
-          {loading === "simulator" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-          Set simulator
-        </button>
-      )}
       {row.is_active !== false && hasActiveKillSwitch && (
         <button
           type="button"
@@ -244,8 +203,6 @@ export function ApiKeyFleetTable({
   refreshSignal = 0,
   simulatorKeyId = "",
   simulatorKeyPrefix = "",
-  orgId = null,
-  onSimulatorKeyAdopted,
   onActionComplete,
   loading = false,
   liveConnected = false,
@@ -636,12 +593,9 @@ export function ApiKeyFleetTable({
                         <FleetRowActions
                           row={row}
                           fetchWithAuth={fetchWithAuth}
-                          orgId={orgId}
-                          simulatorKeyId={simulatorKeyId}
                           onActionComplete={onActionComplete}
                           onKillSwitchClick={setKillModalRow}
                           onFlash={showFlash}
-                          onSimulatorKeyAdopted={onSimulatorKeyAdopted}
                         />
                       </td>
                     </tr>

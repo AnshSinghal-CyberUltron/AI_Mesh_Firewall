@@ -9,7 +9,7 @@ Invariants under test
 1. Empty Redis -> allow (is_killed=False).
 2. Org-scoped global kill-switch -> disable.
 3. Org-scoped per-model kill-switch with ``reroute`` -> reroute + fallback set.
-4. Per-model precedence over global (credential > org-model > org-global).
+4. Precedence: credential+model > credential+__credential__ > org-model > org-global.
 5. Redis failure -> fail-CLOSED (is_killed=True, action="disable").
 6. Malformed payload -> FAIL-OPEN (entry ignored, no crash, no enforcement):
    non-JSON, valid-JSON non-dict, unknown/missing action, and reroute
@@ -115,6 +115,95 @@ def test_credential_takes_precedence_over_model(fake_redis, fake_sync_redis):
     assert verdict.is_killed is True
     assert verdict.action == "disable"
     assert verdict.scope == "credential"
+
+
+def test_credential_wide_sentinel_disables_any_model(fake_redis, fake_sync_redis):
+    """Module 2 SOC activate writes model:__credential__; gateway must honor it."""
+    fake_sync_redis.set(
+        "kill_switch:acme:credential:zs_key_abc:model:__credential__",
+        json.dumps({
+            "is_active": True,
+            "action": "disable",
+            "reason": "analyst containment",
+        }),
+    )
+    for model in ("gpt-4o", "claude-3-opus", "openai.gpt-oss-120b-1:0"):
+        verdict = _run(
+            check_kill_switch(
+                fake_redis,
+                model,
+                org_slug="acme",
+                key_prefix="zs_key_abc",
+            )
+        )
+        assert verdict.is_killed is True, model
+        assert verdict.action == "disable"
+        assert verdict.scope == "credential"
+        assert "analyst containment" in verdict.reason
+
+
+def test_credential_wide_deactivate_allows_again(fake_redis, fake_sync_redis):
+    """Control deactivate DELETEs the Redis key — traffic must flow again."""
+    key = "kill_switch:acme:credential:zs_key_abc:model:__credential__"
+    fake_sync_redis.set(
+        key,
+        json.dumps({"is_active": True, "action": "disable", "reason": "contain"}),
+    )
+    assert _run(
+        check_kill_switch(fake_redis, "gpt-4o", org_slug="acme", key_prefix="zs_key_abc")
+    ).is_killed is True
+
+    fake_sync_redis.delete(key)  # mirrors signals.sync_kill_switch_to_redis on deactivate
+    verdict = _run(
+        check_kill_switch(fake_redis, "gpt-4o", org_slug="acme", key_prefix="zs_key_abc")
+    )
+    assert verdict.is_killed is False
+    assert verdict.scope == "none"
+
+
+def test_per_model_credential_beats_credential_wide(fake_redis, fake_sync_redis):
+    """More-specific credential+model switch wins over credential-wide."""
+    fake_sync_redis.set(
+        "kill_switch:acme:credential:zs_key_abc:model:__credential__",
+        json.dumps({"is_active": True, "action": "disable", "reason": "wide"}),
+    )
+    fake_sync_redis.set(
+        "kill_switch:acme:credential:zs_key_abc:model:gpt-4o",
+        json.dumps({
+            "is_active": True,
+            "action": "reroute",
+            "fallback_model": "claude-haiku",
+            "reason": "model-specific",
+        }),
+    )
+    verdict = _run(
+        check_kill_switch(fake_redis, "gpt-4o", org_slug="acme", key_prefix="zs_key_abc")
+    )
+    assert verdict.is_killed is True
+    assert verdict.action == "reroute"
+    assert verdict.fallback_model == "claude-haiku"
+
+    # Other models still hit the wide sentinel
+    other = _run(
+        check_kill_switch(fake_redis, "gpt-4.1", org_slug="acme", key_prefix="zs_key_abc")
+    )
+    assert other.is_killed is True
+    assert other.action == "disable"
+
+
+def test_credential_wide_does_not_affect_other_keys(fake_redis, fake_sync_redis):
+    fake_sync_redis.set(
+        "kill_switch:acme:credential:zs_key_abc:model:__credential__",
+        json.dumps({"is_active": True, "action": "disable", "reason": "abc only"}),
+    )
+    blocked = _run(
+        check_kill_switch(fake_redis, "gpt-4o", org_slug="acme", key_prefix="zs_key_abc")
+    )
+    allowed = _run(
+        check_kill_switch(fake_redis, "gpt-4o", org_slug="acme", key_prefix="zs_other")
+    )
+    assert blocked.is_killed is True
+    assert allowed.is_killed is False
 
 
 def test_inactive_switches_allow(fake_redis, fake_sync_redis):

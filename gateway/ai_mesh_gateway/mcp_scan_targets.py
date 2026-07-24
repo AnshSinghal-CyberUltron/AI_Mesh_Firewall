@@ -63,20 +63,29 @@ def collect_key_values(obj: Any, key: str) -> list[str]:
 
 
 def _get_by_dot_path(obj: Any, path: str) -> list[Any]:
-    """Return values at a dot-separated path (e.g. arguments.email)."""
+    """Return values at a dot-separated path (e.g. arguments.email).
+
+    Key comparison is NFKC-casefolded (B2 live-binder fix): the detection binder
+    (``policy_engine._collect_dot_path_values``), the seed redaction, and the plain-key walk all
+    normalize, so an EXACT match here under-masked a case/NFKC-variant payload key (a raw credential
+    egressed while the collapsed seed masked it). An all-blank path (``.``/``..``) yields no parts →
+    ``[]`` (parity with the collector), rather than returning the WHOLE payload as one target."""
     if not path:
         return []
     parts = [p for p in path.split(".") if p]
+    if not parts:
+        return []
     nodes: list[Any] = [obj]
     for part in parts:
+        pn = _normalize_key(part)
         next_nodes: list[Any] = []
         for node in nodes:
-            if isinstance(node, dict) and part in node:
-                next_nodes.append(node[part])
+            if isinstance(node, dict):
+                next_nodes.extend(v for k, v in node.items() if _normalize_key(k) == pn)
             elif isinstance(node, list):
                 for item in node:
-                    if isinstance(item, dict) and part in item:
-                        next_nodes.append(item[part])
+                    if isinstance(item, dict):
+                        next_nodes.extend(v for k, v in item.items() if _normalize_key(k) == pn)
         nodes = next_nodes
         if not nodes:
             return []
@@ -111,28 +120,18 @@ def extract_scan_targets(
     targets: list[tuple[str, Callable[[str], None]]] = []
 
     if "." in path:
-        values = _get_by_dot_path(payload, path)
-
-        # Dot-path mutation is best-effort: rebuild only when a single dict path.
-        def _make_setter(i: int) -> Callable[[str], None]:
-            def _set(v: str) -> None:
-                _mutate_dot_path(payload, path, i, v)
-
-            return _set
-
-        for idx, val in enumerate(values):
-            if isinstance(val, str):
-                targets.append((val, _make_setter(idx)))
-            else:
-                # CHG-0046: a non-string dot-path target (number / list / object)
-                # previously got a NO-OP setter, so a detected secret/PII inside it
-                # was reported redacted (scan_mcp_payload sets result_redacted=True)
-                # yet egressed RAW — and the E12 result-floor is then BYPASSED
-                # (the returned payload is a fresh object, so `scanned is
-                # result_content` is False). Bind the SAME real mutator so redaction
-                # replaces the value with the masked string (fail-closed byte truth,
-                # never report-redact-while-forwarding-raw).
-                targets.append((_safe_json(val), _make_setter(idx)))
+        # PER-LEAF setters bound to the exact (parent dict, real key) — mirrors the plain-key walk
+        # below. B2 red-team (wf_8683e8d0): the old index-based ``_mutate_dot_path`` re-resolved the
+        # path and picked the FIRST NFKC-fold-matching key each call, so when two DISTINCT sibling
+        # keys folded together (``email``/``Email``) the getter collected BOTH but the setter masked
+        # only the first — the 2nd key's secret egressed RAW while reported redacted. Binding a
+        # setter to the precise matched key masks every match, keeping detection⟺redaction in sync.
+        for parent, real_key, val in _resolve_dot_path_leaves(payload, path):
+            def _set(new: str, _p=parent, _k=real_key) -> None:
+                _p[_k] = new
+            # CHG-0046: a non-string value still gets a REAL setter (masked string replaces it in
+            # place) — never report-redact-while-forwarding-raw.
+            targets.append((val if isinstance(val, str) else _safe_json(val), _set))
         return targets
 
     # Simple key name — walk all matching keys.
@@ -166,22 +165,72 @@ def extract_scan_targets(
 
 
 def _mutate_dot_path(root: Any, path: str, index: int, new_value: str) -> None:
-    """Replace the index-th value along a dot path (best-effort)."""
+    """Replace the index-th value along a dot path (best-effort). NFKC-casefolded key match, so the
+    setter writes back the SAME case/NFKC-variant key the getter matched (B2 live-binder fix)."""
     parts = [p for p in path.split(".") if p]
     if not parts or not isinstance(root, dict):
         return
+
+    def _find_key(d: dict, part: str):
+        pn = _normalize_key(part)
+        for k in d:
+            if _normalize_key(k) == pn:
+                return k
+        return None
+
     node: Any = root
     for part in parts[:-1]:
-        if not isinstance(node, dict) or part not in node:
+        if not isinstance(node, dict):
             return
-        node = node[part]
-    last = parts[-1]
-    if isinstance(node, dict) and last in node:
-        cur = node[last]
-        if isinstance(cur, list) and 0 <= index < len(cur):
-            node[last][index] = new_value
-        elif index == 0:
-            node[last] = new_value
+        k = _find_key(node, part)
+        if k is None:
+            return
+        node = node[k]
+    if not isinstance(node, dict):
+        return
+    last = _find_key(node, parts[-1])
+    if last is None:
+        return
+    cur = node[last]
+    if isinstance(cur, list) and 0 <= index < len(cur):
+        node[last][index] = new_value
+    elif index == 0:
+        node[last] = new_value
+
+
+def _resolve_dot_path_leaves(obj: Any, path: str) -> list[tuple[dict, Any, Any]]:
+    """Resolve a dot path to ``(parent_dict, real_key, value)`` triples for EVERY terminal match —
+    so a caller can bind a setter to the precise matched key. Keys are NFKC-casefolded (parity with
+    the getter / detection binder / seed); lists are transparent (the path continues into each item
+    dict). An all-blank path yields no triples."""
+    parts = [p for p in path.split(".") if p]
+    if not parts:
+        return []
+    # Navigate to the containers that hold the LAST segment.
+    parents: list[Any] = [obj]
+    for part in parts[:-1]:
+        pn = _normalize_key(part)
+        nxt: list[Any] = []
+        for node in parents:
+            if isinstance(node, dict):
+                nxt.extend(v for k, v in node.items() if _normalize_key(k) == pn)
+            elif isinstance(node, list):
+                for item in node:
+                    if isinstance(item, dict):
+                        nxt.extend(v for k, v in item.items() if _normalize_key(k) == pn)
+        parents = nxt
+        if not parents:
+            return []
+    last = _normalize_key(parts[-1])
+    out: list[tuple[dict, Any, Any]] = []
+    for node in parents:
+        dicts = [node] if isinstance(node, dict) else (
+            [it for it in node if isinstance(it, dict)] if isinstance(node, list) else [])
+        for d in dicts:
+            for k, v in list(d.items()):
+                if _normalize_key(k) == last:
+                    out.append((d, k, v))
+    return out
 
 
 def apply_target_updates(payload: Any, updates: list[tuple[Callable[[str], None], str]]) -> Any:

@@ -61,6 +61,8 @@ class SimulatorGatewayKeyTests(TestCase):
             self.assertEqual(resp.status_code, 200)
             data = resp.json()
             self.assertIn("key", data)
+            self.assertIn("key_id", data)
+            self.assertTrue(data.get("is_simulator_default"))
             self.assertEqual(data.get("name"), "simulator")
             self.assertEqual(data.get("org_id"), self.org_a.id)
 
@@ -86,6 +88,8 @@ class SimulatorGatewayKeyTests(TestCase):
             data = resp.json()
             self.assertTrue(data.get("has_gateway_key"))
             self.assertIn("prefix", data)
+            self.assertIn("key_id", data)
+            self.assertTrue(data.get("is_simulator_default"))
             self.assertNotIn("key", data)
 
     @override_settings(DEBUG=True)

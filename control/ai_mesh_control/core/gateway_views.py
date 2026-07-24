@@ -231,12 +231,14 @@ class SimulatorDefaultGatewayKeyView(APIView):
         return Response(
             {
                 "has_gateway_key": True,
+                "key_id": str(key.id),
                 "prefix": key.prefix,
                 "name": key.name,
                 "project_id": key.project_id,
                 "org_id": org.id,
                 "org_slug": org.slug,
                 "storage_key": storage_key,
+                "is_simulator_default": True,
             }
         )
 
@@ -263,6 +265,7 @@ class SimulatorDefaultGatewayKeyView(APIView):
         storage_key = f"zeroshield_gateway_key:{org.id}"
         data = {
             "has_gateway_key": True,
+            "key_id": str(key_instance.id),
             "prefix": key_instance.prefix,
             "name": key_instance.name,
             "project_id": key_instance.project_id,
@@ -270,6 +273,7 @@ class SimulatorDefaultGatewayKeyView(APIView):
             "org_slug": org.slug,
             "storage_key": storage_key,
             "created": bool(raw_key),
+            "is_simulator_default": True,
         }
         if raw_key:
             # Recoverable per-org simulator key — returned to every simulator in

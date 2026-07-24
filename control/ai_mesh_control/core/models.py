@@ -772,6 +772,10 @@ class KillSwitch(models.Model):
     """
 
     SCOPE_GLOBAL = "__global__"
+    # Credential-wide: with api_key_prefix set, blocks/reroutes ALL models for
+    # that gateway key. Redis: kill_switch:{org}:credential:{prefix}:model:__credential__
+    # Gateway check_kill_switch honors this sentinel for any requested model.
+    SCOPE_CREDENTIAL = "__credential__"
 
     organization = models.ForeignKey(
         "auth_api.Organization",
@@ -782,7 +786,10 @@ class KillSwitch(models.Model):
     )
     model_name = models.CharField(
         max_length=255,
-        help_text="Model name to kill, or '__global__' for all models.",
+        help_text=(
+            "Model name to kill, '__global__' for all models (disabled at API), "
+            "or '__credential__' with api_key_prefix for all models on that key."
+        ),
     )
     api_key_prefix = models.CharField(
         max_length=64,

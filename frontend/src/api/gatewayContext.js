@@ -89,35 +89,6 @@ export async function adoptGatewayKeyForSimulator(fetchWithAuth, apiKey, orgId) 
   return ctx;
 }
 
-/**
- * Promote an existing fleet key as the org simulator credential (backend + browser).
- * Pass `plaintext` when available (e.g. right after key creation).
- */
-export async function adoptSimulatorKeyById(fetchWithAuth, keyId, orgId, { plaintext = "" } = {}) {
-  const res = await fetchWithAuth(`/api/gateways/keys/${keyId}/adopt-simulator/`, {
-    method: "POST",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `Failed to adopt simulator key (${res.status})`);
-  }
-  const data = await res.json();
-  const apiKey = data.key || plaintext;
-  if (apiKey) {
-    writeOrgScopedGatewayKey(apiKey, orgId, data.storage_key);
-  }
-  const ctx = {
-    prefix: data.prefix || "",
-    keyId: data.key_id || String(keyId),
-    name: data.name || "",
-    isSimulatorDefault: true,
-    storageKey: data.storage_key || orgGatewayKeyStorageKey(orgId),
-  };
-  writeStoredGatewayKeyContext(ctx);
-  notifySimulatorKeyChanged(ctx);
-  return ctx;
-}
-
 export async function fetchSimulatorDefaultContext(fetchWithAuth) {
   const res = await fetchWithAuth("/api/gateways/simulator-default/");
   if (!res.ok) return null;

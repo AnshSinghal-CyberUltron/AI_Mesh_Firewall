@@ -30,7 +30,7 @@ from patterns import (
     redact_all,
     redact_all_scoped,
 )
-from policy_engine import apply_field_redaction, apply_redaction, evaluate_mcp_policies
+from policy_engine import apply_field_redaction, apply_redaction, evaluate_mcp_policies, _normalize_key
 
 LOG = logging.getLogger("gateway.mcp_scan")
 
@@ -305,6 +305,37 @@ def _enforce_blocks(enforcement: str) -> bool:
     ``block`` posture silently redacted instead of blocking.
     """
     return enforcement == "block"
+
+
+def _mcp_policy_only_enforcement(enabled_info: dict[str, Any] | None = None) -> bool:
+    """PHASE 3 (collapse-to-one-surface): when True the MCP scan RETIRES the server posture /
+    scan-control ACTION as an enforcement input — presets and Tier-2 run OBSERVE-ONLY and the
+    seeded policy RULES (their own action) are the sole enforcer. This is exactly the
+    ``enforcement="tag"`` world the pre-cutover diff-gate proved reproduces the posture verdict
+    byte-for-byte, so flipping it loses no coverage FOR AN ORG WHOSE DETECTOR POLICIES ARE SEEDED
+    (Phase 2b). It is OFF by default: activate only after seeding, per-org via
+    ``enabled_info['mcp_policy_only_enforcement']`` (preferred — lets an operator cut over one
+    seeded org at a time) or gateway-wide via the ``MCP_POLICY_ONLY_ENFORCEMENT`` env kill-switch.
+    The scan-control ENABLED/direction/scope and Tier-2 enable gating are UNCHANGED — only the
+    ACTION is dropped."""
+    if enabled_info and "mcp_policy_only_enforcement" in enabled_info:
+        return _coerce_flag(enabled_info.get("mcp_policy_only_enforcement"))
+    return _MCP_POLICY_ONLY_ENFORCEMENT_ENV
+
+
+def _coerce_flag(value: Any) -> bool:
+    """Strict truthiness for the cutover flag. A bare ``bool()`` treated ANY non-empty string as
+    True — so a stringly-typed config value of ``'false'``/``'0'``/``'off'``/``'no'`` would silently
+    ACTIVATE the cutover (fail-open), the opposite of the env parser. Match the env parser exactly:
+    only real truthy values (or the canonical truthy strings) activate; everything else is False."""
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
+
+
+_MCP_POLICY_ONLY_ENFORCEMENT_ENV = os.environ.get("MCP_POLICY_ONLY_ENFORCEMENT", "").strip().lower() in (
+    "1", "true", "yes", "on",
+)
 
 
 def _resolve_tier_action(ctrl: dict[str, Any] | None, fallback: str) -> str:
@@ -803,12 +834,60 @@ async def _scan_text_tier1(
 # floor does). Past the cap, leaves are returned unredacted rather than crashing —
 # the preset pass (its own scope) and, for the result direction, the E12 floor still
 # run, so this is a depth backstop, not a silent redaction skip for normal payloads.
-_MCP_POLICY_REDACT_MAX_DEPTH = 200
+# Aligned to policy_engine._KEY_COLLECT_MAX_DEPTH (500): the DETECTION walk admits depth 500, so a
+# lower REDACTION cap (was 200) left a secret nested 201-500 deep DETECTED-but-unmasked → it egressed
+# raw under the Phase-3 observe-only path while the live blob scan masked it (B2/B3 red-team finding).
+# Matching the caps makes detection⟺redaction consistent (no cannot-mask window); a secret past 500
+# is unseen by BOTH (consistent). Recursion at 500 is safe under CPython's 1000-frame default even
+# beneath a deep async stack (verified); a pathological over-limit fails CLOSED (the request errors —
+# no raw egress), never leaks.
+_MCP_POLICY_REDACT_MAX_DEPTH = 500
 
 
-def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]]) -> tuple[Any, bool]:
+def _compile_key_matcher(key: str) -> tuple[str, tuple[str, ...]] | None:
+    """Compile a scope=key ``key`` into a leaf-path matcher, mirroring the detection binders:
+    a DOTTED key → ("dot", parts) prefix-from-root (``_collect_dot_path_values``); a plain key →
+    ("name", (name,)) matched at ANY depth (``_collect_key_values``). Returns None for an empty key."""
+    key = str(key or "").strip()
+    if not key:
+        return None
+    if "." in key:
+        parts = tuple(_normalize_key(p) for p in key.split(".") if p)
+        return ("dot", parts) if parts else None
+    return ("name", (_normalize_key(key),))
+
+
+def _key_matcher_covers(matcher: tuple[str, tuple[str, ...]], path: tuple[str, ...]) -> bool:
+    kind, parts = matcher
+    if kind == "dot":
+        return path[:len(parts)] == parts
+    return parts[0] in path  # plain key name matched at any depth
+
+
+def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]],
+                              *, neutralize: bool = False,
+                              neutralize_keys: list[str] | None = None) -> tuple[Any, bool]:
     """Apply policy ``redaction_hints`` to every STRING LEAF of ``payload`` IN PLACE,
     preserving structure.
+
+    RENDER-LEAK FLOOR (B1, 2026-07-23): when ``neutralize`` is set (an enforcing entire-scope
+    DETECTOR rule is applicable — ``EvaluationResult.render_floor``), each string leaf is run
+    through ``_neutralize_render_leaks`` — the SAME encoded-PII / markdown-split / zero-click
+    exfil-beacon neutralization the live PRESET pass applied under an enforcing posture
+    (CHG-0096/0099). Without it, once Phase 3 retires the posture the seeded detector policy
+    forwards an HTML-entity-encoded credential/PII / render beacon RAW (a LEAK), because the
+    class masker never sees the encoded surface — and the class DETECTION can't match it either,
+    so the rule doesn't even fire. Runs BEFORE the class ``apply_redaction`` so the beacon's
+    payload is still visible (mirrors the preset's ``_neutralize_exfil_deep`` → ``redact_all``
+    order). It is a MASK transform only — a STRICT no-op on benign leaves — and never blocks, so
+    the frozen "redact/floor never escalates to block" invariant holds.
+
+    SCOPED FLOOR (B2, 2026-07-23): ``neutralize_keys`` carries the ``key`` paths of enforcing
+    scope=KEY detector rules (``EvaluationResult.render_floor_keys``). The render-leak floor then
+    runs ONLY on leaves UNDER those keys — so an encoded credential / zero-click beacon inside the
+    operator's key-scoped field is neutralized (parity with the live posture, whose scoped preset
+    pass ran the neutralizers on that field) WITHOUT touching siblings. Without this a key-scoped
+    redact rule left encoded/beacon content in its own protected field egressing raw at cutover.
 
     CRITICAL (2026-07-23): the previous policy pass serialized the whole payload to a
     JSON string, ran ``apply_redaction`` (a blind ``regex.sub``) over it, and reparsed
@@ -819,25 +898,144 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]]) -> tupl
     JSON-RPC ``arguments`` object belongs and (b) collapsed the key-scoped preset + Tier-2
     passes to ZERO targets (a string is not a dict), silently disabling all downstream
     scanning. Redacting leaves in place can never corrupt structure or drop a type — each
-    leaf is a str in and a str out. Returns ``(new_payload, changed)``."""
-    changed = False
+    string leaf is a str in and a str out. Returns ``(new_payload, changed)``.
 
-    def _walk(node: Any, depth: int) -> Any:
-        nonlocal changed
+    NUMERIC LEAVES (2026-07-23): detection runs on the SERIALIZED payload, so a secret
+    transmitted as a JSON NUMBER (an SSN/card/account/PIN as an integer — common in MCP
+    tool args/results) IS detected and reported redacted, but a str-only walk would skip
+    masking it → the raw number egresses while findings claim a redact fired (a silent
+    under-redaction LEAK). So a non-string scalar is stringified, run through the same
+    redaction, and — only if it actually changed — returned as the masked STRING (a masked
+    number cannot remain a number; the same type tradeoff CHG-0046 accepted for the preset
+    pass). An UNMATCHED number keeps its original numeric type.
+
+    ``hit_cap`` is True if the walk stopped at a leaf below ``_MCP_POLICY_REDACT_MAX_DEPTH``
+    (a pathologically nested payload) — the caller fails CLOSED rather than forward that
+    subtree unredacted, since the policy lane has no downstream backstop. Returns
+    ``(new_payload, changed, hit_cap)``.
+
+    SCOPE=KEY (B2, 2026-07-23): a hint carrying ``scope=key`` is applied ONLY to leaves UNDER its
+    ``key`` path. The previous walk applied EVERY hint to EVERY leaf, so a key_path-scoped detector
+    rule (which the live posture scopes to a single field via ``extract_and_bind(key_path=...)``)
+    OVER-MASKED sibling fields the posture forwards raw. A leaf's path is the tuple of NFKC-casefolded
+    dict keys from the root. Matching MIRRORS the two detection binders exactly:
+      * a DOTTED ``key`` (``args.body``) is a path FROM ROOT (``_collect_dot_path_values``) — covered
+        iff the key parts are a PREFIX of the leaf path;
+      * a plain ``key`` (``title``) is a key NAME matched at ANY depth (``_collect_key_values`` —
+        recursive key-name walk) — covered iff that name appears as ANY segment of the leaf path.
+    Using a prefix match for a plain key would only mask a TOP-LEVEL key, leaving a nested match
+    detected-but-unmasked → a spurious cannot-mask block. ``scope=entire`` applies to every leaf.
+
+    LISTS are TRANSPARENT to the key path (a path part matches inside each list item, parity with
+    the ``_collect_dot_path_values`` detection binding), so a key_path value nested in a list is
+    best-effort MASKED — NOT forwarded raw. The live posture, whose dict-only setter cannot write
+    through a list, instead fails CLOSED and BLOCKS that call (cannot-mask). Under Phase 3 the policy
+    lane runs observe-only (``tag``), where the frozen contract forbids blocking, so best-effort
+    masking of the maskable keyed value is the correct — and strictly safer — Phase-3 equivalent (no
+    raw egress; siblings still preserved). This is the one intended posture→observe divergence."""
+    changed = False
+    hit_cap = False
+
+    # Split hints once: entire-scope apply everywhere; key-scope carry their compiled matcher.
+    entire_hints: list[dict[str, Any]] = []
+    keyed_hints: list[tuple[tuple[str, tuple[str, ...]], dict[str, Any]]] = []
+    for h in hints:
+        km = _compile_key_matcher(h.get("key") or "") if (isinstance(h, dict) and h.get("scope") == "key") else None
+        if km is not None:
+            keyed_hints.append((km, h))
+        else:
+            entire_hints.append(h)
+
+    # B2 scoped floor: compile the key-scoped render-floor keys into leaf-path matchers.
+    neu_matchers = [m for m in (_compile_key_matcher(k) for k in (neutralize_keys or [])) if m is not None]
+
+    # B3: DETECTOR hints also mask a secret smuggled as a JSON KEY NAME (by rename) — parity with
+    # the live blob scan, which detection now matches via _leaf_key_names (agreement, no cannot-mask).
+    # Only DETECTOR hints (class patterns) — keyword/regex keys are never scanned (PR#19 stays fixed).
+    # Entire-scope detector hints rename ANY key; a key-scoped detector hint renames keys only in the
+    # dict at/under its key path (B3 red-team finding A: a secret key name inside a key_path field).
+    entire_detector_hints = [h for h in entire_hints
+                             if isinstance(h, dict) and (h.get("config") or {}).get("detector_class")]
+    keyed_detector_hints = [(km, h) for km, h in keyed_hints
+                            if (h.get("config") or {}).get("detector_class")]
+
+    def _hints_for(path: tuple[str, ...]) -> list[dict[str, Any]]:
+        if not keyed_hints:
+            return hints  # fast path: no key-scoped hints → original behavior
+        applicable = list(entire_hints)
+        for km, h in keyed_hints:
+            if _key_matcher_covers(km, path):
+                applicable.append(h)
+        return applicable
+
+    def _neutralize_at(path: tuple[str, ...]) -> bool:
+        if neutralize:
+            return True  # entire-scope floor
+        return any(_key_matcher_covers(m, path) for m in neu_matchers)  # scoped floor
+
+    def _walk(node: Any, depth: int, path: tuple[str, ...]) -> Any:
+        nonlocal changed, hit_cap
         if depth > _MCP_POLICY_REDACT_MAX_DEPTH:
+            # Integration red-team wf_21ddb986 #4: a secret nested past the recursion cap must NOT
+            # fail closed — that ESCALATED redact→block (frozen violation) and diverged from the live
+            # preset, which masks the serialized blob depth-INDEPENDENTLY.
+            # Operator-control #4 (scope fidelity): honor SCOPE at the cap too — only mask the residual
+            # when a hint applies HERE (an entire hint, or a key hint whose path covers this node) or
+            # the render-leak floor covers it; else forward the scoped-out deep subtree RAW (a
+            # key-scoped rule must never mask a sibling that merely sits past the depth cap).
+            if _hints_for(path) or _neutralize_at(path):
+                _ser = _safe_json(node)
+                # red-team wf_e7dda121: mirror the normal-depth leaf path — run the render-leak
+                # neutralizer (encoded-PII / zero-click beacon / markdown-split) BEFORE redact_all
+                # when the floor covers this path, since redact_all is blind to an HTML-entity-encoded
+                # surface. Without it an encoded credential nested past the cap under an enforcing
+                # floor egressed RAW.
+                _work = _neutralize_render_leaks(_ser) if _neutralize_at(path) else _ser
+                _masked = redact_all(_work)
+                if _masked != _ser:
+                    changed = True
+                    return _masked
             return node
         if isinstance(node, str):
-            new = apply_redaction(node, hints)
+            new = _neutralize_render_leaks(node) if _neutralize_at(path) else node
+            new = apply_redaction(new, _hints_for(path))
             if new != node:
                 changed = True
             return new
         if isinstance(node, list):
-            return [_walk(x, depth + 1) for x in node]
+            # A list is TRANSPARENT to the key path (a path part matches inside each list item,
+            # parity with _collect_dot_path_values) — do not extend ``path``.
+            return [_walk(x, depth + 1, path) for x in node]
         if isinstance(node, dict):
-            return {k: _walk(v, depth + 1) for k, v in node.items()}
+            # Detector hints that mask a KEY NAME here: entire-scope (any key) + key-scoped hints
+            # whose path covers THIS dict (a secret key inside the operator's protected field).
+            key_detector_hints = entire_detector_hints
+            if keyed_detector_hints:
+                key_detector_hints = list(entire_detector_hints) + [
+                    h for km, h in keyed_detector_hints if _key_matcher_covers(km, path)]
+            new_dict: dict[Any, Any] = {}
+            for k, v in node.items():
+                nk = k
+                if key_detector_hints and isinstance(k, str):
+                    mk = apply_redaction(k, key_detector_hints)
+                    if mk != k:  # a secret in the KEY NAME → mask it (rename), like the live blob scan
+                        nk = mk
+                        changed = True
+                # The VALUE keeps the ORIGINAL key in its path (key rename never shifts scoping).
+                new_dict[nk] = _walk(v, depth + 1, path + (_normalize_key(k),))
+            return new_dict
+        # Numeric scalar (int/float — NOT bool, whose "true"/"false" carries no secret):
+        # stringify, redact, and mask only if a hint actually matched.
+        if isinstance(node, (int, float)) and not isinstance(node, bool):
+            as_text = _safe_json(node)
+            new = apply_redaction(as_text, _hints_for(path))
+            if new != as_text:
+                changed = True
+                return new
+            return node
         return node
 
-    return _walk(payload, 0), changed
+    return _walk(payload, 0, ()), changed, hit_cap
 
 
 def _mcp_policy_pass_sync(
@@ -862,7 +1060,11 @@ def _mcp_policy_pass_sync(
     context = _build_mcp_context(serialized, scan_direction=scan_direction, full_payload=full_payload)
 
     eval_result = evaluate_mcp_policies(policies, context, tool_name=tool_name or None, actor=actor)
-    if not eval_result.matched_rule_ids:
+    # B1/B2: an enforcing detector rule can arm the render-leak floor WITHOUT any class match
+    # (an HTML-entity-encoded credential the class detector can't see) — so the no-match
+    # short-circuit must also check ``render_floor`` (entire) and ``render_floor_keys`` (scoped),
+    # else the encoded secret egresses raw.
+    if not eval_result.matched_rule_ids and not eval_result.render_floor and not eval_result.render_floor_keys:
         return full_payload, [], False, [], False
 
     findings = _findings_from_policy_eval(eval_result, scan_direction=scan_direction, text=serialized)
@@ -872,11 +1074,57 @@ def _mcp_policy_pass_sync(
     # non-monitor posture; a block posture is a floor over any matched rule.
     if _enforce_blocks(enforcement) or (eval_result.action == "block" and posture != "monitor"):
         return full_payload, findings, True, rfields, False
+    # B1 render-leak floor: a posture-replicating enforcing entire-scope DETECTOR rule is
+    # applicable → neutralize encoded-PII / markdown-split / exfil-beacon surfaces on the leaves,
+    # a MASK the live posture applied as a floor independent of class match. Gated on the same
+    # observe-only rule the redact branch uses (a 'monitor' posture withholds mutation); a 'tag'
+    # posture (the Phase-3 world) still neutralizes, because the DETECTOR rule — not the retired
+    # posture — is the enforcer. Never blocks.
+    render_floor = bool(eval_result.render_floor) and posture != "monitor"
+    # B2 scoped floor: key-scoped detector rules neutralize only their own field's leaves.
+    neutralize_keys = list(eval_result.render_floor_keys) if posture != "monitor" else []
     # Policy-authored redact applies whenever matched (not only under a redact posture);
     # skipped only under an explicit observe-only 'monitor'.
     if eval_result.action == "redact" and eval_result.redaction_hints and posture != "monitor":
-        new_payload, changed = _redact_structured_leaves(full_payload, eval_result.redaction_hints)
+        new_payload, changed, hit_cap = _redact_structured_leaves(
+            full_payload, eval_result.redaction_hints, neutralize=render_floor,
+            neutralize_keys=neutralize_keys)
+        # CANNOT-MASK FAIL-CLOSED (2026-07-23): the operator's redact rule MATCHED (detection
+        # runs on the serialized payload) but the leaf-walk could not mask it — either the
+        # match spans a JSON boundary / structural context no single leaf reproduces (e.g. a
+        # regex requiring ``"key":"...")``, or the payload nests past the depth cap. The
+        # policy lane has NO downstream backstop: its findings carry threat_type='redact',
+        # which the E12 result-redaction floor's _findings_have_secret_or_pii never matches,
+        # so forwarding raw is a SILENT leak while telemetry claims a redact fired. Withhold
+        # instead — the "cannot mask" exception (a system limitation, mirroring the existing
+        # masking-crash fail-closed), NOT a redact->block escalation of MASKABLE content
+        # (maskable matches redact + forward as before). Numeric leaves are masked above, so
+        # this fires only for the genuinely-unmaskable residual (structural regex / deep nest).
+        # TAG NEVER BLOCKS (2026-07-23): gate on _is_observe_only_posture, NOT the literal
+        # ``posture != "monitor"`` above — the frozen contract makes ``tag`` an alias of
+        # ``monitor`` for BLOCKING (a3714946 / 4fdf7fcf: "tag/monitor never block"). Under an
+        # observe-only posture the operator chose NOT to enforce, so an unmaskable match is
+        # forwarded (best-effort redact of what WAS maskable still applied), never blocked —
+        # the cannot-mask fail-closed is an ENFORCING-posture behaviour only.
+        if (hit_cap or not changed) and not _is_observe_only_posture(enforcement):
+            return full_payload, findings, True, rfields, False
         return new_payload, findings, False, rfields, changed
+    # STANDALONE render-leak floor: an enforcing detector rule applies but its CLASS did not
+    # match this payload (e.g. an HTML-entity-encoded credential/PII a redact rule can't
+    # class-detect, or an encoded generic-PII / beacon under a block rule that the #3 exclusion
+    # kept from blocking). Neutralize the render-leak surface on the leaves — a MASK only, never
+    # a block — so the encoded secret / beacon does not egress raw once the posture is retired.
+    if render_floor or neutralize_keys:
+        new_payload, changed, _hc = _redact_structured_leaves(
+            full_payload, [], neutralize=render_floor, neutralize_keys=neutralize_keys)
+        if changed:
+            findings.append(McpFinding(
+                entity_type="render_reconstruction", score=0.9, start=0, end=len(serialized),
+                direction=_direction_label(scan_direction), tier="tier1", threat_type="exfil",
+                detail=("Neutralized a render-time reconstruction leak (zero-click exfil beacon "
+                        "/ encoded-PII / markdown-split PII-secret) via the seeded detector floor"),
+            ))
+            return new_payload, findings, False, rfields, True
     return full_payload, findings, False, rfields, False
 
 
@@ -925,6 +1173,7 @@ async def _scan_text_tier2(
     org_tier2_override: bool | None,
     org_tier2_strict: bool,
     strict_mode: str,
+    policy_only: bool = False,
 ) -> tuple[str, list[McpFinding], bool, str | None]:
     """Tier-2 Bedrock scan. Returns (text, findings, blocked, fallback_reason)."""
     if scanner is None:
@@ -940,7 +1189,20 @@ async def _scan_text_tier2(
         )
     except Exception as exc:
         LOG.warning("MCP Tier-2 scan failed: %s", exc)
-        if strict_mode == "strict":
+        # Operator-control #2 + red-team wf_e7dda121: a scanner CRASH is NOT a masking crash, so it
+        # may hard-block ONLY under an explicit 'block' Tier-2 action (an operator-selected
+        # fail-closed) with strict. "tag/redact means tag/redact only, never block": a 'redact'
+        # action masks best-effort (redact_all — a no-op on benign text, never a block); observe-only
+        # (monitor/tag) and 'allow' pass. Merely enabling Tier-2 (action defaulting nowhere, strict
+        # defaulting to 'strict') must never block a benign call. Mirrors the scanner=None fail-open.
+        if policy_only:
+            if enforcement == "block" and strict_mode == "strict":
+                return text, [], True, "tier2_error_strict"
+            if enforcement == "redact":
+                return redact_all(text), [], False, "tier2_error_redact"
+            return text, [], False, "tier2_error_fail_open"
+        # Legacy (flag OFF): observe-only never blocks; an enforcing posture + strict fails closed.
+        if strict_mode == "strict" and not _is_observe_only_posture(enforcement):
             return text, [], True, "tier2_error_strict"
         return text, [], False, "tier2_error_fail_open"
 
@@ -959,6 +1221,27 @@ async def _scan_text_tier2(
                     detail=verdict.detail,
                 )
             )
+    if policy_only:
+        # Operator-control #7 + red-team wf_e7dda121: under the policy-only flag the retired server
+        # posture never substitutes the Tier-2 verdict. Honor the verdict, bounded EXACTLY by the
+        # operator's own Tier-2 action — "tag/redact means tag/redact only, never block":
+        #   op == 'block' (block authority): block verdict -> block + the judge's reason;
+        #                 redact verdict -> mask (never escalate a soft verdict); flag/allow -> pass.
+        #   op == 'redact' (mask ceiling — NEVER blocks): a block OR redact verdict is LOWERED to a
+        #                 mask (redact_all); flag/allow -> pass. A block verdict never escalates here.
+        #   op observe-only (monitor/tag): never blocks, never mutates — the finding is recorded above.
+        # A 'flag' (flag-for-review) verdict NEVER blocks under any action (invariant F).
+        if enforcement == "block":
+            if verdict.action == "block":
+                return text, findings, True, None
+            if verdict.action == "redact":
+                return redact_all(text), findings, False, None
+            return text, findings, False, None
+        if enforcement == "redact":
+            if verdict.action in ("block", "redact"):
+                return redact_all(text), findings, False, None
+            return text, findings, False, None
+        return text, findings, False, None
     if _enforce_blocks(enforcement) and verdict.action in ("block", "redact", "flag"):
         # A4 FIX (Tier-2 parity): block posture blocks on any actionable Bedrock
         # verdict, not only verdict.action == "block".
@@ -996,9 +1279,19 @@ async def scan_mcp_payload(
     result = McpScanResult()
     tier1_ctrl = _effective_control(effective_controls, "tier1", scan_direction)
     tier2_ctrl = _effective_control(effective_controls, "tier2", scan_direction)
+    # PHASE 3: retire the posture / scan-control ACTION as the TIER-1 (preset) enforcement input.
+    # Coerce the Tier-1 action to the observe-only ``tag`` — the exact world the pre-cutover
+    # diff-gate proved the seeded POLICY rules reproduce. The preset pass then only DETECT+TAG; the
+    # policy lane (rule-action-driven, unaffected because ``tag`` != ``monitor``) is the sole Tier-1
+    # enforcer. TIER-2 (the LLM judge) is operator-controlled independently: its ENABLE toggle and
+    # its OWN action are kept (the Tier-2-only settings model), but under the flag its action no
+    # longer FALLS BACK to the retired server posture (operator-control #6) and it honors its own
+    # verdict directly (#7) — see the tier2 block below. scan-control enabled/direction/scope and
+    # Tier-2 enable gating are unchanged; the Tier-1 preset ACTION is dropped. OFF by default.
+    _policy_only = _mcp_policy_only_enforcement(enabled_info)
     # Per-tier action: each tier's control row owns its action; 'inherit'/unset
     # defers to the server/tool action passed as ``enforcement``.
-    tier1_action = _resolve_tier_action(tier1_ctrl, enforcement)
+    tier1_action = "tag" if _policy_only else _resolve_tier_action(tier1_ctrl, enforcement)
     result_redacted = False
     # 3b: accumulate the named response fields that matched actor-scoped policies
     # declared for RBAC masking (deduped, order-preserving). Applied to the
@@ -1087,7 +1380,12 @@ async def scan_mcp_payload(
             result.compliance_tags = _merge_tags(
                 result.compliance_tags, _tags_for_finding(f)
             )
-        if _is_observe_only_posture(tier1_action):
+        # F3 AUDIT HONESTY: under the Phase-3 flag ``tier1_action`` is the observe-only ``tag``,
+        # but the POLICY lane still enforces via the rule's own action. ``monitored`` means "nothing
+        # was enforced" — so it is set ONLY when the policy neither blocked nor redacted (else an
+        # enforced call would be mislabelled observe-only), and the trace ``action`` below reflects
+        # the POLICY's real enforcement, not the coerced tier action.
+        if _is_observe_only_posture(tier1_action) and not pol_blocked and not pol_redacted:
             result.monitored = True
     if pol_blocked:
         result.blocked = True
@@ -1095,7 +1393,7 @@ async def scan_mcp_payload(
             {
                 "scan_stage": "tier1_policy", "tier": "tier1",
                 "direction": scan_direction, "scope": "entire",
-                "action": tier1_action, "blocked": True,
+                "action": "block", "blocked": True,
                 "finding_count": len(pol_findings), "policy_engine": True,
             }
         )
@@ -1108,8 +1406,8 @@ async def scan_mcp_payload(
             {
                 "scan_stage": "tier1_policy", "tier": "tier1",
                 "direction": scan_direction, "scope": "entire",
-                "action": tier1_action, "finding_count": len(pol_findings),
-                "policy_engine": True,
+                "action": ("redact" if pol_redacted else tier1_action),
+                "finding_count": len(pol_findings), "policy_engine": True,
             }
         )
 
@@ -1149,7 +1447,9 @@ async def scan_mcp_payload(
                 result.compliance_tags = _merge_tags(
                     result.compliance_tags, _tags_for_finding(f)
                 )
-            if _is_observe_only_posture(tier1_action):
+            # F3: observe-only only if nothing has enforced yet (a prior policy block/redact means
+            # the call WAS enforced — don't mislabel it observe-only).
+            if _is_observe_only_posture(tier1_action) and not result.blocked and not result_redacted:
                 result.monitored = True
         if blocked:
             tier1_blocked = True
@@ -1203,6 +1503,7 @@ async def scan_mcp_payload(
 
     if tier1_blocked:
         result.blocked = True
+        result.monitored = False  # F3: a blocked call is never observe-only
         return payload, result
 
     mutable = state_ref[0]
@@ -1218,7 +1519,12 @@ async def scan_mcp_payload(
         return _finalize_output(mutable if result_redacted else payload), result
 
     strict_mode = tier2_ctrl.get("strict_mode") or "strict"
-    tier2_action = _resolve_tier_action(tier2_ctrl, enforcement)
+    # Operator-control #6 (single-surface): the operator's EXPLICIT Tier-2 action is honored, but
+    # under the policy-only flag an unset ('inherit') Tier-2 action must NOT fall back to the retired
+    # server posture — it resolves observe-only, so a Tier-2-enabled org with no explicit Tier-2
+    # action enforcement neither blocks nor mutates (invariant A: no defaults). The verdict itself is
+    # honored directly in _scan_text_tier2 when policy_only (invariant F: flag never blocks).
+    tier2_action = _resolve_tier_action(tier2_ctrl, "monitor" if _policy_only else enforcement)
     org_strict = bool((enabled_info or {}).get("tier2_strict", True))
 
     for text, setter, path_label in targets:
@@ -1233,6 +1539,7 @@ async def scan_mcp_payload(
             org_tier2_override=org_override,
             org_tier2_strict=org_strict,
             strict_mode=strict_mode,
+            policy_only=_policy_only,
         )
         result.findings.extend(t2_findings)
         if t2_findings:
@@ -1240,7 +1547,7 @@ async def scan_mcp_payload(
                 result.compliance_tags = _merge_tags(
                     result.compliance_tags, _tags_for_finding(f)
                 )
-            if _is_observe_only_posture(tier2_action):
+            if _is_observe_only_posture(tier2_action) and not result.blocked and not result_redacted:
                 result.monitored = True
         result.scan_trace.append(
             {
@@ -1258,13 +1565,27 @@ async def scan_mcp_payload(
         )
         if t2_blocked:
             result.blocked = True
+            result.monitored = False  # F3: a blocked call is never observe-only
             return payload, result
-        if fallback and strict_mode == "strict" and "strict" in fallback:
+        if (fallback and strict_mode == "strict" and "strict" in fallback
+                and not _is_observe_only_posture(tier2_action)):
+            # Operator-control #2: the strict fail-closed re-block never fires under an observe-only
+            # Tier-2 action (monitor/tag) — matching _scan_text_tier2, which now returns a fail-OPEN
+            # fallback in that case, so "strict" never appears in it. Guarded here for defence in depth.
             result.blocked = True
+            result.monitored = False
             return payload, result
-        if new_text != text and tier2_action == "redact":
+        if new_text != text and (tier2_action == "redact" or _policy_only):
+            # Under the policy-only flag _scan_text_tier2 only returns a changed text when the Tier-2
+            # VERDICT was 'redact' AND the operator granted an enforcing action, so applying the mask
+            # whenever it changed honors the verdict without dropping it (a 'redact' verdict under a
+            # 'block' Tier-2 action masks — never escalates, never leaks raw).
             setter(new_text)
             result_redacted = True
 
+    # F3 audit honesty: 'monitored' means NOTHING was enforced on this call. Recompute from the
+    # FINAL state so a later-lane enforcement (e.g. a Tier-2 redact after a Tier-1 observe) clears an
+    # earlier per-lane observe set — the incremental sets alone left monitored=True on an enforced call.
+    result.monitored = bool(result.findings) and not result.blocked and not result_redacted
     out = _finalize_output(state_ref[0] if result_redacted else payload)
     return out, result
