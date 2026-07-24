@@ -2167,6 +2167,7 @@ function MCPConnectorPanelInner() {
           scope="mcp"
           mcpServerSlug={policyServerFilter || null}
           mcpServerId={selectedServer?.id || null}
+          servers={servers}
           showCompileButton={true}
           showFilters={true}
         />
