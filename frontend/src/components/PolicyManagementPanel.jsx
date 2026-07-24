@@ -487,10 +487,34 @@ function RuleModal({
   isMcp = false,
   isPipelineOrRag = false,
   presets = [],
+  mcpServerId = null,
+  mcpServerSlug = null,
+  mcpTools = [],
+  mcpToolsLoading = false,
+  mcpToolsError = false,
 }) {
   const handleConditionChange = (key, value) => {
     setForm({ ...form, condition: { ...form.condition, [key]: value } });
   };
+
+  // "Target tools" control state. `target_tool` stays a single string on the
+  // form ("" = all tools, else a specific tool name). We keep a local mode flag
+  // so the operator can pick "Specific tool" and see the picker before choosing
+  // one (an empty target_tool alone can't distinguish "all" from "specific, not
+  // yet chosen"). Initialised from the incoming rule: a non-empty target_tool
+  // means it was scoped to a specific tool. The modal remounts on each open, so
+  // deriving initial state from `form` here is safe.
+  const [toolMode, setToolMode] = useState(form.target_tool ? "specific" : "all");
+  // Merge the discovered tools with the current value so an existing
+  // target_tool is never dropped just because discovery didn't return it
+  // (server offline, tool renamed/removed, org-wide policy, etc.).
+  const toolOptions = (() => {
+    const seen = new Set(mcpTools);
+    if (form.target_tool && !seen.has(form.target_tool)) {
+      return [form.target_tool, ...mcpTools];
+    }
+    return mcpTools;
+  })();
 
   // MCP "match mode": preset (built-in detector) | regex | keywords.
   // Derived from the rule shape so editing an existing rule restores the
@@ -647,14 +671,85 @@ function RuleModal({
           )}
           {isMcp ? (
             <div>
-              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Target MCP tool (optional)</label>
-              <input
-                type="text"
-                value={form.target_tool || ""}
-                onChange={(e) => setForm({ ...form, target_tool: e.target.value })}
-                placeholder="empty = all tools (e.g. filesystem_read)"
-                className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              />
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Target tools</label>
+              <p className="mb-2 text-[11px] text-slate-500 dark:text-slate-400">
+                {mcpServerSlug
+                  ? <>Applies to: <span className="font-medium text-slate-600 dark:text-slate-300">{mcpServerSlug}</span></>
+                  : "Applies to: all servers (org-wide)"}
+              </p>
+              <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-0.5 mb-2">
+                <button
+                  type="button"
+                  onClick={() => { setToolMode("all"); setForm({ ...form, target_tool: "" }); }}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    toolMode === "all"
+                      ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-sm"
+                      : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  All tools
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setToolMode("specific")}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    toolMode === "specific"
+                      ? "bg-white dark:bg-slate-700 text-teal-700 dark:text-teal-300 shadow-sm"
+                      : "text-slate-500 dark:text-slate-400"
+                  }`}
+                >
+                  Specific tool
+                </button>
+              </div>
+              {toolMode === "all" ? (
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  This rule applies to every tool on the selected server(s).
+                </p>
+              ) : mcpServerId ? (
+                mcpToolsLoading ? (
+                  <div className="flex items-center gap-2 py-2 text-xs text-slate-500 dark:text-slate-400">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Loading tools…
+                  </div>
+                ) : mcpToolsError ? (
+                  <div>
+                    <input
+                      type="text"
+                      value={form.target_tool || ""}
+                      onChange={(e) => setForm({ ...form, target_tool: e.target.value })}
+                      placeholder="e.g. filesystem_read"
+                      className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                      Couldn't load this server's tools — type a tool name instead.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={form.target_tool || ""}
+                    onChange={(e) => setForm({ ...form, target_tool: e.target.value })}
+                    className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="">Select a tool…</option>
+                    {toolOptions.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                )
+              ) : (
+                <div>
+                  <input
+                    type="text"
+                    value={form.target_tool || ""}
+                    onChange={(e) => setForm({ ...form, target_tool: e.target.value })}
+                    placeholder="e.g. filesystem_read"
+                    className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    Select a server (top filter) to choose from its tools, or type a tool name.
+                  </p>
+                </div>
+              )}
             </div>
           ) : null}
           {isPipelineOrRag ? (
@@ -976,6 +1071,16 @@ export function PolicyManagementPanel({
   // so the MCP rule builder can render the preset dropdown without
   // hard-coding the list in the client.
   const [mcpPresets, setMcpPresets] = useState([]);
+  // Discovered tools for the bound MCP server, so an MCP rule can target a
+  // specific tool via a dropdown instead of a free-text name. Fetched lazily
+  // (once) when an MCP rule modal opens while a server is bound; on fetch error
+  // the control falls back to free-text so rule creation is never blocked.
+  const [mcpTools, setMcpTools] = useState([]);
+  const [mcpToolsLoading, setMcpToolsLoading] = useState(false);
+  const [mcpToolsError, setMcpToolsError] = useState(false);
+  // Tracks which server id we've already fetched tools for, so re-opening the
+  // modal reuses the cached list instead of re-hitting the connector API.
+  const mcpToolsFetchedRef = useRef(null);
   // External create triggers are monotonic signals from parent pages.
   // Guard against replay on tab/scope changes: only consume each signal once.
   const lastHandledExternalCreateSignal = useRef(0);
@@ -1092,6 +1197,36 @@ export function PolicyManagementPanel({
     },
     [fetchWithAuth]
   );
+
+  // Lazily fetch the bound server's discovered tools (once per server). The
+  // response envelope varies by backend version, so tolerate a bare array,
+  // `.results`, or `.tools`; each entry may be an object with `tool_name` or a
+  // plain string. On any failure we flag an error so the rule form degrades to
+  // the free-text input instead of blocking the operator.
+  const fetchMcpTools = useCallback(async () => {
+    if (!mcpServerId) return;
+    if (mcpToolsFetchedRef.current === mcpServerId) return;
+    mcpToolsFetchedRef.current = mcpServerId;
+    setMcpToolsLoading(true);
+    setMcpToolsError(false);
+    try {
+      const res = await fetchWithAuth(`/api/mcp-connector/servers/${mcpServerId}/tools/`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data?.results || data?.tools || []);
+      const names = list
+        .map((t) => (typeof t === "string" ? t : t?.tool_name))
+        .filter(Boolean);
+      // De-dupe while preserving discovery order.
+      setMcpTools(Array.from(new Set(names)));
+    } catch {
+      setMcpToolsError(true);
+      // Allow a retry the next time the modal opens.
+      mcpToolsFetchedRef.current = null;
+    } finally {
+      setMcpToolsLoading(false);
+    }
+  }, [fetchWithAuth, mcpServerId]);
 
   const toggleExpand = (policyId) => {
     if (expandedPolicy === policyId) {
@@ -1370,6 +1505,9 @@ export function PolicyManagementPanel({
     setEditRuleId(rule?.id || null);
     const targetPolicy = policies.find((p) => p.id === policyId);
     const targetIsMcp = targetPolicy ? normalizePolicyScope(targetPolicy) === "mcp" : false;
+    // Warm the tool dropdown for MCP rules bound to a server (cached after the
+    // first fetch); org-wide policies (no bound server) keep the free-text path.
+    if (targetIsMcp && mcpServerId) fetchMcpTools();
     setRuleForm(rule ? {
       name: rule.name || "",
       rule_type: rule.rule_type || "keywords",
@@ -1782,6 +1920,11 @@ export function PolicyManagementPanel({
             return domain === "pipeline" || domain === "rag";
           })()}
           presets={mcpPresets}
+          mcpServerId={mcpServerId}
+          mcpServerSlug={mcpServerSlug}
+          mcpTools={mcpTools}
+          mcpToolsLoading={mcpToolsLoading}
+          mcpToolsError={mcpToolsError}
         />
       )}
     </div>
