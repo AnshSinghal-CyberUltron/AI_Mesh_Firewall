@@ -416,8 +416,8 @@ function MCPConnectorPanelInner() {
 
   /* ── org gateway key (auto-provisioned for MCP) ── */
   const [orgGatewayKey, setOrgGatewayKey] = useState(null); // { has_gateway_key, prefix, key, ... }
-  // Scan-controls row count — when 0, gateway skips Tier-1/Tier-2; server
-  // default_scan_action badges must not imply active scanning (UI honesty).
+  // Scan-controls row count — when 0, gateway skips Tier-1/Tier-2; the
+  // read-only server scan-state badge must not imply active scanning (UI honesty).
   const [scanControlsConfigured, setScanControlsConfigured] = useState(null);
 
   /* ── OAuth polling interval (BUG FIX a: tracked + cleaned up) ── */
@@ -817,41 +817,10 @@ function MCPConnectorPanelInner() {
     }
   };
 
-  // Per-tool scan enforcement override. "inherit" falls back to the server's
-  // default_scan_action (which itself defaults to "tag"). Block short-circuits
-  // at the gateway.
-  const setToolScanAction = async (serverId, toolName, action) => {
-    try {
-      const res = await fetchWithAuth(`/api/mcp-connector/servers/${serverId}/tools/${encodeURIComponent(toolName)}/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scan_action: action }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      await loadServerTools(serverId);
-      toast(`Tool scan action: ${action}`, { tone: "success" });
-    } catch (e) {
-      setError(`Update scan action failed: ${e.message}`);
-      toast(`Update scan action failed: ${e.message}`, { tone: "error" });
-    }
-  };
-
-  // Server-level default scan enforcement action.
-  const setServerScanDefault = async (serverId, action) => {
-    try {
-      const res = await fetchWithAuth(`/api/mcp-connector/servers/${serverId}/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ default_scan_action: action }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      await loadServers();
-      toast(`Server scan default: ${action}`, { tone: "success" });
-    } catch (e) {
-      setError(`Update server scan default failed: ${e.message}`);
-      toast(`Update server scan default failed: ${e.message}`, { tone: "error" });
-    }
-  };
+  // NOTE (MCP collapse — Phase 4): per-tool `scan_action` and server
+  // `default_scan_action` enforcement were retired from this surface. A
+  // server's/tool's enforcement action is now a single Policy concern — see the
+  // "MCP Security Policies" tab. Registration + enable/disable is the gate here.
 
   const copyEndpoint = (endpoint) => {
     navigator.clipboard.writeText(endpoint).then(() => {
@@ -1486,22 +1455,18 @@ function MCPConnectorPanelInner() {
               <Badge variant="secondary" className="inline-flex items-center gap-1" title="Executes in your org's isolated per-org sandbox; the gateway never dials the upstream directly.">
                 <Shield className="w-3 h-3" /> Sandboxed
               </Badge>
-              <Select
-                value={srv.default_scan_action || "tag"}
-                onChange={(e) => setServerScanDefault(srv.id, e.target.value)}
-                aria-label="Default scan enforcement"
-                className="w-auto text-[11px] py-1"
-                title={
-                  scanControlsConfigured === false
-                    ? "Scanning is OFF (0 Scan Controls). Tier-1/Tier-2 do not run until you add a control on the Scan Controls tab. This posture only applies after scanning is enabled."
-                    : "Default scan enforcement after Tier-1/Tier-2 (tag = observe only)"
-                }
-                disabled={scanControlsConfigured === false}
-              >
-                <option value="tag">Scan: tag</option>
-                <option value="redact">Scan: redact</option>
-                <option value="block">Scan: block</option>
-              </Select>
+              {/* MCP collapse (Phase 4): a server's enforcement action is now a
+                  single Policy concern. Show a compact read-only scan state plus
+                  a CTA that routes to the MCP Security Policies tab. */}
+              {scanControlsConfigured === true && (
+                <Badge
+                  variant="success"
+                  className="text-[10px]"
+                  title="Detection is active for this server. Enforcement actions are defined in MCP Security Policies."
+                >
+                  Scanning on
+                </Badge>
+              )}
               {scanControlsConfigured === false && (
                 <Badge
                   variant="secondary"
@@ -1511,6 +1476,17 @@ function MCPConnectorPanelInner() {
                   Scanning off
                 </Badge>
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setTab("protection")}
+                className="text-[11px] text-indigo-600 dark:text-indigo-400"
+                title="This server's enforcement action is governed by MCP Security Policies"
+              >
+                <Shield className="w-3 h-3" />
+                Manage enforcement in Policies
+                <ArrowRight className="w-3 h-3" />
+              </Button>
               {serverNeedsOAuth(srv) && (
                 <Tooltip content="Authorize OAuth — opens popup for upstream provider login">
                   <Button
@@ -1628,18 +1604,8 @@ function MCPConnectorPanelInner() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Select
-                        value={tool.scan_action || "inherit"}
-                        onChange={(e) => setToolScanAction(srv.id, tool.tool_name, e.target.value)}
-                        aria-label={`Scan enforcement for ${tool.tool_name}`}
-                        className="w-auto text-[10px] py-1"
-                        title="Scan enforcement for this tool (inherit = server default)"
-                      >
-                        <option value="inherit">Scan: inherit</option>
-                        <option value="tag">Scan: tag</option>
-                        <option value="redact">Scan: redact</option>
-                        <option value="block">Scan: block</option>
-                      </Select>
+                      {/* Per-tool enforcement action retired here — governed by
+                          MCP Security Policies. Enable/disable is the gate. */}
                       <Badge variant={sensitivityBadge(tool.sensitivity)}>{tool.sensitivity}</Badge>
                     </div>
                   </div>
@@ -2137,6 +2103,7 @@ function MCPConnectorPanelInner() {
       fetchWithAuth={fetchWithAuth}
       servers={servers}
       onControlsChanged={loadScanControlsConfigured}
+      onOpenPolicies={() => setTab("protection")}
     />
   );
 

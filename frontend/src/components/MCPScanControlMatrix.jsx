@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  ArrowRight,
   Globe,
   Pencil,
   Plus,
@@ -151,6 +152,19 @@ function ActionBadge({ action }) {
   return <Badge variant={info.badge}>{info.label}</Badge>;
 }
 
+/**
+ * Tier-1 enforcement action is retired from this surface (MCP collapse Phase 4).
+ * Tier-1 stays an always-on detection gate; the action that runs on a finding is
+ * decided by MCP Security Policies, so we show a read-only "Policies" marker.
+ */
+function PolicyGovernedBadge() {
+  return (
+    <Badge variant="outline" title="Enforcement action is governed by MCP Security Policies">
+      Policies
+    </Badge>
+  );
+}
+
 function ScopeCell({ row }) {
   const scope = row.scope_type || "org";
   return (
@@ -257,7 +271,11 @@ function TierSection({ tier, title, subtitle, icon: Icon, accent, rows, onEdit, 
                     <Badge variant="outline">Fail open</Badge>
                   )}
                 </TD>
-                <TD><ActionBadge action={row.action} /></TD>
+                <TD>
+                  {tier === "tier1"
+                    ? <PolicyGovernedBadge />
+                    : <ActionBadge action={row.action} />}
+                </TD>
                 <TD className="text-right tabular-nums text-slate-500 dark:text-slate-400">{row.priority}</TD>
                 <TD className="text-right">
                   <div className="flex justify-end gap-1">
@@ -291,7 +309,7 @@ function TierSection({ tier, title, subtitle, icon: Icon, accent, rows, onEdit, 
 }
 
 /** One resolved (tier, direction) line in the sticky preview sidebar. */
-function PreviewRow({ label, ctrl }) {
+function PreviewRow({ label, ctrl, governedByPolicies = false }) {
   return (
     <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 px-3 py-2">
       <div className="min-w-0">
@@ -303,7 +321,7 @@ function PreviewRow({ label, ctrl }) {
           {ctrl.key_path ? ` · ${ctrl.key_path}` : ""}
         </p>
       </div>
-      <ActionBadge action={ctrl.action} />
+      {governedByPolicies ? <PolicyGovernedBadge /> : <ActionBadge action={ctrl.action} />}
     </div>
   );
 }
@@ -324,8 +342,8 @@ function EffectivePreview({ effective, scopeLabel }) {
           <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Tier-1 (static gate)
           </p>
-          <PreviewRow label="Input" ctrl={effective.tier1_input} />
-          <PreviewRow label="Output" ctrl={effective.tier1_output} />
+          <PreviewRow label="Input" ctrl={effective.tier1_input} governedByPolicies />
+          <PreviewRow label="Output" ctrl={effective.tier1_output} governedByPolicies />
         </div>
 
         <div className="space-y-2">
@@ -350,20 +368,7 @@ const TIER2_OPTIONS = [
   { value: "disabled", label: "Disabled", payload: false },
 ];
 
-/**
- * Posture for the transparent external MCP proxy (/v1/mcp/ext-proxy/<host>) —
- * traffic to THIRD-PARTY MCP servers. "tag" is the value when nothing is chosen
- * and enforces NOTHING on that surface: findings are detected and tagged, but
- * content is never masked and the call is never blocked (UI honesty — same rule
- * as the server default_scan_action badges).
- */
-const EXT_ACTION_OPTIONS = [
-  { value: "tag", label: "Tag only" },
-  { value: "redact", label: "Redact" },
-  { value: "block", label: "Block" },
-];
-
-export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsChanged }) {
+export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsChanged, onOpenPolicies }) {
   const { toast } = useToast();
 
   const [controls, setControls] = useState([]);
@@ -378,8 +383,6 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
   const [mcpTier2, setMcpTier2] = useState(null);
   const [firewallConfig, setFirewallConfig] = useState(null);
   const [tier2Saving, setTier2Saving] = useState(false);
-  const [extScanAction, setExtScanAction] = useState("tag");
-  const [extSaving, setExtSaving] = useState(false);
 
   const loadControls = useCallback(async () => {
     setLoading(true);
@@ -407,9 +410,6 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
       const data = await res.json();
       setFirewallConfig(data);
       setMcpTier2(data.mcp_tier2_enabled);
-      // Absent field (older gateway/control-plane) reads as the non-enforcing
-      // default rather than crashing the card.
-      setExtScanAction(data.mcp_ext_scan_action || "tag");
     } catch {
       /* optional */
     }
@@ -488,7 +488,9 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
       target_mode: form.target_mode,
       key_path: form.target_mode === "key_path" ? form.key_path : "",
       strict_mode: form.strict_mode,
-      action: form.action,
+      // Tier-1 enforcement action is retired from this surface (governed by
+      // Policies) — always persist the neutral "inherit" for Tier-1 rows.
+      action: form.tier === "tier1" ? "inherit" : form.action,
       priority: Number(form.priority) || 0,
       tool_name: form.scope_type === "tool" ? form.tool_name : "",
     };
@@ -575,48 +577,6 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
     }
   };
 
-  const saveExtScanAction = async (value) => {
-    const previous = extScanAction;
-    setExtSaving(true);
-    setError(null);
-    setExtScanAction(value);
-    try {
-      // Same partial-update contract as the Tier-2 toggle above (CP28): send ONLY
-      // the changed field so unrelated siblings are not re-validated.
-      const res = await fetchWithAuth("/api/firewall/config/", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mcp_ext_scan_action: value }),
-      });
-      if (!res.ok) {
-        let detail = `HTTP ${res.status}`;
-        try {
-          const err = await res.json();
-          detail = err?.mcp_ext_scan_action?.[0] || err?.detail || detail;
-        } catch { /* keep status */ }
-        throw new Error(detail);
-      }
-      const updated = await res.json().catch(() => ({ mcp_ext_scan_action: value }));
-      setFirewallConfig((prev) => ({ ...(prev || {}), ...updated }));
-      setExtScanAction(updated.mcp_ext_scan_action || value);
-      toast(
-        value === "tag"
-          ? "External MCP proxy set to tag only — nothing is enforced on that surface"
-          : `External MCP proxy set to ${value}`,
-        { tone: value === "tag" ? "info" : "success" },
-      );
-    } catch (e) {
-      setExtScanAction(previous);
-      setError(e.message);
-      toast(e.message || "Failed to save external MCP proxy posture", { tone: "error" });
-    } finally {
-      setExtSaving(false);
-    }
-  };
-
-  const extNotEnforcing = extScanAction === "tag";
-  const extActionInfo = actionInfo(extScanAction);
-
   const tier2State = mcpTier2 === null ? "inherit" : mcpTier2 ? "enabled" : "disabled";
   const tier2StateLabel =
     mcpTier2 === null ? "Inherit (org default)" : mcpTier2 ? "Enabled" : "Disabled";
@@ -650,6 +610,35 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
           </>
         }
       />
+
+      {/* MCP collapse (Phase 4): Policies is the single detection & enforcement
+          surface. This tab keeps only Tier-1 detection + the Tier-2 on/off toggle. */}
+      {typeof onOpenPolicies === "function" && (
+        <button
+          type="button"
+          onClick={onOpenPolicies}
+          className="group flex w-full items-center justify-between gap-3 rounded-xl border border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/70 dark:bg-indigo-900/20 px-4 py-3 text-left transition hover:bg-indigo-100/70 dark:hover:bg-indigo-900/30"
+        >
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300">
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">
+                Manage detection &amp; enforcement rules in Policies
+              </p>
+              <p className="mt-0.5 text-xs text-indigo-700/80 dark:text-indigo-300/80">
+                Enforcement actions (block / redact / tag / allow) live in MCP Security Policies —
+                the single surface. This tab keeps Tier-1 detection and the Tier-2 on/off toggle.
+              </p>
+            </div>
+          </div>
+          <ArrowRight
+            className="h-4 w-4 shrink-0 text-indigo-500 transition group-hover:translate-x-0.5"
+            aria-hidden="true"
+          />
+        </button>
+      )}
 
       {error && (
         <div
@@ -697,60 +686,24 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
         </CardContent>
       </Card>
 
-      {/* External MCP proxy posture — third-party servers via /v1/mcp/ext-proxy */}
-      <Card
-        className={cn(
-          extNotEnforcing
-            && "border-amber-200 bg-amber-50/60 dark:border-amber-800 dark:bg-amber-900/20",
-        )}
-      >
-        <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div
-              className={cn(
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-                extNotEnforcing
-                  ? "bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300"
-                  : "bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-300",
-              )}
-            >
-              <Globe className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  External MCP proxy posture
-                </h3>
-                <Badge variant={extNotEnforcing ? "warning" : extActionInfo.badge}>
-                  {extNotEnforcing ? "Tag only — not enforced" : extActionInfo.label}
-                </Badge>
-                <InfoHint content={"Applies to the transparent external MCP proxy (/v1/mcp/ext-proxy/<host>) — traffic to third-party MCP servers you did not register. Tag only detects and tags findings; Redact masks matched content; Block rejects the call."} />
-              </div>
-              {extNotEnforcing ? (
-                <p className="mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
-                  <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  Nothing is enforced on third-party MCP traffic — findings are tagged, but content
-                  is never masked and calls are never blocked. Choose Redact or Block to enforce.
-                </p>
-              ) : (
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  Findings on third-party MCP traffic are{" "}
-                  {extScanAction === "block" ? "blocked" : "masked before delivery"}.
-                </p>
-              )}
-            </div>
+      {/* External / unregistered MCP servers — MCP collapse (Phase 4). Per the
+          operator model, unregistered third-party MCP servers are simply not
+          usable; once registered, they are governed by MCP Security Policies. */}
+      <Card>
+        <CardContent className="flex items-start gap-3 p-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">
+            <Globe className="h-5 w-5" aria-hidden="true" />
           </div>
-          <div className="flex items-center gap-2 self-start sm:self-center">
-            {extSaving && <Spinner className="h-4 w-4 text-teal-500" />}
-            <SegmentedControl
-              aria-label="External MCP proxy scan action"
-              value={extScanAction}
-              onChange={(v) => {
-                if (extSaving || v === extScanAction) return;
-                saveExtScanAction(v);
-              }}
-              options={EXT_ACTION_OPTIONS}
-            />
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              External MCP servers
+            </h3>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              Unregistered third-party MCP servers can&apos;t be used — traffic to them is blocked
+              until the server is registered on the{" "}
+              <span className="font-medium text-slate-700 dark:text-slate-200">MCP Servers</span> tab.
+              Once registered, every tool call is governed by your MCP Security Policies.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -1000,24 +953,35 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
             )}
           </div>
 
-          {/* Action + strict + priority */}
+          {/* Action (Tier-2 only) + strict + priority. Tier-1's enforcement
+              action is retired here — it is governed by MCP Security Policies. */}
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-200">
-                Action
-                <InfoHint content={ACTION_HELP} />
-              </span>
-              <Select
-                aria-label="Action"
-                value={form.action}
-                onChange={(e) => setForm({ ...form, action: e.target.value })}
-              >
-                <option value="inherit">Inherit (server default)</option>
-                <option value="monitor">Monitor (detect, allow)</option>
-                <option value="redact">Redact</option>
-                <option value="block">Block</option>
-              </Select>
-            </label>
+            {form.tier === "tier2" ? (
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-200">
+                  Action
+                  <InfoHint content={ACTION_HELP} />
+                </span>
+                <Select
+                  aria-label="Action"
+                  value={form.action}
+                  onChange={(e) => setForm({ ...form, action: e.target.value })}
+                >
+                  <option value="inherit">Inherit (server default)</option>
+                  <option value="monitor">Monitor (detect, allow)</option>
+                  <option value="redact">Redact</option>
+                  <option value="block">Block</option>
+                </Select>
+              </label>
+            ) : (
+              <div className="flex flex-col gap-1.5 text-sm">
+                <span className="font-medium text-slate-700 dark:text-slate-200">Action</span>
+                <div className="flex h-9 items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                  <Shield className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  Governed by MCP Security Policies
+                </div>
+              </div>
+            )}
             <label className="flex flex-col gap-1.5 text-sm">
               <span className="font-medium text-slate-700 dark:text-slate-200">Strict mode</span>
               <Select
