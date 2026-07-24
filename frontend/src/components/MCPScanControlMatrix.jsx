@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
+  Globe,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -438,7 +439,7 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
       <PanelHeader
         icon={ShieldCheck}
         title="MCP scan controls"
-        description={`Tier-1 detection & enforcement lives in MCP Security Policies. This page controls only the on/off Tier-2 ${ZEROSHIELD_TIER2_LABEL} model scan.`}
+        description={`Tier-1 detection & enforcement lives in MCP Security Policies. This page controls only the on/off Tier-2 ${ZEROSHIELD_TIER2_LABEL} scan.`}
         actions={
           <Button
             variant="outline"
@@ -581,6 +582,26 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
               })}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* External / unregistered MCP servers — registration is the gate. */}
+      <Card>
+        <CardContent className="flex items-start gap-3 p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300">
+            <Globe className="h-4 w-4" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              External MCP servers
+            </h4>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              Unregistered third-party MCP servers can&apos;t be used — traffic to them is blocked
+              until the server is registered on the{" "}
+              <span className="font-medium text-slate-700 dark:text-slate-200">MCP Servers</span> tab.
+              Once registered, every tool call is governed by your MCP Security Policies.
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
