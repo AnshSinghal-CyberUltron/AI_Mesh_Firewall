@@ -1339,7 +1339,8 @@ async def scan_mcp_payload(
         )
         return masked
 
-    if not tier1_ctrl.get("enabled", True):
+    _tier1_enabled = tier1_ctrl.get("enabled", True)
+    if not _tier1_enabled:
         result.scan_trace.append(
             {
                 "scan_stage": "tier1_skipped",
@@ -1348,7 +1349,12 @@ async def scan_mcp_payload(
                 "enabled": False,
             }
         )
-        return payload, result
+        # red-team wf_d8062c0d F1 (operator-control): a DISABLED Tier-1 direction must NOT silently
+        # drop an operator-ENABLED Tier-2 for the SAME direction — Tier-2 is an INDEPENDENT operator
+        # on/off, so its explicit enable is honored. We skip only the Tier-1 policy + preset passes
+        # below (gated on _tier1_enabled); if Tier-2 is also off, nothing runs and we return here.
+        if not tier2_ctrl.get("enabled", False):
+            return payload, result
 
     # ── Tier-1 POLICY pass (Phase 1, 2026-07-23): evaluate policies ONCE against the
     # FULL payload using each policy's OWN scope, DECOUPLED from the scan-control target
@@ -1362,15 +1368,20 @@ async def scan_mcp_payload(
     # Runs only for an ENABLED tier1 direction (after the disabled-skip above), so direction
     # isolation is preserved. The scan-control scope still governs the PRESET pass that
     # follows; each surface honours its OWN operator-selected scope.
-    pol_payload, pol_findings, pol_blocked, pol_rfields, pol_redacted = await _mcp_policy_pass(
-        payload,
-        scan_direction=scan_direction,
-        enforcement=tier1_action,
-        org_slug=org_slug,
-        server_slug=server_slug,
-        tool_name=tool_name,
-        actor=actor,
-    )
+    # Tier-1 policy + preset passes run ONLY for an enabled Tier-1 direction. A disabled direction
+    # (that reached here because Tier-2 is enabled) contributes no Tier-1 findings and falls through
+    # to the Tier-2 lane below, honoring the operator's independent Tier-2 enable.
+    pol_payload, pol_findings, pol_blocked, pol_rfields, pol_redacted = (payload, [], False, [], False)
+    if _tier1_enabled:
+        pol_payload, pol_findings, pol_blocked, pol_rfields, pol_redacted = await _mcp_policy_pass(
+            payload,
+            scan_direction=scan_direction,
+            enforcement=tier1_action,
+            org_slug=org_slug,
+            server_slug=server_slug,
+            tool_name=tool_name,
+            actor=actor,
+        )
     for _rf in pol_rfields:
         if _rf not in field_redaction_union:
             field_redaction_union.append(_rf)
@@ -1411,8 +1422,11 @@ async def scan_mcp_payload(
             }
         )
 
-    target_mode = tier1_ctrl.get("target_mode") or "entire"
-    key_path = tier1_ctrl.get("key_path") or ""
+    # Bind the payload to the ACTIVE tier's scope: Tier-1's when it runs, else (Tier-1 disabled +
+    # Tier-2 enabled) Tier-2's OWN scope, so Tier-2 honors the operator's Tier-2 target selection.
+    _scope_ctrl = tier1_ctrl if _tier1_enabled else tier2_ctrl
+    target_mode = _scope_ctrl.get("target_mode") or "entire"
+    key_path = _scope_ctrl.get("key_path") or ""
     state_ref, targets = extract_and_bind(
         payload,
         target_mode=target_mode,
@@ -1422,7 +1436,7 @@ async def scan_mcp_payload(
     scanner = _get_input_scanner()
     tier1_blocked = False
 
-    for text, setter, path_label in targets:
+    for text, setter, path_label in (targets if _tier1_enabled else []):
         if not text:
             continue
         # PRESET pass only — the POLICY lane already ran once on the full payload above.

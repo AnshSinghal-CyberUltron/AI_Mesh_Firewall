@@ -878,6 +878,68 @@ async def test_OC7_block_action_redact_verdict_masks_not_blocks(direction):
     assert _SSN not in json.dumps(out), "the redact verdict masks under a block action"
 
 
+# ── F1 (red-team wf_d8062c0d): a DISABLED Tier-1 direction must still run an operator-ENABLED Tier-2 ──
+def _tier1_disabled_tier2(action, *, direction, strict_mode="strict"):
+    ctrls = _observe_controls()
+    ctrls[f"tier1_{direction}"] = {"tier": "tier1", "enabled": False, "direction": direction,
+                                   "scope_type": "org", "target_mode": "entire", "key_path": "",
+                                   "action": "tag", "priority": 0, "control_id": None}
+    ctrls[f"tier2_{direction}"] = {"tier": "tier2", "enabled": True, "action": action,
+                                   "strict_mode": strict_mode, "control_id": 1}
+    return ctrls
+
+
+async def _run_ctrls(payload, *, verdict, effective_controls, direction, flag=True):
+    orig_ps, orig_sc = orch._get_policy_sync, orch._get_input_scanner
+    orch._get_policy_sync = lambda: _FakePolicySync([])
+    orch._get_input_scanner = lambda: _FakeScanner(verdict=verdict)
+    try:
+        return await orch.scan_mcp_payload(
+            payload, scan_direction=direction, enforcement="tag",
+            effective_controls=effective_controls, tool_name="anyTool",
+            enabled_info={"mcp_policy_only_enforcement": flag}, org_slug="o", server_slug="s", actor=None)
+    finally:
+        orch._get_policy_sync, orch._get_input_scanner = orig_ps, orig_sc
+
+
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC_tier1_disabled_still_runs_enabled_tier2(direction):
+    out, res = await _run_ctrls({"args": {"note": _SSN}}, verdict=_FakeVerdict("block"),
+                                effective_controls=_tier1_disabled_tier2("block", direction=direction),
+                                direction=direction)
+    stages = [t.get("scan_stage") for t in res.scan_trace]
+    assert res.blocked, "an operator-enabled Tier-2 block must be honored even when Tier-1 is disabled"
+    assert "tier2" in stages and "tier1_skipped" in stages, "Tier-1 skipped, Tier-2 ran"
+
+
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC_tier1_disabled_tier2_disabled_enforces_nothing(direction):
+    ctrls = _tier1_disabled_tier2("block", direction=direction)
+    ctrls[f"tier2_{direction}"]["enabled"] = False  # both tiers off for this direction
+    out, res = await _run_ctrls({"args": {"note": _SSN}}, verdict=_FakeVerdict("block"),
+                                effective_controls=ctrls, direction=direction)
+    assert not res.blocked and _SSN in json.dumps(out), "both tiers off -> nothing enforced"
+
+
+# ── F2 (red-team wf_d8062c0d): a malformed key-scope rule (scope=key, blank key) ARMS NOTHING ──
+@pytest.mark.parametrize("action", ["block", "redact"])
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC_empty_key_scope_rule_arms_nothing(action, direction):
+    # Must NOT widen to scope=entire (which over-blocked/over-masked the whole payload). It matches
+    # nothing, so a sibling secret survives raw and the call is not blocked — matcher agrees with floor.
+    rule = {"id": 1, "name": "malformed", "rule_type": "detector", "action": action,
+            "condition": {"detector_class": ["credential"], "scope": "key", "key": ""},
+            "target_tool": "", "redaction_config": {}}
+    out, res = await _run({"args": {"secret": _AWS, "who": _EMAIL}}, rules=[rule], enforcement="tag",
+                          effective_controls=_observe_controls(), direction=direction, tool="anyTool",
+                          enabled_info={"mcp_policy_only_enforcement": True})
+    assert not res.blocked, "empty-key key-scope must not widen to entire and block"
+    assert _AWS in json.dumps(out), "empty-key key-scope must not widen to entire and mask siblings"
+
+
 # ── flag-parse hardening: a stringly-typed 'false'/'0'/'off' must NOT activate the cutover ──
 @pytest.mark.parametrize("val,want", [
     (True, True), (False, False), (1, True), (0, False), (None, False), ("", False),

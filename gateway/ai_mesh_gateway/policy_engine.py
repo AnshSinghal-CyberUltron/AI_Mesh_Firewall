@@ -771,8 +771,12 @@ def _resolve_matcher_dict(rule: dict[str, Any]) -> dict[str, Any]:
     if scope not in ("entire", "key"):
         scope = "entire"
     key = str(cond.get("key") or "").strip()
-    if scope == "key" and not key:
-        scope = "entire"
+    # red-team wf_d8062c0d (invariant D): a malformed key-scope rule (scope=key + blank key) ARMS
+    # NOTHING — it stays scope=key with an empty key, which collects no candidate texts
+    # (_collect_key_nodes returns [] for a blank key), so the rule never matches. It must NOT widen to
+    # scope=entire (the prior behavior), which silently ESCALATED a key-scoped rule to enforce across
+    # the WHOLE payload (over-block / over-mask of siblings) and diverged from _detector_floor_action,
+    # which returns None ("arms nothing") for the identical shape. Matcher and floor now agree.
 
     preset = cond.get("preset")
     regex = None
