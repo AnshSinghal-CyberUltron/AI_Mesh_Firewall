@@ -986,14 +986,17 @@ class MCPServerStateView(_APIView):
                 "default_applies": default_applies,
                 "enabled_for_server": bool(applies),
                 "overridden": p.id in p_over,
-                # red-team wf_51ca33ea (UI honesty / master ceiling): only globally-enabled rules are
-                # compiled + enforceable, so — like the policy filter above — show only enabled rules
-                # and CLAMP the effective state to the global ceiling. Without this, a per-server
-                # override "enabling" a globally-disabled rule rendered a green toggle for a rule the
-                # gateway never runs (a false sense of protection).
+                # red-team wf_51ca33ea + wf_1f7cd667 (UI honesty == gateway enforcement): a rule runs on
+                # this server iff (a) the parent policy APPLIES here (``applies`` — default binding
+                # refined by the per-server policy override), (b) the rule is globally enabled (master
+                # ceiling — only enabled rules are compiled), and (c) no per-server rule override
+                # disables it. The gateway drops the ENTIRE policy (all its rules) when the policy is
+                # off/bound-elsewhere for this server, so a rule under an off-for-this-server policy must
+                # NOT render enabled_for_server=True (a false sense of protection). Show only globally-
+                # enabled rules and clamp to BOTH the policy applicability and the rule ceiling.
                 "rules": [{
                     "rule_id": r.id, "name": r.name, "action": r.action,
-                    "enabled_for_server": bool(r.enabled and r_over.get(r.id, True)),
+                    "enabled_for_server": bool(applies and r.enabled and r_over.get(r.id, True)),
                     "overridden": r.id in r_over,
                 } for r in p.rules.all() if r.enabled],
             })

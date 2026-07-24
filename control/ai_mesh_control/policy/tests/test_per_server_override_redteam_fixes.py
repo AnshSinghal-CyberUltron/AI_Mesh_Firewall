@@ -47,3 +47,36 @@ class PerServerOverrideRedteamFixTest(TestCase):
         resp = MCPServerStateView.as_view()(req)
         self.assertEqual(resp.status_code, 404, f"expected clean 404, got {resp.status_code}")
         print("non-uuid server_id ->", resp.status_code, dict(resp.data))
+
+
+class PerServerPolicyOffRuleParityTest(TestCase):
+    """red-team wf_1f7cd667: a rule under a policy that is OFF for this server (bound elsewhere, or
+    per-server policy-override disabled) must render enabled_for_server=False — the gateway drops the
+    whole policy + all its rules, so the view must not light the rules green."""
+    def test_rule_of_policy_bound_elsewhere_is_off_for_this_server(self):
+        from django.contrib.auth import get_user_model
+        from auth.models import Organization, UserProfile
+        from mcp_connector.models import MCPServerRegistration
+        from policy.models import Policy, Rule
+        from policy.views import MCPServerStateView
+        from rest_framework.test import APIRequestFactory, force_authenticate
+        User = get_user_model()
+        org = Organization.objects.create(name="parity-org")
+        user = User.objects.create_user(username="par", password="pw")
+        prof, _ = UserProfile.objects.get_or_create(user=user); prof.organization = org
+        prof.save(update_fields=["organization"])
+        a = MCPServerRegistration.objects.create(organization=org, name="A", server_slug="pa", url="http://a", transport="streamable-http")
+        b = MCPServerRegistration.objects.create(organization=org, name="B", server_slug="pb", url="http://b", transport="streamable-http")
+        # policy bound ONLY to server B, with a globally-enabled rule
+        pol = Policy.objects.create(organization=org, code="P_ELSEWHERE", name="bound B", policy_domain="mcp", enabled=True, mcp_server=b)
+        Rule.objects.create(policy=pol, name="rE", rule_type="keywords", action="block", condition={"keywords": ["x"]}, enabled=True)
+        # GET for server A: the policy is off for A -> its rule must be off for A too
+        req = APIRequestFactory().get(f"/api/policies/mcp-server-states/?server_id={a.id}")
+        force_authenticate(req, user=user)
+        resp = MCPServerStateView.as_view()(req)
+        self.assertEqual(resp.status_code, 200, resp.data)
+        pe = next(p for p in resp.data["policies"] if p["code"] == "P_ELSEWHERE")
+        self.assertFalse(pe["enabled_for_server"], "policy bound elsewhere is off for server A")
+        for r in pe["rules"]:
+            self.assertFalse(r["enabled_for_server"], f"rule {r['name']} of an off-for-A policy must show OFF, matching gateway (which drops it)")
+        print("policy-off rule parity OK:", pe["enabled_for_server"], [r["enabled_for_server"] for r in pe["rules"]])
