@@ -35,7 +35,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { toAbsoluteGatewayUrl, resolveMcpGatewayBaseUrl } from "../utils/environmentUrls";
 import { ServerTier2Manager } from "./ServerTier2Manager";
-import { PolicyManagementPanel } from "./PolicyManagementPanel";
+import { ServerTier1Manager } from "./ServerTier1Manager";
 import { ZEROSHIELD_TIER2_LABEL } from "../constants/zeroshieldBrand";
 
 import { Card, CardContent } from "./ui/Card";
@@ -2155,16 +2155,10 @@ function MCPConnectorPanelInner() {
               onClose={() => setTier1Server(null)}
             />
             <DialogBody>
-              <PolicyManagementPanel
+              <ServerTier1Manager
                 key={tier1Server.id}
-                title={`Policies · ${tier1Server.name}`}
-                description="Enable/disable the policies and rules that apply to this server. Each rule targets this server's tools, Apply-To, scope, and action."
-                scope="mcp"
-                mcpServerSlug={tier1Server.server_slug}
-                mcpServerId={tier1Server.id}
-                servers={servers}
-                showCompileButton
-                showFilters
+                server={tier1Server}
+                fetchWithAuth={fetchWithAuth}
               />
             </DialogBody>
           </>
