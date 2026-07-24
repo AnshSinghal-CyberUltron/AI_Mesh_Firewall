@@ -35,7 +35,6 @@ import { PanelHeader } from "./ui/PanelHeader";
 import { Table, THead, TBody, TR, TH, TD } from "./ui/Table";
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from "./ui/Dialog";
 import { useToast } from "./ui/Toast";
-import { ACTION, actionInfo } from "../lib/mcpColors";
 import { ZEROSHIELD_TIER2_LABEL } from "../constants/zeroshieldBrand";
 import { cn } from "../lib/utils";
 
@@ -137,20 +136,15 @@ const EMPTY_FORM = {
   priority: 0,
 };
 
-const ACTION_HELP = [
-  `Inherit — ${ACTION.inherit.help}`,
-  `Monitor — ${ACTION.monitor.help}`,
-  `Redact — ${ACTION.redact.help}`,
-  `Block — ${ACTION.block.help}`,
-].join("\n");
+// Neither tier carries an operator-chosen action any more (MCP collapse Phase 4):
+// Tier-1 findings are actioned by MCP Security Policies, and when Tier-2 is on the
+// ZeroShield model's verdict decides (allow / block with reason / flag for review).
+const DECISION_HELP =
+  "No per-row action is chosen here. Tier-1 findings are actioned by MCP Security "
+  + "Policies. When Tier-2 is on, the ZeroShield model judges each call and returns "
+  + "allow, block (with reason), or flag for review.";
 
 const DIRECTION_LABEL = { both: "Input + Output", input: "Input", output: "Output" };
-
-/** Color-coded action badge driven by mcpColors.actionInfo(). */
-function ActionBadge({ action }) {
-  const info = actionInfo(action);
-  return <Badge variant={info.badge}>{info.label}</Badge>;
-}
 
 /**
  * Tier-1 enforcement action is retired from this surface (MCP collapse Phase 4).
@@ -161,6 +155,22 @@ function PolicyGovernedBadge() {
   return (
     <Badge variant="outline" title="Enforcement action is governed by MCP Security Policies">
       Policies
+    </Badge>
+  );
+}
+
+/**
+ * Tier-2 has no operator-chosen action. When it is on, the ZeroShield model's
+ * verdict decides (allow / block with reason / flag for review), so the row shows
+ * a read-only "Model verdict" marker instead of a block/redact/monitor action.
+ */
+function ModelVerdictBadge() {
+  return (
+    <Badge
+      variant="outline"
+      title="When Tier-2 is on, the ZeroShield model's verdict decides: allow / block (with reason) / flag for review. There is no action to choose."
+    >
+      Model verdict
     </Badge>
   );
 }
@@ -243,8 +253,8 @@ function TierSection({ tier, title, subtitle, icon: Icon, accent, rows, onEdit, 
               <TH>Strict</TH>
               <TH>
                 <span className="inline-flex items-center gap-1">
-                  Action
-                  <InfoHint content={ACTION_HELP} />
+                  Decision
+                  <InfoHint content={DECISION_HELP} />
                 </span>
               </TH>
               <TH className="w-12 text-right">Pri</TH>
@@ -274,7 +284,7 @@ function TierSection({ tier, title, subtitle, icon: Icon, accent, rows, onEdit, 
                 <TD>
                   {tier === "tier1"
                     ? <PolicyGovernedBadge />
-                    : <ActionBadge action={row.action} />}
+                    : <ModelVerdictBadge />}
                 </TD>
                 <TD className="text-right tabular-nums text-slate-500 dark:text-slate-400">{row.priority}</TD>
                 <TD className="text-right">
@@ -309,7 +319,7 @@ function TierSection({ tier, title, subtitle, icon: Icon, accent, rows, onEdit, 
 }
 
 /** One resolved (tier, direction) line in the sticky preview sidebar. */
-function PreviewRow({ label, ctrl, governedByPolicies = false }) {
+function PreviewRow({ label, ctrl, badge = null }) {
   return (
     <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/60 px-3 py-2">
       <div className="min-w-0">
@@ -321,7 +331,7 @@ function PreviewRow({ label, ctrl, governedByPolicies = false }) {
           {ctrl.key_path ? ` · ${ctrl.key_path}` : ""}
         </p>
       </div>
-      {governedByPolicies ? <PolicyGovernedBadge /> : <ActionBadge action={ctrl.action} />}
+      {badge}
     </div>
   );
 }
@@ -342,16 +352,16 @@ function EffectivePreview({ effective, scopeLabel }) {
           <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Tier-1 (static gate)
           </p>
-          <PreviewRow label="Input" ctrl={effective.tier1_input} governedByPolicies />
-          <PreviewRow label="Output" ctrl={effective.tier1_output} governedByPolicies />
+          <PreviewRow label="Input" ctrl={effective.tier1_input} badge={<PolicyGovernedBadge />} />
+          <PreviewRow label="Output" ctrl={effective.tier1_output} badge={<PolicyGovernedBadge />} />
         </div>
 
         <div className="space-y-2">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400">
             Tier-2 ({ZEROSHIELD_TIER2_LABEL})
           </p>
-          <PreviewRow label="Input" ctrl={effective.tier2_input} />
-          <PreviewRow label="Output" ctrl={effective.tier2_output} />
+          <PreviewRow label="Input" ctrl={effective.tier2_input} badge={<ModelVerdictBadge />} />
+          <PreviewRow label="Output" ctrl={effective.tier2_output} badge={<ModelVerdictBadge />} />
         </div>
 
         <p className="text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
@@ -488,9 +498,10 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
       target_mode: form.target_mode,
       key_path: form.target_mode === "key_path" ? form.key_path : "",
       strict_mode: form.strict_mode,
-      // Tier-1 enforcement action is retired from this surface (governed by
-      // Policies) — always persist the neutral "inherit" for Tier-1 rows.
-      action: form.tier === "tier1" ? "inherit" : form.action,
+      // No operator-chosen action on either tier (MCP collapse Phase 4): Tier-1
+      // is actioned by Policies and Tier-2 is verdict-authoritative, so always
+      // persist the neutral "inherit" — the per-scope action is ignored.
+      action: "inherit",
       priority: Number(form.priority) || 0,
       tool_name: form.scope_type === "tool" ? form.tool_name : "",
     };
@@ -663,10 +674,11 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
                   Tier-2 ({ZEROSHIELD_TIER2_LABEL}) for this org
                 </h3>
                 <Badge variant={tier2BadgeVariant}>{tier2StateLabel}</Badge>
-                <InfoHint content={`Tier-2 runs the ${ZEROSHIELD_TIER2_LABEL} semantic scan only after the Tier-1 static gate passes. Inherit defers to the org global Tier-2 default; Enabled/Disabled force it for MCP tool calls.`} />
+                <InfoHint content={`Tier-2 is pure on/off. When enabled, the ${ZEROSHIELD_TIER2_LABEL} model judges each MCP tool call (after the Tier-1 static gate passes) and returns allow, block with a reason, or flag for review — there is no action to choose. Inherit defers to the org global Tier-2 default; Enabled/Disabled force it for MCP tool calls.`} />
               </div>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {tier2Active} Tier-2 {tier2Active === 1 ? "row" : "rows"} active across all scopes.
+                {" "}When on, the model&apos;s verdict decides — allow / block (with reason) / flag for review.
               </p>
             </div>
           </div>
@@ -829,7 +841,7 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
         <DialogHeader
           id="scan-control-dialog-title"
           title={editing ? "Edit scan control" : "New scan control"}
-          description="Define which tier, direction, scope, target, and action applies."
+          description="Define which tier, direction, scope, and target applies. Tier-1 is actioned by Policies; Tier-2 is decided by the ZeroShield model verdict — no action is chosen here."
           onClose={() => setDrawerOpen(false)}
         />
         <DialogBody>
@@ -953,35 +965,30 @@ export function MCPScanControlMatrix({ fetchWithAuth, servers = [], onControlsCh
             )}
           </div>
 
-          {/* Action (Tier-2 only) + strict + priority. Tier-1's enforcement
-              action is retired here — it is governed by MCP Security Policies. */}
+          {/* Decision + strict + priority. No operator-chosen action on either
+              tier (MCP collapse Phase 4): Tier-1 findings are actioned by MCP
+              Security Policies; when Tier-2 is on, the ZeroShield model's verdict
+              decides (allow / block with reason / flag for review). */}
           <div className="grid gap-4 sm:grid-cols-2">
-            {form.tier === "tier2" ? (
-              <label className="flex flex-col gap-1.5 text-sm">
-                <span className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-200">
-                  Action
-                  <InfoHint content={ACTION_HELP} />
-                </span>
-                <Select
-                  aria-label="Action"
-                  value={form.action}
-                  onChange={(e) => setForm({ ...form, action: e.target.value })}
-                >
-                  <option value="inherit">Inherit (server default)</option>
-                  <option value="monitor">Monitor (detect, allow)</option>
-                  <option value="redact">Redact</option>
-                  <option value="block">Block</option>
-                </Select>
-              </label>
-            ) : (
-              <div className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium text-slate-700 dark:text-slate-200">Action</span>
-                <div className="flex h-9 items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                  <Shield className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  Governed by MCP Security Policies
-                </div>
+            <div className="flex flex-col gap-1.5 text-sm">
+              <span className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-200">
+                Decision
+                <InfoHint content={DECISION_HELP} />
+              </span>
+              <div className="flex h-9 items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                {form.tier === "tier2" ? (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    ZeroShield model verdict (allow / block / flag)
+                  </>
+                ) : (
+                  <>
+                    <Shield className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    Governed by MCP Security Policies
+                  </>
+                )}
               </div>
-            )}
+            </div>
             <label className="flex flex-col gap-1.5 text-sm">
               <span className="font-medium text-slate-700 dark:text-slate-200">Strict mode</span>
               <Select
