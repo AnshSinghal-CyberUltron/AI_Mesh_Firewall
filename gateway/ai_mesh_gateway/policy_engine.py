@@ -1114,12 +1114,13 @@ def evaluate_mcp_policies(
             result.matched_policy_severities.append(policy.get("severity", ""))
             result.matched_policy_categories.append(policy.get("category", ""))
             result.matched_rule_descriptions.append(rule.get("description", ""))
-            # 3b: surface the MATCHED policy's response-field redaction list so the
-            # adapter path can mask those named fields on the tool RESULT. Deduped +
-            # order-preserving; idempotent across a policy's multiple matching rules.
-            for _rf in (policy.get("redaction_fields") or []):
-                if isinstance(_rf, str) and _rf and _rf not in result.redaction_fields:
-                    result.redaction_fields.append(_rf)
+            # NOTE (operator model, 2026-07-24): the policy's response-field redaction
+            # (``redaction_fields``, actor-scoped RBAC field masking) is populated BELOW, gated on
+            # the matched rule's action being ``redact`` — see the ``if action == "redact":`` block.
+            # "tag/redact means exactly that": an observe-only (tag/allow/monitor) or exempt rule must
+            # NOT mask the output, so field masking follows the SAME action gate as the primary
+            # ``redaction_hints`` masking (it used to fire unconditionally on any match, masking under
+            # a tag rule — red-team field-RBAC-under-tag).
 
             # This policy is exempt for this tool+direction → the SERVER-WIDE (and other non-tool)
             # enforcing rules are recorded (findings above, for audit) and contribute only OBSERVE
@@ -1146,6 +1147,12 @@ def evaluate_mcp_policies(
                     _blocker_rule_name = rule.get("name", "")
 
             if action == "redact":
+                # Operator model: field-level RBAC redaction masks the tool RESULT ONLY under a
+                # ``redact`` action (never under tag/allow/monitor or an exempt/downgraded rule, which
+                # ``continue`` above). Deduped + order-preserving across a policy's matching rules.
+                for _rf in (policy.get("redaction_fields") or []):
+                    if isinstance(_rf, str) and _rf and _rf not in result.redaction_fields:
+                        result.redaction_fields.append(_rf)
                 matcher = _resolve_matcher_dict(rule)
                 config: dict[str, Any] = {"replacement": matcher["replacement"]}
                 if matcher["regex"]:
