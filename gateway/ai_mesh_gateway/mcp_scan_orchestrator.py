@@ -1310,7 +1310,19 @@ async def scan_mcp_payload(
             return out_payload
         # Pure observe-only ``monitor`` skips field RBAC; ``tag`` still honors
         # policy-declared redaction_fields (cross-stage RBAC projection).
-        if (enforcement or "").strip().lower() == "monitor":
+        #
+        # OPERATOR SOVEREIGNTY (red-team LANE-A-01, 2026-07-24): the operator's
+        # observe-only selection for THIS direction lives in the RESOLVED
+        # per-direction ``tier1_action`` (from the scan-control row), NOT the raw
+        # server ``enforcement`` posture — whose choices are only tag/redact/block,
+        # so it NEVER carries 'monitor' on the real proxy path. Gating solely on
+        # ``enforcement`` let a scan-control action='monitor' STILL mask the OUTPUT
+        # payload end-to-end (mutation under an observe-only selection), while the
+        # unit-level ``enforcement='monitor'`` gate gave false confidence. Read the
+        # resolved ``tier1_action`` too, so a scan-control 'monitor' suppresses field
+        # RBAC exactly like every other Tier-1 branch already consults tier1_action.
+        if (tier1_action or "").strip().lower() == "monitor" or \
+                (enforcement or "").strip().lower() == "monitor":
             return out_payload
         masked = apply_field_redaction(out_payload, mask_fields)
         if masked is out_payload:
