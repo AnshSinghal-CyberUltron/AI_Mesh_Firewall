@@ -1086,28 +1086,35 @@ def _mcp_policy_pass_sync(
     # Policy-authored redact applies whenever matched (not only under a redact posture);
     # skipped only under an explicit observe-only 'monitor'.
     if eval_result.action == "redact" and eval_result.redaction_hints and posture != "monitor":
-        new_payload, changed, hit_cap = _redact_structured_leaves(
+        new_payload, changed, _hit_cap = _redact_structured_leaves(
             full_payload, eval_result.redaction_hints, neutralize=render_floor,
             neutralize_keys=neutralize_keys)
-        # CANNOT-MASK FAIL-CLOSED (2026-07-23): the operator's redact rule MATCHED (detection
-        # runs on the serialized payload) but the leaf-walk could not mask it — either the
-        # match spans a JSON boundary / structural context no single leaf reproduces (e.g. a
-        # regex requiring ``"key":"...")``, or the payload nests past the depth cap. The
-        # policy lane has NO downstream backstop: its findings carry threat_type='redact',
-        # which the E12 result-redaction floor's _findings_have_secret_or_pii never matches,
-        # so forwarding raw is a SILENT leak while telemetry claims a redact fired. Withhold
-        # instead — the "cannot mask" exception (a system limitation, mirroring the existing
-        # masking-crash fail-closed), NOT a redact->block escalation of MASKABLE content
-        # (maskable matches redact + forward as before). Numeric leaves are masked above, so
-        # this fires only for the genuinely-unmaskable residual (structural regex / deep nest).
-        # TAG NEVER BLOCKS (2026-07-23): gate on _is_observe_only_posture, NOT the literal
-        # ``posture != "monitor"`` above — the frozen contract makes ``tag`` an alias of
-        # ``monitor`` for BLOCKING (a3714946 / 4fdf7fcf: "tag/monitor never block"). Under an
-        # observe-only posture the operator chose NOT to enforce, so an unmaskable match is
-        # forwarded (best-effort redact of what WAS maskable still applied), never blocked —
-        # the cannot-mask fail-closed is an ENFORCING-posture behaviour only.
-        if (hit_cap or not changed) and not _is_observe_only_posture(enforcement):
-            return full_payload, findings, True, rfields, False
+        # REDACT NEVER ESCALATES TO BLOCK (LANE3, 2026-07-24, Ansh: "redact means redact,
+        # fix the hardblock"). The operator's redact rule MATCHED but the leaf-walk could
+        # not reproduce it — either the match is STRUCTURAL (a regex/keyword hitting a nested
+        # KEY NAME or a cross-field ``"key":"val"`` serialization no single VALUE leaf
+        # reproduces — _candidate_texts_mcp scope=key stringifies nested nodes), or the
+        # subtree nests past the depth cap. The old code FAIL-CLOSED (block) here, turning a
+        # ``redact`` selection into a ``block`` — the exact escalation the frozen invariant
+        # forbids and the sibling of the depth-cap decision already taken at
+        # ``_redact_structured_leaves`` (red-team wf_21ddb986 #4: "a secret nested past the
+        # recursion cap must NOT fail closed").
+        #
+        # This is SAFE — it does not forward a real secret raw:
+        #   * A real secret in a VALUE LEAF is ALWAYS masked here: detection
+        #     (_evaluate_rule_mcp) and redaction share the SAME redact_all_scoped / regex /
+        #     substring engine on the SAME value leaves, so a maskable value match yields
+        #     ``changed=True`` and never reaches this branch (regression-locked by
+        #     test_lane3_real_value_secret_still_masked).
+        #   * A ``not changed`` residual is therefore a STRUCTURAL match whose value leaves
+        #     are BENIGN (policy_engine._leaf_value_texts / the cannot-mask-blocked-benign
+        #     note) — nothing to leak.
+        #   * A ``hit_cap`` subtree already had ``redact_all`` applied best-effort AT THE CAP
+        #     inside the walk (depth-independent masking of known classes), so a known-class
+        #     secret past the cap is masked in ``new_payload``.
+        # ``new_payload`` carries everything that WAS maskable (== ``full_payload`` when
+        # nothing matched a leaf); forward it, never block. Only an operator-authored
+        # ``block`` rule / ``block`` posture blocks (handled above).
         return new_payload, findings, False, rfields, changed
     # STANDALONE render-leak floor: an enforcing detector rule applies but its CLASS did not
     # match this payload (e.g. an HTML-entity-encoded credential/PII a redact rule can't
