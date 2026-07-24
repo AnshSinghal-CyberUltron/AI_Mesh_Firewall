@@ -47,6 +47,7 @@ _ENV_VARS = [
     "GATEWAY_TIER2_SAMPLE_RATE",
     "ENABLE_TIER2",
     "BEDROCK_MAX_TOKENS",
+    "GATEWAY_MCP_BLOCK_ON_CREDENTIAL",
 ]
 
 
@@ -424,3 +425,31 @@ def test_bedrock_scan_max_tokens_clamped(monkeypatch):
     assert _scan_payload_with_max_tokens_env(monkeypatch, "0")["max_tokens"] == 1
     assert _scan_payload_with_max_tokens_env(
         monkeypatch, "9999999")["max_tokens"] == 65536
+
+
+# ---------- mcp_block_on_credential: DEFAULT OFF (strict operator control) ---
+#
+# Regression for the config-vs-helper drift behind the live "issue_write blocked
+# with 'matched compliance tags: SECRET' but no operator policy" symptom. Commit
+# 005a6ffa (2026-07-22) made the credential force-block OPT-IN so a "redact"
+# posture masks-and-forwards instead of escalating to a hard BLOCK ("redact means
+# redact"). It updated _mcp_block_on_credential_enabled()'s docstring + env
+# fallback but left THIS config.py default at "true" — and that helper reads the
+# CONFIG value FIRST, so the escalation stayed live in every real deployment. The
+# existing scan tests never caught it because they patch the helper / setenv
+# directly and never build CONFIG from config.py. This pins the CONFIG default.
+
+def test_mcp_block_on_credential_defaults_off():
+    # Unset env (the autouse _clean_env fixture removed it) -> load_config MUST
+    # produce False, so a "redact" posture masks the credential and forwards
+    # rather than the floor escalating redact -> block.
+    assert load_config()["mcp_block_on_credential"] is False
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("true", True), ("1", True), ("yes", True),   # opt-in still available
+    ("false", False), ("0", False), ("", False),  # explicit / bad -> off
+])
+def test_mcp_block_on_credential_opt_in(monkeypatch, raw, expected):
+    monkeypatch.setenv("GATEWAY_MCP_BLOCK_ON_CREDENTIAL", raw)
+    assert load_config()["mcp_block_on_credential"] is expected

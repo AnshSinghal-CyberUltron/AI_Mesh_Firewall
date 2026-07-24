@@ -107,11 +107,20 @@ def load_config():
     output_scan_enabled = get_env("GATEWAY_OUTPUT_SCAN_ENABLED", "true").lower() in ("true", "1", "yes")
     scan_block_on_injection = get_env("GATEWAY_SCAN_BLOCK_ON_INJECTION", "true").lower() in ("true", "1", "yes")
     scan_block_on_pii = get_env("GATEWAY_SCAN_BLOCK_ON_PII", "false").lower() in ("true", "1", "yes")
-    # E12: hard-block a credential/secret detected in MCP tool ARGUMENTS (outbound
-    # to the MCP server), regardless of the per-tool scan_action default ("tag").
-    # Only credentials/secrets force-block here (not generic PII), to limit false
-    # positives. Default ON; a per-tool MCPScanControl set to "monitor" still wins.
-    mcp_block_on_credential = get_env("GATEWAY_MCP_BLOCK_ON_CREDENTIAL", "true").lower() in ("true", "1", "yes")
+    # E12: OPT-IN hard-block of a credential/secret detected in MCP tool ARGUMENTS
+    # (outbound to the MCP server). STRICTLY-WHAT-THE-OPERATOR-SELECTED (2026-07-22,
+    # commit 005a6ffa): DEFAULT OFF. This was a built-in floor that ESCALATED a
+    # detected-credential redact -> BLOCK regardless of the operator's selected
+    # posture, so a server on "redact" HARD-BLOCKED the call (HTTP 400) instead of
+    # masking the credential and forwarding — which is not "redact". That commit
+    # made ``_mcp_block_on_credential_enabled`` default OFF (docstring + env fallback),
+    # but THIS CONFIG default (read FIRST by that helper) was left at "true" and won
+    # at runtime, so the escalation stayed live in every real deployment. Under
+    # "redact" the credential is now masked in place (AKIA****MPLE) and forwarded; an
+    # operator who wants a credential to hard-BLOCK selects the ``block`` posture (or a
+    # block policy rule). Still opt-in via GATEWAY_MCP_BLOCK_ON_CREDENTIAL / CONFIG for
+    # anyone who wants the belt-and-suspenders. A "monitor" posture always wins.
+    mcp_block_on_credential = get_env("GATEWAY_MCP_BLOCK_ON_CREDENTIAL", "false").lower() in ("true", "1", "yes")
     # E12: force-REDACT an MCP tool RESULT (outbound back to the LLM/client) when
     # the output scan DETECTS a secret/credential or PII but the resolved
     # scan_action defaults to "tag"/"monitor" (detect-but-allow). Symmetric to
