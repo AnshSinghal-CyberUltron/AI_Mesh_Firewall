@@ -931,3 +931,116 @@ class RuleViewSet(ModelViewSet):
         if instance.policy.is_system and not _user_is_policy_admin(self.request):
             raise PermissionDenied("Only platform admins can delete system policy rules.")
         instance.delete()
+
+
+from rest_framework.views import APIView as _APIView  # noqa: E402
+
+
+class MCPServerStateView(_APIView):
+    """Per-server enablement overrides for the server-centric "Manage Tier-1" view.
+
+    GET  ?server_id=<uuid>  -> the org's MCP policies with this server's EFFECTIVE enabled state for
+                              each policy + rule (default applicability, refined by any override).
+    PUT  {server_id, policy_id|rule_id, enabled}   -> upsert an override for this server.
+    DELETE {server_id, policy_id|rule_id}          -> clear the override (revert to default).
+    All operations are org-scoped (tenant isolation) and trigger a debounced recompile via signals.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def _org(self, request):
+        return get_request_organization(request)
+
+    def _server(self, org, server_id):
+        from mcp_connector.models import MCPServerRegistration
+        # red-team wf_51ca33ea: MCPServerRegistration.id is a UUIDField, so a syntactically-invalid
+        # server_id raises django ValidationError inside the ORM (escaping as a 500). Validate at the
+        # boundary so a malformed id returns the same clean 404 as an unknown well-formed one.
+        try:
+            uuid.UUID(str(server_id))
+        except (ValueError, TypeError, AttributeError):
+            return None
+        return MCPServerRegistration.objects.filter(organization=org, id=server_id).first()
+
+    def get(self, request):
+        from policy.models import MCPServerPolicyState, MCPServerRuleState, Policy
+        org = self._org(request)
+        if org is None:
+            return Response({"error": "No organization context."}, status=400)
+        server = self._server(org, request.query_params.get("server_id"))
+        if server is None:
+            return Response({"error": "Unknown server."}, status=404)
+        p_over = {s.policy_id: s.enabled for s in
+                  MCPServerPolicyState.objects.filter(organization=org, server=server)}
+        r_over = {s.rule_id: s.enabled for s in
+                  MCPServerRuleState.objects.filter(organization=org, server=server)}
+        policies = (Policy.objects.filter(organization=org, policy_domain="mcp", enabled=True)
+                    .select_related("mcp_server").prefetch_related("rules").order_by("-priority", "code"))
+        out = []
+        for p in policies:
+            default_applies = (p.mcp_server_id is None) or (p.mcp_server_id == server.id)
+            applies = p_over.get(p.id, default_applies)
+            out.append({
+                "policy_id": p.id, "code": p.code, "name": p.name,
+                "mcp_server_slug": (p.mcp_server.server_slug if p.mcp_server_id else None),
+                "org_wide": p.mcp_server_id is None,
+                "default_applies": default_applies,
+                "enabled_for_server": bool(applies),
+                "overridden": p.id in p_over,
+                # red-team wf_51ca33ea (UI honesty / master ceiling): only globally-enabled rules are
+                # compiled + enforceable, so — like the policy filter above — show only enabled rules
+                # and CLAMP the effective state to the global ceiling. Without this, a per-server
+                # override "enabling" a globally-disabled rule rendered a green toggle for a rule the
+                # gateway never runs (a false sense of protection).
+                "rules": [{
+                    "rule_id": r.id, "name": r.name, "action": r.action,
+                    "enabled_for_server": bool(r.enabled and r_over.get(r.id, True)),
+                    "overridden": r.id in r_over,
+                } for r in p.rules.all() if r.enabled],
+            })
+        return Response({"server_id": str(server.id), "policies": out})
+
+    def _resolve(self, request):
+        org = self._org(request)
+        if org is None:
+            return None, None, Response({"error": "No organization context."}, status=400)
+        server = self._server(org, request.data.get("server_id"))
+        if server is None:
+            return None, None, Response({"error": "Unknown server."}, status=404)
+        return org, server, None
+
+    def put(self, request):
+        from policy.models import MCPServerPolicyState, MCPServerRuleState, Policy, Rule
+        org, server, err = self._resolve(request)
+        if err:
+            return err
+        enabled = bool(request.data.get("enabled"))
+        policy_id, rule_id = request.data.get("policy_id"), request.data.get("rule_id")
+        if rule_id is not None:
+            rule = Rule.objects.filter(policy__organization=org, id=rule_id).first()
+            if rule is None:
+                return Response({"error": "Unknown rule."}, status=404)
+            MCPServerRuleState.objects.update_or_create(
+                organization=org, server=server, rule=rule, defaults={"enabled": enabled})
+        elif policy_id is not None:
+            policy = Policy.objects.filter(organization=org, id=policy_id).first()
+            if policy is None:
+                return Response({"error": "Unknown policy."}, status=404)
+            MCPServerPolicyState.objects.update_or_create(
+                organization=org, server=server, policy=policy, defaults={"enabled": enabled})
+        else:
+            return Response({"error": "policy_id or rule_id required."}, status=400)
+        return Response({"ok": True, "enabled": enabled})
+
+    def delete(self, request):
+        from policy.models import MCPServerPolicyState, MCPServerRuleState
+        org, server, err = self._resolve(request)
+        if err:
+            return err
+        policy_id, rule_id = request.data.get("policy_id"), request.data.get("rule_id")
+        if rule_id is not None:
+            MCPServerRuleState.objects.filter(organization=org, server=server, rule_id=rule_id).delete()
+        elif policy_id is not None:
+            MCPServerPolicyState.objects.filter(organization=org, server=server, policy_id=policy_id).delete()
+        else:
+            return Response({"error": "policy_id or rule_id required."}, status=400)
+        return Response({"ok": True, "reverted": True})
