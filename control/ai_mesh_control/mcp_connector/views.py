@@ -2581,6 +2581,7 @@ class MCPGatewayEnabledToolsView(APIView):
 
         mcp_tier2_enabled = None
         tier2_strict = True
+        mcp_policy_only_enforcement = False
         try:
             from core.models import FirewallConfig
 
@@ -2588,6 +2589,10 @@ class MCPGatewayEnabledToolsView(APIView):
             if fw is not None:
                 mcp_tier2_enabled = fw.mcp_tier2_enabled
                 tier2_strict = fw.tier2_strict
+                # Per-org Phase-3 cutover flag — surfaced into the gateway enabled_info so the
+                # gateway's policy-only observe-only gate is reachable per-org (not only via the
+                # gateway-wide env kill-switch). Without this the operator toggle is inoperative.
+                mcp_policy_only_enforcement = bool(fw.mcp_policy_only_enforcement)
         except Exception:
             pass
 
@@ -2611,6 +2616,7 @@ class MCPGatewayEnabledToolsView(APIView):
             "effective_scan_controls_by_tool": effective_by_tool,
             "mcp_tier2_enabled": mcp_tier2_enabled,
             "tier2_strict": tier2_strict,
+            "mcp_policy_only_enforcement": mcp_policy_only_enforcement,
         })
 
 

@@ -792,11 +792,22 @@ async def test_OC2_tier2_strict_crash_no_block_under_observe(direction):
 
 @pytest.mark.parametrize("direction", _DIRECTIONS)
 @pytest.mark.asyncio
-async def test_OC2_tier2_strict_crash_blocks_only_when_operator_selected_enforcing(direction):
-    # action=block (operator-selected enforcing) + strict + crash → fail-closed block IS honored.
+async def test_OC2_tier2_strict_crash_blocks_only_when_operator_selected_block(direction):
+    # action=block (the ONLY action that authorizes a hard block) + strict + crash → fail-closed block.
     out, res = await _run_tier2({"args": {"note": _BENIGN}}, boom=True, tier2_action="block",
                                 strict_mode="strict", direction=direction)
-    assert res.blocked, "an operator-selected enforcing+strict Tier-2 may fail closed on crash"
+    assert res.blocked, "an operator-selected block+strict Tier-2 may fail closed on crash"
+
+
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC2_tier2_redact_action_crash_never_blocks(direction):
+    # red-team wf_e7dda121: "redact means redact only, never block" — a scanner crash under a redact
+    # Tier-2 action must MASK best-effort (redact_all), NEVER hard-block, even with strict_mode=strict.
+    out, res = await _run_tier2({"args": {"note": _SSN}}, boom=True, tier2_action="redact",
+                                strict_mode="strict", direction=direction)
+    assert not res.blocked, "a redact Tier-2 action must never escalate a scanner crash to a block"
+    assert _SSN not in json.dumps(out), "a redact action masks best-effort on a scanner crash"
 
 
 # ── #6: under the flag, an unset Tier-2 action does NOT fall back to server posture ───────
@@ -835,6 +846,36 @@ async def test_OC7_tier2_allow_verdict_passes(direction):
     out, res = await _run_tier2({"args": {"note": _BENIGN}}, verdict=_FakeVerdict("allow"),
                                 tier2_action="block", direction=direction)
     assert not res.blocked
+
+
+@pytest.mark.parametrize("verdict_action", ["block", "redact"])
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC7_redact_action_lowers_block_verdict_to_mask_never_blocks(verdict_action, direction):
+    # red-team wf_e7dda121: a 'redact' Tier-2 action is a mask CEILING — a block (or redact) verdict is
+    # LOWERED to a mask, NEVER escalated to a hard block. "redact means redact only, never block."
+    out, res = await _run_tier2({"args": {"note": _SSN}}, verdict=_FakeVerdict(verdict_action),
+                                tier2_action="redact", direction=direction)
+    assert not res.blocked, f"redact action must not block on a {verdict_action} verdict"
+    assert _SSN not in json.dumps(out), "redact action masks the flagged content"
+
+
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC7_redact_action_allow_verdict_passes_unmutated(direction):
+    out, res = await _run_tier2({"args": {"note": _BENIGN}}, verdict=_FakeVerdict("allow"),
+                                tier2_action="redact", direction=direction)
+    assert not res.blocked and _BENIGN in json.dumps(out), "allow verdict under redact passes clean"
+
+
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC7_block_action_redact_verdict_masks_not_blocks(direction):
+    # Under a block action, a soft 'redact' verdict must MASK (not escalate to block).
+    out, res = await _run_tier2({"args": {"note": _SSN}}, verdict=_FakeVerdict("redact"),
+                                tier2_action="block", direction=direction)
+    assert not res.blocked, "a redact verdict must not escalate to a block even under a block action"
+    assert _SSN not in json.dumps(out), "the redact verdict masks under a block action"
 
 
 # ── flag-parse hardening: a stringly-typed 'false'/'0'/'off' must NOT activate the cutover ──
@@ -885,3 +926,23 @@ def test_OC4_keyscoped_cap_residual_leaves_sibling_untouched():
     # Under the scoped key: masked. The sibling 'other' (outside the key) past the cap: RAW.
     assert _AWS not in json.dumps(out["target"]), "secret under the scoped key is masked at the cap"
     assert _AWS in json.dumps(out["other"]), "a sibling outside the key must NOT be masked at the cap"
+
+
+def test_OC4_render_leak_neutralized_at_depth_cap():
+    """red-team wf_e7dda121: an HTML-entity-encoded credential nested PAST the 500 depth cap under an
+    enforcing render-leak floor must be neutralized, not egress raw (redact_all is blind to it)."""
+    from mcp_scan_orchestrator import _redact_structured_leaves
+    enc = "".join("&#%d;" % ord(c) for c in _AWS)  # decodes to the AWS key
+    deep = enc
+    for _ in range(502):
+        deep = {"n": deep}
+    out, changed, hit_cap = _redact_structured_leaves(deep, [], neutralize=True)
+    assert changed and not hit_cap
+    assert enc not in json.dumps(out), "encoded credential past the cap must be neutralized"
+    # B2 key-scoped floor variant: encoded secret under the scoped key past the cap is neutralized.
+    scoped = enc
+    for _ in range(502):
+        scoped = {"n": scoped}
+    out2, changed2, _ = _redact_structured_leaves(
+        {"secret": scoped}, [], neutralize=False, neutralize_keys=["secret"])
+    assert changed2 and enc not in json.dumps(out2), "scoped floor neutralizes encoded secret at cap"

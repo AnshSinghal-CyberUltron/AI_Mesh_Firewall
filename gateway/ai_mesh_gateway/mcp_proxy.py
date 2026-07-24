@@ -866,6 +866,15 @@ async def _get_enabled_tools(org_slug: str, server_slug: str) -> dict | None:
                 "effective_scan_controls_by_tool": data.get("effective_scan_controls_by_tool") or {},
                 "mcp_tier2_enabled": data.get("mcp_tier2_enabled"),
                 "tier2_strict": data.get("tier2_strict", True),
+                # Per-org Phase-3 cutover flag (operator-control #1 delivery): without this the
+                # observe-only gate in _resolved_tier1_action / the orchestrator Tier-2 lane is
+                # UNREACHABLE per-org — only the gateway-wide MCP_POLICY_ONLY_ENFORCEMENT env
+                # activated it, so an operator who flipped FirewallConfig.mcp_policy_only_enforcement
+                # kept getting the retired posture's static floors. Only forward the key when the
+                # control plane actually sent it, so its absence keeps deferring to the env default
+                # (never a synthesized False that would override the env kill-switch).
+                **({"mcp_policy_only_enforcement": data.get("mcp_policy_only_enforcement")}
+                   if "mcp_policy_only_enforcement" in data else {}),
             }
             _enabled_tools_cache[cache_key] = result
             _enabled_tools_ttl[cache_key] = now

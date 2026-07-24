@@ -985,7 +985,13 @@ def _redact_structured_leaves(payload: Any, hints: list[dict[str, Any]],
             # key-scoped rule must never mask a sibling that merely sits past the depth cap).
             if _hints_for(path) or _neutralize_at(path):
                 _ser = _safe_json(node)
-                _masked = redact_all(_ser)
+                # red-team wf_e7dda121: mirror the normal-depth leaf path — run the render-leak
+                # neutralizer (encoded-PII / zero-click beacon / markdown-split) BEFORE redact_all
+                # when the floor covers this path, since redact_all is blind to an HTML-entity-encoded
+                # surface. Without it an encoded credential nested past the cap under an enforcing
+                # floor egressed RAW.
+                _work = _neutralize_render_leaks(_ser) if _neutralize_at(path) else _ser
+                _masked = redact_all(_work)
                 if _masked != _ser:
                     changed = True
                     return _masked
@@ -1183,11 +1189,19 @@ async def _scan_text_tier2(
         )
     except Exception as exc:
         LOG.warning("MCP Tier-2 scan failed: %s", exc)
-        # Operator-control #2 (action-fidelity + no-defaults): a scanner CRASH may fail closed ONLY
-        # when the operator selected an ENFORCING Tier-2 action (not observe-only monitor/tag) AND
-        # strict. Merely enabling Tier-2 (action=monitor, strict_mode defaulting to 'strict') must
-        # NOT block a benign call — observe-only never blocks. This mirrors the scanner=None twin,
-        # which already fails open.
+        # Operator-control #2 + red-team wf_e7dda121: a scanner CRASH is NOT a masking crash, so it
+        # may hard-block ONLY under an explicit 'block' Tier-2 action (an operator-selected
+        # fail-closed) with strict. "tag/redact means tag/redact only, never block": a 'redact'
+        # action masks best-effort (redact_all — a no-op on benign text, never a block); observe-only
+        # (monitor/tag) and 'allow' pass. Merely enabling Tier-2 (action defaulting nowhere, strict
+        # defaulting to 'strict') must never block a benign call. Mirrors the scanner=None fail-open.
+        if policy_only:
+            if enforcement == "block" and strict_mode == "strict":
+                return text, [], True, "tier2_error_strict"
+            if enforcement == "redact":
+                return redact_all(text), [], False, "tier2_error_redact"
+            return text, [], False, "tier2_error_fail_open"
+        # Legacy (flag OFF): observe-only never blocks; an enforcing posture + strict fails closed.
         if strict_mode == "strict" and not _is_observe_only_posture(enforcement):
             return text, [], True, "tier2_error_strict"
         return text, [], False, "tier2_error_fail_open"
@@ -1208,19 +1222,25 @@ async def _scan_text_tier2(
                 )
             )
     if policy_only:
-        # Operator-control #7 (flow + no-escalation): under the policy-only flag the retired server
-        # posture never substitutes the Tier-2 verdict. Honor the VERDICT directly, bounded by the
-        # operator's own Tier-2 action:
-        #   - 'block'  -> block + the judge's reason (finding.detail), ONLY if the operator granted
-        #                 Tier-2 an enforcing action (not observe-only monitor/tag);
-        #   - 'redact' -> mask, ONLY under an enforcing action (never escalate a redact to a block);
-        #   - 'flag'   -> flag-for-review: recorded in `findings` above, NEVER blocks or mutates;
-        #   - 'allow'  -> pass.
-        observe_only = _is_observe_only_posture(enforcement)
-        if verdict.action == "block" and not observe_only:
-            return text, findings, True, None
-        if verdict.action == "redact" and not observe_only:
-            return redact_all(text), findings, False, None
+        # Operator-control #7 + red-team wf_e7dda121: under the policy-only flag the retired server
+        # posture never substitutes the Tier-2 verdict. Honor the verdict, bounded EXACTLY by the
+        # operator's own Tier-2 action — "tag/redact means tag/redact only, never block":
+        #   op == 'block' (block authority): block verdict -> block + the judge's reason;
+        #                 redact verdict -> mask (never escalate a soft verdict); flag/allow -> pass.
+        #   op == 'redact' (mask ceiling — NEVER blocks): a block OR redact verdict is LOWERED to a
+        #                 mask (redact_all); flag/allow -> pass. A block verdict never escalates here.
+        #   op observe-only (monitor/tag): never blocks, never mutates — the finding is recorded above.
+        # A 'flag' (flag-for-review) verdict NEVER blocks under any action (invariant F).
+        if enforcement == "block":
+            if verdict.action == "block":
+                return text, findings, True, None
+            if verdict.action == "redact":
+                return redact_all(text), findings, False, None
+            return text, findings, False, None
+        if enforcement == "redact":
+            if verdict.action in ("block", "redact"):
+                return redact_all(text), findings, False, None
+            return text, findings, False, None
         return text, findings, False, None
     if _enforce_blocks(enforcement) and verdict.action in ("block", "redact", "flag"):
         # A4 FIX (Tier-2 parity): block posture blocks on any actionable Bedrock
