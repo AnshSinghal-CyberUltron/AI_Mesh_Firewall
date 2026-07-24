@@ -952,6 +952,13 @@ class MCPServerStateView(_APIView):
 
     def _server(self, org, server_id):
         from mcp_connector.models import MCPServerRegistration
+        # red-team wf_51ca33ea: MCPServerRegistration.id is a UUIDField, so a syntactically-invalid
+        # server_id raises django ValidationError inside the ORM (escaping as a 500). Validate at the
+        # boundary so a malformed id returns the same clean 404 as an unknown well-formed one.
+        try:
+            uuid.UUID(str(server_id))
+        except (ValueError, TypeError, AttributeError):
+            return None
         return MCPServerRegistration.objects.filter(organization=org, id=server_id).first()
 
     def get(self, request):
@@ -979,11 +986,16 @@ class MCPServerStateView(_APIView):
                 "default_applies": default_applies,
                 "enabled_for_server": bool(applies),
                 "overridden": p.id in p_over,
+                # red-team wf_51ca33ea (UI honesty / master ceiling): only globally-enabled rules are
+                # compiled + enforceable, so — like the policy filter above — show only enabled rules
+                # and CLAMP the effective state to the global ceiling. Without this, a per-server
+                # override "enabling" a globally-disabled rule rendered a green toggle for a rule the
+                # gateway never runs (a false sense of protection).
                 "rules": [{
                     "rule_id": r.id, "name": r.name, "action": r.action,
-                    "enabled_for_server": bool(r_over.get(r.id, r.enabled)),
+                    "enabled_for_server": bool(r.enabled and r_over.get(r.id, True)),
                     "overridden": r.id in r_over,
-                } for r in p.rules.all()],
+                } for r in p.rules.all() if r.enabled],
             })
         return Response({"server_id": str(server.id), "policies": out})
 
