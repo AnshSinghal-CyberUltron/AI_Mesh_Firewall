@@ -1189,17 +1189,13 @@ async def _scan_text_tier2(
         )
     except Exception as exc:
         LOG.warning("MCP Tier-2 scan failed: %s", exc)
-        # Operator-control #2 + red-team wf_e7dda121: a scanner CRASH is NOT a masking crash, so it
-        # may hard-block ONLY under an explicit 'block' Tier-2 action (an operator-selected
-        # fail-closed) with strict. "tag/redact means tag/redact only, never block": a 'redact'
-        # action masks best-effort (redact_all — a no-op on benign text, never a block); observe-only
-        # (monitor/tag) and 'allow' pass. Merely enabling Tier-2 (action defaulting nowhere, strict
-        # defaulting to 'strict') must never block a benign call. Mirrors the scanner=None fail-open.
+        # Pure Tier-2 on/off (operator model, 2026-07-24): Tier-2 is a verdict-authoritative judge
+        # with NO operator action gate. A scanner CRASH produces no verdict, so Tier-2 cannot judge —
+        # it fails OPEN (never blocks a call the model never ruled on). Tier-1 policies already
+        # enforced this call, so the operator's own rules still gated it. No per-scope action or
+        # strict DEFAULT blocks here (invariant A: no defaults; F: the verdict decides). Mirrors the
+        # scanner=None fail-open twin.
         if policy_only:
-            if enforcement == "block" and strict_mode == "strict":
-                return text, [], True, "tier2_error_strict"
-            if enforcement == "redact":
-                return redact_all(text), [], False, "tier2_error_redact"
             return text, [], False, "tier2_error_fail_open"
         # Legacy (flag OFF): observe-only never blocks; an enforcing posture + strict fails closed.
         if strict_mode == "strict" and not _is_observe_only_posture(enforcement):
@@ -1222,25 +1218,17 @@ async def _scan_text_tier2(
                 )
             )
     if policy_only:
-        # Operator-control #7 + red-team wf_e7dda121: under the policy-only flag the retired server
-        # posture never substitutes the Tier-2 verdict. Honor the verdict, bounded EXACTLY by the
-        # operator's own Tier-2 action — "tag/redact means tag/redact only, never block":
-        #   op == 'block' (block authority): block verdict -> block + the judge's reason;
-        #                 redact verdict -> mask (never escalate a soft verdict); flag/allow -> pass.
-        #   op == 'redact' (mask ceiling — NEVER blocks): a block OR redact verdict is LOWERED to a
-        #                 mask (redact_all); flag/allow -> pass. A block verdict never escalates here.
-        #   op observe-only (monitor/tag): never blocks, never mutates — the finding is recorded above.
-        # A 'flag' (flag-for-review) verdict NEVER blocks under any action (invariant F).
-        if enforcement == "block":
-            if verdict.action == "block":
-                return text, findings, True, None
-            if verdict.action == "redact":
-                return redact_all(text), findings, False, None
-            return text, findings, False, None
-        if enforcement == "redact":
-            if verdict.action in ("block", "redact"):
-                return redact_all(text), findings, False, None
-            return text, findings, False, None
+        # Pure Tier-2 on/off (operator model, 2026-07-24): when the operator enables Tier-2 its
+        # VERDICT is authoritative — there is NO operator action gate (Tier-2 is on/off only). The
+        # ZeroShield model decides per call:
+        #   block  -> block + the judge's reason (finding.detail);
+        #   redact -> mask (redact_all);
+        #   flag   -> flag-for-review: recorded in `findings` above, allowed, NEVER blocks;
+        #   allow  -> pass.
+        if verdict.action == "block":
+            return text, findings, True, None
+        if verdict.action == "redact":
+            return redact_all(text), findings, False, None
         return text, findings, False, None
     if _enforce_blocks(enforcement) and verdict.action in ("block", "redact", "flag"):
         # A4 FIX (Tier-2 parity): block posture blocks on any actionable Bedrock
@@ -1533,11 +1521,11 @@ async def scan_mcp_payload(
         return _finalize_output(mutable if result_redacted else payload), result
 
     strict_mode = tier2_ctrl.get("strict_mode") or "strict"
-    # Operator-control #6 (single-surface): the operator's EXPLICIT Tier-2 action is honored, but
-    # under the policy-only flag an unset ('inherit') Tier-2 action must NOT fall back to the retired
-    # server posture — it resolves observe-only, so a Tier-2-enabled org with no explicit Tier-2
-    # action enforcement neither blocks nor mutates (invariant A: no defaults). The verdict itself is
-    # honored directly in _scan_text_tier2 when policy_only (invariant F: flag never blocks).
+    # Pure Tier-2 on/off (operator model): under the flag Tier-2 has NO operator action gate — the
+    # verdict is authoritative (handled in _scan_text_tier2). ``tier2_action`` here resolves
+    # observe-only ("monitor") and is used only for the audit trace + the monitored/flag-for-review
+    # accounting below; it never gates the block/mask decision under policy_only. Legacy (flag off)
+    # keeps the posture-derived action.
     tier2_action = _resolve_tier_action(tier2_ctrl, "monitor" if _policy_only else enforcement)
     org_strict = bool((enabled_info or {}).get("tier2_strict", True))
 

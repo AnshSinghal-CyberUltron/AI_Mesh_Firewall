@@ -780,102 +780,64 @@ def test_OC1_proxy_floors_observe_only_under_flag(direction):
     assert mcp_proxy._static_hardening_floors_enabled("anyTool", off, direction) is True
 
 
-# ── #2: Tier-2 scanner CRASH must NOT block under an observe-only Tier-2 action ───────────
+# ══════════════════════════════════════════════════════════════════════════════════════════
+# PURE Tier-2 on/off (operator model, 2026-07-24): under the flag Tier-2 has NO operator action
+# gate — when ENABLED the ZeroShield model's VERDICT is authoritative. We parametrize over the
+# (now-irrelevant) tier2_action to PROVE it is ignored: the verdict alone decides.
+# ══════════════════════════════════════════════════════════════════════════════════════════
+_ANY_TIER2_ACTION = ["inherit", "monitor", "redact", "block"]
+
+
+@pytest.mark.parametrize("tier2_action", _ANY_TIER2_ACTION)
 @pytest.mark.parametrize("direction", _DIRECTIONS)
 @pytest.mark.asyncio
-async def test_OC2_tier2_strict_crash_no_block_under_observe(direction):
-    # action=monitor (observe-only) + strict + benign payload + scanner crash → must NOT block.
-    out, res = await _run_tier2({"args": {"note": _BENIGN}}, boom=True, tier2_action="monitor",
-                                strict_mode="strict", direction=direction)
-    assert not res.blocked, "observe-only Tier-2 must never fail-closed block a benign call"
-
-
-@pytest.mark.parametrize("direction", _DIRECTIONS)
-@pytest.mark.asyncio
-async def test_OC2_tier2_strict_crash_blocks_only_when_operator_selected_block(direction):
-    # action=block (the ONLY action that authorizes a hard block) + strict + crash → fail-closed block.
-    out, res = await _run_tier2({"args": {"note": _BENIGN}}, boom=True, tier2_action="block",
-                                strict_mode="strict", direction=direction)
-    assert res.blocked, "an operator-selected block+strict Tier-2 may fail closed on crash"
-
-
-@pytest.mark.parametrize("direction", _DIRECTIONS)
-@pytest.mark.asyncio
-async def test_OC2_tier2_redact_action_crash_never_blocks(direction):
-    # red-team wf_e7dda121: "redact means redact only, never block" — a scanner crash under a redact
-    # Tier-2 action must MASK best-effort (redact_all), NEVER hard-block, even with strict_mode=strict.
-    out, res = await _run_tier2({"args": {"note": _SSN}}, boom=True, tier2_action="redact",
-                                strict_mode="strict", direction=direction)
-    assert not res.blocked, "a redact Tier-2 action must never escalate a scanner crash to a block"
-    assert _SSN not in json.dumps(out), "a redact action masks best-effort on a scanner crash"
-
-
-# ── #6: under the flag, an unset Tier-2 action does NOT fall back to server posture ───────
-@pytest.mark.parametrize("direction", _DIRECTIONS)
-@pytest.mark.asyncio
-async def test_OC6_tier2_inherit_no_posture_fallback_under_flag(direction):
-    # flag ON, tier2 action='inherit', a real BLOCK verdict → observe-only (no posture) → NOT blocked.
+async def test_OC_tier2_block_verdict_always_blocks_regardless_of_action(tier2_action, direction):
+    # Tier-2 enabled + block verdict -> BLOCK + reason, for EVERY tier2_action (action is ignored).
     out, res = await _run_tier2({"args": {"note": _BENIGN}}, verdict=_FakeVerdict("block"),
-                                tier2_action="inherit", direction=direction)
-    assert not res.blocked, "inherit Tier-2 under the flag must be observe-only, not posture-driven"
+                                tier2_action=tier2_action, direction=direction)
+    assert res.blocked, "an enabled Tier-2 honors a block verdict regardless of action"
+    assert res.findings, "the block verdict is recorded (carries the judge's reason)"
 
 
-# ── #7: the Tier-2 VERDICT is honored directly; a 'flag' verdict NEVER blocks (no escalation) ──
+@pytest.mark.parametrize("tier2_action", _ANY_TIER2_ACTION)
 @pytest.mark.parametrize("direction", _DIRECTIONS)
 @pytest.mark.asyncio
-async def test_OC7_tier2_block_verdict_blocks_under_enforcing_action(direction):
-    out, res = await _run_tier2({"args": {"note": _BENIGN}}, verdict=_FakeVerdict("block"),
-                                tier2_action="block", direction=direction)
-    assert res.blocked, "an enforcing Tier-2 action honors a block verdict"
-
-
-@pytest.mark.parametrize("direction", _DIRECTIONS)
-@pytest.mark.asyncio
-async def test_OC7_tier2_flag_verdict_never_blocks_even_under_block_action(direction):
-    # The frozen contract: a 'flag' (flag-for-review) verdict must NEVER be escalated to a block,
-    # even when the operator selected a block Tier-2 action. Real ZeroShield emits flag at 0.40-0.69.
+async def test_OC_tier2_flag_verdict_never_blocks(tier2_action, direction):
+    # flag-for-review: allowed, recorded, NEVER blocks — for every action. ZeroShield emits flag ~0.4-0.7.
     out, res = await _run_tier2({"args": {"note": _BENIGN}}, verdict=_FakeVerdict("flag"),
-                                tier2_action="block", direction=direction)
-    assert not res.blocked, "flag-for-review must not escalate to a hard block"
-    assert res.findings, "flag verdict is still recorded for review"
+                                tier2_action=tier2_action, direction=direction)
+    assert not res.blocked, "a flag-for-review verdict must never block"
+    assert res.findings, "the flag is recorded for operator review"
 
 
+@pytest.mark.parametrize("tier2_action", _ANY_TIER2_ACTION)
 @pytest.mark.parametrize("direction", _DIRECTIONS)
 @pytest.mark.asyncio
-async def test_OC7_tier2_allow_verdict_passes(direction):
+async def test_OC_tier2_allow_verdict_passes_clean(tier2_action, direction):
     out, res = await _run_tier2({"args": {"note": _BENIGN}}, verdict=_FakeVerdict("allow"),
-                                tier2_action="block", direction=direction)
-    assert not res.blocked
+                                tier2_action=tier2_action, direction=direction)
+    assert not res.blocked and _BENIGN in json.dumps(out), "an allow verdict passes unmutated"
 
 
-@pytest.mark.parametrize("verdict_action", ["block", "redact"])
+@pytest.mark.parametrize("tier2_action", _ANY_TIER2_ACTION)
 @pytest.mark.parametrize("direction", _DIRECTIONS)
 @pytest.mark.asyncio
-async def test_OC7_redact_action_lowers_block_verdict_to_mask_never_blocks(verdict_action, direction):
-    # red-team wf_e7dda121: a 'redact' Tier-2 action is a mask CEILING — a block (or redact) verdict is
-    # LOWERED to a mask, NEVER escalated to a hard block. "redact means redact only, never block."
-    out, res = await _run_tier2({"args": {"note": _SSN}}, verdict=_FakeVerdict(verdict_action),
-                                tier2_action="redact", direction=direction)
-    assert not res.blocked, f"redact action must not block on a {verdict_action} verdict"
-    assert _SSN not in json.dumps(out), "redact action masks the flagged content"
-
-
-@pytest.mark.parametrize("direction", _DIRECTIONS)
-@pytest.mark.asyncio
-async def test_OC7_redact_action_allow_verdict_passes_unmutated(direction):
-    out, res = await _run_tier2({"args": {"note": _BENIGN}}, verdict=_FakeVerdict("allow"),
-                                tier2_action="redact", direction=direction)
-    assert not res.blocked and _BENIGN in json.dumps(out), "allow verdict under redact passes clean"
-
-
-@pytest.mark.parametrize("direction", _DIRECTIONS)
-@pytest.mark.asyncio
-async def test_OC7_block_action_redact_verdict_masks_not_blocks(direction):
-    # Under a block action, a soft 'redact' verdict must MASK (not escalate to block).
+async def test_OC_tier2_redact_verdict_masks_never_blocks(tier2_action, direction):
     out, res = await _run_tier2({"args": {"note": _SSN}}, verdict=_FakeVerdict("redact"),
-                                tier2_action="block", direction=direction)
-    assert not res.blocked, "a redact verdict must not escalate to a block even under a block action"
-    assert _SSN not in json.dumps(out), "the redact verdict masks under a block action"
+                                tier2_action=tier2_action, direction=direction)
+    assert not res.blocked, "a redact verdict masks, never blocks"
+    assert _SSN not in json.dumps(out), "the redact verdict masks the flagged content"
+
+
+@pytest.mark.parametrize("tier2_action", _ANY_TIER2_ACTION)
+@pytest.mark.parametrize("direction", _DIRECTIONS)
+@pytest.mark.asyncio
+async def test_OC_tier2_scanner_crash_fails_open(tier2_action, direction):
+    # A scanner CRASH has no verdict -> Tier-2 cannot judge -> fail OPEN (no block), for every action
+    # and even with strict_mode='strict'. No default blocks a benign call (invariant A; F: verdict decides).
+    out, res = await _run_tier2({"args": {"note": _BENIGN}}, boom=True, tier2_action=tier2_action,
+                                strict_mode="strict", direction=direction)
+    assert not res.blocked, "a Tier-2 scanner crash must fail open under the pure on/off model"
 
 
 # ── F1 (red-team wf_d8062c0d): a DISABLED Tier-1 direction must still run an operator-ENABLED Tier-2 ──
