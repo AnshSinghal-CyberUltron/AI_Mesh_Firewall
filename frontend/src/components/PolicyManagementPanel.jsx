@@ -55,6 +55,11 @@ const EMPTY_POLICY_FORM = {
   allowed_user_ids: "",   // integers, e.g. "3, 7, 12"
   allowed_agent_ids: "",  // API key prefixes (8 chars each), e.g. "V-OwdAAx, abc12def"
   allowed_roles: "",      // role names, e.g. "admin, analyst"
+  // MCP-only: the server this policy binds to (writable FK). "" = org-wide
+  // (all servers). Explicit in-form selection; initialised from the policy
+  // being edited or the current server filter, then wins over that context.
+  mcp_server_id: "",
+  mcp_server_slug: "",    // label-only fallback so an offline bound server stays visible
 };
 
 const EMPTY_RULE_FORM = {
@@ -147,7 +152,14 @@ function buildPolicyPayload(form, enforcedScope, mcpServerId, scopeLocked = fals
     allowed_roles: splitCSV(form.allowed_roles),
     ...(form.version != null ? { version: form.version } : {}),
   };
-  if (mcpServerId) payload.mcp_server = mcpServerId;
+  // Explicit in-form server selection is authoritative. The form field is
+  // initialised from the current server filter (mcpServerId) at open time, so
+  // an untouched field still defaults to the filter context; an operator who
+  // picks "All servers (org-wide)" sends null and clears any prior binding.
+  // Fall back to the filter context only when the form lacks the field entirely
+  // (defensive — every form path now seeds mcp_server_id).
+  payload.mcp_server =
+    (form.mcp_server_id !== undefined ? form.mcp_server_id : mcpServerId) || null;
   return payload;
 }
 
@@ -214,7 +226,18 @@ function StatCard({ icon: Icon, label, value, tone = "teal" }) {
   );
 }
 
-function PolicyModal({ title, form, setForm, onSubmit, onClose, submitting, error, scopeLocked = false, onRequestVectorCreate }) {
+function PolicyModal({ title, form, setForm, onSubmit, onClose, submitting, error, scopeLocked = false, onRequestVectorCreate, servers = [] }) {
+  // Server options for the MCP "Apply to server" select. Merge the currently
+  // bound server in even if it's not in the connected-servers list (e.g. the
+  // server went offline after the policy was created) so editing never silently
+  // drops or blanks the existing binding.
+  const serverOptions = (() => {
+    const list = Array.isArray(servers) ? servers : [];
+    if (form.mcp_server_id && !list.some((s) => String(s.id) === String(form.mcp_server_id))) {
+      return [{ id: form.mcp_server_id, name: form.mcp_server_slug || form.mcp_server_id }, ...list];
+    }
+    return list;
+  })();
   // B5: while a submit is in-flight, suppress backdrop-close and disable the
   // close X button so a stray click cannot discard the user's draft mid-save
   // (race could also leave a server-side write half-applied with no UI).
@@ -314,6 +337,29 @@ function PolicyModal({ title, form, setForm, onSubmit, onClose, submitting, erro
                   specific stage (query / retriever / ranker / generator) per-rule after the policy is created.
                 </p>
               ) : null}
+            </div>
+          ) : null}
+          {form.scope === "mcp" ? (
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Apply to server</label>
+              <select
+                value={form.mcp_server_id || ""}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  const match = serverOptions.find((s) => String(s.id) === String(next));
+                  setForm({ ...form, mcp_server_id: next, mcp_server_slug: match?.server_slug || match?.slug || match?.name || "" });
+                }}
+                className="text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="">All servers (org-wide)</option>
+                {serverOptions.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                Bind this policy (and its rules) to one MCP server, or choose "All servers" for an org-wide policy.
+                Rules can then target a specific tool from the selected server.
+              </p>
             </div>
           ) : null}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1029,6 +1075,11 @@ export function PolicyManagementPanel({
   emptyStateMessage,
   mcpServerSlug = null,
   mcpServerId = null,
+  // Connected MCP servers (id/name/slug), so the create/edit Policy modal can
+  // offer an explicit "Apply to server" selector instead of relying solely on
+  // the top server filter for the binding. Optional — falls back to org-wide
+  // only when absent.
+  servers = [],
   externalCreateSignal = 0,
   externalCreateScope = "pipeline",
   externalCreateScopeLocked = false,
@@ -1081,6 +1132,12 @@ export function PolicyManagementPanel({
   // Tracks which server id we've already fetched tools for, so re-opening the
   // modal reuses the cached list instead of re-hitting the connector API.
   const mcpToolsFetchedRef = useRef(null);
+  // The server the currently-open rule modal is bound to — resolved from the
+  // parent policy's own FK (mcp_server / mcp_server_slug), falling back to the
+  // panel filter. Drives the rule's tool dropdown + "Applies to:" line so they
+  // reflect the policy's ACTUAL server, not just the view filter.
+  const [ruleServerId, setRuleServerId] = useState(null);
+  const [ruleServerSlug, setRuleServerSlug] = useState(null);
   // External create triggers are monotonic signals from parent pages.
   // Guard against replay on tab/scope changes: only consume each signal once.
   const lastHandledExternalCreateSignal = useRef(0);
@@ -1140,7 +1197,7 @@ export function PolicyManagementPanel({
     if (externalCreateSignal <= lastHandledExternalCreateSignal.current) return;
     lastHandledExternalCreateSignal.current = externalCreateSignal;
     const behavior = resolvePolicyCreateBehavior(externalCreateScope || scope, "header");
-    setPolicyForm({ ...EMPTY_POLICY_FORM, scope: behavior.scope });
+    setPolicyForm({ ...EMPTY_POLICY_FORM, scope: behavior.scope, mcp_server_id: mcpServerId || "", mcp_server_slug: mcpServerSlug || "" });
     setCreateScopeLocked(Boolean(externalCreateScopeLocked));
     setFormError(null);
     setCreateModalOpen(true);
@@ -1203,14 +1260,15 @@ export function PolicyManagementPanel({
   // `.results`, or `.tools`; each entry may be an object with `tool_name` or a
   // plain string. On any failure we flag an error so the rule form degrades to
   // the free-text input instead of blocking the operator.
-  const fetchMcpTools = useCallback(async () => {
-    if (!mcpServerId) return;
-    if (mcpToolsFetchedRef.current === mcpServerId) return;
-    mcpToolsFetchedRef.current = mcpServerId;
+  const fetchMcpTools = useCallback(async (serverId) => {
+    const sid = serverId || mcpServerId;
+    if (!sid) return;
+    if (mcpToolsFetchedRef.current === sid) return;
+    mcpToolsFetchedRef.current = sid;
     setMcpToolsLoading(true);
     setMcpToolsError(false);
     try {
-      const res = await fetchWithAuth(`/api/mcp-connector/servers/${mcpServerId}/tools/`);
+      const res = await fetchWithAuth(`/api/mcp-connector/servers/${sid}/tools/`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const list = Array.isArray(data) ? data : (data?.results || data?.tools || []);
@@ -1311,6 +1369,10 @@ export function PolicyManagementPanel({
       allowed_user_ids: Array.isArray(policy.allowed_user_ids) ? policy.allowed_user_ids.join(", ") : "",
       allowed_agent_ids: Array.isArray(policy.allowed_agent_ids) ? policy.allowed_agent_ids.join(", ") : "",
       allowed_roles: Array.isArray(policy.allowed_roles) ? policy.allowed_roles.join(", ") : "",
+      // MCP server binding (writable FK). Seed the id from the policy's own FK
+      // and keep the slug as a label-only fallback for offline-server display.
+      mcp_server_id: policy.mcp_server || "",
+      mcp_server_slug: policy.mcp_server_slug || "",
     });
     setEditPolicyId(policy.id);
     setFormError(null);
@@ -1505,9 +1567,16 @@ export function PolicyManagementPanel({
     setEditRuleId(rule?.id || null);
     const targetPolicy = policies.find((p) => p.id === policyId);
     const targetIsMcp = targetPolicy ? normalizePolicyScope(targetPolicy) === "mcp" : false;
+    // Resolve the server this rule's policy is actually bound to: prefer the
+    // policy's own FK, fall back to the panel filter context. This is what the
+    // tool dropdown and "Applies to:" line key off of.
+    const resolvedServerId = targetPolicy?.mcp_server || mcpServerId || null;
+    const resolvedServerSlug = targetPolicy?.mcp_server_slug || mcpServerSlug || null;
+    setRuleServerId(resolvedServerId);
+    setRuleServerSlug(resolvedServerSlug);
     // Warm the tool dropdown for MCP rules bound to a server (cached after the
     // first fetch); org-wide policies (no bound server) keep the free-text path.
-    if (targetIsMcp && mcpServerId) fetchMcpTools();
+    if (targetIsMcp && resolvedServerId) fetchMcpTools(resolvedServerId);
     setRuleForm(rule ? {
       name: rule.name || "",
       rule_type: rule.rule_type || "keywords",
@@ -1638,7 +1707,7 @@ export function PolicyManagementPanel({
           <button
             onClick={() => {
               const behavior = resolvePolicyCreateBehavior(scope, "panel");
-              setPolicyForm({ ...EMPTY_POLICY_FORM, scope: behavior.scope });
+              setPolicyForm({ ...EMPTY_POLICY_FORM, scope: behavior.scope, mcp_server_id: mcpServerId || "", mcp_server_slug: mcpServerSlug || "" });
               setCreateScopeLocked(scope !== "all");
               setFormError(null);
               setCreateModalOpen(true);
@@ -1874,6 +1943,7 @@ export function PolicyManagementPanel({
           submitting={submitting}
           error={formError}
           scopeLocked={createScopeLocked}
+          servers={servers}
           onRequestVectorCreate={
             onRequestVectorCreate
               ? () => {
@@ -1898,6 +1968,7 @@ export function PolicyManagementPanel({
           submitting={submitting}
           error={formError}
           scopeLocked={scope !== "all"}
+          servers={servers}
         />
       )}
 
@@ -1920,8 +1991,8 @@ export function PolicyManagementPanel({
             return domain === "pipeline" || domain === "rag";
           })()}
           presets={mcpPresets}
-          mcpServerId={mcpServerId}
-          mcpServerSlug={mcpServerSlug}
+          mcpServerId={ruleServerId}
+          mcpServerSlug={ruleServerSlug}
           mcpTools={mcpTools}
           mcpToolsLoading={mcpToolsLoading}
           mcpToolsError={mcpToolsError}
