@@ -946,3 +946,20 @@ def test_OC4_render_leak_neutralized_at_depth_cap():
     out2, changed2, _ = _redact_structured_leaves(
         {"secret": scoped}, [], neutralize=False, neutralize_keys=["secret"])
     assert changed2 and enc not in json.dumps(out2), "scoped floor neutralizes encoded secret at cap"
+
+
+@pytest.mark.xfail(reason="Accepted depth-cap fail-open (deferred B3): a KEY-scoped floor cannot "
+                          "resolve scope for a {scoped_key: enc} dict that ITSELF sits past the 500 "
+                          "cap — the key is only in the path when descending INTO its value, so at "
+                          "the cap node the plain-name matcher can't fire. Entire-scope covers it; "
+                          "detection is equally blind past 500 (no fail-closed block misfires); the "
+                          "live posture it replaces caps lower at 200. Not a regression of 07861405.",
+                   strict=True)
+def test_OC4_keyscoped_floor_at_cap_on_scoped_dict_itself_KNOWN_LIMITATION():
+    from mcp_scan_orchestrator import _redact_structured_leaves
+    enc = "".join("&#%d;" % ord(c) for c in _AWS)
+    node = {"secret": enc}
+    for _ in range(501):  # the {secret: enc} dict itself is pushed past the cap
+        node = {"wrap": node}
+    out, changed, _ = _redact_structured_leaves(node, [], neutralize=False, neutralize_keys=["secret"])
+    assert enc not in json.dumps(out), "would need cap-aware key-scope descent to close this"
