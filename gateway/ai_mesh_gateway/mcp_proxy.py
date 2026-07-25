@@ -1454,6 +1454,53 @@ def _mask_text_content_blocks(result_content):
     return masked
 
 
+def _apply_cross_block_split_floor(
+    original_content,
+    scanned_content,
+    *,
+    tool_name: str,
+    enabled_info: dict | None,
+    org_slug: str = "",
+    server_slug: str = "",
+) -> tuple[object, bool, list[str]]:
+    """CHG-0100 cross-block split-secret floor, shared by ``_scan_tool_result_floor``
+    AND the primary ``org_mcp_jsonrpc`` route (T3-01 route-parity fix).
+
+    A secret split across content-array items (each half a benign sub-pattern) evades
+    the per-block ``_mcp_security_scan`` — the items are separated by JSON structure so
+    the value is never contiguous — but a client that concatenates the text blocks
+    reconstructs it. The primary route scanned results with bare ``_mcp_security_scan``
+    and so, unlike the bare-REST/internal routes (which go through
+    ``_scan_tool_result_floor``), it forwarded a split secret RAW.
+
+    Detection runs on the ORIGINAL content; the mask is applied to the SCANNED content
+    (preserving any redactions the scan already made). STRICT OPERATOR CONTROL:
+      * operator-selected block -> withhold the whole result (blocked=True);
+      * otherwise (redact/tag with the floor)-> mask the text blocks so the split can no
+        longer be reassembled, then forward (redact means redact, never block);
+      * observe-only (monitor) -> never fires.
+    Returns ``(content, split_blocked, extra_tags)``; ``content`` is unchanged when no
+    split is present. Callers feed ``extra_tags``/``split_blocked`` into their normal
+    block/redact swap-back machinery."""
+    if _explicit_monitor_posture(tool_name, enabled_info, "output"):
+        return scanned_content, False, []
+    _split, _split_kinds = _result_has_split_secret(original_content)
+    if not _split:
+        return scanned_content, False, []
+    if _mcp_operator_selected_block(tool_name, enabled_info, "output"):
+        LOG.warning(
+            "mcp_proxy.cross_block_split_secret org=%s server=%s tool=%s kinds=%s (operator selected block)",
+            org_slug, server_slug, tool_name, _split_kinds,
+        )
+        return scanned_content, True, ["SECRET"]
+    _masked = _mask_text_content_blocks(scanned_content)
+    LOG.info(
+        "mcp_proxy.cross_block_split_redacted org=%s server=%s tool=%s kinds=%s",
+        org_slug, server_slug, tool_name, _split_kinds,
+    )
+    return _masked, False, ["SECRET"]
+
+
 def _result_has_split_secret(result_content) -> tuple[bool, list[str]]:
     """CHG-0100: detect a HIGH-CONFIDENCE secret SPLIT across content-array items.
 
@@ -1616,26 +1663,19 @@ async def _scan_tool_result_floor(
     #     reconstructable secret: mask the text content blocks in place so the split
     #     can no longer be reassembled, then forward.
     #   * tag/mon -> observe-only (unchanged).
-    if not _explicit_monitor_posture(tool_name, enabled_info, "output"):
-        _split, _split_kinds = _result_has_split_secret(result_content)
-        if _split and _mcp_operator_selected_block(tool_name, enabled_info, "output"):
-            LOG.warning(
-                "mcp_proxy.cross_block_split_secret org=%s server=%s tool=%s kinds=%s (operator selected block)",
-                org_slug, server_slug, tool_name, _split_kinds,
-            )
-            return result_content, True, list(dict.fromkeys(list(tags) + ["SECRET"])), findings, {
+    _split_content, _split_blocked, _split_tags = _apply_cross_block_split_floor(
+        result_content, scanned, tool_name=tool_name, enabled_info=enabled_info,
+        org_slug=org_slug, server_slug=server_slug,
+    )
+    if _split_tags:  # a cross-block split secret was detected
+        _merged_tags = list(dict.fromkeys(list(tags) + _split_tags))
+        if _split_blocked:
+            return result_content, True, _merged_tags, findings, {
                 **meta, "cross_block_split_secret": True,
             }
-        if _split:
-            # redact: mask the text blocks so the split cannot be reconstructed.
-            _masked = _mask_text_content_blocks(result_content)
-            LOG.info(
-                "mcp_proxy.cross_block_split_redacted org=%s server=%s tool=%s kinds=%s",
-                org_slug, server_slug, tool_name, _split_kinds,
-            )
-            return _masked, False, list(dict.fromkeys(list(tags) + ["SECRET"])), findings, {
-                **meta, "cross_block_split_redacted": True,
-            }
+        return _split_content, False, _merged_tags, findings, {
+            **meta, "cross_block_split_redacted": True,
+        }
 
     # E12 result-REDACTION floor: detected secret/PII but the resolved action did
     # not redact, so the result would egress RAW. Re-scan with a "redact" floor.
@@ -4680,6 +4720,20 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         extra_redaction_fields=_in_rfields,
                     )
                 )
+                # T3-01: cross-block split-secret floor — parity with
+                # _scan_tool_result_floor (the bare-REST/internal routes). A secret
+                # split across content-array items evades the per-block scan above but
+                # a client reconstructs it; this primary route previously forwarded it
+                # RAW. Feed the result into the existing block/redact swap-back below.
+                _scanned_out, _split_blocked, _split_tags = _apply_cross_block_split_floor(
+                    _scan_target, _scanned_out, tool_name=tool_name,
+                    enabled_info=enabled_info, org_slug=org_slug, server_slug=server_slug,
+                )
+                if _split_blocked:
+                    _out_blocked = True
+                for _st in _split_tags:
+                    if _st not in _out_tags_new:
+                        _out_tags_new.append(_st)
                 # CHG-0025: a field-projection redaction can mask named result
                 # fields with NO PII/secret finding (the input-stage RBAC policy
                 # fired on the call, not the response). Enter the swap block on that
@@ -4916,6 +4970,19 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                             actor=mcp_actor,
                         )
                     )
+                    # T3-01: cross-block split-secret floor (parity with the other
+                    # routes' _scan_tool_result_floor). Detect + mask/block a secret
+                    # split across content blocks before the direct-backend result
+                    # egresses; feeds the block/redact swap-back below.
+                    _scanned_content, _split_blocked2, _split_tags2 = _apply_cross_block_split_floor(
+                        result_content, _scanned_content, tool_name=tool_name,
+                        enabled_info=enabled_info, org_slug=org_slug, server_slug=server_slug,
+                    )
+                    if _split_blocked2:
+                        _out_blocked2 = True
+                    for _st in _split_tags2:
+                        if _st not in _out_tags_new2:
+                            _out_tags_new2.append(_st)
                     for t in _out_tags_new2:
                         if t not in _out_tags2:
                             _out_tags2.append(t)
