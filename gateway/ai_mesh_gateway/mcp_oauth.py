@@ -92,6 +92,27 @@ def _validate_redirect_uri(uri: str) -> bool:
     return False
 
 
+def _redirect_uri_allowed_for_client(client_id: str, redirect_uri: str) -> bool:
+    """AU2-01: bind ``redirect_uri`` to the DYNAMICALLY-REGISTERED client's declared
+    allowlist. ``_validate_redirect_uri`` only enforces the SCHEME (any HTTPS host passes),
+    so without this a rogue/guessed ``client_id`` could redirect the authorization code —
+    which IS the user's Gateway API key (see the token endpoint) — to an attacker-controlled
+    HTTPS host: full API-key theft. The DCR store (``_registered_clients``) recorded each
+    client's ``redirect_uris`` but never read them.
+
+    OAuth 2.1: an EXACT match against the client's registered redirect_uris is required (no
+    substring/prefix). An UNREGISTERED ``client_id`` is rejected so an attacker cannot skip
+    registration to dodge the binding, and a client that registered without any redirect_uris
+    can authorize none. NOTE: ``_registered_clients`` is in-memory (like ``_auth_codes``), so
+    a gateway restart drops registrations and the client must re-register (DCR) — acceptable
+    for the short-lived in-memory flow; a persistent client store is the follow-up."""
+    reg = _registered_clients.get(client_id)
+    if not reg:
+        return False
+    allowed = reg.get("redirect_uris") or []
+    return redirect_uri in allowed
+
+
 # ── OAuth 2.0 Protected Resource Metadata (RFC 9728) ────────────────
 # REQUIRED by MCP spec 2025-06-18. VS Code checks this FIRST.
 
@@ -231,6 +252,29 @@ async def oauth_authorize_page(request: Request):
             content={
                 "error": "invalid_request",
                 "error_description": "Invalid redirect_uri",
+            },
+            status_code=400,
+        )
+
+    # AU2-01: bind the redirect_uri to the registered client (not just the scheme).
+    if not _redirect_uri_allowed_for_client(client_id, redirect_uri):
+        return JSONResponse(
+            content={
+                "error": "invalid_request",
+                "error_description": "redirect_uri not registered for this client",
+            },
+            status_code=400,
+        )
+
+    # AU2-02: PKCE is MANDATORY (MCP 2025-06-18 / OAuth 2.1). Requiring a code_challenge
+    # here means every issued auth code is PKCE-bound, so a stolen/leaked code cannot be
+    # redeemed without the matching verifier (the token endpoint only verified PKCE when a
+    # challenge happened to be present — an optional-PKCE downgrade).
+    if not code_challenge or code_challenge_method != "S256":
+        return JSONResponse(
+            content={
+                "error": "invalid_request",
+                "error_description": "PKCE required: code_challenge with S256 method",
             },
             status_code=400,
         )
@@ -401,6 +445,23 @@ async def oauth_authorize_submit(request: Request):
             status_code=400,
         )
 
+    # AU2-01: bind the redirect_uri to the registered client (the code-issuing path — the
+    # security-critical one: this is where the auth code that unlocks the API key is minted).
+    if not _redirect_uri_allowed_for_client(client_id, redirect_uri):
+        return JSONResponse(
+            content={"error": "invalid_request",
+                     "error_description": "redirect_uri not registered for this client"},
+            status_code=400,
+        )
+
+    # AU2-02: PKCE is MANDATORY — never issue an auth code without a bound S256 challenge.
+    if not code_challenge or code_challenge_method != "S256":
+        return JSONResponse(
+            content={"error": "invalid_request",
+                     "error_description": "PKCE required: code_challenge with S256 method"},
+            status_code=400,
+        )
+
     # ── Validate the API key against Redis ──
     import redis.asyncio as aioredis
 
@@ -524,18 +585,29 @@ async def oauth_token(request: Request):
             status_code=400,
         )
 
-    # Verify PKCE (S256)
-    if stored.get("code_challenge"):
-        digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
-        computed = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-        if computed != stored["code_challenge"]:
-            return JSONResponse(
-                content={
-                    "error": "invalid_grant",
-                    "error_description": "PKCE verification failed",
-                },
-                status_code=400,
-            )
+    # Verify PKCE (S256) — MANDATORY (AU2-02). Authorize now refuses to issue a code
+    # without a bound challenge, so a stored code ALWAYS carries one; require it here too
+    # (fail-closed) so a code can never be redeemed without proving possession of the
+    # verifier — closing the stolen/leaked-code-without-PKCE redemption path.
+    stored_challenge = stored.get("code_challenge") or ""
+    if not stored_challenge or not code_verifier:
+        return JSONResponse(
+            content={
+                "error": "invalid_grant",
+                "error_description": "PKCE required: missing code_challenge or code_verifier",
+            },
+            status_code=400,
+        )
+    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
+    computed = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    if computed != stored_challenge:
+        return JSONResponse(
+            content={
+                "error": "invalid_grant",
+                "error_description": "PKCE verification failed",
+            },
+            status_code=400,
+        )
 
     LOG.info("OAuth token issued for client=%s", client_id[:8] if client_id else "?")
 
