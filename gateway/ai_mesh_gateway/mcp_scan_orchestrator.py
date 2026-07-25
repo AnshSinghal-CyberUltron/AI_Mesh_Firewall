@@ -1563,6 +1563,23 @@ async def scan_mcp_payload(
     tier2_action = _resolve_tier_action(tier2_ctrl, "monitor" if _policy_only else enforcement)
     org_strict = bool((enabled_info or {}).get("tier2_strict", True))
 
+    # EN2-01 / L9-01 (lifecycle red-team): refresh ``targets`` against the POST-Tier-1
+    # payload before Tier-2 scans. ``extract_and_bind`` was called BEFORE the Tier-1 preset
+    # loop mutated the leaves via ``setter()``, so ``targets`` still holds the STALE
+    # pre-Tier-1 text. Without this refresh, Tier-2's redact write-back
+    # ``setter(redact_all(stale))`` overwrites the leaf with a redaction of the OLD text —
+    # reverting every Tier-1 preset neutralization ``redact_all`` cannot reproduce: the
+    # zero-click exfil-beacon defang, the markdown-split-PII mask, and the encoded-PII mask
+    # (they only fire when the payload ALSO carries a redact_all-maskable value, so the
+    # setter fires and the revert leaks). Re-bind only when Tier-1 actually changed the
+    # payload; ``extract_and_bind`` deep-copies the mutated payload (Tier-1 changes
+    # preserved) with the SAME scope, and ``_finalize_output`` reads ``state_ref[0]``.
+    if _tier1_enabled and result_redacted:
+        state_ref, targets = extract_and_bind(
+            mutable, target_mode=target_mode, key_path=key_path
+        )
+        mutable = state_ref[0]
+
     for text, setter, path_label in targets:
         if not text:
             continue
