@@ -655,16 +655,42 @@ def _collect_key_nodes(obj: Any, key: str) -> list[Any]:
     return out
 
 
+def _value_leaf_texts_of(node: Any) -> list[str]:
+    """The maskable VALUE-leaf texts of a matched scope=key node: the node itself if it is a
+    string/number leaf, else the value leaves of its subtree (``_leaf_value_texts``) — value
+    content only, NEVER key names / JSON punctuation.
+
+    scope=key DETECTION used to scan ``_safe_json(node)`` (the serialized subtree blob, INCLUDING
+    key names), while scope=key REDACTION only masks value leaves. So a redact rule whose
+    keyword/regex hit a KEY NAME matched in detection but changed nothing in the leaf walk
+    (``changed=False``), and the cannot-mask fail-closed BLOCKED a redact selection — a
+    redact->block escalation (red-team LANE3-KEYSCOPE-REDACT-TO-BLOCK). Because ``changed=False``
+    means the match was purely structural (no value leaf carried it), nothing sensitive survives,
+    so the block was always spurious. Scanning value leaves makes scope=key detection consistent
+    with its redactor — identical to the scope=entire fix (``_leaf_value_texts``)."""
+    if isinstance(node, str):
+        return [node]
+    return _leaf_value_texts(node)
+
+
 def _collect_dot_path_values(obj: Any, path: str) -> list[str]:
-    """String (and stringified) values at a DOT-separated ``key_path`` — see
-    ``_collect_dot_path_nodes``. A ``scope=key`` detector rule whose ``key`` is a dot-path must
-    traverse the path (a detector SEEDED from a dot-path scan-control else scanned NOTHING —
-    Phase-2b red-team #1)."""
-    return [n if isinstance(n, str) else _safe_json(n) for n in _collect_dot_path_nodes(obj, path)]
+    """VALUE-leaf texts at a DOT-separated ``key_path`` — see ``_collect_dot_path_nodes``. A
+    ``scope=key`` detector rule whose ``key`` is a dot-path must traverse the path (a detector
+    SEEDED from a dot-path scan-control else scanned NOTHING — Phase-2b red-team #1). Scans value
+    leaves, never key names (see ``_value_leaf_texts_of`` / LANE3)."""
+    out: list[str] = []
+    for n in _collect_dot_path_nodes(obj, path):
+        out.extend(_value_leaf_texts_of(n))
+    return out
 
 
 def _collect_key_values(obj: Any, key: str) -> list[str]:
-    return [n if isinstance(n, str) else _safe_json(n) for n in _collect_key_nodes(obj, key)]
+    """VALUE-leaf texts of every node matched at ``key`` (any depth), never key names — see
+    ``_value_leaf_texts_of`` / LANE3."""
+    out: list[str] = []
+    for n in _collect_key_nodes(obj, key):
+        out.extend(_value_leaf_texts_of(n))
+    return out
 
 
 def _leaf_value_texts(obj: Any) -> list[str]:
