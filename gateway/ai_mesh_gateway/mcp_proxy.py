@@ -2360,6 +2360,49 @@ async def ext_mcp_proxy(path: str, request: Request):
             _ext_params = _ext_req.get("params") or {}
             if isinstance(_ext_params, dict):
                 _ext_tool_name = str(_ext_params.get("name") or "")
+                # AU3-02 (lifecycle red-team): enforce the per-key tool allowlist +
+                # per-key tool-call cap on the transparent ext-proxy, parity with both
+                # org routes (org_mcp_jsonrpc ~4454, org_mcp_tool_call ~5250). This route
+                # sits behind the auth middleware but previously enforced NEITHER, so a
+                # key restricted to ``mcp_allowed_tools=['safe']`` could invoke ANY tool
+                # and a key with ``mcp_max_tool_calls=N`` got unlimited calls via
+                # /v1/mcp/ext-proxy/<host>. Empty allowlist = all tools; cap 0 = unlimited.
+                if str(_ext_req.get("method") or "") == "tools/call" and _ext_tool_name:
+                    _ext_auth = _get_auth_context(request)
+                    if not _tool_allowed_by_key(_ext_tool_name, _ext_auth):
+                        await _ext_audit(
+                            "block", "tool_not_allowed_for_key", tool=_ext_tool_name)
+                        return JSONResponse(
+                            content={
+                                "jsonrpc": _ext_req.get("jsonrpc", "2.0"),
+                                "id": _ext_req.get("id"),
+                                "error": {
+                                    "code": -32000,
+                                    "message": f"Tool '{_ext_tool_name}' not allowed for this key.",
+                                },
+                            },
+                            status_code=200,
+                        )
+                    _ext_cap = int(getattr(_ext_auth, "mcp_max_tool_calls", 0) or 0)
+                    if _ext_cap > 0:
+                        _ext_n = await _incr_tool_call_count(_ext_auth)
+                        if _tool_call_cap_exceeded(_ext_n, _ext_cap):
+                            await _ext_audit(
+                                "block", "tool_call_cap_exceeded", tool=_ext_tool_name)
+                            return JSONResponse(
+                                content={
+                                    "jsonrpc": _ext_req.get("jsonrpc", "2.0"),
+                                    "id": _ext_req.get("id"),
+                                    "error": {
+                                        "code": -32000,
+                                        "message": (
+                                            f"Tool-call limit exceeded for this key "
+                                            f"({_ext_cap} per turn)."
+                                        ),
+                                    },
+                                },
+                                status_code=200,
+                            )
                 _ext_args = _ext_params.get("arguments")
                 if _ext_args is not None:
                     _scanned_args, _in_blocked, _in_tags, _in_findings, _scan_meta_in = (
