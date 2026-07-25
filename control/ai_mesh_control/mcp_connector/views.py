@@ -228,6 +228,40 @@ def _request_actor(request) -> tuple[int | None, str]:
     return None, ""
 
 
+def _gateway_forwarded_actor_identity(request) -> tuple[str, list[str]]:
+    """Resolve the gateway-forwarded actor identity — ``(agent_id, roles)`` — used for
+    per-agent / per-role MCP policy scoping.
+
+    SECURITY (AU3-01, lifecycle red-team): ``agent_id`` (the API key prefix) and ``roles``
+    come from the gateway's SIGNED Redis auth payload, forwarded as ``X-Gateway-Key-Prefix``
+    / ``X-Gateway-Roles``. They are trustworthy ONLY on the internal gateway->backend path
+    (shared-secret authenticated via ``_is_gateway_internal_request``). ``MCPToolCallView``
+    also accepts a direct JWT org user (``IsAuthenticatedOrGatewayInternal``); such a caller
+    could otherwise SET these headers themselves to forge an agent identity / roles and dodge
+    a role- or agent-scoped policy (e.g. a contractor forging a non-``contractor`` role to
+    escape a contractor-scoped block/redact rule). So we trust them ONLY when the request is
+    gateway-internal — a direct JWT user gets no forged identity (empty), mirroring what
+    ``_request_actor`` already does for the user id. The verified JWT ``user_id`` (from
+    ``_request_actor``) still scopes per-user policies; only the forgeable agent/role
+    dimensions are gated here."""
+    if not _is_gateway_internal_request(request):
+        return "", []
+    from urllib.parse import unquote as _unquote
+
+    agent_id = (request.headers.get("X-Gateway-Key-Prefix", "") or "").strip()
+    raw_roles_header = request.headers.get("X-Gateway-Roles", "") or ""
+    roles: list[str] = []
+    for chunk in raw_roles_header.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            roles.append(_unquote(chunk))
+        except Exception:
+            roles.append(chunk)
+    return agent_id, roles
+
+
 def _upstream_error_detail(exc: Exception) -> str:
     """Extract actionable details from upstream HTTP failures."""
     response = getattr(exc, "response", None)
@@ -1505,7 +1539,6 @@ class MCPToolCallView(APIView):
         from policy.models import Policy as PolicyModel
         from policy.redaction import apply_field_redaction, redact_structured
         from django.db.models import Q
-        from urllib.parse import unquote as _unquote
 
         # ── G8: extract actor identifiers for per-user/agent/role policy
         # scoping. user_id is JWT-authenticated (or trusted gateway
@@ -1514,18 +1547,9 @@ class MCPToolCallView(APIView):
         # auth payload, forwarded as a comma-separated URL-quoted header.
         # All three feed BOTH the policy queryset filter AND the engine
         # context so rule conditions can also reference them.
-        agent_id = (request.headers.get("X-Gateway-Key-Prefix", "") or "").strip()
-        raw_roles_header = request.headers.get("X-Gateway-Roles", "") or ""
-        actor_roles: list[str] = []
-        if raw_roles_header:
-            for chunk in raw_roles_header.split(","):
-                chunk = chunk.strip()
-                if not chunk:
-                    continue
-                try:
-                    actor_roles.append(_unquote(chunk))
-                except Exception:
-                    actor_roles.append(chunk)
+        # AU3-01: agent_id + roles are trusted ONLY from the internal gateway path — a
+        # direct JWT user must not be able to forge them to dodge role/agent-scoped policy.
+        agent_id, actor_roles = _gateway_forwarded_actor_identity(request)
 
         arg_text = " ".join(str(v) for v in arguments.values()) if arguments else ""
         policy_context = {
