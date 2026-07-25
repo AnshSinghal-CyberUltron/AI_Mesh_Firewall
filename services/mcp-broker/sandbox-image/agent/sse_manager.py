@@ -21,11 +21,64 @@ from agent.upstream_manager import (
     UpstreamSession,
     _MAX_RESPONSE_BYTES,
     _aiter_sse_lines_bounded,
+    _assert_upstream_not_ssrf,
     _error_response,
+    _normalize_host,
     _wrap_response,
 )
 
 LOG = logging.getLogger("sandbox_agent.sse")
+
+
+async def _validated_messages_url(
+    candidate: str, session: UpstreamSession, base: str
+) -> str | None:
+    """Validate an UPSTREAM-SUPPLIED SSE ``endpoint`` URL before we POST credentials to it.
+
+    RED-TEAM L5-01 (credential exfiltration). The legacy HTTP+SSE transport learns its POST
+    target from the untrusted upstream's ``endpoint`` event. The old code accepted that value
+    VERBATIM whenever it started with ``http``, with no allowlist and no SSRF re-check — and
+    ``_send_sse_jsonrpc_locked`` then POSTs to it with ``session.headers``, i.e. the operator's
+    BYOK ``Authorization: Bearer <token>`` plus any custom auth header, and every tool-call
+    argument. A malicious or compromised MCP server therefore harvested the operator's upstream
+    credentials simply by naming its own collector host. ``_validate_upstream`` /
+    ``_assert_upstream_not_ssrf`` run ONCE on the CONFIGURED ``upstream.url`` at session
+    creation and were never re-applied here.
+
+    A second escape lived in the same branch: ``data.startswith("/")`` is also true for a
+    PROTOCOL-RELATIVE ``//evil.example/x``, which ``urljoin(base, ...)`` resolves to a
+    cross-host absolute URL — so the "relative" path was not safe either. Every candidate,
+    whichever branch produced it, is therefore validated HERE.
+
+    Accepted: the configured upstream's own host, or a host the OPERATOR explicitly placed in
+    ``allowed_hosts`` (consistent with ``_validate_upstream``, which matches on hostname only),
+    and only after the same DNS/SSRF resolution check the configured URL got. Returns the URL
+    when it is safe, else ``None`` (caller keeps the previous target and logs the rejection) —
+    fail CLOSED: we would rather stall this session than ship a bearer token to a stranger.
+    """
+    parsed = urlparse(candidate or "")
+    if parsed.scheme not in ("http", "https"):
+        return None
+    host = parsed.hostname
+    if not host:
+        return None
+    norm = _normalize_host(host)
+    base_host = _normalize_host(urlparse(base).hostname or "")
+    if norm and norm == base_host:
+        # Same host as the CONFIGURED upstream: it already passed _validate_upstream and
+        # _assert_upstream_not_ssrf at session creation, so accept without re-resolving
+        # (a transient DNS hiccup must not stall an otherwise valid session).
+        return candidate
+    allowed = {_normalize_host(h) for h in (getattr(session, "allowed_hosts", None) or []) if h}
+    if norm not in allowed and host not in allowed:
+        return None
+    # A DIFFERENT host the operator explicitly allowlisted: honour the selection, but only
+    # after the same DNS/SSRF resolution check the configured URL received.
+    try:
+        await _assert_upstream_not_ssrf(host)
+    except UpstreamError:
+        return None
+    return candidate
 
 # CHG-0129: bound the per-session SSE response queue. The persistent reader keeps
 # running between RPCs, so an untrusted upstream flooding UNSOLICITED `message`
@@ -164,13 +217,26 @@ async def _sse_reader_loop(session: UpstreamSession, connect_timeout: float) -> 
                     data_lines = []
                     data_bytes = 0
                     if event_type == "endpoint" or "sessionId" in data or data.startswith("/"):
+                        # L5-01: build the candidate, then VALIDATE it before it can ever
+                        # receive the operator's credentials (see _validated_messages_url).
                         if data.startswith("/") or data.startswith("http"):
-                            session.sse_messages_url = (
+                            _candidate = (
                                 data if data.startswith("http") else urljoin(base, data.split("\n")[0])
                             )
                         else:
                             path = data.split("sessionId=")[-1] if "sessionId=" in data else data
-                            session.sse_messages_url = urljoin(base, f"/messages?sessionId={path}")
+                            _candidate = urljoin(base, f"/messages?sessionId={path}")
+                        _safe = await _validated_messages_url(_candidate, session, base)
+                        if _safe is None:
+                            LOG.warning(
+                                "sse endpoint event REJECTED for server=%s: %r resolves outside the "
+                                "configured upstream host / allowed_hosts (credential exfiltration "
+                                "attempt or misconfigured upstream) — target unchanged",
+                                session.server_slug, _candidate,
+                            )
+                            event_type = ""
+                            continue
+                        session.sse_messages_url = _safe
                         if "sessionId=" in data:
                             session.session_id = data.split("sessionId=")[-1].split("&")[0]
                         ready.set()
