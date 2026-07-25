@@ -1232,9 +1232,24 @@ async def _scan_text_tier2(
         #   redact -> mask (redact_all);
         #   flag   -> flag-for-review: recorded in `findings` above, allowed, NEVER blocks;
         #   allow  -> pass.
-        if verdict.action == "block":
+        #
+        # ONLY THE JUDGE VERDICT IS AUTHORITATIVE (LANE F red-team wf_827dc178, 2026-07-25).
+        # ``scanner.scan_prompt_with_tier2`` runs the DETERMINISTIC Tier-1 pre-filter
+        # (``scan_prompt``) FIRST and returns ITS verdict verbatim (tier="tier_1"/"tier_0_5"/
+        # "tier_1_5"/"tier_1_multiturn") when a built-in regex / the MAX_PROMPT_LENGTH DoS floor /
+        # a heuristic fires — Bedrock is NEVER reached. That is a Tier-1 PRE-FILTER result, not the
+        # Tier-2 judge, and in the collapsed model Tier-1 is the operator's POLICIES (already run in
+        # the policy lane). Blocking on it here made a static default floor hard-block observe-only
+        # traffic the operator never selected to block (invariant A), and — because the finding gate
+        # above excludes tier=="tier_1" — surfaced a block with NO reason (invariant F: block+reason).
+        # Concretely a benign >10k-char tool RESULT dos-blocked under a tag/monitor posture. So honor
+        # block/redact ONLY for a genuine JUDGE verdict (tier_2); a pre-filter verdict falls through
+        # to observe-only (forward) — the operator's own Tier-1 policies, not a built-in default,
+        # govern deterministic detections. Legacy (flag off) is unchanged below.
+        _is_judge_verdict = (verdict.tier or "").strip().lower() == "tier_2"
+        if _is_judge_verdict and verdict.action == "block":
             return text, findings, True, None
-        if verdict.action == "redact":
+        if _is_judge_verdict and verdict.action == "redact":
             return redact_all(text), findings, False, None
         return text, findings, False, None
     if _enforce_blocks(enforcement) and verdict.action in ("block", "redact", "flag"):
