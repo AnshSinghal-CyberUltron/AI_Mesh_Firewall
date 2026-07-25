@@ -212,7 +212,16 @@ async def broker_send_jsonrpc(
 
     url = f"{_BROKER_URL}/v1/sandbox/{org_slug}/stdio/rpc"
     async with httpx.AsyncClient(timeout=_http_timeout(timeout)) as client:
-        response = await _request_with_503_retry(client, "POST", url, json=payload)
+        response = await _request_with_503_retry(
+            client, "POST", url, json=payload,
+            # CHG-0137: don't retry a non-idempotent stdio tools/call after dispatch —
+            # a read-timeout / reset AFTER the request reached the broker may mean the
+            # stdio tool ALREADY executed upstream, so a retry would double-execute the
+            # side effect (send an email twice, etc.). Parity with broker_send_rpc (the
+            # ws/http/sse path), which has passed this guard since CHG-0137; the stdio
+            # path defaulted idempotent=True and silently retried mutating calls.
+            idempotent=(method not in _NON_IDEMPOTENT_METHODS),
+        )
 
     _raise_for_broker_error(response)
     return response.json()
