@@ -1785,8 +1785,44 @@ async def _scan_reframe_sse_tool_result(
             obj = json.loads(data_val)
         except Exception:
             return list(evt_lines), None  # not JSON (keep-alive / partial) — verbatim
+        # L2-01 (red-team wf_c7ea99b8): a JSON-RPC BATCH (array of messages) is spec-allowed
+        # and MCP-supported. The old dict-only check forwarded a batch frame verbatim
+        # UNSCANNED, so an untrusted upstream could wrap its tool result in a 1-element batch
+        # to bypass the output floor entirely (block didn't block, redact didn't mask). Scan
+        # EACH message in the batch with the same floor; block the whole event if any is
+        # hard-blocked; reframe to a single masked data: line if any changed.
+        if isinstance(obj, list):
+            _changed_any = False
+            _new_batch: list = []
+            for _msg in obj:
+                if not isinstance(_msg, dict):
+                    _new_batch.append(_msg)
+                    continue
+                _scanned_msg, _msg_changed, _blk_info = await _scan_one_jsonrpc_message(_msg)
+                if _blk_info is not None:
+                    return None, _blk_info
+                _changed_any = _changed_any or _msg_changed
+                _new_batch.append(_scanned_msg)
+            if _changed_any:
+                non_data = [ln for i, ln in enumerate(evt_lines) if i not in data_pos]
+                return non_data + [f"data: {json.dumps(_new_batch)}"], None
+            return list(evt_lines), None
         if not isinstance(obj, dict):
             return list(evt_lines), None
+        _scanned_obj, _obj_changed, _blk_info = await _scan_one_jsonrpc_message(obj)
+        if _blk_info is not None:
+            return None, _blk_info
+        if _obj_changed:
+            non_data = [ln for i, ln in enumerate(evt_lines) if i not in data_pos]
+            return non_data + [f"data: {json.dumps(_scanned_obj)}"], None
+        return list(evt_lines), None
+
+    async def _scan_one_jsonrpc_message(obj: dict) -> tuple[dict, bool, dict | None]:
+        """Scan ONE JSON-RPC message dict's result/error (or notification params under
+        ``scan_notifications``) through the output floor. Returns
+        ``(message, changed, block_info)``: ``block_info`` non-None => withhold the whole
+        event; ``changed`` True => ``message`` carries the masked content. Shared by the
+        single-message and batch-array (L2-01) paths."""
         # An ERROR frame (no result) can still carry a secret in its message/data from
         # an untrusted server — scan + mask it too (CHG-0043; fail CLOSED on scan error).
         target_key = "result"
@@ -1801,7 +1837,7 @@ async def _scan_reframe_sse_tool_result(
                 # smuggle sensitive data in the ``params`` of a notifications/message
                 # frame, so scan the WHOLE message (params + any data field).
                 if not (scan_notifications and obj.get("params") is not None):
-                    return list(evt_lines), None  # notification / keep-alive — verbatim
+                    return obj, False, None  # notification / keep-alive — verbatim
                 target_obj = obj
                 target_key = None
         # Scan the ENTIRE result/error/notification (dict content/structuredContent,
@@ -1816,7 +1852,7 @@ async def _scan_reframe_sse_tool_result(
         )
         if blocked:
             # Hard block (policy block OR fail-closed scan error): withhold everything.
-            return None, {
+            return obj, False, {
                 "tags": list(tags),
                 "id": obj.get("id"),
                 "jsonrpc": obj.get("jsonrpc", "2.0"),
@@ -1826,11 +1862,8 @@ async def _scan_reframe_sse_tool_result(
                 obj = scanned if isinstance(scanned, dict) else obj
             else:
                 obj[target_key] = scanned
-            # Re-emit any non-data field lines (event:/id:/comments) verbatim, then the
-            # masked payload as a SINGLE ``data:`` line (json.dumps is newline-free).
-            non_data = [ln for i, ln in enumerate(evt_lines) if i not in data_pos]
-            return non_data + [f"data: {json.dumps(obj)}"], None
-        return list(evt_lines), None
+            return obj, True, None
+        return obj, False, None
 
     out_lines: list[str] = []
     event_lines: list[str] = []
