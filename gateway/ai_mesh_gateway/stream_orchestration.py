@@ -59,12 +59,25 @@ class StreamRunMetrics:
     usage_estimated: bool = False
     # Reconstructed assistant text (capped) for the Scan Detail "Output" panel.
     output_snippet: str = ""
+    # STREAM RAW-OUTPUT FIDELITY: the PRE-redaction model text (capped), so the Scan
+    # Detail "Raw model output" panel shows what the model actually produced for a
+    # STREAMED request. ``output_snippet`` holds only the POST-redaction, client-facing
+    # text; this holds the raw pre-guard text. SAFE to persist — build_telemetry_event
+    # routes ``raw_output`` through redact_all at the single audit choke (telemetry.py)
+    # so no raw PII ever lands in the governance/audit log.
+    raw_output_snippet: str = ""
 
     def append_output(self, text: str, *, cap: int = 2000) -> None:
         """Accumulate streamed assistant text up to ``cap`` chars."""
         if not text or len(self.output_snippet) >= cap:
             return
         self.output_snippet = (self.output_snippet + text)[:cap]
+
+    def append_raw_output(self, text: str, *, cap: int = 8000) -> None:
+        """Accumulate PRE-redaction (raw model) text up to ``cap`` chars."""
+        if not text or len(self.raw_output_snippet) >= cap:
+            return
+        self.raw_output_snippet = (self.raw_output_snippet + text)[:cap]
     # M-51: strongest output-guard verdict observed mid-stream, consumed by the
     # terminal zeroshield trace frame (allow/redact/flag/block attribution).
     guard_action: str = ""
@@ -388,10 +401,27 @@ async def finalize_stream(
         if metrics.guard_threat_type:
             _sc_threat = metrics.guard_threat_type
 
+    # GOVERNANCE-LOG BUCKETING: the Output Governance Log (§1.7) only surfaces
+    # output_guard/output_scan events (frontend outputGovernanceFeed.js,
+    # firewall_module_classifier.py). The streaming finalizer historically always
+    # emitted event_type="stream_complete", so a streamed request whose OUTPUT guard
+    # actually acted never appeared in §1.7. Emit as "output_guard" (parity with the
+    # non-stream path) ONLY when the guard acted; KEEP "stream_complete" for clean/allow
+    # streams so §1.7 is not flooded with every completed stream.
+    _output_guard_acted = bool(
+        metrics.output_blocked
+        or metrics.guard_action in ("block", "redact", "rewrite", "flag")
+    )
+    _event_type = "output_guard" if _output_guard_acted else "stream_complete"
+    # PER-STAGE HONESTY on the PERSISTED trace: stamp the output_guardrail stage with the
+    # guard's OWN action (identical logic to the SSE frame) so the audit record reflects the
+    # real output-guard outcome, not the base (input-redaction) trace.
+    _stamped_pt = _stamp_output_stage_action(pipeline_trace, metrics)
+
     if hooks.emit_telemetry is not None:
         try:
             hooks.emit_telemetry(
-                event_type="stream_complete",
+                event_type=_event_type,
                 model=model,
                 user_id=ctx.user_id,
                 project_id=ctx.project_id,
@@ -415,7 +445,7 @@ async def finalize_stream(
                     # output so the activity/scan-detail report shows the 9-stage
                     # pipeline plus both sides of the conversation for STREAMED
                     # requests, not just a thin summary.
-                    **({"pipeline_trace": pipeline_trace} if pipeline_trace else {}),
+                    **({"pipeline_trace": _stamped_pt} if _stamped_pt else {}),
                     "prompt_snippet": _prompt_snip[:2000],
                     **(
                         {
@@ -423,6 +453,17 @@ async def finalize_stream(
                             "sanitized_output": metrics.output_snippet[:2000],
                         }
                         if metrics.output_snippet
+                        else {}
+                    ),
+                    # STREAM RAW-OUTPUT FIDELITY: include the PRE-redaction model text so
+                    # the Scan Detail "Raw model output" panel is populated for STREAMED
+                    # requests (emitted independently of output_snippet so a BLOCKED stream,
+                    # which records no client-facing output, still surfaces the raw output
+                    # that was blocked). Scrubbed through redact_all at the telemetry audit
+                    # choke (telemetry.py) — no raw PII persists.
+                    **(
+                        {"raw_output": metrics.raw_output_snippet[:8000]}
+                        if metrics.raw_output_snippet
                         else {}
                     ),
                 },
@@ -484,6 +525,48 @@ def build_usage_chunk_frame(
         "usage": usage,
     }
     return f"data: {json.dumps(frame)}\n\n"
+
+
+def _stamp_output_stage_action(
+    pipeline_trace_base: dict | None,
+    metrics: StreamRunMetrics,
+) -> dict | None:
+    """Overlay the OUTPUT guard's OWN enforced action onto the ``output_guardrail``
+    stage of a shallow-copied pipeline_trace.
+
+    PER-STAGE HONESTY (mirror of the non-stream build_pipeline_trace ``_enforced_at_output``
+    gating, pipeline_trace.py:1114/1144): the output_guardrail stage action must come from
+    the OUTPUT guard's OWN verdict — ``metrics.guard_action`` (with ``metrics.output_blocked``
+    taking block precedence) — NOT the request-global ``zeroshield.action``. That top-level
+    action is "redact" whenever the INPUT prompt was redacted, so keying the output stage off
+    it stamped a PHANTOM "redact" onto the output_guardrail stage of a response the output
+    guard left untouched ("output guardrails redacted nothing but shows redacted"). Detail
+    likewise comes from the guard's own ``metrics.guard_detail``, never the input-redaction
+    reason.
+
+    Non-mutating: returns a shallow copy; the ``stages`` list is only replaced (with per-stage
+    copies) when the output guard actually acted. Shared by the SSE trace frame and the
+    persisted telemetry event so their output-stage attribution is byte-identical.
+    """
+    if not pipeline_trace_base:
+        return pipeline_trace_base
+    pt = dict(pipeline_trace_base)
+    _out_stage_action = (
+        "block"
+        if (metrics.output_blocked or metrics.guard_action == "block")
+        else (metrics.guard_action or "").lower()
+    )
+    if _out_stage_action in ("block", "redact", "flag", "rewrite"):
+        _stages = []
+        for s in (pt.get("stages") or []):
+            s2 = dict(s) if isinstance(s, dict) else s
+            if isinstance(s2, dict) and s2.get("name") == "output_guardrail":
+                s2["action"] = _out_stage_action
+                if metrics.guard_detail:
+                    s2["detail"] = metrics.guard_detail
+            _stages.append(s2)
+        pt["stages"] = _stages
+    return pt
 
 
 def build_stream_trace_frame(
@@ -564,18 +647,13 @@ def build_stream_trace_frame(
     # onto the output_guardrail stage so a mid-stream block/redact/flag is reflected.
     if pipeline_trace_base:
         try:
-            pt = dict(pipeline_trace_base)
-            _final = str(zs.get("action") or "allow")
-            if _final in ("block", "redact", "flag"):
-                _stages = []
-                for s in (pt.get("stages") or []):
-                    s2 = dict(s) if isinstance(s, dict) else s
-                    if isinstance(s2, dict) and s2.get("name") == "output_guardrail":
-                        s2["action"] = _final
-                        if zs.get("detail"):
-                            s2["detail"] = zs["detail"]
-                    _stages.append(s2)
-                pt["stages"] = _stages
+            # PER-STAGE HONESTY: drive the output_guardrail stage from the OUTPUT
+            # guard's OWN action (metrics.guard_action / output_blocked) via the shared
+            # stamping helper — NOT the request-global zs["action"], which is "redact"
+            # when only the INPUT prompt was redacted (the phantom output-guard label).
+            # The persisted telemetry event (finalize_stream) uses the SAME helper so the
+            # SSE frame and the audit record agree.
+            pt = _stamp_output_stage_action(pipeline_trace_base, metrics)
             # Reconcile totals with the completed stream wall-clock (PIPELINE-0015).
             _stage_sum = round(
                 sum(float(s.get("latency_ms") or 0) for s in (pt.get("stages") or []) if isinstance(s, dict)),
