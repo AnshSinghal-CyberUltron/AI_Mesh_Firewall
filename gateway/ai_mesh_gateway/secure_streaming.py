@@ -331,6 +331,13 @@ class SecureStreamingResponse:
         except ImportError:
             from .output_guard import normalize_output_scan_text
         full_text = normalize_output_scan_text(full_text)
+        # STREAM RAW-OUTPUT FIDELITY: capture the PRE-redaction model text (this flush's
+        # full buffer) onto the shared StreamRunMetrics BEFORE any redact/block branch
+        # below, so the Scan Detail "Raw model output" panel shows what the model produced
+        # (``_record_output`` accumulates only the POST-redaction, client-facing text).
+        # Recorded even for content that is about to be blocked/redacted — it is scrubbed
+        # through redact_all at the telemetry audit choke, so no raw PII persists.
+        self._record_raw_output(full_text)
         if not full_text and self._output_guard is not None:
             # L7: whitespace-only / empty model output — release without guard scan.
             if reason == FlushReason.DONE:
@@ -834,6 +841,19 @@ class SecureStreamingResponse:
             return
         try:
             self._stream_metrics.append_output(text)
+        except Exception:
+            pass
+
+    def _record_raw_output(self, text: str) -> None:
+        """Accumulate the PRE-redaction (raw model) streamed text onto the shared
+        StreamRunMetrics for the Scan Detail "Raw model output" panel. Distinct from
+        ``_record_output`` (which records only the post-redaction, client-facing text).
+        Safe to record content about to be blocked/redacted: build_telemetry_event scrubs
+        ``raw_output`` through redact_all before it reaches the audit log."""
+        if self._stream_metrics is None or not text:
+            return
+        try:
+            self._stream_metrics.append_raw_output(text)
         except Exception:
             pass
 

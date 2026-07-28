@@ -3532,6 +3532,11 @@ def _launch_chat_stream_response(
     org_tpm_limit: int = 0,
     secure_output_scan: bool = True,
     input_action: str = "allow",
+    # INPUT-SCAN LATENCY FIDELITY: the live proxy_chat stage_metrics dict (carries
+    # tier1_ms/tier2_ms). Forwarded into the streaming pipeline_trace so the input_scan
+    # stage reports its real latency instead of 0 ("input scan shows <1ms"). Optional so
+    # legacy callers/tests are unaffected — a None simply yields the prior 0ms behavior.
+    stage_metrics: dict | None = None,
 ):
     """
     stream_phase + finalization_phase for /v1/chat/completions (SSE).
@@ -3671,6 +3676,9 @@ def _launch_chat_stream_response(
             requested_model=_stream_echo_model,
             final_action=input_action,
             http_status=200,
+            # INPUT-SCAN LATENCY FIDELITY: pass the tier1_ms/tier2_ms captured during
+            # proxy_chat so _metrics() derives a real input_scan_ms (else it defaulted to 0).
+            stage_metrics=stage_metrics,
         )
     except Exception:
         LOG.debug("streaming pipeline_trace build failed; routing-only trace emitted", exc_info=True)
@@ -7290,6 +7298,7 @@ async def proxy_chat(
                     estimated_tokens=estimated_request_tokens,
                     org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
                     secure_output_scan=False,
+                    stage_metrics=stage_metrics,
                 )
             code, resp = await LLM_ROUTER.acompletion(body, None)
             METRICS["allowed"] += 1
@@ -8231,6 +8240,7 @@ async def proxy_chat(
                     org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
                     secure_output_scan=bool(CONFIG.get("output_scan_enabled", True)),
                     input_action=_input_decision.action if _input_decision is not None else "allow",
+                    stage_metrics=stage_metrics,
                 )
             upstream_start = time.perf_counter()
             code, resp = await LLM_ROUTER.acompletion(
@@ -9008,6 +9018,7 @@ async def proxy_chat(
                 org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
                 secure_output_scan=bool(CONFIG.get("output_scan_enabled", True)),
                 input_action=_input_decision.action if _input_decision is not None else "allow",
+                stage_metrics=stage_metrics,
             )
         upstream_start = time.perf_counter()
         stage_metrics["model_input_ms"] = round((upstream_start - _model_in_start) * 1000, 1)
