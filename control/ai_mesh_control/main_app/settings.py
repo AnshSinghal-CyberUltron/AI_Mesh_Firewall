@@ -915,6 +915,24 @@ if os.environ.get("FRONTEND_ORIGIN"):
     CORS_ALLOWED_ORIGINS = list(set(CORS_ALLOWED_ORIGINS) | {os.environ.get("FRONTEND_ORIGIN").strip()})
 CORS_ALLOW_ALL_ORIGINS = DEBUG
 
+# CSRF trusted origins (Django 4+). Behind the nginx TLS proxy (SECURE_PROXY_SSL_HEADER
+# marks the request HTTPS), Django's CSRF Origin check REQUIRES the request's scheme+host
+# to be listed here for any unsafe (POST/PUT/DELETE) request — otherwise the Django admin
+# login at aimeshbackend.zeroshield.ai and any session-cookie POST fail with
+# "CSRF verification failed - Origin checking failed" (403). Entries MUST include the
+# scheme (https://...). Default: every https:// origin already trusted for CORS, plus the
+# FRONTEND/BACKEND/GATEWAY public URLs; override wholesale via CSRF_TRUSTED_ORIGINS (csv).
+_env_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS", "").strip()
+if _env_csrf:
+    CSRF_TRUSTED_ORIGINS = [o.strip() for o in _env_csrf.split(",") if o.strip()]
+else:
+    _csrf_origins = {o for o in CORS_ALLOWED_ORIGINS if o.startswith("https://")}
+    for _pub_var in ("FRONTEND_ORIGIN", "BACKEND_PUBLIC_URL", "GATEWAY_PUBLIC_URL"):
+        _pub_url = (os.environ.get(_pub_var) or "").strip()
+        if _pub_url.startswith("https://"):
+            _csrf_origins.add(_pub_url)
+    CSRF_TRUSTED_ORIGINS = sorted(_csrf_origins)
+
 # Logging
 # https://docs.djangoproject.com/en/stable/topics/logging/
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG" if DEBUG else "INFO")
