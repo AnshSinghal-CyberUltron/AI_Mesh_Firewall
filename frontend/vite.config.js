@@ -34,7 +34,13 @@ function demoTrailingSlashRedirect() {
 export default defineConfig({
   plugins: [react(), tailwindcss(), demoTrailingSlashRedirect()],
   server: {
+    host: "0.0.0.0",
     port: 5173,
+    // Docker maps host :8180 → container :5173; without clientPort the browser
+    // tries ws://localhost:5173 for HMR and fails (connection reset / "websocket off").
+    hmr: {
+      clientPort: Number(process.env.VITE_HMR_CLIENT_PORT || 8180),
+    },
     proxy: {
       "/api": { target: process.env.VITE_CONTROL_PROXY || "http://127.0.0.1:8100", changeOrigin: true, ...noKeepAlive },
       "/v1": { target: process.env.VITE_GATEWAY_PROXY || "http://127.0.0.1:8300", changeOrigin: true, ...noKeepAlive },

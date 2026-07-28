@@ -17,6 +17,7 @@ import {
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../context/AuthContext";
 import { useBackendHealth } from "../../hooks/useBackendHealth";
+import { resolveOfferingVisibility } from "../../utils/offeringVisibility";
 
 const menuItems = [
   {
@@ -53,15 +54,6 @@ const menuItems = [
   },
 ];
 
-function useOfferingVisibility(user) {
-  const roles = user?.roles || [];
-  const hasPlatform =
-    user?.is_superuser || roles.some((r) => ["platform_admin", "platform_user"].includes(r));
-  return {
-    hasPlatform: hasPlatform || !roles.length,
-  };
-}
-
 export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMobile }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [hasManualCollapsePreference, setHasManualCollapsePreference] = useState(false);
@@ -78,7 +70,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
       : backendHealth === "degraded"
         ? { line: "Backend slow to respond", dot: "bg-amber-500", pulse: "animate-pulse", label: "Degraded", labelCls: "text-amber-700 dark:text-amber-400" }
         : { line: "Backend unreachable", dot: "bg-red-500", pulse: "", label: "Offline", labelCls: "text-red-700 dark:text-red-400" };
-  const { hasPlatform } = useOfferingVisibility(user);
+  const { hasPlatform } = resolveOfferingVisibility(user);
   const [expandedModules, setExpandedModules] = useState([]);
   const [hasCustomizedExpansion, setHasCustomizedExpansion] = useState(false);
   const isAdmin = user?.is_superuser || (user?.roles || []).includes("platform_admin");

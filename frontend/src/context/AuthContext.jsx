@@ -193,7 +193,7 @@ export function AuthProvider({ children }) {
     const data = await res.json();
     setStoredTokens(data.access, data.refresh);
     const me = await fetchMe(data.access);
-    setUser(me ?? { email, first_name: '', last_name: '', roles: ['user'], is_active: true });
+    setUser(me ?? { email, first_name: '', last_name: '', roles: ['user', 'platform_user'], is_active: true });
     return me;
   }, []);
 

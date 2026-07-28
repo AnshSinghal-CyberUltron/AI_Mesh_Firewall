@@ -645,9 +645,17 @@ export function sourceBadgeClass(source) {
 /** Read human-readable detail from enforcement metadata (top-level or nested extra). */
 export function metadataDetail(meta = {}) {
   if (!meta || typeof meta !== "object") return "";
-  if (meta.detail) return String(meta.detail);
+  for (const field of ["detail", "reason", "intent"]) {
+    const value = String(meta[field] || "").trim();
+    if (value) return value;
+  }
   const extra = meta.extra;
-  if (extra && typeof extra === "object" && extra.detail) return String(extra.detail);
+  if (extra && typeof extra === "object") {
+    for (const field of ["detail", "reason", "intent"]) {
+      const value = String(extra[field] || "").trim();
+      if (value) return value;
+    }
+  }
   return "";
 }
 
@@ -686,6 +694,134 @@ export function formatIncidentAge(isoString) {
   const hrs = Math.floor(mins / 60);
   if (hrs < 48) return `${hrs}h`;
   return `${Math.floor(hrs / 24)}d`;
+}
+
+/** Humanize threat_type / snake_case labels for analyst UI (kill_switch → Kill switch). */
+export function humanizeThreatType(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const spaced = raw.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!spaced) return "";
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
+}
+
+/**
+ * Extract display prompt for an incident timeline event.
+ * Prefers top-level API prompt_snippet, then metadata / extra allowlisted fields.
+ */
+export function extractIncidentPrompt(event = {}) {
+  const top = String(event.prompt_snippet || "").trim();
+  if (top) return top;
+
+  const meta = event.metadata && typeof event.metadata === "object" ? event.metadata : {};
+  const extra = meta.extra && typeof meta.extra === "object" ? meta.extra : {};
+
+  for (const field of [
+    "prompt_snippet",
+    "prompt_submitted",
+    "input_text",
+    "user_prompt",
+    "original_prompt",
+    "input_preview",
+  ]) {
+    const direct = String(meta[field] || "").trim();
+    if (direct) return direct;
+  }
+
+  for (const field of [
+    "prompt_snippet",
+    "prompt",
+    "user_message",
+    "query",
+    "prompt_submitted",
+    "input_text",
+  ]) {
+    const nested = String(extra[field] || "").trim();
+    if (nested) return nested;
+  }
+
+  const lineage = Array.isArray(meta.prompt_lineage) ? meta.prompt_lineage : [];
+  for (const entry of lineage) {
+    if (!entry || typeof entry !== "object") continue;
+    const prompt = String(entry.prompt || entry.text || "").trim();
+    if (prompt) return prompt;
+  }
+
+  return "";
+}
+
+function _formatBriefInstant(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return String(iso);
+  return d.toLocaleString();
+}
+
+/**
+ * Case time span for the Case Brief: opened → resolved/still open,
+ * optional event window when the timeline has multiple timestamps.
+ */
+export function formatIncidentTimeSpan(incident = {}, timeline = []) {
+  const opened = incident.created_at || null;
+  const resolved = incident.resolved_at || null;
+  const status = String(incident.status || "").toLowerCase();
+  const openedLabel = _formatBriefInstant(opened) || "—";
+  const closedLabel =
+    resolved
+      ? _formatBriefInstant(resolved)
+      : status === "resolved"
+        ? "Resolved"
+        : "Still open";
+
+  const times = (Array.isArray(timeline) ? timeline : [])
+    .map((ev) => ev?.created_at)
+    .filter(Boolean)
+    .map((iso) => new Date(iso).getTime())
+    .filter((t) => Number.isFinite(t))
+    .sort((a, b) => a - b);
+
+  let eventWindow = null;
+  if (times.length >= 2) {
+    eventWindow = `${_formatBriefInstant(new Date(times[0]).toISOString())} → ${_formatBriefInstant(new Date(times[times.length - 1]).toISOString())}`;
+  } else if (times.length === 1) {
+    eventWindow = _formatBriefInstant(new Date(times[0]).toISOString());
+  }
+
+  return {
+    opened: openedLabel,
+    closed: closedLabel,
+    caseSpan: `${openedLabel} → ${closedLabel}`,
+    eventWindow,
+    isOpen: !resolved && status !== "resolved",
+  };
+}
+
+const ACTION_BADGE_CLASS = {
+  block: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200",
+  redact: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+  monitor: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+  flag: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+  allow: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200",
+};
+
+/** Colored badge class for enforcement action. */
+export function incidentActionBadgeClass(action) {
+  const key = String(action || "").toLowerCase();
+  return ACTION_BADGE_CLASS[key] || ACTION_BADGE_CLASS.monitor;
+}
+
+/** Short human phrase for the Case Brief action chip. */
+export function formatIncidentActionPhrase(action, meta = {}) {
+  const key = String(action || "").toLowerCase();
+  if (key === "block" && isThreatIntelEnforcementMeta(meta)) {
+    return "Blocked by Threat Intelligence";
+  }
+  if (TICKER_ACTION_PHRASES[key]) {
+    // "was blocked by policy" → "Blocked by policy"
+    const phrase = TICKER_ACTION_PHRASES[key];
+    return phrase.replace(/^was\s+/i, "").replace(/^\w/, (c) => c.toUpperCase());
+  }
+  return key ? key.charAt(0).toUpperCase() + key.slice(1) : "Processed";
 }
 
 const ACTIVE_INCIDENT_STATUSES = new Set(["open", "investigating", "escalated"]);

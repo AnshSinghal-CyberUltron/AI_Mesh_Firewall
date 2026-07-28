@@ -25,7 +25,17 @@ import {
   Module2ErrorState,
   Module2PageErrorBoundary,
 } from "../../components/module2/PageStates";
-import { incidentLaneDrillDown, metadataDetail, sourceBadgeClass } from "./pageData";
+import {
+  extractIncidentPrompt,
+  formatIncidentActionPhrase,
+  formatIncidentTimeSpan,
+  formatTickerAnalystSummary,
+  humanizeThreatType,
+  incidentActionBadgeClass,
+  incidentLaneDrillDown,
+  metadataDetail,
+  sourceBadgeClass,
+} from "./pageData";
 import { ANALYST_BRIEF_TITLE, PAGE_BRIEFS } from "./pageCopy";
 
 const REFRESH_DEBOUNCE_MS = 300;
@@ -39,6 +49,180 @@ const STAGE_ICONS = {
   enforcement: { Icon: ShieldOff, color: "text-red-500", bg: "bg-red-100 dark:bg-red-900/30" },
   completed: { Icon: CheckCircle2, color: "text-green-500", bg: "bg-green-100 dark:bg-green-900/30" },
 };
+
+function CaseBrief({ incident, selectedEvent, timeline, source, evidence }) {
+  const [promptExpanded, setPromptExpanded] = useState(false);
+  const meta = selectedEvent?.metadata || {};
+  const extra = meta.extra && typeof meta.extra === "object" ? meta.extra : {};
+  const prompt = extractIncidentPrompt(selectedEvent || {});
+  const action = selectedEvent?.action || "—";
+  const threatRaw = meta.threat_type || evidence?.threat_type || "";
+  const threat = humanizeThreatType(threatRaw) || "—";
+  const reason = metadataDetail(meta);
+  const isKillSwitch =
+    String(threatRaw).toLowerCase() === "kill_switch"
+    || String(meta.event_type || "").toLowerCase() === "kill_switch"
+    || String(extra.trigger_source || "").toLowerCase() === "kill_switch";
+  const timeSpan = formatIncidentTimeSpan(incident || {}, timeline || []);
+  const eventAt = selectedEvent?.created_at
+    ? new Date(selectedEvent.created_at).toLocaleString()
+    : "—";
+  const lane = String(selectedEvent?.source || source || "generic").toLowerCase();
+  const keyPrefix =
+    selectedEvent?.key_prefix || evidence?.key_prefix || meta.key_prefix || meta.api_key_prefix || "—";
+  const model =
+    selectedEvent?.model || evidence?.model || meta.model || extra.original_model || "—";
+  const project = meta.project_id || evidence?.project_id || "—";
+  const isolationScope = extra.isolation_scope ? String(extra.isolation_scope) : "";
+  const summary = selectedEvent
+    ? formatTickerAnalystSummary({
+        action: selectedEvent.action,
+        metadata: {
+          ...meta,
+          detail: reason || meta.detail,
+          model: selectedEvent.model || meta.model || extra.original_model,
+          key_prefix: selectedEvent.key_prefix || meta.key_prefix,
+          threat_type: threatRaw,
+          source: lane,
+        },
+        source: lane,
+      })
+    : "Select a timeline event to load the analyst brief.";
+  const promptPreviewLimit = 320;
+  const promptNeedsExpand = prompt.length > promptPreviewLimit;
+  const promptShown =
+    promptExpanded || !promptNeedsExpand
+      ? prompt
+      : `${prompt.slice(0, promptPreviewLimit).trimEnd()}…`;
+  const accentBorder =
+    String(action).toLowerCase() === "block"
+      ? "border-red-300 dark:border-red-700"
+      : "border-teal-300 dark:border-teal-700";
+
+  return (
+    <div
+      className={`rounded-xl border-2 bg-white p-4 shadow-sm dark:bg-slate-800/60 ${accentBorder}`}
+      data-testid="incident-case-brief"
+    >
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+          Analyst Case Brief
+        </h3>
+        <span
+          className={`inline-flex rounded-md px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${incidentActionBadgeClass(action)}`}
+        >
+          {String(action).replace(/_/g, " ") || "—"}
+        </span>
+      </div>
+
+      <div className="space-y-4 text-sm">
+        <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-200">{summary}</p>
+
+        {reason ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 dark:border-amber-800/60 dark:bg-amber-950/30">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+              Why this fired
+            </p>
+            <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{reason}</p>
+            {isKillSwitch && isolationScope ? (
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                Isolation scope: <code>{isolationScope}</code>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Action taken</p>
+            <p className="mt-2 text-sm font-semibold capitalize text-slate-900 dark:text-slate-100">
+              {String(action).replace(/_/g, " ") || "—"}
+            </p>
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+              {formatIncidentActionPhrase(action, meta)}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Threat</p>
+            <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{threat}</p>
+            {meta.event_type ? (
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Event: {String(meta.event_type).replace(/_/g, " ")}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-900/40 sm:col-span-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Time span</p>
+            <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">{timeSpan.caseSpan}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Selected event: {eventAt}
+              {timeSpan.eventWindow && timeSpan.eventWindow !== eventAt
+                ? ` · Timeline window: ${timeSpan.eventWindow}`
+                : ""}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">User prompt</p>
+            {prompt ? (
+              <button
+                type="button"
+                onClick={() => copyToClipboard(prompt)}
+                className="rounded border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700/50"
+              >
+                Copy
+              </button>
+            ) : null}
+          </div>
+          {prompt ? (
+            <>
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-slate-800 dark:text-slate-100">
+                {promptShown}
+              </pre>
+              {promptNeedsExpand ? (
+                <button
+                  type="button"
+                  onClick={() => setPromptExpanded((open) => !open)}
+                  className="mt-2 text-xs font-medium text-teal-600 hover:underline dark:text-teal-400"
+                >
+                  {promptExpanded ? "Show less" : "Show full prompt"}
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              {isKillSwitch
+                ? "No chat prompt on this event — containment was applied at the API-key / request boundary (kill switch), not from a scanned user message."
+                : "No prompt captured for this event."}
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+          <span>
+            Lane:{" "}
+            <span className={`rounded px-1.5 py-0.5 font-medium ${sourceBadgeClass(lane)}`}>
+              {lane.replace(/_/g, " ")}
+            </span>
+          </span>
+          <span>
+            Key: <code className="text-slate-700 dark:text-slate-200">{keyPrefix}</code>
+          </span>
+          <span>
+            Model: <code className="text-slate-700 dark:text-slate-200">{model}</code>
+          </span>
+          <span>
+            Project: <code className="text-slate-700 dark:text-slate-200">{project}</code>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ChainOfCustody({ timeline }) {
   const stageEvents = (timeline || []).filter(
@@ -176,14 +360,7 @@ function IncidentDetailPageInner() {
     const source = String(selectedEvent.source || data?.source || "generic").toLowerCase();
     const extra = meta.extra && typeof meta.extra === "object" ? meta.extra : {};
     const promptLineage = Array.isArray(meta.prompt_lineage) ? meta.prompt_lineage.slice(0, 3) : [];
-    const promptSnippet = String(
-      meta.prompt_snippet
-      || extra.prompt_snippet
-      || extra.prompt
-      || extra.user_message
-      || extra.query
-      || "",
-    ).trim();
+    const promptSnippet = extractIncidentPrompt(selectedEvent);
     if (!promptSnippet && promptLineage.length === 0 && source !== "chat") {
       return null;
     }
@@ -328,6 +505,17 @@ function IncidentDetailPageInner() {
         </div>
       )}
 
+      <div className="mb-4">
+        <CaseBrief
+          key={selectedEvent?.id || "none"}
+          incident={incident}
+          selectedEvent={selectedEvent}
+          timeline={data.timeline}
+          source={data.source}
+          evidence={data.evidence}
+        />
+      </div>
+
       <ChainOfCustody timeline={data.timeline} />
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -406,32 +594,32 @@ function IncidentDetailPageInner() {
                 <p><strong>Detail:</strong> {selectedDetail}</p>
               )}
               {promptPayload && (
-                <div className="rounded-lg border border-indigo-200 bg-indigo-50/70 p-3 dark:border-indigo-800/60 dark:bg-indigo-900/20">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-                      Prompt JSON
-                    </p>
+                <details className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+                  <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Technical payload (JSON)
+                  </summary>
+                  <div className="mt-2 flex items-center justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => copyToClipboard(JSON.stringify(promptPayload, null, 2))}
-                      className="rounded border border-indigo-300 px-2 py-0.5 text-[10px] font-medium text-indigo-700 hover:bg-indigo-100 dark:border-indigo-700 dark:text-indigo-300 dark:hover:bg-indigo-900/40"
+                      className="rounded border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700/50"
                     >
                       Copy JSON
                     </button>
                   </div>
-                  <pre className="max-h-44 overflow-auto rounded bg-slate-900 p-2 text-[10px] leading-relaxed text-emerald-300">
+                  <pre className="mt-2 max-h-44 overflow-auto rounded bg-slate-900 p-2 text-[10px] leading-relaxed text-emerald-300">
                     {JSON.stringify(promptPayload, null, 2)}
                   </pre>
-                </div>
-              )}
-              {selectedEvent.metadata?.prompt_snippet && (
-                <div className="rounded bg-slate-900 p-3 text-xs text-green-400">
-                  {selectedEvent.metadata.prompt_snippet}
-                </div>
+                </details>
               )}
               {selectedEvent.metadata?.response_snippet && (
-                <div className="rounded bg-slate-900 p-3 text-xs text-blue-400">
-                  {selectedEvent.metadata.response_snippet}
+                <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Response snippet
+                  </p>
+                  <pre className="max-h-36 overflow-auto whitespace-pre-wrap break-words font-sans text-xs text-slate-700 dark:text-slate-200">
+                    {selectedEvent.metadata.response_snippet}
+                  </pre>
                 </div>
               )}
             </div>

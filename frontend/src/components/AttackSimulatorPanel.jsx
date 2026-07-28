@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Zap, Shield, AlertTriangle, CheckCircle, Loader2, ChevronDown, ChevronRight,
   Copy, Send, RotateCcw, Play, Activity,
@@ -17,6 +17,11 @@ import {
   normalizeStreamChatPipelineResult,
 } from "../utils/liveGateway";
 import { formatZeroshieldScanSummary, formatRoutingReason, ZEROSHIELD_GUARD_MODEL_LABEL } from "../constants/zeroshieldBrand";
+import {
+  CONTAINMENT_CHANGED_EVENT,
+  clearSimulatorKeyReprovisionSuppress,
+  readSimulatorKeyReprovisionSuppress,
+} from "../utils/containmentEvents";
 
 // Upstream provider/model literals that must never reach the operator UI.
 // The gateway tier-2 'detail'/'guard_reason' strings can embed the raw Bedrock
@@ -232,6 +237,13 @@ export function AttackSimulatorPanel() {
   const [burstConcurrency, setBurstConcurrency] = useState(10);
   const [burstEstimatedTokens, setBurstEstimatedTokens] = useState(8000);
   const [useStreamMode, setUseStreamMode] = useState(false);
+  const [disableKeyBanner, setDisableKeyBanner] = useState(() => readSimulatorKeyReprovisionSuppress());
+
+  useEffect(() => {
+    const sync = () => setDisableKeyBanner(readSimulatorKeyReprovisionSuppress());
+    window.addEventListener(CONTAINMENT_CHANGED_EVENT, sync);
+    return () => window.removeEventListener(CONTAINMENT_CHANGED_EVENT, sync);
+  }, []);
 
   const activePrompt = promptText;
 
@@ -597,6 +609,30 @@ export function AttackSimulatorPanel() {
         )}
       </div>
 
+      {disableKeyBanner && (
+        <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+          <p className="font-semibold">
+            API key disabled
+            {disableKeyBanner.prefix ? ` (${disableKeyBanner.prefix}…)` : ""}
+            {" — "}
+            Run Pipeline should stop at Auth (HTTP 403), not Input Scan.
+          </p>
+          <p className="mt-1 text-amber-800 dark:text-amber-200/90">
+            Keep this key in the Gateway API Key field. Auto-provision of a replacement key is paused so Disable stays testable.
+          </p>
+          <button
+            type="button"
+            className="mt-2 text-[11px] font-semibold underline"
+            onClick={() => {
+              clearSimulatorKeyReprovisionSuppress();
+              setDisableKeyBanner(null);
+            }}
+          >
+            Allow new simulator key provision
+          </button>
+        </div>
+      )}
+
       <div className="mb-4 grid gap-3 lg:grid-cols-2">
         <div>
           <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Gateway URL</label>
@@ -813,6 +849,14 @@ export function AttackSimulatorPanel() {
             <span className="text-red-600 dark:text-red-400">
               {" "}
               Stopped at <span className="font-medium">{result.blocked_by.replace(/_/g, " ")}</span>.
+              {result.message && result.blocked_by === "auth" ? (
+                <span className="ml-1 font-normal">({result.message})</span>
+              ) : null}
+            </span>
+          )}
+          {disableKeyBanner && result.blocked_by && result.blocked_by !== "auth" && (
+            <span className="ml-1 text-amber-700 dark:text-amber-300">
+              Expected Auth (disabled key) — this request used an active credential (or a newly provisioned simulator key).
             </span>
           )}
         </p>

@@ -22,6 +22,12 @@ import {
   patchIncidentSummaryForMutation,
   resolveEventLane,
   sourceBadgeClass,
+  extractIncidentPrompt,
+  formatIncidentTimeSpan,
+  humanizeThreatType,
+  incidentActionBadgeClass,
+  formatIncidentActionPhrase,
+  metadataDetail,
 } from "./pageData.js";
 import {
   EXPOSURE_KPI_SOURCE,
@@ -287,6 +293,80 @@ test("formatIncidentAge renders compact durations", () => {
   const hourAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   assert.equal(formatIncidentAge(hourAgo), "2h");
   assert.equal(formatIncidentAge(""), "—");
+});
+
+test("humanizeThreatType spaces snake_case and capitalizes", () => {
+  assert.equal(humanizeThreatType("kill_switch"), "Kill switch");
+  assert.equal(humanizeThreatType("PROMPT_INJECTION"), "Prompt injection");
+  assert.equal(humanizeThreatType(""), "");
+});
+
+test("extractIncidentPrompt prefers top-level then metadata then extra then lineage", () => {
+  assert.equal(
+    extractIncidentPrompt({ prompt_snippet: "top level prompt" }),
+    "top level prompt",
+  );
+  assert.equal(
+    extractIncidentPrompt({
+      metadata: { prompt_submitted: "from submitted" },
+    }),
+    "from submitted",
+  );
+  assert.equal(
+    extractIncidentPrompt({
+      metadata: { extra: { user_message: "from extra" } },
+    }),
+    "from extra",
+  );
+  assert.equal(
+    extractIncidentPrompt({
+      metadata: { prompt_lineage: [{ prompt: "from lineage" }] },
+    }),
+    "from lineage",
+  );
+  assert.equal(extractIncidentPrompt({}), "");
+});
+
+test("formatIncidentTimeSpan builds case span and event window", () => {
+  const opened = "2026-07-27T10:00:00.000Z";
+  const later = "2026-07-27T11:00:00.000Z";
+  const span = formatIncidentTimeSpan(
+    { created_at: opened, status: "open" },
+    [{ created_at: opened }, { created_at: later }],
+  );
+  assert.equal(span.isOpen, true);
+  assert.match(span.caseSpan, /Still open/);
+  assert.ok(span.eventWindow);
+  assert.match(span.eventWindow, /→/);
+
+  const closed = formatIncidentTimeSpan(
+    { created_at: opened, resolved_at: later, status: "resolved" },
+    [{ created_at: opened }],
+  );
+  assert.equal(closed.isOpen, false);
+  assert.ok(closed.caseSpan.includes("→"));
+});
+
+test("incidentActionBadgeClass and formatIncidentActionPhrase map outcomes", () => {
+  assert.match(incidentActionBadgeClass("block"), /red/);
+  assert.match(incidentActionBadgeClass("allow"), /emerald/);
+  assert.equal(formatIncidentActionPhrase("block"), "Blocked by policy");
+  assert.equal(
+    formatIncidentActionPhrase("block", { source: "threat_intel" }),
+    "Blocked by Threat Intelligence",
+  );
+});
+
+test("metadataDetail falls back to reason when detail is absent", () => {
+  assert.equal(
+    metadataDetail({ reason: "Analyst containment — medium risk" }),
+    "Analyst containment — medium risk",
+  );
+  assert.equal(
+    metadataDetail({ extra: { reason: "nested kill switch reason" } }),
+    "nested kill switch reason",
+  );
+  assert.equal(metadataDetail({ detail: "prefer detail", reason: "later" }), "prefer detail");
 });
 
 test("patchIncidentSummaryForMutation updates open and resolved counts on resolve", () => {

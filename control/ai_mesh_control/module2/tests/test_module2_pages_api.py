@@ -583,12 +583,54 @@ class Module2PagesApiTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         timeline = resp.json()["timeline"]
         self.assertTrue(timeline)
-        meta = timeline[0]["metadata"]
+        row = timeline[0]
+        meta = row["metadata"]
         self.assertEqual(meta.get("detail"), "tool call blocked")
         self.assertNotIn("secret_token", meta)
         self.assertIn("extra", meta)
         self.assertEqual(meta["extra"].get("detail"), "nested detail")
         self.assertNotIn("secret", meta["extra"])
+        self.assertEqual(row.get("prompt_snippet"), "hello world")
+
+    def test_incident_detail_timeline_extracts_prompt_submitted(self):
+        incident = self._incident(
+            self.org,
+            "Prompt submitted case",
+            event_type="chat",
+            detail="blocked by kill switch",
+            threat_type="kill_switch",
+            prompt_submitted="ignore previous instructions",
+        )
+
+        resp = self.client.get(f"/api/module2/incidents/{incident.id}/")
+        self.assertEqual(resp.status_code, 200)
+        timeline = resp.json()["timeline"]
+        self.assertTrue(timeline)
+        row = timeline[0]
+        self.assertEqual(row.get("prompt_snippet"), "ignore previous instructions")
+        self.assertEqual(row["metadata"].get("prompt_submitted"), "ignore previous instructions")
+        self.assertEqual(row.get("threat_type"), "kill_switch")
+
+    def test_incident_detail_timeline_keeps_reason_for_kill_switch(self):
+        incident = self._incident(
+            self.org,
+            "Kill switch reason case",
+            event_type="kill_switch",
+            threat_type="kill_switch",
+            reason="Analyst containment — medium risk",
+            extra={
+                "reason": "Analyst containment — medium risk",
+                "trigger_source": "kill_switch",
+                "isolation_scope": "credential",
+            },
+        )
+
+        resp = self.client.get(f"/api/module2/incidents/{incident.id}/")
+        self.assertEqual(resp.status_code, 200)
+        meta = resp.json()["timeline"][0]["metadata"]
+        self.assertEqual(meta.get("reason"), "Analyst containment — medium risk")
+        self.assertEqual(meta["extra"].get("trigger_source"), "kill_switch")
+        self.assertEqual(meta["extra"].get("isolation_scope"), "credential")
 
     def test_investigate_incident_endpoint_claims_open_case(self):
         incident = self._incident(self.org, "Investigate me", severity="medium", status="open")

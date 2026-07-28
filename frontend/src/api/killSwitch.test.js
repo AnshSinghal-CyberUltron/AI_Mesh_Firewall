@@ -4,9 +4,17 @@ import {
   buildCredentialKillSwitchPayload,
   buildAnalystKillSwitchReason,
   createKillSwitchApi,
+  deriveAllowedModelsForKey,
+  describeContainmentSemantics,
+  fetchActiveSimulatorContext,
+  filterEnforcedKillSwitches,
   filterKillSwitchesForPrefix,
   findKillSwitchForPayload,
+  isGatewayEnforcedKillModel,
+  isSimulatorKeyRow,
+  mergeKillSwitchModelCandidates,
   resolveTopModelName,
+  validateKillSwitchTarget,
 } from "./killSwitch.js";
 
 test("buildCredentialKillSwitchPayload requires model_name (no __credential__)", () => {
@@ -21,6 +29,66 @@ test("buildCredentialKillSwitchPayload requires model_name (no __credential__)",
   assert.equal(payload.reason, "UEBA high risk");
 });
 
+test("buildCredentialKillSwitchPayload rejects legacy __credential__ scope", () => {
+  assert.throws(
+    () => buildCredentialKillSwitchPayload({
+      modelName: "__credential__",
+      apiKeyPrefix: "abc12345",
+      reason: "legacy",
+    }),
+    /not enforced by the gateway/,
+  );
+});
+
+test("isGatewayEnforcedKillModel rejects legacy credential scope", () => {
+  assert.equal(isGatewayEnforcedKillModel("__credential__"), false);
+  assert.equal(isGatewayEnforcedKillModel("gpt-4o"), true);
+  assert.equal(filterEnforcedKillSwitches([
+    { id: 1, model_name: "__credential__", is_active: true },
+    { id: 2, model_name: "gpt-4o", is_active: true },
+  ]).map((ks) => ks.id).join(","), "2");
+});
+
+test("mergeKillSwitchModelCandidates prefers simulator then catalog then telemetry", () => {
+  const models = mergeKillSwitchModelCandidates({
+    preferredModel: "north-mini",
+    gatewayModelNames: ["gpt-4o", "north-mini"],
+    telemetryRow: { top_models: [["served-model", 9]] },
+  });
+  assert.deepEqual(models, ["north-mini", "gpt-4o", "served-model"]);
+});
+
+test("buildCredentialKillSwitchPayload allows org-wide scope when prefix is empty", () => {
+  const payload = buildCredentialKillSwitchPayload({
+    modelName: "gpt-4o",
+    apiKeyPrefix: "",
+    reason: "org-wide containment",
+  });
+  assert.equal(payload.model_name, "gpt-4o");
+  assert.equal(payload.api_key_prefix, undefined);
+  assert.equal(payload.action, "disable");
+});
+
+test("buildCredentialKillSwitchPayload requires fallback_model for reroute", () => {
+  assert.throws(
+    () => buildCredentialKillSwitchPayload({ modelName: "gpt-4o", action: "reroute" }),
+    /fallback_model is required/,
+  );
+});
+
+test("buildCredentialKillSwitchPayload includes reroute fallback_model", () => {
+  const payload = buildCredentialKillSwitchPayload({
+    modelName: "gpt-4o",
+    apiKeyPrefix: "abc12345",
+    action: "reroute",
+    fallbackModel: "gpt-4.1-mini",
+    reason: "fallback test",
+  });
+  assert.equal(payload.action, "reroute");
+  assert.equal(payload.fallback_model, "gpt-4.1-mini");
+  assert.equal(payload.api_key_prefix, "abc12345");
+});
+
 test("buildCredentialKillSwitchPayload throws without model_name", () => {
   assert.throws(
     () => buildCredentialKillSwitchPayload({ apiKeyPrefix: "abc12345", reason: "x" }),
@@ -31,6 +99,16 @@ test("buildCredentialKillSwitchPayload throws without model_name", () => {
 test("resolveTopModelName prefers top_models tuples", () => {
   assert.equal(resolveTopModelName({ top_models: [["gpt-4o", 3], ["mini", 1]] }), "gpt-4o");
   assert.equal(resolveTopModelName({ models: ["z", "a"] }), "a");
+});
+
+test("deriveAllowedModelsForKey preserves key-scoped model ordering and uniqueness", () => {
+  const models = deriveAllowedModelsForKey({
+    top_models: [["gpt-4o", 3], ["gpt-4.1-mini", 1]],
+    models: ["gpt-4.1-mini", "gpt-4o-mini"],
+    recent_requests: [{ model: "gpt-4o" }, { model: "gpt-4o-mini" }],
+    model: "gpt-5-mini",
+  });
+  assert.deepEqual(models, ["gpt-4o", "gpt-4.1-mini", "gpt-4o-mini", "gpt-5-mini"]);
 });
 
 test("buildAnalystKillSwitchReason includes band and metrics", () => {
@@ -176,4 +254,65 @@ test("setGatewayKeyActive PATCHes is_active", async () => {
   assert.equal(calls[0].url, "/api/gateways/keys/k1/");
   assert.equal(calls[0].method, "PATCH");
   assert.equal(JSON.parse(calls[0].body).is_active, false);
+});
+
+test("deactivateKillSwitch posts deactivate endpoint", async () => {
+  const calls = [];
+  const fetchWithAuth = async (url, opts = {}) => {
+    calls.push({ url, method: opts.method || "GET", body: opts.body });
+    return { ok: true, json: async () => ({ id: 77, is_active: false }) };
+  };
+  const api = createKillSwitchApi(fetchWithAuth);
+  await api.deactivateKillSwitch(77);
+  assert.equal(calls[0].url, "/api/kill-switches/77/deactivate/");
+  assert.equal(calls[0].method, "POST");
+});
+
+test("validateKillSwitchTarget refuses inactive and stale simulator prefixes", () => {
+  const live = { prefix: "liveSim1", keyId: "42", name: "simulator" };
+  assert.equal(isSimulatorKeyRow({ name: "simulator", prefix: "oldSim99" }, live), true);
+  const inactive = validateKillSwitchTarget({
+    row: { name: "simulator", prefix: "oldSim99", is_active: false },
+    activeSimulator: live,
+    requireActiveKey: true,
+  });
+  assert.equal(inactive.ok, false);
+  assert.match(inactive.error, /liveSim1/);
+
+  const staleActive = validateKillSwitchTarget({
+    row: { name: "simulator", prefix: "oldSim99", is_active: true },
+    activeSimulator: live,
+    requireActiveKey: true,
+  });
+  assert.equal(staleActive.ok, false);
+  assert.match(staleActive.error, /Stale simulator/);
+
+  const okLive = validateKillSwitchTarget({
+    row: { name: "simulator", prefix: "liveSim1", is_active: true },
+    activeSimulator: live,
+    requireActiveKey: true,
+  });
+  assert.equal(okLive.ok, true);
+
+  const semantics = describeContainmentSemantics();
+  assert.match(semantics.killSwitch, /Kill Switch pipeline stage/);
+  assert.match(semantics.disableKey, /Auth \(HTTP 403\)/);
+});
+
+test("fetchActiveSimulatorContext reads Module 1 simulator-default", async () => {
+  const fetchWithAuth = async (url) => {
+    assert.equal(url, "/api/gateways/simulator-default/");
+    return {
+      ok: true,
+      json: async () => ({
+        has_gateway_key: true,
+        prefix: "abcDEF12",
+        key_id: "99",
+        name: "simulator",
+      }),
+    };
+  };
+  const ctx = await fetchActiveSimulatorContext(fetchWithAuth);
+  assert.equal(ctx.prefix, "abcDEF12");
+  assert.equal(ctx.keyId, "99");
 });

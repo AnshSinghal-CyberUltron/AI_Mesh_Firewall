@@ -30,6 +30,7 @@ from module2.analytics import (
     build_vector_exposure_payload,
     count_monitored_events,
     count_rerouted_events,
+    event_prompt_from_meta,
     event_source,
     hours_from_period,
     key_prefix_from_meta,
@@ -95,6 +96,7 @@ _TIMELINE_META_ALLOWLIST = {
     "pipeline_stage",
     "source",
     "detail",
+    "reason",
     "threat_type",
     "request_id",
     "pipeline_request_id",
@@ -114,22 +116,32 @@ _TIMELINE_META_ALLOWLIST = {
     "original_model",
     "selected_model",
     "prompt_snippet",
+    "prompt_submitted",
+    "input_text",
     "response_snippet",
     "prompt_lineage",
     "intent",
+    "owasp_code",
     "extra",
 }
 
 _TIMELINE_EXTRA_ALLOWLIST = {
     "detail",
+    "reason",
     "source",
     "prompt",
     "prompt_snippet",
+    "prompt_submitted",
+    "input_text",
     "user_message",
     "query",
     "rerouted",
     "original_model",
     "selected_model",
+    "trigger_source",
+    "isolation_scope",
+    "is_isolation_event",
+    "kill_switch_truth_mode",
 }
 
 _VALID_INCIDENT_STATUSES = {"open", "investigating", "escalated", "resolved"}
@@ -302,17 +314,37 @@ def _collect_key_metrics_from_collapsed(keys_qs, collapsed_rows):
     return key_by_prefix, metrics
 
 
+def _gateway_keys_for_org(org, *, select_owner=False, order_by=None):
+    """Org-scoped GatewayAPIKey queryset. Missing org => empty (never all-tenants)."""
+    qs = GatewayAPIKey.objects.all()
+    if select_owner:
+        qs = qs.select_related("owner")
+    if org is None:
+        return qs.none()
+    qs = qs.filter(organization=org)
+    if order_by:
+        qs = qs.order_by(order_by)
+    return qs
+
+
 def _build_key_containment_payload(org, keys_qs=None):
     """Counts and detail rows for disabled API keys and active kill switches."""
+    if org is None:
+        return {
+            "disabled_keys": 0,
+            "active_kill_switches": 0,
+            "active_kill_switches_total": 0,
+            "disabled_keys_detail": [],
+            "active_kill_switches_detail": [],
+        }
+
     if keys_qs is None:
-        keys_qs = GatewayAPIKey.objects.select_related("owner").all()
-        if org:
-            keys_qs = keys_qs.filter(organization=org)
+        keys_qs = GatewayAPIKey.objects.select_related("owner").filter(organization=org)
 
     disabled_qs = keys_qs.filter(is_active=False).order_by("-updated_at")
-    ks_qs = KillSwitch.objects.filter(is_active=True).order_by("-activated_at", "-updated_at")
-    if org:
-        ks_qs = ks_qs.filter(organization=org)
+    ks_qs = KillSwitch.objects.filter(organization=org, is_active=True).order_by(
+        "-activated_at", "-updated_at"
+    )
 
     disabled_keys_detail = [
         {
@@ -334,35 +366,37 @@ def _build_key_containment_payload(org, keys_qs=None):
             "action": ks.action,
             "reason": ks.reason,
             "activated_at": ks.activated_at.isoformat() if ks.activated_at else None,
+            "gateway_enforced": _is_gateway_enforced_kill_model(ks.model_name),
         }
         for ks in ks_qs[:50]
     ]
+    # Only gateway-enforceable switches count as containment (legacy __credential__ does not).
+    enforced_detail = [row for row in active_kill_switches_detail if row["gateway_enforced"]]
 
     return {
         "disabled_keys": disabled_qs.count(),
-        "active_kill_switches": ks_qs.count(),
+        "active_kill_switches": len(enforced_detail),
+        "active_kill_switches_total": ks_qs.count(),
         "disabled_keys_detail": disabled_keys_detail,
         "active_kill_switches_detail": active_kill_switches_detail,
     }
 
 
-def _empty_key_metric():
-    return {
-        "total": 0,
-        "blocked": 0,
-        "redacted": 0,
-        "endpoint_ids": set(),
-        "models": set(),
-        "model_counts": defaultdict(int),
-        "threat_types": defaultdict(int),
-        "hourly": defaultdict(int),
-    }
+def _is_gateway_enforced_kill_model(model_name: str) -> bool:
+    """Gateway matches …:model:{client_requested_model}; legacy __credential__ never matches chat."""
+    name = str(model_name or "").strip()
+    if not name:
+        return False
+    if name == "__credential__":
+        return False
+    return True
 
 
 def _kill_switches_by_prefix(org):
-    ks_qs = KillSwitch.objects.filter(is_active=True).order_by("-activated_at")
-    if org:
-        ks_qs = ks_qs.filter(organization=org)
+    """Active kill switches grouped by api_key_prefix. Missing org => empty."""
+    if org is None:
+        return {}
+    ks_qs = KillSwitch.objects.filter(organization=org, is_active=True).order_by("-activated_at")
     grouped = defaultdict(list)
     for ks in ks_qs:
         prefix = str(ks.api_key_prefix or "").strip()
@@ -375,6 +409,7 @@ def _kill_switches_by_prefix(org):
                     "is_active": ks.is_active,
                     "reason": ks.reason,
                     "activated_at": ks.activated_at.isoformat() if ks.activated_at else None,
+                    "gateway_enforced": _is_gateway_enforced_kill_model(ks.model_name),
                 }
             )
     return grouped
@@ -401,15 +436,25 @@ def _risk_rows_for_metrics(keys_qs, key_by_prefix, metrics, org):
 
 
 def _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix, org=None):
-    """Merge gateway key registry rows with UEBA behavior metrics and kill-switch scope."""
+    """Merge gateway key registry rows with UEBA behavior metrics and kill-switch scope.
+
+    Hide historical keys with zero enforcement activity in the selected window, but keep
+    actionable rows (disabled keys or keys with an active kill switch) so operators can
+    still manage containment.
+    """
     org_settings = get_or_create_org_settings(org) if org else None
     assessments = assessments_map_for_keys(list(keys_qs[:200]))
     results = []
     for k in keys_qs[:200]:
         prefix = k.prefix
         metric = metrics.get(prefix) or _empty_key_metric()
-        risk = assessment_to_risk_payload(k, metric, assessments.get(k.pk), org_settings)
         active_ks = kill_by_prefix.get(prefix, [])
+        enforced_ks = [ks for ks in active_ks if ks.get("gateway_enforced")]
+        has_period_activity = int(metric.get("total") or 0) > 0
+        # Keep disabled / kill-switched keys even with zero window activity.
+        if not has_period_activity and k.is_active and not active_ks:
+            continue
+        risk = assessment_to_risk_payload(k, metric, assessments.get(k.pk), org_settings)
         top_threats = sorted(metric["threat_types"].items(), key=lambda x: -x[1])[:3]
         top_models = sorted(metric["model_counts"].items(), key=lambda x: -x[1])[:3]
 
@@ -445,7 +490,8 @@ def _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefi
                 "top_threat_types": top_threats,
                 "top_models": top_models,
                 "active_kill_switches": active_ks,
-                "active_kill_switch_count": len(active_ks),
+                "active_kill_switch_count": len(enforced_ks),
+                "enforced_kill_switch_count": len(enforced_ks),
             }
         )
 
@@ -468,11 +514,7 @@ class UebaApiKeySummaryView(APIView):
         since = timezone.now() - timedelta(hours=_hours_from_period(period))
         org = _org_or_403(request)
 
-        keys_qs = GatewayAPIKey.objects.all()
-        if org:
-            keys_qs = keys_qs.filter(organization=org)
-        elif not request.user.is_superuser:
-            keys_qs = keys_qs.none()
+        keys_qs = _gateway_keys_for_org(org)
 
         events = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
@@ -511,11 +553,7 @@ class UebaApiKeyRegistryView(APIView):
         period = request.query_params.get("period", "24h")
         since = timezone.now() - timedelta(hours=_hours_from_period(period))
         org = _org_or_403(request)
-        qs = GatewayAPIKey.objects.select_related("owner").order_by("-created_at")
-        if org:
-            qs = qs.filter(organization=org)
-        elif not request.user.is_superuser:
-            qs = qs.none()
+        qs = _gateway_keys_for_org(org, select_owner=True, order_by="-created_at")
 
         events = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
@@ -540,11 +578,7 @@ def _ueba_period_bundle(request, period: str):
     hours = _hours_from_period(period)
     org = _org_or_403(request)
 
-    keys_qs = GatewayAPIKey.objects.select_related("owner").order_by("-created_at")
-    if org:
-        keys_qs = keys_qs.filter(organization=org)
-    elif not request.user.is_superuser:
-        keys_qs = keys_qs.none()
+    keys_qs = _gateway_keys_for_org(org, select_owner=True, order_by="-created_at")
 
     events = _enforcement_events_for_request(
         request, EnforcementEvent.objects.filter(created_at__gte=since)
@@ -734,11 +768,7 @@ class UebaApiKeyTimelineView(APIView):
         since = timezone.now() - timedelta(hours=hours)
         org = _org_or_403(request)
 
-        keys_qs = GatewayAPIKey.objects.all()
-        if org:
-            keys_qs = keys_qs.filter(organization=org)
-        elif not request.user.is_superuser:
-            keys_qs = keys_qs.none()
+        keys_qs = _gateway_keys_for_org(org)
 
         events = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
@@ -805,11 +835,7 @@ class UebaApiKeyBehaviorView(APIView):
         except ValueError:
             return Response({"detail": "Invalid key id."}, status=status.HTTP_400_BAD_REQUEST)
 
-        key_qs = GatewayAPIKey.objects.select_related("owner")
-        if org:
-            key_qs = key_qs.filter(organization=org)
-        elif not request.user.is_superuser:
-            key_qs = key_qs.none()
+        key_qs = _gateway_keys_for_org(org, select_owner=True)
         key = key_qs.filter(pk=key_id).first()
         if not key:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -1581,7 +1607,11 @@ class IncidentDetailView(APIView):
         source = "generic"
         evidence = {"key_prefix": "", "model": "", "project_id": "", "threat_type": ""}
         for ev in events:
-            meta = _sanitize_incident_metadata(ev.metadata or {})
+            raw_meta = ev.metadata or {}
+            meta = _sanitize_incident_metadata(raw_meta)
+            prompt_snippet = sanitize_incident_text(
+                event_prompt_from_meta(raw_meta if isinstance(raw_meta, dict) else {})
+            )
             source = source if source != "generic" else _event_source(meta)
             evidence["key_prefix"] = evidence["key_prefix"] or _key_prefix_from_meta(meta)
             evidence["model"] = evidence["model"] or str(meta.get("model") or "")
@@ -1598,6 +1628,8 @@ class IncidentDetailView(APIView):
                     "source": _event_source(meta),
                     "key_prefix": _key_prefix_from_meta(meta),
                     "model": meta.get("model") or "",
+                    "prompt_snippet": prompt_snippet,
+                    "threat_type": str(meta.get("threat_type") or ""),
                 }
             )
 

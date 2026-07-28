@@ -7,15 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { useBackendHealth } from "../../hooks/useBackendHealth";
-
-function useOfferingVisibility(user) {
-  const roles = user?.roles || [];
-  const hasPlatform =
-    user?.is_superuser || roles.some((r) => ["platform_admin", "platform_user"].includes(r));
-  return {
-    hasPlatform: hasPlatform || !roles.length,
-  };
-}
+import { resolveOfferingVisibility } from "../../utils/offeringVisibility";
 
 function formatRelativeTime(isoString) {
   if (!isoString) return "";
@@ -163,7 +155,7 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
   const { user, logout, fetchWithAuth } = useAuth();
   const { resolvedTheme, toggleTheme } = useTheme();
   const isAdmin = user?.is_superuser || (user?.roles || []).includes("platform_admin");
-  const { hasPlatform } = useOfferingVisibility(user);
+  const { hasPlatform } = resolveOfferingVisibility(user);
   const navigate = useNavigate();
   const displayName = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') || user.email : '';
   const [showHelpModal, setShowHelpModal] = useState(false);

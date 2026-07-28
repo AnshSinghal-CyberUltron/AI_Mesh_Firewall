@@ -15,6 +15,8 @@
 //   - Scoped to the simulator-key gateway calls that pass `reprovision`; it is
 //     never wired into the JWT/control fetch path.
 
+import { isSimulatorKeyReprovisionSuppressed } from "../utils/containmentEvents.js";
+
 const DISABLED_KEY_RE = /(api key is disabled|key is disabled|not valid for any token type|invalid api key|key_disabled|api_key_invalid)/i;
 
 async function bodyIndicatesDisabledKey(res) {
@@ -45,6 +47,11 @@ export async function gatewayFetch(url, options = {}, { key, reprovision } = {})
   let res = await fetch(url, withKey(key));
 
   if ((res.status === 401 || res.status === 403) && typeof reprovision === "function") {
+    // After Module 2 "Disable key", do not mint/swap a fresh simulator key —
+    // that hides Auth-stage rejection and makes the next chat look like Input Scan.
+    if (isSimulatorKeyReprovisionSuppressed(key)) {
+      return res;
+    }
     if (await bodyIndicatesDisabledKey(res)) {
       const fresh = await reprovision();
       // Retry once, only if we actually got a different key.

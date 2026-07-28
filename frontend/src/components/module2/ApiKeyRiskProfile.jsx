@@ -4,8 +4,16 @@ import {
   buildCredentialKillSwitchPayload,
   buildAnalystKillSwitchReason,
   createKillSwitchApi,
+  describeContainmentSemantics,
+  fetchActiveSimulatorContext,
+  fetchGatewayModelNames,
+  filterEnforcedKillSwitches,
   filterKillSwitchesForPrefix,
-  resolveTopModelName,
+  isGatewayEnforcedKillModel,
+  isSimulatorKeyRow,
+  mergeKillSwitchModelCandidates,
+  readPreferredSimulatorModel,
+  validateKillSwitchTarget,
 } from "../../api/killSwitch";
 import { LlMObservationBadge, LlMObservationPanel } from "./LlMObservationStatus";
 import { RiskBandBadge } from "./RiskBandBadge";
@@ -18,6 +26,7 @@ import {
   laneLabel,
 } from "./uebaPromptDisplay";
 import { formatUebaRequestTime } from "./uebaTimeFormat";
+import { KillSwitchActionDialog } from "./KillSwitchActionDialog";
 
 const RECOMMENDED_ACTION_LABELS = {
   monitor: "Monitor — routine watch",
@@ -372,10 +381,23 @@ export function ApiKeyRiskProfile({
   const [actionLoading, setActionLoading] = useState(null);
   const [actionError, setActionError] = useState(null);
   const [actionSuccess, setActionSuccess] = useState(null);
+  const [killSwitchDialogOpen, setKillSwitchDialogOpen] = useState(false);
+  const [killDialogModels, setKillDialogModels] = useState([]);
+  const [killPreferredModel, setKillPreferredModel] = useState("");
+  const [activeSimulator, setActiveSimulator] = useState(null);
 
   const scopedKillSwitches = useMemo(
     () => filterKillSwitchesForPrefix(killSwitches, behavior?.prefix),
     [killSwitches, behavior?.prefix],
+  );
+  const enforcedKillSwitches = useMemo(
+    () => filterEnforcedKillSwitches(scopedKillSwitches),
+    [scopedKillSwitches],
+  );
+  const legacyKillSwitches = useMemo(
+    () => scopedKillSwitches.filter((ks) => ks?.is_active !== false
+      && !isGatewayEnforcedKillModel(ks?.model_name)),
+    [scopedKillSwitches],
   );
 
   const allowRate = useMemo(() => {
@@ -385,6 +407,43 @@ export function ApiKeyRiskProfile({
     const allowed = Math.max(0, behavior.request_count - blocked - redacted);
     return (allowed / behavior.request_count) * 100;
   }, [behavior]);
+
+  const isSimulatorTarget = Boolean(
+    (simulatorKeyPrefix && behavior?.prefix && behavior.prefix === simulatorKeyPrefix)
+    || isSimulatorKeyRow(behavior, activeSimulator),
+  );
+
+  useEffect(() => {
+    if (!killSwitchDialogOpen) {
+      setKillDialogModels([]);
+      setKillPreferredModel("");
+      setActiveSimulator(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const preferred = readPreferredSimulatorModel();
+    setKillPreferredModel(preferred);
+    (async () => {
+      const [gatewayNames, liveSim] = await Promise.all([
+        fetchGatewayModelNames(fetchWithAuth),
+        fetchActiveSimulatorContext(fetchWithAuth),
+      ]);
+      if (cancelled) return;
+      setActiveSimulator(liveSim);
+      const simTarget = Boolean(
+        (simulatorKeyPrefix && behavior?.prefix && behavior.prefix === simulatorKeyPrefix)
+        || isSimulatorKeyRow(behavior, liveSim),
+      );
+      setKillDialogModels(mergeKillSwitchModelCandidates({
+        telemetryRow: behavior,
+        gatewayModelNames: gatewayNames,
+        preferredModel: simTarget ? preferred : "",
+      }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [killSwitchDialogOpen, behavior, fetchWithAuth, simulatorKeyPrefix]);
 
   const loadKillSwitches = useCallback(async () => {
     setKsLoading(true);
@@ -413,45 +472,40 @@ export function ApiKeyRiskProfile({
   const displayScore = behavior.final_score ?? behavior.risk_score ?? 0;
 
   const handleApplyKillSwitch = async () => {
-    const topModel = resolveTopModelName(behavior);
-    if (!topModel) {
-      const confirmedDisable = window.confirm(
-        `No model traffic found for ${behavior.prefix}. `
-        + "Disable the API key instead (blocks all models via PATCH is_active=false)?",
-      );
-      if (!confirmedDisable) return;
-      setActionLoading("kill-switch");
-      setActionError(null);
-      setActionSuccess(null);
-      try {
-        await api.setGatewayKeyActive(behavior.key_id, false);
-        setActionSuccess(`API key ${behavior.prefix} disabled (all models).`);
-        onActionComplete?.();
-      } catch (err) {
-        setActionError(err.message || "Failed to disable API key.");
-      } finally {
-        setActionLoading(null);
-      }
-      return;
-    }
+    setActionError(null);
+    setActionSuccess(null);
+    setKillSwitchDialogOpen(true);
+  };
 
-    const confirmed = window.confirm(
-      `Activate kill switch for model ${topModel} on key ${behavior.prefix}? `
-      + "Uses POST /api/kill-switches/ (per-model). For all-model containment, use Disable API key.",
-    );
-    if (!confirmed) return;
-
+  const handleSubmitKillSwitch = async (form) => {
     setActionLoading("kill-switch");
     setActionError(null);
     setActionSuccess(null);
     try {
+      const liveSim = activeSimulator || await fetchActiveSimulatorContext(fetchWithAuth);
+      const check = validateKillSwitchTarget({
+        row: behavior,
+        activeSimulator: liveSim,
+        requireActiveKey: true,
+      });
+      if (!check.ok) {
+        setActionError(check.error);
+        await onActionComplete?.();
+        return;
+      }
       const payload = buildCredentialKillSwitchPayload({
-        modelName: topModel,
-        apiKeyPrefix: behavior.prefix,
-        reason: buildAnalystKillSwitchReason(behavior),
+        modelName: form.modelName,
+        apiKeyPrefix: form.apiKeyPrefix || behavior.prefix,
+        action: form.action,
+        fallbackModel: form.fallbackModel,
+        reason: form.reason || buildAnalystKillSwitchReason(behavior),
       });
       await api.createAndActivateKillSwitch(payload);
-      setActionSuccess(`Kill switch activated for ${behavior.prefix} / ${topModel}`);
+      const semantics = describeContainmentSemantics();
+      setActionSuccess(
+        `Kill switch activated for ${behavior.prefix} / ${form.modelName}. ${semantics.killSwitch}`,
+      );
+      setKillSwitchDialogOpen(false);
       await loadKillSwitches();
       onActionComplete?.();
     } catch (err) {
@@ -462,8 +516,9 @@ export function ApiKeyRiskProfile({
   };
 
   const handleDisableKey = async () => {
+    const semantics = describeContainmentSemantics();
     const confirmed = window.confirm(
-      `Disable API key ${behavior.prefix}? All requests with this credential will fail authentication.`,
+      `Disable API key ${behavior.prefix}?\n\n${semantics.disableKey}`,
     );
     if (!confirmed) return;
 
@@ -471,8 +526,11 @@ export function ApiKeyRiskProfile({
     setActionError(null);
     setActionSuccess(null);
     try {
-      await api.setGatewayKeyActive(behavior.key_id, false);
-      setActionSuccess(`API key ${behavior.prefix} disabled.`);
+      await api.setGatewayKeyActive(behavior.key_id, false, { prefix: behavior.key_prefix || behavior.prefix });
+      setActionSuccess(
+        `API key ${behavior.prefix} disabled — Auth will reject this credential (HTTP 403). `
+        + "Traffic never reaches Input Scan or Kill Switch.",
+      );
       onActionComplete?.();
     } catch (err) {
       setActionError(err.message || "Failed to disable API key.");
@@ -485,7 +543,7 @@ export function ApiKeyRiskProfile({
     setActionLoading("enable-key");
     setActionError(null);
     try {
-      await api.setGatewayKeyActive(behavior.key_id, true);
+      await api.setGatewayKeyActive(behavior.key_id, true, { prefix: behavior.key_prefix || behavior.prefix });
       setActionSuccess(`API key ${behavior.prefix} re-enabled.`);
       onActionComplete?.();
     } catch (err) {
@@ -625,12 +683,16 @@ export function ApiKeyRiskProfile({
           <p className="text-xs text-slate-400">No kill switches scoped to this key prefix.</p>
         ) : (
           <ul className="space-y-1.5">
-            {scopedKillSwitches.map((ks) => (
+            {scopedKillSwitches.map((ks) => {
+              const enforced = enforcedKillSwitches.some((row) => row.id === ks.id);
+              return (
               <li key={ks.id} className="flex items-center justify-between text-xs">
                 <span className="font-mono text-slate-700 dark:text-slate-200">
                   {ks.model_name}
                   {ks.is_active ? (
-                    <span className="ml-2 text-red-600 dark:text-red-400">active</span>
+                    <span className={`ml-2 ${enforced ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>
+                      {enforced ? "active · Kill Switch stage" : "active · legacy (not enforced)"}
+                    </span>
                   ) : (
                     <span className="ml-2 text-slate-400">inactive</span>
                   )}
@@ -655,9 +717,22 @@ export function ApiKeyRiskProfile({
                   </button>
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
+        {legacyKillSwitches.length > 0 && (
+          <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+            Legacy <span className="font-mono">__credential__</span> switches are not gateway-enforced.
+            They do not count as containment — deactivate them and create a per-model kill switch,
+            or use Disable API key (Auth rejection).
+          </p>
+        )}
+        <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+          {describeContainmentSemantics().killSwitch}
+          {" "}
+          {describeContainmentSemantics().disableKey}
+        </p>
       </div>
       )}
 
@@ -682,7 +757,7 @@ export function ApiKeyRiskProfile({
               className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
             >
               {actionLoading === "kill-switch" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
-              Apply model kill switch
+              Activate kill switch
             </button>
           )}
           {behavior.is_active !== false ? (
@@ -714,6 +789,21 @@ export function ApiKeyRiskProfile({
           </a>
         </div>
       )}
+      <KillSwitchActionDialog
+        open={killSwitchDialogOpen}
+        title="Activate kill switch"
+        targetLabel={behavior?.prefix || ""}
+        allowedModels={killDialogModels}
+        preferredModel={isSimulatorTarget ? killPreferredModel : ""}
+        initialApiKeyPrefix={behavior?.prefix || ""}
+        defaultReason={buildAnalystKillSwitchReason(behavior)}
+        keyIsActive={behavior?.is_active !== false}
+        isSimulatorKey={isSimulatorTarget}
+        activeSimulatorPrefix={activeSimulator?.prefix || simulatorKeyPrefix || ""}
+        loading={actionLoading === "kill-switch"}
+        onClose={() => setKillSwitchDialogOpen(false)}
+        onSubmit={handleSubmitKillSwitch}
+      />
     </div>
   );
 }

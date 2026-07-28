@@ -46,13 +46,44 @@ class KeyContainmentPayloadTests(TestCase):
         payload = _build_key_containment_payload(self.org)
         self.assertEqual(payload["disabled_keys"], 1)
         self.assertEqual(payload["active_kill_switches"], 1)
+        self.assertEqual(payload["active_kill_switches_total"], 1)
         self.assertEqual(payload["disabled_keys_detail"][0]["prefix"], self.disabled_key.prefix)
         self.assertEqual(payload["active_kill_switches_detail"][0]["model_name"], "gpt-4o")
+        self.assertTrue(payload["active_kill_switches_detail"][0]["gateway_enforced"])
+
+    def test_legacy_credential_kill_switch_not_counted_as_containment(self):
+        KillSwitch.objects.create(
+            organization=self.org,
+            model_name="__credential__",
+            api_key_prefix=self.active_key.prefix,
+            is_active=True,
+            action="disable",
+            reason="legacy",
+            activated_at=timezone.now(),
+        )
+        payload = _build_key_containment_payload(self.org)
+        # gpt-4o counts; __credential__ is listed but not counted as containment
+        self.assertEqual(payload["active_kill_switches_total"], 2)
+        self.assertEqual(payload["active_kill_switches"], 1)
+        legacy = next(
+            row for row in payload["active_kill_switches_detail"]
+            if row["model_name"] == "__credential__"
+        )
+        self.assertFalse(legacy["gateway_enforced"])
 
     def test_fleet_registry_merges_behavior_and_kill_switches(self):
         from module2.views import _build_fleet_registry_payload, _collect_key_metrics, _kill_switches_by_prefix
         from policy.models import EnforcementEvent
 
+        KillSwitch.objects.create(
+            organization=self.org,
+            model_name="__credential__",
+            api_key_prefix=self.active_key.prefix,
+            is_active=True,
+            action="disable",
+            reason="legacy",
+            activated_at=timezone.now(),
+        )
         EnforcementEvent.objects.create(
             organization=self.org,
             action="block",
@@ -65,6 +96,8 @@ class KeyContainmentPayloadTests(TestCase):
         fleet = _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix, self.org)
         active_row = next(r for r in fleet if r["prefix"] == self.active_key.prefix)
         self.assertEqual(active_row["active_kill_switch_count"], 1)
+        self.assertEqual(active_row["enforced_kill_switch_count"], 1)
+        self.assertEqual(len(active_row["active_kill_switches"]), 2)
         self.assertGreaterEqual(active_row["request_count"], 1)
         self.assertIn("behavior_profile", active_row)
         self.assertIn("traditional_score", active_row)
