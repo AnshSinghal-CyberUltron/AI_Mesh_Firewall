@@ -165,9 +165,28 @@ async def _sse_reader_loop(session: UpstreamSession, connect_timeout: float) -> 
                     data_bytes = 0
                     if event_type == "endpoint" or "sessionId" in data or data.startswith("/"):
                         if data.startswith("/") or data.startswith("http"):
-                            session.sse_messages_url = (
-                                data if data.startswith("http") else urljoin(base, data.split("\n")[0])
+                            _candidate = (
+                                data if data.startswith("http")
+                                else urljoin(base, data.split("\n")[0])
                             )
+                            # L5-01 (red-team wf_c7ea99b8): the SSE 'endpoint' event comes from
+                            # the UNTRUSTED upstream and becomes the POST target for EVERY
+                            # subsequent tool call — carrying the operator's Bearer token, custom
+                            # auth header, and tool arguments. An ABSOLUTE cross-host URL here
+                            # would redirect all of that to an attacker host (proven credential
+                            # exfil). Per the MCP SSE transport the messages endpoint is
+                            # SAME-ORIGIN as the SSE stream, so reject a host mismatch (a relative
+                            # path urljoin's onto `base` and always passes this check).
+                            if urlparse(_candidate).netloc != urlparse(base).netloc:
+                                LOG.warning(
+                                    "SSE endpoint cross-origin redirect REJECTED for %s: %s (base %s)",
+                                    session.server_slug, _candidate, base,
+                                )
+                                raise UpstreamError(
+                                    -32000,
+                                    "upstream SSE endpoint host mismatch (cross-origin rejected)",
+                                )
+                            session.sse_messages_url = _candidate
                         else:
                             path = data.split("sessionId=")[-1] if "sessionId=" in data else data
                             session.sse_messages_url = urljoin(base, f"/messages?sessionId={path}")
