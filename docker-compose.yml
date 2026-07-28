@@ -32,6 +32,34 @@ services:
       timeout: 5s
       retries: 5
 
+  # Transaction-mode pooler in front of Postgres. Apps use DATABASE_URL →
+  # pgbouncer:6432; migrations / DDL use DATABASE_URL_DIRECT → postgres:5432.
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.23.1-p1
+    ports: ["6432:6432"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      AUTH_TYPE: plain
+      POOL_MODE: transaction
+      # edoburu defaults listen_port=5432; apps + published port use 6432.
+      LISTEN_PORT: "6432"
+      MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-1000}
+      DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-25}
+      MIN_POOL_SIZE: ${PGBOUNCER_MIN_POOL_SIZE:-5}
+      RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-5}
+      MAX_DB_CONNECTIONS: ${PGBOUNCER_MAX_DB_CONNECTIONS:-80}
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,options
+      ADMIN_USERS: ${POSTGRES_USER:-ai_mesh_firewall}
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      # Image includes pg_isready; probe the pooler listen port (not Postgres).
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-p", "6432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   redis:
     # 7.2+ required for CLIENT MAINT_NOTIFICATIONS (redis-py handshake)
     image: redis:7.4-alpine
@@ -92,7 +120,11 @@ services:
       DJANGO_SETTINGS_MODULE: main_app.settings
       # .env may set gateway PYTHONPATH — override so gunicorn/daphne resolve main_app.
       PYTHONPATH: /app/shared:/app/control/ai_mesh_control
-      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@pgbouncer:6432/${POSTGRES_DB:-ai_mesh_firewall}
+      DATABASE_URL_DIRECT: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      # Transaction pooling: do not hold idle server connections.
+      POSTGRES_CONN_MAX_AGE: ${POSTGRES_CONN_MAX_AGE:-0}
+      DISABLE_SERVER_SIDE_CURSORS: ${DISABLE_SERVER_SIDE_CURSORS:-true}
       REDIS_URL: redis://redis:6379/0
       CHANNEL_LAYERS_REDIS_URL: redis://redis:6379/1
       ASGI_ALLOWED_ORIGINS: ${ASGI_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:8180,http://127.0.0.1:8180}
@@ -112,6 +144,7 @@ services:
       TELEMETRY_DRAIN_BATCH_SIZE: ${TELEMETRY_DRAIN_BATCH_SIZE:-250}
     depends_on:
       postgres: { condition: service_healthy }
+      pgbouncer: { condition: service_healthy }
       redis: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=5)"]
@@ -127,7 +160,10 @@ services:
       dockerfile: workers/Dockerfile
     environment:
       DJANGO_SETTINGS_MODULE: main_app.settings
-      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@pgbouncer:6432/${POSTGRES_DB:-ai_mesh_firewall}
+      DATABASE_URL_DIRECT: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      POSTGRES_CONN_MAX_AGE: ${POSTGRES_CONN_MAX_AGE:-0}
+      DISABLE_SERVER_SIDE_CURSORS: ${DISABLE_SERVER_SIDE_CURSORS:-true}
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
       REDIS_URL: redis://redis:6379/0
       TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-beat}
@@ -135,6 +171,7 @@ services:
       POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
     depends_on:
       postgres: { condition: service_healthy }
+      pgbouncer: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
       redis: { condition: service_healthy }
 
@@ -146,7 +183,10 @@ services:
     command: celery -A ai_mesh_workers.celery_app beat --loglevel=info
     environment:
       DJANGO_SETTINGS_MODULE: main_app.settings
-      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@pgbouncer:6432/${POSTGRES_DB:-ai_mesh_firewall}
+      DATABASE_URL_DIRECT: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      POSTGRES_CONN_MAX_AGE: ${POSTGRES_CONN_MAX_AGE:-0}
+      DISABLE_SERVER_SIDE_CURSORS: ${DISABLE_SERVER_SIDE_CURSORS:-true}
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
       REDIS_URL: redis://redis:6379/0
       TELEMETRY_DRAIN_MODE: beat
@@ -156,6 +196,7 @@ services:
       POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
     depends_on:
       postgres: { condition: service_healthy }
+      pgbouncer: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
       redis: { condition: service_healthy }
 
@@ -171,6 +212,8 @@ services:
       AIGUARDX_BACKEND_URL: http://control:8000
       GATEWAY_REDIS_URL: redis://redis:6379/0
       REDIS_URL: redis://redis:6379/0
+      # Embedding vault Postgres pool — via PgBouncer (same as control).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@pgbouncer:6432/${POSTGRES_DB:-ai_mesh_firewall}
       POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
       GATEWAY_AUTH_ENABLED: "true"
       GATEWAY_ORG_ONLY_INFERENCE: "true"
@@ -220,6 +263,7 @@ services:
     depends_on:
       control: { condition: service_healthy }
       redis: { condition: service_healthy }
+      pgbouncer: { condition: service_started }
     # Phase-3 auto-recovery: the gateway was the only core service with neither a
     # healthcheck nor a restart policy (BACKSTOP CHG-0020: health=none → never
     # auto-restarted, and peers could not gate on service_healthy). /health is

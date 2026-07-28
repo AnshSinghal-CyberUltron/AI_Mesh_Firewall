@@ -50,3 +50,12 @@ scripts/ralph/mcp_sandbox/runs/
 scripts/ralph/.mcp_scale_manifest.json
 
 gateway/tests/golden/.live_session.json
+
+# Local QA secrets (never commit)
+docs/qa/*.local.md
+
+# Secrets / local machine artifacts (never commit)
+*.pem
+ai-mesh-key.pem
+/aws/
+awscliv2.zip

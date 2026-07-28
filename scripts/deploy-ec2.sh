@@ -170,7 +170,7 @@ echo "==> Pull application images from ECR"
   || echo "    (ai-mesh-demo image absent for this tag — /demo/ will be unavailable; platform unaffected)"
 
 echo "==> Start infrastructure"
-"${COMPOSE[@]}" up -d --no-build postgres redis rabbitmq
+"${COMPOSE[@]}" up -d --no-build postgres pgbouncer redis rabbitmq
 
 for _ in $(seq 1 30); do
   "${COMPOSE[@]}" exec -T postgres pg_isready -U "${POSTGRES_USER:-ai_mesh_firewall}" >/dev/null 2>&1 && break
@@ -179,7 +179,7 @@ done
 
 CONTROL_MANAGE_PY="/app/control/manage.py"
 
-echo "==> Control + migrations"
+echo "==> Control + migrations (via DATABASE_URL_DIRECT — not PgBouncer)"
 "${COMPOSE[@]}" up -d --no-build control
 for _ in $(seq 1 45); do
   curl -sf "http://127.0.0.1:8100/api/health/" >/dev/null 2>&1 && break
@@ -187,7 +187,9 @@ for _ in $(seq 1 45); do
 done
 curl -sf "http://127.0.0.1:8100/api/health/" >/dev/null 2>&1 \
   || die "control not healthy on :8100 — check: ${COMPOSE[*]} logs control --tail=80"
-"${COMPOSE[@]}" exec -T control python "${CONTROL_MANAGE_PY}" migrate --noinput
+# Transaction-mode PgBouncer cannot run migrations; prefer the direct DSN.
+"${COMPOSE[@]}" exec -T control sh -c \
+  'DATABASE_URL="${DATABASE_URL_DIRECT:-$DATABASE_URL}" python "'"${CONTROL_MANAGE_PY}"'" migrate --noinput'
 
 if [[ "${SKIP_ADMIN:-}" != "1" ]]; then
   "${COMPOSE[@]}" exec -T control python "${CONTROL_MANAGE_PY}" ensure_zeroshield_admin \

@@ -76,7 +76,12 @@ if [[ -f "${ROOT}/deploy/observability/cloudwatch-agent-config.json" ]]; then
     "${ROOT}/deploy/observability/alarm-email-example.html" \
     "${ROOT}/deploy/observability/alarm-runbooks.json" \
     "${ROOT}/deploy/observability/prometheus-scrape.example.yml" \
+    "${ROOT}/deploy/observability/postgres-connection-alerts.yml" \
     "${SSH_HOST}:${REMOTE_DIR}/deploy/observability/"
+fi
+if [[ -d "${ROOT}/deploy/pgbouncer" ]]; then
+  ssh "${SSH_HOST}" "mkdir -p '${REMOTE_DIR}/deploy/pgbouncer'"
+  "${RSYNC_SSH[@]}" "${ROOT}/deploy/pgbouncer/" "${SSH_HOST}:${REMOTE_DIR}/deploy/pgbouncer/"
 fi
 
 echo "==> Sync .env (strips static AWS keys — EC2 uses instance role for ECR pull)"

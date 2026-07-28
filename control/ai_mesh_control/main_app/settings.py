@@ -199,40 +199,32 @@ ASGI_ALLOWED_ORIGINS = (
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+from main_app.db_url import postgres_database_from_url  # noqa: E402
+
 _database_url = os.environ.get("DATABASE_URL", "").strip()
 if _database_url:
     _parsed_db_url = urlparse(_database_url)
     if _parsed_db_url.scheme in {"postgres", "postgresql"}:
         DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.postgresql",
-                "NAME": (_parsed_db_url.path or "/").lstrip("/") or "postgres",
-                "USER": _parsed_db_url.username or "",
-                "PASSWORD": _parsed_db_url.password or "",
-                "HOST": _parsed_db_url.hostname or "localhost",
-                "PORT": str(_parsed_db_url.port or 5432),
-                # Cap persistent-connection reuse and probe liveness before reuse
-                # so a wedged/half-closed connection is recycled instead of
-                # accumulating until the Postgres pool (max_connections) is
-                # exhausted under load.
-                "CONN_MAX_AGE": int(os.environ.get("POSTGRES_CONN_MAX_AGE", "60")),
-                "CONN_HEALTH_CHECKS": True,
-            }
+            "default": postgres_database_from_url(
+                _database_url,
+                conn_max_age=int(os.environ.get("POSTGRES_CONN_MAX_AGE", "60")),
+                disable_server_side_cursors_env=os.environ.get(
+                    "DISABLE_SERVER_SIDE_CURSORS", ""
+                ),
+            )
         }
         _replica_url = os.environ.get("DATABASE_REPLICA_URL", "").strip()
         if _replica_url:
             _parsed_replica_url = urlparse(_replica_url)
             if _parsed_replica_url.scheme in {"postgres", "postgresql"}:
-                DATABASES["replica"] = {
-                    "ENGINE": "django.db.backends.postgresql",
-                    "NAME": (_parsed_replica_url.path or "/").lstrip("/") or "postgres",
-                    "USER": _parsed_replica_url.username or "",
-                    "PASSWORD": _parsed_replica_url.password or "",
-                    "HOST": _parsed_replica_url.hostname or "localhost",
-                    "PORT": str(_parsed_replica_url.port or 5432),
-                    "CONN_MAX_AGE": int(os.environ.get("POSTGRES_CONN_MAX_AGE", "60")),
-                    "CONN_HEALTH_CHECKS": True,
-                }
+                DATABASES["replica"] = postgres_database_from_url(
+                    _replica_url,
+                    conn_max_age=int(os.environ.get("POSTGRES_CONN_MAX_AGE", "60")),
+                    disable_server_side_cursors_env=os.environ.get(
+                        "DISABLE_SERVER_SIDE_CURSORS", ""
+                    ),
+                )
     else:
         raise ImproperlyConfigured(
             f"Unsupported DATABASE_URL scheme '{_parsed_db_url.scheme}'. "
