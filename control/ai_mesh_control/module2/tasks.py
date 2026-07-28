@@ -14,6 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from ai_mesh_shared.redis_pool import connection_pool_kwargs
+from module2.threat_intel_projection import apply_threat_intel_projection, summarize_projection
 
 logger = logging.getLogger(__name__)
 
@@ -223,6 +224,7 @@ def sync_threat_intel_to_redis(self, org_id):
     entries = ThreatIntelEntry.objects.filter(organization=org).filter(
         Q(expires_at__isnull=True) | Q(expires_at__gt=now)
     )
+    projection = apply_threat_intel_projection(org)
 
     payload = [
         {
@@ -241,7 +243,13 @@ def sync_threat_intel_to_redis(self, org_id):
         client = _get_redis_client()
         client.set(key, json.dumps(payload))
         client.publish(THREAT_INTEL_CHANNEL, json.dumps({"org_slug": slug}))
-        logger.info("Synced %d threat intel entries to %s", len(payload), key)
+        logger.info(
+            "Synced %d threat intel entries to %s (blocking=%d telemetry_only=%d)",
+            len(payload),
+            key,
+            int(projection.get("blocking_entries") or 0),
+            int(projection.get("telemetry_only_entries") or 0),
+        )
     except Exception:
         logger.warning("Failed to sync threat intel to Redis", exc_info=True)
         raise
@@ -271,14 +279,32 @@ def build_threat_intel_sync_meta(org) -> dict:
         .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
         .order_by("threat_type", "id")
     )
+    projection = summarize_projection(entries)
     by_type = dict(Counter(e.threat_type for e in entries))
     return {
         "synced_by_threat_type": by_type,
         "synced_entries": [
             {
+                "id": e.id,
                 "threat_type": e.threat_type,
                 "indicator": (e.indicator or "")[:160],
                 "auto_block": bool(e.auto_block),
+                "effective_mode": next(
+                    (
+                        row["effective_mode"]
+                        for row in projection["rows"]
+                        if row["entry_id"] == e.id
+                    ),
+                    "telemetry_only",
+                ),
+                "effective_reason": next(
+                    (
+                        row["effective_reason"]
+                        for row in projection["rows"]
+                        if row["entry_id"] == e.id
+                    ),
+                    "unknown",
+                ),
             }
             for e in entries[:50]
         ],
@@ -288,6 +314,10 @@ def build_threat_intel_sync_meta(org) -> dict:
             for e in entries
             if e.expires_at and now < e.expires_at <= week_ahead
         ),
+        "projection_mode": projection.get("projection_mode"),
+        "blocking_entries": projection.get("blocking_entries", 0),
+        "telemetry_only_entries": projection.get("telemetry_only_entries", 0),
+        "managed_keywords_count": len(projection.get("managed_keywords") or []),
     }
 
 
@@ -535,6 +565,23 @@ def repair_telemetry_metadata():
     from module2.telemetry_health import maybe_repair_stale_telemetry
 
     return maybe_repair_stale_telemetry(force=True)
+
+
+@shared_task(queue="policy.compile")
+def repair_threat_intel_projection():
+    """Periodic drift repair: re-apply threat-intel projection and Redis sync for all active orgs."""
+    from auth.models import Organization
+
+    stats = {"orgs": 0, "synced": 0, "failed": 0}
+    for org in Organization.objects.filter(is_active=True):
+        stats["orgs"] += 1
+        ok, err = safe_sync_threat_intel_to_redis(org.id)
+        if ok:
+            stats["synced"] += 1
+            continue
+        stats["failed"] += 1
+        logger.warning("Threat intel projection repair failed org=%s err=%s", org.id, err)
+    return stats
 
 
 @shared_task(queue="compute.heavy")

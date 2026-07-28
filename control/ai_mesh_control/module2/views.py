@@ -244,6 +244,7 @@ def _collapse_prepared_event_rows(raw_rows):
             meta.setdefault("endpoint_id", ev["endpoint_id"])
         prepared.append(
             {
+                "id": ev.get("id"),
                 "created_at": ev.get("created_at"),
                 "action": ev.get("action"),
                 "metadata": meta,
@@ -859,9 +860,28 @@ class UebaApiKeyBehaviorView(APIView):
             meta = item.metadata or {}
             if not prefixes_match(key.prefix, key_prefix_from_meta(meta)):
                 continue
+            request_id = str(
+                item.request_id
+                or meta.get("request_id")
+                or meta.get("pipeline_request_id")
+                or ""
+            ).strip()
+            display_event_id = str(
+                item.display_event_id
+                or meta.get("event_id")
+                or request_id
+                or ""
+            ).strip()
             events.append(
                 {
-                    "id": meta.get("event_id") or meta.get("request_id"),
+                    # Backward-compatible "event_id" for existing UI chips.
+                    "id": display_event_id,
+                    "event_id": display_event_id,
+                    # Canonical request-scoped identity.
+                    "request_id": request_id,
+                    # Explicit DB row id for deep-link/debug parity.
+                    "enforcement_event_id": item.enforcement_event_id,
+                    "display_event_id": display_event_id,
                     "created_at": item.created_at,
                     "action": item.action,
                     "endpoint_id": meta.get("endpoint_id"),
@@ -972,9 +992,9 @@ class ModelExposureView(APIView):
                 meta = dict(ev.get("metadata") or {})
                 raw_model = str(meta.get("model") or "").strip().lower()
                 canonical_model = model_aliases.get(raw_model)
-                if not canonical_model:
-                    continue
-                meta["model"] = canonical_model
+                # Preserve totals by explicitly bucketing uncatalogued model traffic
+                # instead of silently dropping those events from the model tab.
+                meta["model"] = canonical_model or "unknown"
                 normalized_events.append({"metadata": meta, "action": ev.get("action")})
         else:
             normalized_events = events
@@ -1185,8 +1205,8 @@ class ThreatIntelSyncView(APIView):
         now = timezone.now()
         entry_count = ThreatIntelEntry.objects.filter(organization=org).count()
         redis_key = f"firewall:threat_intel:{org.slug or org.id}"
-        sync_meta = build_threat_intel_sync_meta(org)
         ok, err = safe_sync_threat_intel_to_redis(org.id)
+        sync_meta = build_threat_intel_sync_meta(org)
         if not ok:
             return Response(
                 {
@@ -1306,8 +1326,8 @@ class IncidentListView(APIView):
         # drops the row) in Postgres when the JSON key is missing, so every
         # exclusion on a JSON value must be guarded with has_key.
         _lane_event_type_q = Q(enforcement_event__metadata__has_key="event_type") & (
-            Q(enforcement_event__metadata__event_type="rag_pipeline")
-            | Q(enforcement_event__metadata__event_type="mcp_tool_call")
+            Q(enforcement_event__metadata__event_type__startswith="rag_")
+            | Q(enforcement_event__metadata__event_type__startswith="mcp_")
         )
         _mcp_metadata_fallback_q = (
             Q(enforcement_event__metadata__has_key="tools_invoked")
@@ -1346,10 +1366,10 @@ class IncidentListView(APIView):
         if source_filter == "threat_intel":
             qs = qs.filter(_threat_intel_q)
         elif source_filter == "rag":
-            qs = qs.filter(enforcement_event__metadata__event_type="rag_pipeline")
+            qs = qs.filter(enforcement_event__metadata__event_type__startswith="rag_")
         elif source_filter == "mcp":
             qs = qs.filter(
-                Q(enforcement_event__metadata__event_type="mcp_tool_call")
+                Q(enforcement_event__metadata__event_type__startswith="mcp_")
                 | _mcp_metadata_fallback_q
             )
         elif source_filter == "vector":

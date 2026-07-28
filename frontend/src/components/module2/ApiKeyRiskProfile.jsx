@@ -134,7 +134,7 @@ function promptPositionLabel(index) {
 
 function requestIdentity(req) {
   if (!req) return "";
-  return `${req.event_id ?? ""}:${req.timestamp ?? ""}:${promptPreview(req)}`;
+  return `${req.event_id ?? req.enforcement_event_id ?? req.request_id ?? ""}:${req.timestamp ?? ""}:${promptPreview(req)}`;
 }
 
 function RecentRequestsSection({ requests, requestCount }) {
@@ -182,7 +182,7 @@ function RecentRequestsSection({ requests, requestCount }) {
           <div className="flex flex-wrap items-center gap-1.5">
             {requests.map((req, i) => (
               <button
-                key={`${req.event_id || req.timestamp}-${i}`}
+                key={`${req.event_id || req.enforcement_event_id || req.request_id || req.timestamp}-${i}`}
                 type="button"
                 onClick={() => {
                   selectedIdentityRef.current = requestIdentity(req);
@@ -245,7 +245,7 @@ function RecentRequestsSection({ requests, requestCount }) {
                 {promptPositionLabel(safeIndex)}
               </p>
               <p className={`mt-1 font-semibold uppercase ${actionLabelStyle(selected.action)}`}>
-                {laneLabel(selected.request_lane || selected.metadata?.source || "chat")}
+                {laneLabel(selected.request_lane || "chat")}
                 {" · "}{(selected.action || "—").toUpperCase()}
                 {" · "}{selected.model || "—"}
                 {" · "}{selected.threat_type || "—"}

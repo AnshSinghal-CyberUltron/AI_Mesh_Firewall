@@ -102,10 +102,11 @@ class Module2PagesApiTests(TestCase):
         self.assertIn("exposure_by_model", data)
         self.assertIn("models", data)
         self.assertEqual(data["summary"]["active_models"], 3)
-        self.assertEqual(data["summary"]["total_requests"], 2)
-        self.assertEqual(data["models"][0]["model"], "gpt-4o")
-        self.assertEqual(len(data["models"]), 1)
-        self.assertIn("exposure_score", data["models"][0])
+        self.assertEqual(data["summary"]["total_requests"], 3)
+        model_names = {row["model"] for row in data["models"]}
+        self.assertIn("gpt-4o", model_names)
+        self.assertIn("unknown", model_names)
+        self.assertTrue(all("exposure_score" in row for row in data["models"]))
 
     def test_model_exposure_accepts_model_id_alias_from_gateway_metadata(self):
         self._event(
@@ -518,6 +519,9 @@ class Module2PagesApiTests(TestCase):
         self.user.save(update_fields=["is_staff"])
         resp_admin = self.client.post("/api/module2/threat-intel/", payload, format="json")
         self.assertEqual(resp_admin.status_code, 201, resp_admin.content)
+        body = resp_admin.json()
+        self.assertEqual(body.get("effective_mode"), "synced_for_blocking")
+        self.assertEqual(body.get("effective_reason"), "keyword_literal_match")
 
     def test_threat_intel_sync_returns_503_when_redis_fails(self):
         self.user.is_staff = True

@@ -131,8 +131,24 @@ def build_recent_request_json(ev: dict, max_snippet: int = 500) -> dict:
     snippet = event_prompt_from_meta(meta, max_len=max_snippet)
     risk_score = meta.get("security_risk_score")
     lineage = [{"prompt": snippet, "risk_score": risk_score}] if snippet else []
+    request_id = str(
+        ev.get("request_id")
+        or meta.get("request_id")
+        or meta.get("pipeline_request_id")
+        or ""
+    ).strip()
+    display_event_id = str(
+        ev.get("display_event_id")
+        or meta.get("event_id")
+        or request_id
+        or ev.get("event_id")
+        or ""
+    ).strip()
     return {
-        "event_id": ev.get("id"),
+        "event_id": display_event_id,
+        "display_event_id": display_event_id,
+        "request_id": request_id,
+        "enforcement_event_id": ev.get("enforcement_event_id") or ev.get("event_id") or ev.get("id"),
         "timestamp": ev.get("created_at").isoformat() if ev.get("created_at") else None,
         "action": ev.get("action"),
         "endpoint_id": ev.get("endpoint_id"),

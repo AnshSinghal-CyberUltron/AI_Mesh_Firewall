@@ -443,6 +443,9 @@ TELEMETRY_DRAIN_MODE = os.environ.get("TELEMETRY_DRAIN_MODE", "beat").strip().lo
 MODULE2_TELEMETRY_REPAIR_INTERVAL_SEC = float(os.environ.get("MODULE2_TELEMETRY_REPAIR_INTERVAL_SEC", "300"))
 MODULE2_TELEMETRY_REPAIR_BATCH_SIZE = int(os.environ.get("MODULE2_TELEMETRY_REPAIR_BATCH_SIZE", "250"))
 MODULE2_TELEMETRY_REPAIR_LOOKBACK_HOURS = int(os.environ.get("MODULE2_TELEMETRY_REPAIR_LOOKBACK_HOURS", "720"))
+MODULE2_THREAT_INTEL_REPAIR_INTERVAL_SEC = float(
+    os.environ.get("MODULE2_THREAT_INTEL_REPAIR_INTERVAL_SEC", "300")
+)
 MODULE2_UEBA_AUTO_KILL_ENABLED = os.environ.get("MODULE2_UEBA_AUTO_KILL_ENABLED", "false").lower() in (
     "1",
     "true",
@@ -493,6 +496,10 @@ CELERY_BEAT_SCHEDULE = {
     "module2-repair-telemetry": {
         "task": "module2.tasks.repair_telemetry_metadata",
         "schedule": MODULE2_TELEMETRY_REPAIR_INTERVAL_SEC,
+    },
+    "module2-repair-threat-intel-projection": {
+        "task": "module2.tasks.repair_threat_intel_projection",
+        "schedule": MODULE2_THREAT_INTEL_REPAIR_INTERVAL_SEC,
     },
     # Reconcile active gateway API keys into Redis so a Redis flush / container
     # recycle cannot leave the data plane returning 401 for every /v1/* request.

@@ -138,6 +138,9 @@ class KeyContainmentPayloadTests(TestCase):
         self.assertEqual(len(recent), 1)
         self.assertEqual(recent[0]["model"], "gpt-4o")
         self.assertIn("ignore", recent[0]["prompt_snippet"])
+        self.assertIn("request_id", recent[0])
+        self.assertIn("enforcement_event_id", recent[0])
+        self.assertIn("display_event_id", recent[0])
         obs = body.get("llm_observation") or {}
         self.assertIn("requests_meet_prompt_target", obs)
         self.assertIn("prompt_target", obs)

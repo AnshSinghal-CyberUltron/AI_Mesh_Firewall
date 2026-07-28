@@ -262,6 +262,28 @@ test("resolveEventLane prefers pipeline metadata over policy source", () => {
   assert.equal(resolveEventLane({ source: "rag", title: "Case" }), "rag");
 });
 
+test("resolveEventLane mirrors backend priority for threat intel", () => {
+  assert.equal(
+    resolveEventLane({
+      metadata: {
+        event_type: "mcp_tool_call",
+        source: "security_scan",
+        threat_type: "threat_intel_match",
+      },
+    }),
+    "threat_intel",
+  );
+  assert.equal(
+    resolveEventLane({
+      metadata: {
+        event_type: "rag_pipeline",
+        extra: { detail: "Threat intel hit during retrieval" },
+      },
+    }),
+    "threat_intel",
+  );
+});
+
 test("KPI builders attach analyst helpText to every card", () => {
   for (const kpi of buildExposureKpis(EXPOSURE_FIXTURE.summary)) {
     assert.ok(kpi.helpText && kpi.helpText.length > 10, `missing helpText: ${kpi.key}`);

@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { resolveWebSocketBaseUrl } from '../utils/environmentUrls';
+import {
+  buildWebSocketUrl,
+  eventBelongsToOrg,
+  normalizeOrgId,
+} from './realtimeNotificationsScope';
 
 /** @typedef {{ enabled?: boolean, onEnforcementEvent?: Function, onEscalationEvent?: Function, onResolutionEvent?: Function, onMessage?: Function }} RealtimeSubscriber */
 
@@ -17,9 +21,12 @@ const shared = {
   /** @type {Set<(event: object | null) => void>} */
   eventListeners: new Set(),
   connectGeneration: 0,
+  /** Org the live socket is bound to (null until known). */
+  activeOrgId: null,
   auth: {
     isAuthenticated: false,
     getValidAccessToken: null,
+    orgId: null,
   },
 };
 
@@ -31,6 +38,9 @@ function realtimeGloballyEnabled() {
 
 function anySubscriberWantsConnection() {
   if (!realtimeGloballyEnabled() || !shared.auth.isAuthenticated) return false;
+  // Fail closed until the signed-in user's org is known — avoids joining an
+  // unbound / wrong tenant channel from a shared browser tab.
+  if (normalizeOrgId(shared.auth.orgId) == null) return false;
   for (const subRef of shared.subscribers) {
     if (subRef.current.enabled !== false) return true;
   }
@@ -48,16 +58,12 @@ function setSharedLastEvent(event) {
   for (const listener of shared.eventListeners) listener(event);
 }
 
-function buildWebSocketUrl(token) {
-  const base = resolveWebSocketBaseUrl();
-  const normalized = base.endsWith('/') ? base.slice(0, -1) : base;
-  const baseUrl = `${normalized}/ws/notifications/`;
-  return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
-}
-
 function dispatchPayload(data) {
   const payload = data.type === 'notification_message' ? data.message : data.payload ?? data;
   if (payload) {
+    if (!eventBelongsToOrg(payload, shared.auth.orgId)) {
+      return;
+    }
     setSharedLastEvent(payload);
     for (const subRef of shared.subscribers) {
       const sub = subRef.current;
@@ -92,6 +98,7 @@ function teardownSharedSocket() {
     shared.ws.close();
     shared.ws = null;
   }
+  shared.activeOrgId = null;
   setSharedConnected(false);
 }
 
@@ -100,6 +107,19 @@ async function ensureSharedSocket() {
     teardownSharedSocket();
     return;
   }
+
+  const desiredOrgId = normalizeOrgId(shared.auth.orgId);
+  const orgChanged =
+    shared.ws &&
+    desiredOrgId != null &&
+    shared.activeOrgId != null &&
+    shared.activeOrgId !== desiredOrgId;
+
+  if (orgChanged) {
+    shared.connectGeneration += 1;
+    teardownSharedSocket();
+  }
+
   if (shared.ws?.readyState === WebSocket.OPEN || shared.ws?.readyState === WebSocket.CONNECTING) {
     return;
   }
@@ -113,8 +133,10 @@ async function ensureSharedSocket() {
   const token = await shared.auth.getValidAccessToken?.();
   if (generation !== shared.connectGeneration || !anySubscriberWantsConnection()) return;
 
-  const ws = new WebSocket(buildWebSocketUrl(token));
+  const orgId = normalizeOrgId(shared.auth.orgId);
+  const ws = new WebSocket(buildWebSocketUrl(token, orgId));
   shared.ws = ws;
+  shared.activeOrgId = orgId;
 
   ws.onopen = () => {
     if (generation !== shared.connectGeneration) return;
@@ -126,8 +148,18 @@ async function ensureSharedSocket() {
     if (generation !== shared.connectGeneration) return;
     setSharedConnected(false);
     shared.ws = null;
+    shared.activeOrgId = null;
     if (!anySubscriberWantsConnection()) return;
-    if (event.code === 1008 || event.code === 4001 || event.code === 4003) return;
+    // 4401/4403 are auth/tenant rejects from NotificationConsumer; do not spin.
+    if (
+      event.code === 1008
+      || event.code === 4001
+      || event.code === 4003
+      || event.code === 4401
+      || event.code === 4403
+    ) {
+      return;
+    }
     shared.reconnectAttempt += 1;
     const delayMs = Math.min(30000, 1500 * 2 ** (shared.reconnectAttempt - 1));
     shared.reconnectTimeout = setTimeout(() => {
@@ -162,6 +194,8 @@ function subscribe(subscriberRef) {
 /**
  * WebSocket hook for real-time enforcement notifications.
  * Uses one shared connection per browser tab (Header + dashboard hooks must not each open their own socket).
+ * The socket is organization-scoped: URL carries organization_id, reconnects on org change,
+ * and drops cross-tenant payloads client-side as defense-in-depth.
  */
 export function useRealtimeNotifications({
   enabled = true,
@@ -170,7 +204,8 @@ export function useRealtimeNotifications({
   onResolutionEvent,
   onMessage,
 } = {}) {
-  const { isAuthenticated, getValidAccessToken } = useAuth();
+  const { isAuthenticated, getValidAccessToken, user } = useAuth();
+  const orgId = normalizeOrgId(user?.organization?.id);
   const [lastEvent, setLastEvent] = useState(shared.lastEvent);
   const [connected, setConnected] = useState(shared.connected);
 
@@ -188,9 +223,9 @@ export function useRealtimeNotifications({
   subscriberRef.current.onMessage = onMessage;
 
   useEffect(() => {
-    shared.auth = { isAuthenticated, getValidAccessToken };
+    shared.auth = { isAuthenticated, getValidAccessToken, orgId };
     ensureSharedSocket();
-  }, [isAuthenticated, getValidAccessToken]);
+  }, [isAuthenticated, getValidAccessToken, orgId]);
 
   useEffect(() => {
     const onConn = (value) => setConnected(value);
@@ -216,3 +251,6 @@ export function useRealtimeNotifications({
 
   return { lastEvent, connected, reconnect };
 }
+
+// Re-export pure helpers for callers/tests that already imported from this module.
+export { buildWebSocketUrl, eventBelongsToOrg, normalizeOrgId };

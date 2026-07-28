@@ -200,6 +200,29 @@ class ThreatIntelEntry(models.Model):
         return f"{self.threat_type}: {self.indicator[:40]}"
 
 
+class ThreatIntelProjectionState(models.Model):
+    """Persist managed blocked-keyword projection state per organization."""
+
+    organization = models.OneToOneField(
+        "auth_api.Organization",
+        on_delete=models.CASCADE,
+        related_name="threat_intel_projection_state",
+    )
+    managed_blocked_keywords = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Keywords currently managed by Module 2 threat-intel projection.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Threat Intel Projection State"
+        verbose_name_plural = "Threat Intel Projection States"
+
+    def __str__(self):
+        return f"ThreatIntelProjectionState org={self.organization_id}"
+
+
 class OrgUebaSettings(models.Model):
     """Organization-wide UEBA graduation and scoring thresholds."""
 

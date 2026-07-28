@@ -49,3 +49,33 @@ class Module2RequestScopedMetricsTests(SimpleTestCase):
         self.assertEqual(collapsed[0].action, "block")
         self.assertEqual(collapsed[0].metadata.get("prompt_snippet"), "how are u today")
         self.assertEqual(collapsed[0].metadata.get("prompt_submitted"), "how are u today")
+
+    def test_collapse_tracks_canonical_request_and_event_ids(self):
+        rows = [
+            {
+                "id": 11,
+                "action": "allow",
+                "metadata": {
+                    "request_id": "zs-req-11",
+                    "event_id": "display-11",
+                    "event_type": "request",
+                },
+            },
+            {
+                "id": 12,
+                "action": "block",
+                "metadata": {
+                    "request_id": "zs-req-11",
+                    "event_id": "display-11-block",
+                    "event_type": "input_blocked",
+                },
+            },
+        ]
+        collapsed = collapse_events_by_request(rows)
+        self.assertEqual(len(collapsed), 1)
+        req = collapsed[0]
+        self.assertEqual(req.request_id, "zs-req-11")
+        # Preserve first-seen display id for stable UI chips.
+        self.assertEqual(req.display_event_id, "display-11")
+        # Promote DB id to the strongest action row.
+        self.assertEqual(req.enforcement_event_id, 12)

@@ -97,6 +97,26 @@ class Module2AnalyticsTests(SimpleTestCase):
         )
         self.assertEqual(row["request_lane"], "chat")
 
+    def test_build_recent_request_json_includes_request_and_event_ids(self):
+        row = build_recent_request_json(
+            {
+                "id": 101,
+                "created_at": timezone.now(),
+                "action": "redact",
+                "event_id": 101,
+                "metadata": {
+                    "request_id": "zs-req-101",
+                    "event_id": "evt-frontend-101",
+                    "pipeline_request_id": "zs-req-101",
+                    "model": "gpt-4o",
+                },
+            }
+        )
+        self.assertEqual(row["request_id"], "zs-req-101")
+        self.assertEqual(row["event_id"], "evt-frontend-101")
+        self.assertEqual(row["display_event_id"], "evt-frontend-101")
+        self.assertEqual(row["enforcement_event_id"], 101)
+
     def test_build_recent_request_json_includes_context_source_subtag(self):
         row = build_recent_request_json(
             {

@@ -125,6 +125,9 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             except Exception:
                 return None
 
+        requested_org_id = _get_org_id_from_scope(self.scope)
+        profile_org_id = await sync_to_async(_get_org_from_profile, thread_sensitive=True)(user)
+
         org_id = None
         if user.is_superuser:
             # M-08 FIX: a superuser must explicitly select a tenant (?organization_id=...)
@@ -132,11 +135,24 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             # implicitly associate the session with a real, unintended tenant and leak
             # its notifications. When neither is present, org_id stays None and the
             # shared `if org_id is None:` guard below rejects the connection (4403).
-            org_id = _get_org_id_from_scope(self.scope)
-            if org_id is None:
-                org_id = await sync_to_async(_get_org_from_profile, thread_sensitive=True)(user)
+            org_id = requested_org_id if requested_org_id is not None else profile_org_id
         else:
-            org_id = await sync_to_async(_get_org_from_profile, thread_sensitive=True)(user)
+            org_id = profile_org_id
+            # Defense-in-depth: a non-superuser client that claims a different org
+            # in the query string must not join that tenant channel.
+            if (
+                requested_org_id is not None
+                and profile_org_id is not None
+                and requested_org_id != profile_org_id
+            ):
+                LOG.warning(
+                    "WebSocket rejected: org claim mismatch user_id=%s claimed=%s profile=%s",
+                    user.id,
+                    requested_org_id,
+                    profile_org_id,
+                )
+                await self.close(code=4403)
+                return
 
         if org_id is None:
             LOG.warning("WebSocket rejected: no org_id for user_id=%s", user.id)

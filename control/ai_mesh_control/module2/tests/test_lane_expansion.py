@@ -404,6 +404,7 @@ class LaneExpansionApiTests(TestCase):
         self._incident("MCP case", event_type="mcp_tool_call", tools_invoked=["x"])
         self._incident("MCP legacy case", tools_invoked=["legacy_tool"], server_slug="stub")
         self._incident("RAG case", event_type="rag_pipeline", pipeline_stage="retriever")
+        self._incident("RAG blocked case", event_type="rag_query_blocked", pipeline_stage="query")
         self._incident("Vector case", collection="kb_docs")
         self._incident("Chat case", model="gpt-4o")
 
@@ -418,6 +419,8 @@ class LaneExpansionApiTests(TestCase):
             titles = [r["title"] for r in resp.json()["results"]]
             if source == "mcp":
                 self.assertEqual(titles, ["MCP legacy case", "MCP case"], f"source={source} -> {titles}")
+            elif source == "rag":
+                self.assertEqual(titles, ["RAG blocked case", "RAG case"], f"source={source} -> {titles}")
             else:
                 self.assertEqual(titles, [expected_title], f"source={source} -> {titles}")
 

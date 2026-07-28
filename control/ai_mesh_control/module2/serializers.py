@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from module2.models import AlertFiring, AlertRule, AnomalyRule, Playbook, PlaybookRun, ThreatIntelEntry
+from module2.threat_intel_projection import resolve_projection_row
 
 
 class PlaybookSerializer(serializers.ModelSerializer):
@@ -107,6 +108,19 @@ class AnomalyRuleSerializer(serializers.ModelSerializer):
 
 
 class ThreatIntelEntrySerializer(serializers.ModelSerializer):
+    effective_mode = serializers.SerializerMethodField()
+    effective_reason = serializers.SerializerMethodField()
+    projected_keyword = serializers.SerializerMethodField()
+
+    def get_effective_mode(self, obj):
+        return resolve_projection_row(obj).effective_mode
+
+    def get_effective_reason(self, obj):
+        return resolve_projection_row(obj).effective_reason
+
+    def get_projected_keyword(self, obj):
+        return resolve_projection_row(obj).keyword or ""
+
     class Meta:
         model = ThreatIntelEntry
         fields = [
@@ -120,5 +134,8 @@ class ThreatIntelEntrySerializer(serializers.ModelSerializer):
             "auto_block",
             "expires_at",
             "created_at",
+            "effective_mode",
+            "effective_reason",
+            "projected_keyword",
         ]
         read_only_fields = ["id", "organization", "created_at"]

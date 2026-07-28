@@ -64,7 +64,7 @@ const IOC_EXAMPLE = {
 const VALIDATION_STEPS = [
   {
     title: "Add Entry (this page)",
-    body: "Saves an IOC to the control-plane database and syncs it to the gateway immediately (Redis key firewall:threat_intel:{org}). Enable Auto-Block so matches hard-block traffic.",
+    body: "Saves an IOC to the control-plane database, projects eligible entries to gateway blocked-keywords, and syncs to Redis. Enable Auto-Block so eligible keyword/literal indicators hard-block traffic.",
   },
   {
     title: "Optional: Sync to Gateway",
@@ -76,7 +76,7 @@ const VALIDATION_STEPS = [
   },
   {
     title: "Send a matching prompt",
-    body: "Paste your indicator text verbatim in the simulator prompt — e.g. “ignore previous instructions”. With Auto-Block ON, expect a block response.",
+    body: "Paste your indicator text verbatim in the simulator prompt — e.g. “ignore previous instructions”. With Auto-Block ON and Effective State = Synced for blocking, expect a block response.",
   },
   {
     title: "Validate on this page",
@@ -112,8 +112,9 @@ function IocEntryGuide({ onUseExample, iocMatchCount, entryCount, syncQueued }) 
       </div>
       <p className="text-teal-900/90 dark:text-teal-100/90">
         <strong>Add Entry</strong> registers a threat indicator (IOC) in your org library. The gateway matches user
-        prompts against these patterns at <strong>tier-0</strong> (before policy). Matches can hard-block when{" "}
-        <strong>Auto-Block</strong> is enabled, or monitor-only when it is off.
+        prompts against synced keyword/literal indicators at <strong>tier-0</strong> (before policy). Matches can hard-block
+        when <strong>Auto-Block</strong> is enabled and the indicator is projection-compatible; otherwise the entry stays
+        telemetry-only.
       </p>
 
       <p className="mt-3 font-semibold text-teal-800 dark:text-teal-200">Validate end-to-end (simulator)</p>
@@ -231,8 +232,8 @@ function ThreatIntelSocPanel({ summary, iocLibrary, fleetStats, topVector, perio
           {" "}({summary?.threat_intel_matches ?? 0} / {summary?.total_events ?? 0}).
         </p>
         <p className="mt-2 text-slate-500 dark:text-slate-400">
-          Injection blocks from M1.1 usually count under <strong>Injection</strong>, not IOC Matches, unless metadata
-          is tagged as threat intel.
+          Injection blocks from M1.1 usually count under <strong>Injection</strong>, not IOC Matches. UEBA high-risk actor
+          blocks are separate and continue to use risk-score enforcement.
         </p>
       </div>
 
@@ -274,6 +275,8 @@ function SyncBatchPanel({ syncStatus }) {
       <p className="mt-1 opacity-90">
         {failed && syncStatus.error ? `${syncStatus.error}. ` : ""}
         Target <code className="font-mono">{syncStatus.redis_key || "firewall:threat_intel:{org}"}</code>
+        {typeof syncStatus.blocking_entries === "number" ? ` · blocking ${syncStatus.blocking_entries}` : ""}
+        {typeof syncStatus.telemetry_only_entries === "number" ? ` · telemetry-only ${syncStatus.telemetry_only_entries}` : ""}
         {syncStatus.last_sync_at ? ` · ${new Date(syncStatus.last_sync_at).toLocaleString()}` : ""}
       </p>
       {rows.length > 0 ? (
@@ -789,7 +792,7 @@ function ThreatIntelPageInner() {
           <div>
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Threat Indicators (IOC library)</h3>
             <p className="mt-1 max-w-3xl text-xs text-slate-500 dark:text-slate-400">
-              <strong>Add Entry</strong> stores a pattern and syncs it to the gateway automatically.
+              <strong>Add Entry</strong> stores an IOC and projects eligible keyword/literal entries into gateway blocked keywords.
               Matching traffic is blocked as a <strong>Threat Intel policy block</strong> (not a generic Policy Management rule)
               and shows under <strong>IOC Matches</strong> above.
             </p>
@@ -841,7 +844,7 @@ function ThreatIntelPageInner() {
                 className="rounded-lg border px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"
               />
               <input
-                placeholder="Indicator (regex or substring fingerprint)"
+                placeholder="Indicator (keyword or literal phrase)"
                 value={form.indicator}
                 onChange={(e) => setForm({ ...form, indicator: e.target.value })}
                 className="sm:col-span-2 rounded-lg border px-3 py-2 font-mono text-sm dark:border-slate-600 dark:bg-slate-800"
@@ -852,7 +855,7 @@ function ThreatIntelPageInner() {
                   checked={form.auto_block}
                   onChange={(e) => setForm({ ...form, auto_block: e.target.checked })}
                 />
-                Auto-block on match (otherwise monitor-only at scanner tier)
+                Auto-block on match (eligible keyword/literal entries only; others stay telemetry-only)
               </label>
               {isAdmin && (
                 <label className="flex items-center gap-2 text-sm sm:col-span-2">
@@ -891,11 +894,28 @@ function ThreatIntelPageInner() {
             {
               key: "indicator",
               label: "Indicator",
-              helpText: "Regex (case-insensitive) or substring matched at gateway tier-0 before policy scan.",
+              helpText: "Keyword/literal phrase matched at gateway tier-0 before policy scan (regex-style indicators are telemetry-only in this phase).",
               render: (r) => (
                 <code className="text-xs" title={r.indicator}>
                   {r.indicator?.length > 60 ? `${r.indicator.slice(0, 60)}…` : r.indicator}
                 </code>
+              ),
+            },
+            {
+              key: "effective_mode",
+              label: "Effective State",
+              helpText: "Synced for blocking = projected to gateway blocked keywords; Telemetry only = tracked but not enforced by keyword blocker.",
+              render: (r) => (
+                <span
+                  className={
+                    r.effective_mode === "synced_for_blocking"
+                      ? "font-medium text-emerald-600 dark:text-emerald-400"
+                      : "text-amber-600 dark:text-amber-300"
+                  }
+                  title={r.effective_reason || ""}
+                >
+                  {r.effective_mode === "synced_for_blocking" ? "Synced for blocking" : "Telemetry only"}
+                </span>
               ),
             },
             {
@@ -912,7 +932,7 @@ function ThreatIntelPageInner() {
             {
               key: "auto_block",
               label: "Auto-Block",
-              helpText: "ON = hard block at tier-0. OFF = monitor verdict only (may still block downstream via policy).",
+              helpText: "ON = project to keyword/literal blocking when indicator is compatible. OFF = telemetry-only (may still block downstream via policy/UEBA).",
               render: (r) => (
                 <button
                   type="button"

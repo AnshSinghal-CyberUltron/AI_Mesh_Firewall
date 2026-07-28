@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from module2.models import AlertFiring, AlertRule, AnomalyRule, Playbook, PlaybookRun, ThreatIntelEntry
+from module2.models import (
+    AlertFiring,
+    AlertRule,
+    AnomalyRule,
+    Playbook,
+    PlaybookRun,
+    ThreatIntelEntry,
+    ThreatIntelProjectionState,
+)
 
 
 @admin.register(Playbook)
@@ -36,3 +44,9 @@ class AnomalyRuleAdmin(admin.ModelAdmin):
 class ThreatIntelEntryAdmin(admin.ModelAdmin):
     list_display = ("id", "threat_type", "source", "confidence", "auto_block", "organization", "created_at")
     list_filter = ("source", "auto_block")
+
+
+@admin.register(ThreatIntelProjectionState)
+class ThreatIntelProjectionStateAdmin(admin.ModelAdmin):
+    list_display = ("organization", "updated_at")
+    search_fields = ("organization__name", "organization__slug")

@@ -440,22 +440,27 @@ export function formatRiskDistributionChart(distribution = {}) {
 
 /** Derive enforcement lane (chat/rag/vector/mcp/threat_intel) from WS or incident payloads. */
 export function resolveEventLane(item = {}) {
-  if (item.source && item.source !== "policy" && item.source !== "gateway") {
-    return item.source;
+  const topSource = String(item.source || "").toLowerCase();
+  if (["chat", "rag", "vector", "mcp", "threat_intel"].includes(topSource)) {
+    return topSource;
   }
   const meta = item.metadata || {};
+  const detail = String(
+    meta.detail
+    || (meta.extra && typeof meta.extra === "object" ? meta.extra.detail : "")
+    || ""
+  ).toLowerCase();
+  const src = String(meta.source || item.source || "").toLowerCase();
+  const threatType = String(meta.threat_type || "").toLowerCase();
+  if (detail.includes("threat intel") || src.includes("threat_intel") || threatType.startsWith("threat_intel")) {
+    return "threat_intel";
+  }
   const eventType = String(meta.event_type || "").toLowerCase();
   if (eventType === "mcp_tool_call" || eventType.startsWith("mcp_") || meta.tools_invoked || meta.mcp_server || meta.server_slug) {
     return "mcp";
   }
   if (eventType === "rag_pipeline" || eventType.startsWith("rag_")) return "rag";
   if (meta.collection || meta.vector_collection || meta.vector_namespace) return "vector";
-  const detail = String(meta.detail || "").toLowerCase();
-  const src = String(meta.source || item.source || "").toLowerCase();
-  const threatType = String(meta.threat_type || "").toLowerCase();
-  if (detail.includes("threat intel") || src.includes("threat_intel") || threatType.startsWith("threat_intel")) {
-    return "threat_intel";
-  }
   return "chat";
 }
 

@@ -48,6 +48,9 @@ class CollapsedRequest:
     action: str = "allow"
     metadata: dict = field(default_factory=dict)
     created_at: Any = None
+    request_id: str = ""
+    enforcement_event_id: int | None = None
+    display_event_id: str = ""
     had_monitor: bool = False
     had_reroute: bool = False
 
@@ -100,19 +103,40 @@ def collapse_events_by_request(rows: Iterable[dict]) -> list[CollapsedRequest]:
         meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
         key = request_key(meta, idx)
         action = row.get("action") or "allow"
+        row_event_id = row.get("id")
+        row_request_id = str(meta.get("request_id") or meta.get("pipeline_request_id") or "").strip()
+        row_display_id = str(meta.get("event_id") or row_request_id or "").strip()
         entry = collapsed.get(key)
         if entry is None:
             entry = CollapsedRequest(
                 key=key,
                 action=merge_request_action(None, action),
                 metadata=dict(meta),
+                request_id=row_request_id,
+                enforcement_event_id=row_event_id if isinstance(row_event_id, int) else None,
+                display_event_id=row_display_id,
             )
             if row.get("created_at") is not None:
                 entry.created_at = row["created_at"]
             collapsed[key] = entry
         else:
+            previous_action = entry.action
             entry.action = merge_request_action(entry.action, action)
             entry.metadata = _merge_metadata(entry.metadata, meta, action)
+            if not entry.request_id and row_request_id:
+                entry.request_id = row_request_id
+            if not entry.display_event_id and row_display_id:
+                entry.display_event_id = row_display_id
+            # Keep the DB id aligned with the strongest observed action for stable
+            # "representative event" mapping in request-collapsed activity timelines.
+            if (
+                isinstance(row_event_id, int)
+                and (
+                    entry.enforcement_event_id is None
+                    or (previous_action != entry.action and action in {ACTION_BLOCK, ACTION_REDACT})
+                )
+            ):
+                entry.enforcement_event_id = row_event_id
             ts = row.get("created_at")
             if ts is not None and (entry.created_at is None or ts < entry.created_at):
                 entry.created_at = ts
