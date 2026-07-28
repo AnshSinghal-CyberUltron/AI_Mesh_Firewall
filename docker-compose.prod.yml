@@ -7,13 +7,21 @@
 #   gateway   https://aimeshgateway.zeroshield.ai
 #
 # Sized for c8g.2xlarge (8 vCPU / 16 GiB): gateway-first CPU, cgroup memory sum ~14.4 GiB.
+#
+# CPU hard-limit budget (must sum ≤ 8 — do NOT overcommit):
+#   gateway 4  +  control 2  +  workers 1  = 7  (~1 CPU headroom for PG/Redis/nginx/OS)
+# Pin workers to match: WEB_CONCURRENCY=4, CONTROL_WEB_CONCURRENCY=2.
+# Apps reach Postgres via pgbouncer:6432; migrations use DATABASE_URL_DIRECT.
+#
 # Build/push: infra/scripts/build-push-images.sh  |  Deploy: scripts/deploy-ec2.sh
 #
 # This overlay covers EVERY service defined in docker-compose.yml:
-#   always-on: postgres, redis, rabbitmq, control, gateway, workers, workers-beat,
-#              mcp-sandbox-image, mcp-broker, guardrails, vector-retrieval, nginx, demo
+#   always-on: postgres, pgbouncer, redis, rabbitmq, control, gateway, workers,
+#              workers-beat, mcp-sandbox-image, mcp-broker, guardrails,
+#              vector-retrieval, nginx, demo
 #   profile:   chromadb (chroma), mongo (telemetry-pilot), mcp-stub (mcp-stub),
-#              frontend (dev-frontend), transport stubs (transport-stubs)
+#              frontend (dev-frontend), transport stubs (transport-stubs),
+#              postgres-exporter (observability)
 # Dev-only services stay profile-gated; prod defaults enable the full product path
 # (MCP sandboxes + Celery + guardrails/vector sidecars) without requiring --profile.
 
@@ -64,17 +72,28 @@ services:
       - -c
       - effective_cache_size=1536MB
       - -c
-      # Raised from 100: control opens a DB conn per request (CONN_MAX_AGE) + celery;
-      # under multi-tenant MCP load 100 exhausts ("too many clients") -> bogus login-401s
-      # + control wedge. 200 doubles headroom while staying within the 2560M cap
-      # (~7.5MB/backend). Bump the memory limit before raising further.
-      - max_connections=${POSTGRES_MAX_CONNECTIONS:-200}
+      # Align with base compose / PERF-0006. PgBouncer caps server-side fan-in
+      # (max_db_connections≈80); 400 is the hard ceiling for direct + pooler.
+      - max_connections=${POSTGRES_MAX_CONNECTIONS:-400}
       - -c
       - work_mem=4MB
     deploy:
       resources:
         limits:
           memory: 2560M
+
+  pgbouncer:
+    <<: *restart_unless_stopped
+    ports: !override ["127.0.0.1:6432:6432"]
+    environment:
+      # Keep server pool well under POSTGRES_MAX_CONNECTIONS=400.
+      MAX_DB_CONNECTIONS: ${PGBOUNCER_MAX_DB_CONNECTIONS:-80}
+      DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-25}
+      MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-1000}
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   redis:
     <<: *restart_unless_stopped
@@ -117,11 +136,11 @@ services:
     build: !reset null
     ports: !override ["127.0.0.1:8100:8000"]
     # Do NOT override command — image CMD is server-entrypoint.sh (cgroup-aware
-    # worker count). Pin via CONTROL_WEB_CONCURRENCY (4 fits the 4-CPU limit).
+    # worker count). Pin via CONTROL_WEB_CONCURRENCY (2 fits the 2-CPU limit).
     environment:
       DEBUG: ${DEBUG:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      CONTROL_WEB_CONCURRENCY: ${CONTROL_WEB_CONCURRENCY:-4}
+      CONTROL_WEB_CONCURRENCY: ${CONTROL_WEB_CONCURRENCY:-2}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-aimeshbackend.zeroshield.ai,aimeshfirewall.zeroshield.ai,aimeshgateway.zeroshield.ai,localhost,127.0.0.1,control,gateway}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://aimeshfirewall.zeroshield.ai}
       GATEWAY_PUBLIC_URL: ${GATEWAY_PUBLIC_URL:-https://aimeshgateway.zeroshield.ai}
@@ -134,12 +153,14 @@ services:
       # Internal Docker DNS — nginx terminates TLS; control→gateway stays HTTP.
       GATEWAY_URL: http://gateway:8300
       GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
-      POSTGRES_CONN_MAX_AGE: ${POSTGRES_CONN_MAX_AGE:-30}
+      # Transaction pooling: never keep idle server conns behind PgBouncer.
+      POSTGRES_CONN_MAX_AGE: ${POSTGRES_CONN_MAX_AGE:-0}
+      DISABLE_SERVER_SIDE_CURSORS: ${DISABLE_SERVER_SIDE_CURSORS:-true}
       DJANGO_CACHE_MAX_CONNECTIONS: ${DJANGO_CACHE_MAX_CONNECTIONS:-50}
     deploy:
       resources:
         limits:
-          cpus: "4"
+          cpus: "2"
           memory: 2560M
 
   # ── Gateway ─────────────────────────────────────────────────────────────────
@@ -150,11 +171,11 @@ services:
     ports: !override ["0.0.0.0:8300:8300"]
     environment:
       # 1 gunicorn worker per gateway vCPU (async uvicorn — not 2×CPU+1)
-      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-6}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
       GUNICORN_WORKER_CONNECTIONS: ${GUNICORN_WORKER_CONNECTIONS:-1000}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
       GUNICORN_KEEPALIVE: ${GUNICORN_KEEPALIVE:-65}
-      # Thread pools are per forked worker (6 workers × pool size = cluster total)
+      # Thread pools are per forked worker (4 workers × pool size = cluster total)
       GATEWAY_SCANNER_THREAD_POOL_SIZE: ${GATEWAY_SCANNER_THREAD_POOL_SIZE:-4}
       GATEWAY_BEDROCK_THREAD_POOL_SIZE: ${GATEWAY_BEDROCK_THREAD_POOL_SIZE:-8}
       GATEWAY_VAULT_POOL_MIN: ${GATEWAY_VAULT_POOL_MIN:-1}
@@ -194,7 +215,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "6"
+          cpus: "4"
           memory: 7168M
 
   # ── Celery (always-on in prod — clear base `workers` profile) ───────────────
@@ -337,3 +358,18 @@ services:
       resources:
         limits:
           memory: 256M
+
+  # Optional: scrape with --profile observability (see deploy/observability/).
+  postgres-exporter:
+    <<: *restart_unless_stopped
+    profiles: ["observability"]
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    ports: ["127.0.0.1:9187:9187"]
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}?sslmode=disable
+    depends_on:
+      postgres: { condition: service_healthy }
+    deploy:
+      resources:
+        limits:
+          memory: 128M

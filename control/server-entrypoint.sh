@@ -13,20 +13,49 @@
 #
 # CONTROL_WEB_CONCURRENCY (env) ALWAYS overrides the detector. If the detector
 # fails, fall back to a safe static count so control can never fail to boot.
+# After resolve, ALWAYS clamp workers to ceil(cgroup cpu_budget) so an affinity
+# fallback (host nproc) cannot exceed the container's CPU quota (prod incident:
+# 8-vCPU host + cpus:2 → runaway workers holding idle PG connections).
 # CONTROL_ENTRYPOINT_DRYRUN=1 prints the resolved command and exits 0 (perf proof).
 set -eu
+
+# Containers ship `python` on PATH; bare hosts may only have `python3`.
+if command -v python >/dev/null 2>&1; then
+    PYTHON_BIN=python
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN=python3
+else
+    echo "[control-entrypoint] FATAL: neither python nor python3 on PATH" >&2
+    exit 1
+fi
 
 FALLBACK_WORKERS=2
 
 if [ -n "${CONTROL_WEB_CONCURRENCY:-}" ]; then
     WORKERS="$CONTROL_WEB_CONCURRENCY"
     WSRC="env-override"
-elif WORKERS="$(python -m ai_mesh_shared.resource_budget --value workers 2>/dev/null)" \
+elif WORKERS="$("$PYTHON_BIN" -m ai_mesh_shared.resource_budget --value workers 2>/dev/null)" \
         && [ -n "$WORKERS" ]; then
     WSRC="detector"
 else
     WORKERS="$FALLBACK_WORKERS"
     WSRC="fallback"
+fi
+
+# Clamp to cgroup CPU quota (defense-in-depth even when env override is wrong).
+CPU_BUDGET="$("$PYTHON_BIN" -m ai_mesh_shared.resource_budget --value cpu_budget 2>/dev/null || true)"
+if [ -n "$CPU_BUDGET" ]; then
+    CPU_CAP="$(awk "BEGIN { c = int($CPU_BUDGET + 0.999); if (c < 1) c = 1; print c }")"
+    case "$WORKERS" in
+        ''|*[!0-9]*) ;;
+        *)
+            if [ "$WORKERS" -gt "$CPU_CAP" ]; then
+                echo "[control-entrypoint] clamping workers $WORKERS → $CPU_CAP (cpu_budget=$CPU_BUDGET)" >&2
+                WORKERS="$CPU_CAP"
+                WSRC="${WSRC}+cgroup-clamp"
+            fi
+            ;;
+    esac
 fi
 
 # gunicorn reads WEB_CONCURRENCY at config-import time and crashes on an empty
@@ -36,20 +65,26 @@ export WEB_CONCURRENCY="$WORKERS"
 
 # Size the event-loop default thread-pool (sync offload) from the detector unless
 # pinned. main_app/asgi.py reads ASGI_THREADS per worker (P3 item 09).
+# Never export an empty string — Daphne does int(os.environ["ASGI_THREADS"]).
 if [ -z "${ASGI_THREADS:-}" ]; then
-    ASGI_THREADS="$(python -m ai_mesh_shared.resource_budget --value asgi_threads 2>/dev/null || true)"
+    ASGI_THREADS="$("$PYTHON_BIN" -m ai_mesh_shared.resource_budget --value asgi_threads 2>/dev/null || true)"
+fi
+if [ -z "${ASGI_THREADS:-}" ]; then
+    ASGI_THREADS=8
 fi
 export ASGI_THREADS
 
 # Size the Django cache Redis pool per worker from the detector (was fixed 200)
 # unless pinned. Generous, scales with cores, never a bottleneck (P5 item 16).
 if [ -z "${DJANGO_CACHE_MAX_CONNECTIONS:-}" ]; then
-    DJANGO_CACHE_MAX_CONNECTIONS="$(python -m ai_mesh_shared.resource_budget --value redis_pool 2>/dev/null || true)"
-    [ -n "$DJANGO_CACHE_MAX_CONNECTIONS" ] && export DJANGO_CACHE_MAX_CONNECTIONS
+    DJANGO_CACHE_MAX_CONNECTIONS="$("$PYTHON_BIN" -m ai_mesh_shared.resource_budget --value redis_pool 2>/dev/null || true)"
+fi
+if [ -n "${DJANGO_CACHE_MAX_CONNECTIONS:-}" ]; then
+    export DJANGO_CACHE_MAX_CONNECTIONS
 fi
 
 echo "[control-entrypoint] CONTROL workers=$WORKERS (source=$WSRC)" >&2
-python -m ai_mesh_shared.resource_budget --json 2>/dev/null \
+"$PYTHON_BIN" -m ai_mesh_shared.resource_budget --json 2>/dev/null \
     | sed 's/^/[control-entrypoint]   /' >&2 || true
 
 set -- gunicorn main_app.asgi:application \
