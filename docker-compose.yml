@@ -236,7 +236,7 @@ services:
   guardrails:
     image: python:3.12-slim
     working_dir: /app
-    command: pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8310
+    command: ["sh", "-c", "pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8310"]
     volumes: ["./services/guardrails/src:/app"]
     ports: ["8310:8310"]
     profiles: ["services"]
@@ -310,7 +310,7 @@ services:
   vector-retrieval:
     image: python:3.12-slim
     working_dir: /app
-    command: pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8312
+    command: ["sh", "-c", "pip install fastapi uvicorn && uvicorn main:app --host 0.0.0.0 --port 8312"]
     volumes: ["./services/vector-retrieval/src:/app"]
     ports: ["8312:8312"]
     profiles: ["services"]
