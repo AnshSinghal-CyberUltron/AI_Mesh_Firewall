@@ -5382,6 +5382,27 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
         if arguments is None:
             arguments = {}
 
+    # TELEMETRY PARITY: audit EVERY tool call — allow/monitor too, not only block/redact —
+    # so the MCP governance dashboard reflects all activity (it previously showed only
+    # blocks because the clean-allow terminal never recorded an event). Additive/audit-only:
+    # never changes the enforcement decision, so it honors the operator-selected posture.
+    _audited = False
+    _obs_tags: list = []
+    _obs_findings: list = []
+    # A-07: a control/NUL byte in a tool name is never a valid MCP tool and crashed a
+    # downstream parametrized DB filter (HTTP 500). Reject it at the gateway boundary.
+    if tool_name and any(ord(c) < 0x20 or ord(c) == 0x7f for c in tool_name):
+        await _record_gateway_event(
+            org_slug=org_slug, server_slug=server_slug, tool_name="", decision="block",
+            reason="invalid_tool_name", request_id=_req_id,
+            metadata={"transport": "rest", "enforced_at": "gateway"},
+        )
+        return JSONResponse(
+            status_code=400,
+            content={"error": "invalid_request", "code": "invalid_tool_name",
+                     "param": "name", "detail": "Tool name contains control characters.",
+                     "request_id": _req_id},
+        )
     enabled_info = await _get_enabled_tools(org_slug, server_slug)
     call_t0 = time.time()
     if tool_name:
@@ -5443,6 +5464,8 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
             server_slug=server_slug,
             actor=mcp_actor,
         )
+        _obs_tags += list(in_tags or [])
+        _obs_findings += list(in_findings or [])
         if in_blocked:
             await _record_gateway_event(
                 org_slug=org_slug,
@@ -5487,6 +5510,7 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
                 compliance_tags=list(in_tags),
                 scan_findings=list(in_findings),
             )
+            _audited = True
 
     async with httpx.AsyncClient(timeout=max(_TIMEOUT, 60)) as client:
         try:
@@ -5519,6 +5543,8 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
                         server_slug=server_slug,
                         actor=mcp_actor,
                     )
+                    _obs_tags += list(out_tags or [])
+                    _obs_findings += list(out_findings or [])
                     if out_blocked:
                         await _record_gateway_event(
                             org_slug=org_slug,
@@ -5562,11 +5588,27 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
                             compliance_tags=list(out_tags),
                             scan_findings=list(out_findings),
                         )
+                        _audited = True
                         # Swap the masked content back under whichever key carried it.
                         if data.get("result") is not None:
                             data["result"] = scanned_content
                         else:
                             data["content"] = scanned_content
+            # TELEMETRY PARITY: record the terminal outcome for EVERY tool call that was
+            # not already audited as block/redact — a clean allow, or a monitor (findings
+            # observed under an observe/tag posture, never blocked). This is the fix for the
+            # dashboard showing only blocks. Audit-only: the response is returned unchanged.
+            if not _audited:
+                await _record_gateway_event(
+                    org_slug=org_slug, server_slug=server_slug, tool_name=tool_name or "",
+                    decision=("monitor" if (_obs_findings or _obs_tags) else "allow"),
+                    reason=("compliance_tags_matched" if _obs_tags
+                            else ("findings_observed" if _obs_findings else "clean_allow")),
+                    request_id=_req_id, latency_ms=int((time.time() - call_t0) * 1000),
+                    metadata={"transport": "rest", "enforced_at": "gateway"},
+                    compliance_tags=list(dict.fromkeys(_obs_tags)),
+                    scan_findings=_obs_findings,
+                )
             return JSONResponse(content=data, status_code=resp.status_code)
         except httpx.TimeoutException as exc:
             LOG.error("Org MCP tool call timeout: %s", exc)
