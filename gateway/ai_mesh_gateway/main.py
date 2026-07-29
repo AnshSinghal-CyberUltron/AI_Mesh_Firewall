@@ -5680,7 +5680,10 @@ def _detect_rag_request(body: dict, messages: list[dict]) -> bool:
         if msg.get("role") == "tool":
             return True
         if msg.get("role") == "system":
-            content = (msg.get("content") or "").lower()
+            # B-39: content may be a LIST of parts ({"type":"text",...}); (list or "").lower()
+            # raised AttributeError (neither ValueError nor TypeError → escaped the 400 handler
+            # → 500). Flatten to text first (list-aware, safe for str/dict/None too).
+            content = _content_to_text(msg.get("content")).lower()
             if any(
                 marker in content
                 for marker in ("context:", "retrieved documents:", "knowledge base:", "search results:")
