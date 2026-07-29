@@ -134,6 +134,43 @@ async def test_flag_absent_fails_safe_to_scanning():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("server_default", ["tag", "monitor"])
+async def test_configured_block_control_blocks_even_with_observe_server_default(server_default):
+    """CHG-0119 regression: when scan controls ARE configured with a tier1_input
+    action='block' row, the call MUST block on a finding — even if the SERVER default
+    posture is observe (tag/monitor). Detect-only must NOT suppress a configured per-tier
+    block (it applies only to the ZERO-controls case)."""
+    eff = {
+        "scan_controls_configured": True,
+        "tier1_input": {"enabled": True, "target_mode": "entire", "key_path": "",
+                        "strict_mode": "fail_open", "action": "block"},
+        "tier1_output": {"enabled": True, "target_mode": "entire", "key_path": "",
+                         "strict_mode": "fail_open", "action": "inherit"},
+        "tier2_input": {"enabled": False, "target_mode": "entire", "key_path": "",
+                        "strict_mode": "strict", "action": "inherit"},
+        "tier2_output": {"enabled": False, "target_mode": "entire", "key_path": "",
+                         "strict_mode": "strict", "action": "inherit"},
+    }
+    enabled_info = {
+        "scan_controls_configured": True,
+        "default_scan_action": server_default,
+        "effective_scan_controls": eff,
+        "effective_scan_controls_by_tool": {},
+    }
+    scanned, blocked, tags, findings, meta = await mcp_proxy._mcp_security_scan(
+        _SSN_PAYLOAD,
+        scan_direction="input",
+        tool_name="echo",
+        enabled_info=enabled_info,
+        org_slug="zeroshield",
+        server_slug="everything-1",
+    )
+    assert blocked is True, "configured tier1_input=block must BLOCK despite observe server default"
+    assert meta.get("detect_only_observe") is not True
+    assert findings
+
+
+@pytest.mark.asyncio
 async def test_configured_true_still_scans():
     enabled_info = {
         "scan_controls_configured": True,
