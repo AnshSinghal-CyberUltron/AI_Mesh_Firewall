@@ -2156,15 +2156,22 @@ async def _mcp_security_scan(
     # zero scan controls, so tool-arg / result threats are VISIBLE in telemetry (never
     # blocked or mutated). Any other posture (block/redact/unset) with zero controls keeps
     # the pure off-by-default skip below — enforcement floors require explicit controls.
+    #
+    # CRITICAL: detect-only applies ONLY to the ZERO-CONTROLS case. When the org HAS scan
+    # controls configured, the normal two-tier path runs and its per-tier resolved actions
+    # (a tier1_input action='block'/'redact' from an MCPScanControl row) MUST take effect —
+    # gating _detect_only solely on the observe *server default* wrongly suppressed a
+    # configured per-tier block (the belt-and-suspenders below forced blocked=False), so an
+    # operator who selected block via the scan-control matrix still only got 'monitor'.
+    _controls_unconfigured = bool(
+        enabled_info is not None and enabled_info.get("scan_controls_configured") is False
+    )
     _detect_only = (
         _MCP_OBSERVE_SCAN_UNCONFIGURED
+        and _controls_unconfigured
         and str(action).strip().lower() in _MCP_OBSERVE_POSTURES
     )
-    if (
-        enabled_info is not None
-        and enabled_info.get("scan_controls_configured") is False
-        and not _detect_only
-    ):
+    if _controls_unconfigured and not _detect_only:
         return (
             payload,
             False,
