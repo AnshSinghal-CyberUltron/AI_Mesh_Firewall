@@ -1399,3 +1399,116 @@ def test_backend_headers_omit_roles_when_auth_has_none():
     out = mcp_proxy._backend_proxy_headers(_spoofed_request(auth), "demo", "srv1")
     assert "X-Gateway-Roles" not in out
     assert "admin" not in "\n".join(out.values())
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# A-28 (Content-Type enforcement) + A-35 (null/omitted arguments normalization)
+# ════════════════════════════════════════════════════════════════════════════
+
+
+def _rest_request_ct(auth, body_bytes, content_type=None):
+    req = SimpleNamespace(state=SimpleNamespace(auth_context=auth))
+    req.body = AsyncMock(return_value=body_bytes)
+    req.headers = {"content-type": content_type} if content_type is not None else {}
+    return req
+
+
+def _capturing_client(captured, response):
+    async def _post(*_a, **k):
+        captured["content"] = k.get("content")
+        return response
+
+    client = AsyncMock()
+    client.post = AsyncMock(side_effect=_post)
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    return client
+
+
+@pytest.mark.asyncio
+async def test_rest_rejects_non_json_content_type():
+    """A-28: a text/plain Content-Type on a JSON-parsed tool-call body is rejected 415."""
+    req = _rest_request_ct(
+        _auth(), b'{"name": "fetch", "arguments": {}}', content_type="text/plain"
+    )
+    with (
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+    ):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code == 415
+    assert _decode(resp)["code"] == "mcp_unsupported_media_type"
+
+
+@pytest.mark.asyncio
+async def test_rest_accepts_application_json_content_type():
+    """A-28: application/json (with a charset param) is accepted (not 415)."""
+    req = _rest_request_ct(
+        _auth(), b'{"name": "fetch", "arguments": {}}',
+        content_type="application/json; charset=utf-8",
+    )
+    backend = _http_resp({"result": [{"type": "text", "text": "ok"}]})
+    with (
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_fake_client([backend])),
+    ):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code != 415
+
+
+@pytest.mark.asyncio
+async def test_rest_missing_content_type_is_lenient():
+    """A-28: a missing Content-Type stays lenient (some MCP clients omit it)."""
+    req = _rest_request_ct(_auth(), b'{"name": "fetch", "arguments": {}}', content_type=None)
+    backend = _http_resp({"result": [{"type": "text", "text": "ok"}]})
+    with (
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy.httpx, "AsyncClient", return_value=_fake_client([backend])),
+    ):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code != 415
+
+
+@pytest.mark.asyncio
+async def test_rest_null_arguments_normalized_to_empty_object():
+    """A-35: an explicit `arguments: null` is normalized to `{}` in the FORWARDED body,
+    so it presents to the control tool-call API identically to an omitted key (which the
+    control API accepts; it 400s on a literal null)."""
+    captured = {}
+    backend = _http_resp({"result": [{"type": "text", "text": "ok"}]})
+    req = _rest_request_ct(
+        _auth(), b'{"name": "fetch", "arguments": null}',
+        content_type="application/json",
+    )
+    with (
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy.httpx, "AsyncClient",
+                     return_value=_capturing_client(captured, backend)),
+    ):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code == 200
+    forwarded = json.loads(captured["content"])
+    assert forwarded["arguments"] == {}, "null arguments must be forwarded as {}"
+
+
+@pytest.mark.asyncio
+async def test_rest_omitted_arguments_forwarded_as_empty_object():
+    """A-35: an omitted `arguments` key is likewise forwarded as `{}` (parity with null)."""
+    captured = {}
+    backend = _http_resp({"result": [{"type": "text", "text": "ok"}]})
+    req = _rest_request_ct(
+        _auth(), b'{"name": "fetch"}', content_type="application/json"
+    )
+    with (
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value=None)),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+        patch.object(mcp_proxy.httpx, "AsyncClient",
+                     return_value=_capturing_client(captured, backend)),
+    ):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code == 200
+    forwarded = json.loads(captured["content"])
+    assert forwarded.get("arguments") == {}
