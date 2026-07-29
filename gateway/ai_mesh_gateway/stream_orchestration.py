@@ -562,6 +562,18 @@ def _stamp_output_stage_action(
             s2 = dict(s) if isinstance(s, dict) else s
             if isinstance(s2, dict) and s2.get("name") == "output_guardrail":
                 s2["action"] = _out_stage_action
+                # STAGE COHERENCE: the guard's OWN verdict fields must agree with the
+                # stamped action. Left at their pre-stream "allow" values, the Scan
+                # Detail showed an output_guardrail stage that was simultaneously
+                # action="block" and guard_action="allow" (guard_reason "...ALLOW"),
+                # which reads as a self-contradiction on every blocked/redacted stream.
+                s2["guard_action"] = _out_stage_action
+                s2["guard_reason"] = (
+                    f"ZeroShield Output Guard — enforcement: {_out_stage_action.upper()}"
+                )
+                s2["enforcement_source"] = "output_guard"
+                s2["decision_source"] = "output_guard"
+                s2.setdefault("decision_source_label", "ZeroShield Output Guard")
                 if metrics.guard_detail:
                     s2["detail"] = metrics.guard_detail
             _stages.append(s2)
