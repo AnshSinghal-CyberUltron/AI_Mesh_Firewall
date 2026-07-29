@@ -3537,6 +3537,15 @@ def _launch_chat_stream_response(
     # stage reports its real latency instead of 0 ("input scan shows <1ms"). Optional so
     # legacy callers/tests are unaffected — a None simply yields the prior 0ms behavior.
     stage_metrics: dict | None = None,
+    # STREAM POLICY ATTRIBUTION: the matched policy/rule NAMES from the policy engine
+    # (check_resp), so a policy-redacted stream's policy stage names the rules that fired
+    # ("which policy / why redacted"). None on the firewall-disabled path (no policy eval).
+    matched_policy_names: list | None = None,
+    matched_rule_names: list | None = None,
+    # Whether the POLICY engine's own decision was "redact" (check_resp action). Used to
+    # attribute the redaction to the policy stage PRECISELY — a monitor/flag rule that
+    # merely matched (while the SCANNER did the redaction) must NOT flip policy to redact.
+    policy_redacted: bool = False,
 ):
     """
     stream_phase + finalization_phase for /v1/chat/completions (SSE).
@@ -3678,15 +3687,35 @@ def _launch_chat_stream_response(
         # which is exactly why model_output/output_guardrail were hollow.
         _orig_prompt = _extract_prompt_from_messages(body.get("messages") or [])
         _fwd_prompt = redacted_prompt if redacted_prompt is not None else _orig_prompt
-        _scanner_redacted = bool(
+        _any_redaction = bool(
             redacted_prompt is not None and str(redacted_prompt) != str(_orig_prompt)
         )
+        # STREAM POLICY ATTRIBUTION: name the policy rules that fired (from check_resp) on
+        # the policy stage, and mark policy=redact when a policy rule matched AND a redaction
+        # occurred — so a policy-redacted stream shows "which policy / why". A TRACE-only
+        # zeroshield copy carries the names; the client-facing _stream_zs_base and response
+        # headers are unchanged. detection_tier is intentionally NOT overridden here (the
+        # top-level tier stays the scanner's) to avoid mis-attributing a scanner redaction.
+        _pol_names = list(matched_policy_names or [])
+        _rule_names = list(matched_rule_names or [])
+        # Attribute the redaction to the POLICY stage ONLY when the policy engine's
+        # decision was actually "redact" AND a redaction occurred — never merely because
+        # a rule matched. This keeps a scanner (Tier-2) redaction attributed to input_scan
+        # even if a monitor/flag policy rule also matched, and only then names the rules.
+        _policy_acted = bool(policy_redacted) and _any_redaction
+        _trace_zs = dict(_stream_zs_base or {})
+        if _policy_acted:
+            if _pol_names:
+                _trace_zs["matched_policy_names"] = _pol_names
+            if _rule_names:
+                _trace_zs["matched_rule_names"] = _rule_names
         _trace_kwargs = dict(
             prompt=_redact_trace_text(_orig_prompt),
             forwarded_prompt=_redact_trace_text(_fwd_prompt or _orig_prompt),
-            scanner_redaction_applied=_scanner_redacted,
+            policy_redacted_flag=_policy_acted,
+            scanner_redaction_applied=_any_redaction,
             scan_verdict=scan_verdict,
-            zeroshield=_stream_zs_base,
+            zeroshield=_trace_zs,
             requested_model=_stream_echo_model,
             final_action=input_action,
             http_status=200,
@@ -8257,6 +8286,9 @@ async def proxy_chat(
                     secure_output_scan=bool(CONFIG.get("output_scan_enabled", True)),
                     input_action=_input_decision.action if _input_decision is not None else "allow",
                     stage_metrics=stage_metrics,
+                    matched_policy_names=(check_resp.get("matched_policy_names") or check_resp.get("matched_policies") or []),
+                    matched_rule_names=(check_resp.get("matched_rules") or []),
+                    policy_redacted=(str(check_resp.get("action") or "").lower() == "redact"),
                 )
             upstream_start = time.perf_counter()
             code, resp = await LLM_ROUTER.acompletion(
@@ -9035,6 +9067,9 @@ async def proxy_chat(
                 secure_output_scan=bool(CONFIG.get("output_scan_enabled", True)),
                 input_action=_input_decision.action if _input_decision is not None else "allow",
                 stage_metrics=stage_metrics,
+                matched_policy_names=(check_resp.get("matched_policy_names") or check_resp.get("matched_policies") or []),
+                matched_rule_names=(check_resp.get("matched_rules") or []),
+                policy_redacted=(str(check_resp.get("action") or "").lower() == "redact"),
             )
         upstream_start = time.perf_counter()
         stage_metrics["model_input_ms"] = round((upstream_start - _model_in_start) * 1000, 1)

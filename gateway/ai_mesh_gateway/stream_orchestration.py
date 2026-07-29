@@ -84,6 +84,18 @@ class StreamRunMetrics:
     guard_threat_type: str = ""
     guard_detail: str = ""
     guard_matched_patterns: list[str] = field(default_factory=list)
+    # STREAM TIMING FIDELITY: accumulated wall-time spent inside the output guard's
+    # inspect() across ALL mid-stream flushes (fed to the output_guardrail stage latency
+    # at finalization). Accumulated, never overwritten; 0.0 when the guard never ran.
+    output_guard_ms: float = 0.0
+
+    def add_output_guard_ms(self, dt_ms: float) -> None:
+        """Accumulate (never overwrite) output-guard inspect() wall-time across flushes."""
+        try:
+            if dt_ms and dt_ms > 0:
+                self.output_guard_ms += float(dt_ms)
+        except Exception:
+            pass
 
     def record_guard_action(
         self,
@@ -652,6 +664,10 @@ def _rebuilt_stream_trace(
         sm = dict(kwargs.get("stage_metrics") or {})
         if metrics.ttft_ms > 0 and metrics.duration_ms > metrics.ttft_ms:
             sm.setdefault("model_output_ms", round(metrics.duration_ms - metrics.ttft_ms, 1))
+        # Measured output-guard inspect() wall-time (accumulated across flushes) — a real
+        # output_guardrail latency instead of the wall-clock approximation / 0.0.
+        if getattr(metrics, "output_guard_ms", 0.0) > 0:
+            sm.setdefault("output_guardrail_ms", round(metrics.output_guard_ms, 1))
         rebuilt = build_pipeline_trace(
             **{k: v for k, v in kwargs.items() if k != "stage_metrics"},
             stage_metrics=sm,
