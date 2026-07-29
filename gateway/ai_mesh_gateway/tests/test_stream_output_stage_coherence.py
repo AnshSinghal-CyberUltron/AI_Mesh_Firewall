@@ -129,3 +129,28 @@ def test_rebuilt_stream_trace_fails_open_without_kwargs():
     ctx = StreamLaunchContext(body={}, redacted_prompt=None, org_slug="o", model="m")
     base = {"stages": [{"name": "model_output"}]}
     assert _rebuilt_stream_trace(ctx, StreamRunMetrics(), base) is base
+
+
+def test_output_guard_ms_accumulates_across_flushes():
+    m = StreamRunMetrics()
+    m.add_output_guard_ms(10.0)
+    m.add_output_guard_ms(5.5)
+    m.add_output_guard_ms(-3)   # negative ignored
+    m.add_output_guard_ms(0)    # zero ignored
+    assert m.output_guard_ms == 15.5
+
+
+def test_rebuilt_trace_uses_measured_output_guard_latency():
+    from ai_mesh_gateway.stream_orchestration import _rebuilt_stream_trace, StreamLaunchContext
+    ctx = StreamLaunchContext(body={}, redacted_prompt=None, org_slug="o", model="m")
+    ctx.trace_build_kwargs = dict(
+        prompt="hi [MASKED]", forwarded_prompt="hi [MASKED]", scan_verdict=None,
+        zeroshield={}, requested_model="m", final_action="allow", http_status=200,
+        stage_metrics={},
+    )
+    m = StreamRunMetrics()
+    m.output_snippet = "hello there"
+    m.output_guard_ms = 42.0
+    pt = _rebuilt_stream_trace(ctx, m, {"stages": [{"name": "output_guardrail"}]})
+    og = next(s for s in pt["stages"] if s["name"] == "output_guardrail")
+    assert float(og.get("latency_ms") or 0) == 42.0, "output_guardrail latency from measured guard time"

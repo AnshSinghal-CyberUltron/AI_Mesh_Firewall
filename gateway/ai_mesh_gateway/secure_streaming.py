@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from enum import Enum
 from typing import AsyncGenerator, Callable, TYPE_CHECKING
 
@@ -371,6 +372,7 @@ class SecureStreamingResponse:
             # guard whose inspect() predates these kwargs falls back to the legacy
             # single-arg call so no caller/test is regressed.
             context_chunks = await self._resolve_context_chunks()
+            _guard_t0 = time.perf_counter()
             try:
                 verdict = await self._output_guard.inspect(
                     full_text,
@@ -381,6 +383,12 @@ class SecureStreamingResponse:
             except TypeError:
                 # Older/duck-typed guard: inspect(text) only.
                 verdict = await self._output_guard.inspect(full_text)
+            finally:
+                # STREAM TIMING FIDELITY: accumulate guard inspect() wall-time so the
+                # output_guardrail stage reports a REAL latency at finalization (was ~0).
+                # Fail-open — a timing hiccup must never break the stream.
+                if self._stream_metrics is not None:
+                    self._stream_metrics.add_output_guard_ms((time.perf_counter() - _guard_t0) * 1000)
 
             # H-03 FIX: a tier-2 output-guard OUTAGE sets verdict.scan_degraded,
             # meaning the streamed response was passed only partially / UN-scanned
