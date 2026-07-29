@@ -20,7 +20,7 @@ from core.pagination import PublicUrlPagination
 
 logger = logging.getLogger(__name__)
 
-_ORG_ADMIN_ROLE_NAMES = ("admin", "superadmin", "org_admin")
+_ORG_ADMIN_ROLE_NAMES = ("admin", "superadmin", "org_admin", "platform_admin")
 
 
 class GatewayAPIKeyPagination(PublicUrlPagination):
@@ -51,6 +51,12 @@ class IsGatewayKeyOwner(BasePermission):
             return True
         # For mutation (PATCH, DELETE), require ownership or admin role
         user = request.user
+        # Platform operators (Django superusers) may manage ANY key. Without this,
+        # a superuser whose profile role is `platform_admin` (not one of the
+        # org-scoped role names) and who does not OWN the key was denied with 403 —
+        # e.g. deleting revoked keys created by another operator in the same org.
+        if getattr(user, "is_superuser", False):
+            return True
         if obj.owner_id == user.id:
             return True
         # Allow org admins to manage any key in their org
@@ -386,7 +392,11 @@ class GatewayAPIKeyViewSet(ModelViewSet):
         qs = self.get_queryset().filter(is_active=False)
         user = self.request.user
         profile = getattr(user, "profile", None)
-        if _profile_is_org_admin(profile):
+        # Superusers (platform operators) and org admins purge every revoked key in
+        # the org-scoped queryset; everyone else only their own. Without the
+        # superuser check, a platform_admin operator's "delete all revoked" silently
+        # purged nothing (it fell to `owner=user`, of which they owned none).
+        if getattr(user, "is_superuser", False) or _profile_is_org_admin(profile):
             return qs
         return qs.filter(owner=user)
 
