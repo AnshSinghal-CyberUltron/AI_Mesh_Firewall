@@ -2182,16 +2182,22 @@ def _record_event(
                 _status_code = _status_code_map.get(decision, 200)
 
                 # Map MCPEvent decision → EnforcementEvent action.
-                # 'allow' is recorded as 'monitor' so success traffic still
-                # appears on dashboard timelines without being mis-tagged
-                # as a block. 'error' is also recorded as 'monitor'.
-                # 'scan_skipped' = zero scan controls (no Tier-1/Tier-2) —
-                # observably distinct in MCPEvent, mapped to monitor for SOC.
+                # 'allow' is now recorded as its own first-class 'allow' action
+                # (not folded into 'monitor') so a clean tool call is visibly
+                # distinct on the dashboard from a flagged/observed 'monitor'
+                # event. The evidence table, action filter ("Allowed"), action
+                # colors (emerald), Event-Timeline (allow→allowed bucket) and
+                # the generic action_counts aggregation all already understand
+                # 'allow'; only this fold was hiding it, which made every clean
+                # tool call read as "monitor" on the operator surface.
+                # 'error' and 'scan_skipped' (zero scan controls, no Tier-1/2)
+                # remain mapped to 'monitor' — they are observably distinct in
+                # the raw MCPEvent (metadata.decision) but are not clean allows.
                 _action_map = {
                     "block": "block",
                     "redact": "redact",
                     "monitor": "monitor",
-                    "allow": "monitor",
+                    "allow": "allow",
                     "scan_skipped": "monitor",
                     "error": "monitor",
                 }
