@@ -140,6 +140,12 @@ class StreamLaunchContext:
     organization_id: int | None = None
     source_ip: str = ""
     start_time: float = field(default_factory=time.perf_counter)
+    # STREAM TRACE PARITY: the build_pipeline_trace kwargs captured pre-stream (minus
+    # response_text), so finalization can REBUILD the full 9-stage trace once the
+    # streamed model output exists — reaching parity with the non-stream path
+    # (per-stage prompt_in/out, model_output & output_guardrail content + latency).
+    # None disables the rebuild (fail-open to the pre-stream base).
+    trace_build_kwargs: dict | None = None
 
 
 @dataclass
@@ -416,7 +422,9 @@ async def finalize_stream(
     # PER-STAGE HONESTY on the PERSISTED trace: stamp the output_guardrail stage with the
     # guard's OWN action (identical logic to the SSE frame) so the audit record reflects the
     # real output-guard outcome, not the base (input-redaction) trace.
-    _stamped_pt = _stamp_output_stage_action(pipeline_trace, metrics)
+    _stamped_pt = _stamp_output_stage_action(
+        _rebuilt_stream_trace(ctx, metrics, pipeline_trace), metrics
+    )
 
     if hooks.emit_telemetry is not None:
         try:
@@ -608,6 +616,54 @@ def _stamp_output_stage_action(
     return pt
 
 
+def _rebuilt_stream_trace(
+    ctx: "StreamLaunchContext",
+    metrics: "StreamRunMetrics",
+    pipeline_trace_base: dict | None,
+) -> dict | None:
+    """STREAM TRACE PARITY: rebuild the full 9-stage pipeline_trace at finalization.
+
+    The pre-stream build (main._launch_chat_stream_response) calls build_pipeline_trace
+    with response_text="" because the streamed output does not exist yet — so
+    model_output/output_guardrail come out hollow (0.0ms, no content) and per-stage
+    prompt_in/prompt_out are absent on the input-side stages. Re-run the SAME
+    build_pipeline_trace the non-stream path uses, now with the reconstructed output, so
+    a streamed request's Scan Detail is identical in shape to a non-stream one.
+
+    - response_text = metrics.output_snippet (ALREADY post-redaction / client-facing — the
+      same value #79 puts into model_output.content; raw pre-redaction text never enters).
+    - model_output latency ≈ wall-clock after first token (streams have no per-token
+      provider timer); better than the hollow 0.0.
+    - The output-guard ACTION/DETAIL stays sourced from _stamp_output_stage_action (#77),
+      applied by the callers AFTER this rebuild — output_scan_verdict is intentionally not
+      synthesized here to avoid double-sourcing the output action.
+
+    Fail-open: any error (or no stashed kwargs) returns the pre-stream base unchanged, so
+    this can only ADD fidelity, never break the stream or its telemetry.
+    """
+    kwargs = getattr(ctx, "trace_build_kwargs", None)
+    if not isinstance(kwargs, dict) or not kwargs:
+        return pipeline_trace_base
+    try:
+        try:
+            from pipeline_trace import build_pipeline_trace
+        except ImportError:
+            from .pipeline_trace import build_pipeline_trace
+        sm = dict(kwargs.get("stage_metrics") or {})
+        if metrics.ttft_ms > 0 and metrics.duration_ms > metrics.ttft_ms:
+            sm.setdefault("model_output_ms", round(metrics.duration_ms - metrics.ttft_ms, 1))
+        rebuilt = build_pipeline_trace(
+            **{k: v for k, v in kwargs.items() if k != "stage_metrics"},
+            stage_metrics=sm,
+            response_text=(metrics.output_snippet or ""),
+        )
+        if isinstance(rebuilt, dict) and rebuilt.get("stages"):
+            return rebuilt
+    except Exception:
+        LOG.debug("stream pipeline_trace rebuild failed; using pre-stream base", exc_info=True)
+    return pipeline_trace_base
+
+
 def build_stream_trace_frame(
     ctx: StreamLaunchContext,
     metrics: StreamRunMetrics,
@@ -692,7 +748,9 @@ def build_stream_trace_frame(
             # when only the INPUT prompt was redacted (the phantom output-guard label).
             # The persisted telemetry event (finalize_stream) uses the SAME helper so the
             # SSE frame and the audit record agree.
-            pt = _stamp_output_stage_action(pipeline_trace_base, metrics)
+            pt = _stamp_output_stage_action(
+                _rebuilt_stream_trace(ctx, metrics, pipeline_trace_base), metrics
+            )
             # Reconcile totals with the completed stream wall-clock (PIPELINE-0015).
             _stage_sum = round(
                 sum(float(s.get("latency_ms") or 0) for s in (pt.get("stages") or []) if isinstance(s, dict)),

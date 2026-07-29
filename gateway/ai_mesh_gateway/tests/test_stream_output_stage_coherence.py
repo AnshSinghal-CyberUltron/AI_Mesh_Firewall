@@ -98,3 +98,34 @@ def test_no_output_and_no_guard_action_returns_trace_unchanged():
     pt = _stamp_output_stage_action(base, m)
     assert "stream" not in pt and "output_text" not in pt
     assert _stage(pt, "model_output")["content"] == ""
+
+
+def test_rebuilt_stream_trace_backfills_output_and_per_stage_prompt_io():
+    # STREAM TRACE PARITY: with stashed build kwargs + a completed output, the rebuild
+    # produces a full trace with model_output content AND per-stage before/after input.
+    from ai_mesh_gateway.stream_orchestration import _rebuilt_stream_trace, StreamLaunchContext
+    ctx = StreamLaunchContext(body={}, redacted_prompt=None, org_slug="o", model="m")
+    ctx.trace_build_kwargs = dict(
+        prompt="Process this record for [EMAIL_REDACTED]",
+        forwarded_prompt="Process this record for [EMAIL_REDACTED]",
+        scan_verdict=None, zeroshield={}, requested_model="m",
+        final_action="allow", http_status=200, stage_metrics={},
+    )
+    m = StreamRunMetrics()
+    m.output_snippet = "Done processing. Result: OK."
+    base = {"stages": [{"name": "model_output", "content": "", "detail": "No completion body"}]}
+    pt = _rebuilt_stream_trace(ctx, m, base)
+    assert pt is not base, "rebuild must replace the hollow pre-stream base"
+    stages = {s["name"]: s for s in pt["stages"] if isinstance(s, dict)}
+    assert stages["model_output"].get("content"), "model_output content back-filled from output_snippet"
+    assert "Done processing" in stages["model_output"]["content"]
+    # per-stage before/after input now present (was blank on streams)
+    assert stages["auth"].get("prompt_in"), "prompt_in populated on all stages"
+    assert stages["policy"].get("prompt_in")
+
+
+def test_rebuilt_stream_trace_fails_open_without_kwargs():
+    from ai_mesh_gateway.stream_orchestration import _rebuilt_stream_trace, StreamLaunchContext
+    ctx = StreamLaunchContext(body={}, redacted_prompt=None, org_slug="o", model="m")
+    base = {"stages": [{"name": "model_output"}]}
+    assert _rebuilt_stream_trace(ctx, StreamRunMetrics(), base) is base

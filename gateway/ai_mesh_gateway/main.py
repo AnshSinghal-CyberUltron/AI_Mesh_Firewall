@@ -3669,17 +3669,33 @@ def _launch_chat_stream_response(
     try:
         from pipeline_trace import build_pipeline_trace as _bpt_stream
 
-        _stream_pt_base = _bpt_stream(
-            forwarded_prompt=redacted_prompt or "",
+        # STREAM TRACE PARITY: pass the SAME arg set the non-stream path passes — in
+        # particular `prompt` (the ORIGINAL, operator-masked) so build_pipeline_trace
+        # populates per-stage prompt_in/prompt_out (the "before/after input" the Scan
+        # Detail showed blank on streams). STASH the kwargs on ctx so finalization can
+        # REBUILD the trace once the streamed model output exists (_rebuilt_stream_trace):
+        # this pre-stream build must pass response_text="" (the output isn't produced yet),
+        # which is exactly why model_output/output_guardrail were hollow.
+        _orig_prompt = _extract_prompt_from_messages(body.get("messages") or [])
+        _fwd_prompt = redacted_prompt if redacted_prompt is not None else _orig_prompt
+        _scanner_redacted = bool(
+            redacted_prompt is not None and str(redacted_prompt) != str(_orig_prompt)
+        )
+        _trace_kwargs = dict(
+            prompt=_redact_trace_text(_orig_prompt),
+            forwarded_prompt=_redact_trace_text(_fwd_prompt or _orig_prompt),
+            scanner_redaction_applied=_scanner_redacted,
             scan_verdict=scan_verdict,
             zeroshield=_stream_zs_base,
             requested_model=_stream_echo_model,
             final_action=input_action,
             http_status=200,
-            # INPUT-SCAN LATENCY FIDELITY: pass the tier1_ms/tier2_ms captured during
-            # proxy_chat so _metrics() derives a real input_scan_ms (else it defaulted to 0).
+            prompt_in_operator_masked=_trace_prompt_operator_masked(_orig_prompt),
+            # INPUT-SCAN LATENCY FIDELITY: tier1_ms/tier2_ms captured during proxy_chat.
             stage_metrics=stage_metrics,
         )
+        _stream_pt_base = _bpt_stream(response_text="", **_trace_kwargs)
+        ctx.trace_build_kwargs = _trace_kwargs
     except Exception:
         LOG.debug("streaming pipeline_trace build failed; routing-only trace emitted", exc_info=True)
 
