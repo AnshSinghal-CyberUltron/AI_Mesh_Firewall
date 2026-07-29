@@ -544,9 +544,13 @@ def _stamp_output_stage_action(
     likewise comes from the guard's own ``metrics.guard_detail``, never the input-redaction
     reason.
 
+    Also back-fills the streamed model output into the ``model_output`` stage (see STREAM
+    I/O FIDELITY below) so the per-stage Scan Detail is complete for streamed requests.
+
     Non-mutating: returns a shallow copy; the ``stages`` list is only replaced (with per-stage
-    copies) when the output guard actually acted. Shared by the SSE trace frame and the
-    persisted telemetry event so their output-stage attribution is byte-identical.
+    copies) when the output guard acted OR there is streamed output to surface. Shared by the
+    SSE trace frame and the persisted telemetry event so their output-stage attribution and
+    per-stage I/O are byte-identical.
     """
     if not pipeline_trace_base:
         return pipeline_trace_base
@@ -556,11 +560,24 @@ def _stamp_output_stage_action(
         if (metrics.output_blocked or metrics.guard_action == "block")
         else (metrics.guard_action or "").lower()
     )
-    if _out_stage_action in ("block", "redact", "flag", "rewrite"):
-        _stages = []
-        for s in (pt.get("stages") or []):
-            s2 = dict(s) if isinstance(s, dict) else s
-            if isinstance(s2, dict) and s2.get("name") == "output_guardrail":
+    _guard_acted = _out_stage_action in ("block", "redact", "flag", "rewrite")
+    # STREAM I/O FIDELITY: a streamed response has no single completion body, so the
+    # model_output stage was built as "No completion body" with EMPTY content — the
+    # Scan Detail per-stage view then cannot show what the model produced ("what was
+    # the model output"), even though the aggregate output is captured at the trace
+    # root. Back-fill the reconstructed, POST-redaction, client-facing text
+    # (metrics.output_snippet — NEVER the raw pre-redaction snippet) so a streamed
+    # request's per-stage trace is as complete as the non-stream path. This helper only
+    # runs on the streaming path, so the trace IS a stream.
+    _model_out = (metrics.output_snippet or "").strip()
+    if not _guard_acted and not _model_out:
+        return pt
+    _stages = []
+    for s in (pt.get("stages") or []):
+        s2 = dict(s) if isinstance(s, dict) else s
+        if isinstance(s2, dict):
+            _name = s2.get("name")
+            if _name == "output_guardrail" and _guard_acted:
                 s2["action"] = _out_stage_action
                 # STAGE COHERENCE: the guard's OWN verdict fields must agree with the
                 # stamped action. Left at their pre-stream "allow" values, the Scan
@@ -576,8 +593,18 @@ def _stamp_output_stage_action(
                 s2.setdefault("decision_source_label", "ZeroShield Output Guard")
                 if metrics.guard_detail:
                     s2["detail"] = metrics.guard_detail
-            _stages.append(s2)
-        pt["stages"] = _stages
+            elif _name == "model_output" and _model_out and not (s2.get("content") or "").strip():
+                s2["content"] = _model_out
+                if (s2.get("detail") or "").strip() in ("", "No completion body"):
+                    s2["detail"] = "Streamed model output"
+        _stages.append(s2)
+    pt["stages"] = _stages
+    # Trace-level markers so the Scan Detail I/O resolver renders the streamed output
+    # (resolvePipelineInputOutput keys off trace.output_text) and recognises the stream.
+    if _model_out:
+        pt["stream"] = True
+        if not pt.get("output_text"):
+            pt["output_text"] = _model_out
     return pt
 
 
