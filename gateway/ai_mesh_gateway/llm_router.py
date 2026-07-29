@@ -1687,6 +1687,25 @@ class LLMRouter:
             LOG.info("reload_models called with empty list; keeping current config")
             return
 
+        # CALLBACK-LEAK FIX: reload_models runs on every config-update notification
+        # (~every 2 min), but the model list rarely changes. Each LiteLLMRouter(...)
+        # reconstruction re-registers callbacks into litellm's global
+        # logging_callback_manager without releasing the previous router's, so they
+        # accumulate to the MAX_CALLBACKS=100 cap and flood logs with thousands of
+        # "Cannot add callback - would exceed MAX_CALLBACKS limit" warnings. Skip the
+        # rebuild when the incoming list is identical to the last one we applied.
+        try:
+            _sig = json.dumps(model_list, sort_keys=True, default=str)
+        except Exception:
+            _sig = None
+        if (
+            _sig is not None
+            and _sig == getattr(self, "_last_model_list_sig", None)
+            and getattr(self, "_router", None) is not None
+        ):
+            LOG.debug("reload_models: model list unchanged; skipping router rebuild")
+            return
+
         valid_models, invalid_models = self._filter_valid_reload_models(model_list)
         if invalid_models:
             sample = "; ".join(f"{name}: {reason}" for name, reason in invalid_models[:3])
@@ -1753,6 +1772,9 @@ class LLMRouter:
                 fallbacks=fallbacks,
             )
             self._set_active_model_names(valid_models)
+            # Cache the signature ONLY after a successful rebuild, so a failed build
+            # (router left unchanged) is retried on the next identical notification.
+            self._last_model_list_sig = _sig
             LOG.info(
                 "LiteLLM router hot-reloaded with %d valid models from Redis (%d invalid dropped)",
                 len(valid_models),
