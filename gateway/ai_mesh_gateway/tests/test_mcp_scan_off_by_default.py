@@ -37,8 +37,40 @@ _EFFECTIVE_ON = {
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("direction", ["input", "output"])
-async def test_no_controls_skips_all_scanning(direction):
-    """scan_controls_configured=False => payload untouched, no findings/tags, skip meta."""
+async def test_no_controls_observe_posture_detects_only(direction):
+    """CHG-0119: scan_controls_configured=False + OBSERVE posture (tag/monitor) =>
+    DETECT-ONLY. Findings surface for telemetry, but the payload is NEVER mutated and
+    the call is NEVER blocked (FROZEN operator model: observe never acts). No scan_skipped."""
+    enabled_info = {
+        "scan_controls_configured": False,
+        "default_scan_action": "tag",
+        "effective_scan_controls": {},
+        "effective_scan_controls_by_tool": {},
+    }
+    scanned, blocked, tags, findings, meta = await mcp_proxy._mcp_security_scan(
+        _SSN_PAYLOAD,
+        scan_direction=direction,
+        tool_name="echo",
+        enabled_info=enabled_info,
+        org_slug="zeroshield",
+        server_slug="everything-1",
+    )
+    # Detect-only: payload untouched + never blocked, but the SSN IS detected (visible).
+    assert scanned == _SSN_PAYLOAD
+    assert blocked is False
+    assert findings, "observe posture must DETECT the SSN so it is visible in telemetry"
+    assert meta.get("detect_only_observe") is True
+    assert meta.get("scan_skipped") != "no_scan_controls_configured"
+    # Belt-and-suspenders: an observe scan never reports redacted fields.
+    assert meta.get("redacted_fields") == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("direction", ["input", "output"])
+async def test_no_controls_kill_switch_off_skips(direction, monkeypatch):
+    """With the CHG-0119 kill-switch OFF, zero controls restores the pure off-by-default
+    skip (no scanning at all), regardless of posture."""
+    monkeypatch.setattr(mcp_proxy, "_MCP_OBSERVE_SCAN_UNCONFIGURED", False)
     enabled_info = {
         "scan_controls_configured": False,
         "default_scan_action": "tag",
@@ -59,6 +91,32 @@ async def test_no_controls_skips_all_scanning(direction):
     assert findings == []
     assert meta.get("scan_skipped") == "no_scan_controls_configured"
     assert meta.get("monitored") is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("direction", ["input", "output"])
+async def test_no_controls_enforcing_posture_still_skips(direction):
+    """A non-observe (block/redact) posture with zero controls keeps the off-by-default
+    skip: enforcement floors require EXPLICIT scan controls, so detect-only never turns
+    an unconfigured enforcing posture into scanning."""
+    enabled_info = {
+        "scan_controls_configured": False,
+        "default_scan_action": "block",
+        "effective_scan_controls": {},
+        "effective_scan_controls_by_tool": {},
+    }
+    scanned, blocked, tags, findings, meta = await mcp_proxy._mcp_security_scan(
+        _SSN_PAYLOAD,
+        scan_direction=direction,
+        tool_name="echo",
+        enabled_info=enabled_info,
+        org_slug="zeroshield",
+        server_slug="everything-1",
+    )
+    assert scanned == _SSN_PAYLOAD
+    assert blocked is False
+    assert findings == []
+    assert meta.get("scan_skipped") == "no_scan_controls_configured"
 
 
 @pytest.mark.asyncio

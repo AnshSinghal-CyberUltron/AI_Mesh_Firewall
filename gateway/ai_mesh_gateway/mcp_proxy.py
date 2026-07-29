@@ -353,6 +353,19 @@ _MCP_MAX_RESULT_DEPTH = int(os.environ.get("MCP_MAX_RESULT_DEPTH", "200"))
 # cap; separately env-tunable.
 _MCP_MAX_ARG_DEPTH = int(os.environ.get("MCP_MAX_ARG_DEPTH", str(_MCP_MAX_RESULT_DEPTH)))
 
+# CHG-0119 (2026-07-29): observe-posture DETECT-ONLY scan for orgs with ZERO
+# MCPScanControl rows. The 'tag'/'monitor' posture contract is "detect, tag and emit
+# findings, but NEVER mutate or block" (see _ext_proxy_enabled_info). But the registered-
+# server tool-call path used to skip scanning ENTIRELY when scan_controls_configured is
+# False, so tool-arg threats reached the upstream MCP server with ZERO telemetry — the
+# operator could not even SEE them. When on (default), an observe posture still runs the
+# scanner (default Tier-1 controls, enforcement forced to the observe action) so findings
+# become visible on the dashboard. It NEVER blocks or mutates (belt-and-suspenders forced
+# below), so the FROZEN operator model holds: enforcing requires an explicit block/redact
+# posture + scan controls. Set to "0" to restore the pure off-by-default skip.
+_MCP_OBSERVE_SCAN_UNCONFIGURED = os.environ.get("MCP_OBSERVE_SCAN_UNCONFIGURED", "1") not in ("0", "false", "False", "")
+_MCP_OBSERVE_POSTURES = frozenset({"tag", "monitor"})
+
 
 def _exceeds_nesting_depth(obj, limit: int) -> bool:
     """True if ``obj`` nests deeper than ``limit``. ITERATIVE (its own explicit stack)
@@ -432,6 +445,35 @@ def _mcp_body_too_large_response() -> JSONResponse:
             "error": "payload_too_large",
             "code": "mcp_body_too_large",
             "message": f"MCP request body exceeds the {_MCP_MAX_BODY_BYTES}-byte ceiling.",
+        },
+    )
+
+
+def _mcp_content_type_rejected(request) -> bool:
+    """A-28: True when a non-empty tool-call body declares a Content-Type that is not
+    JSON. The body is always parsed as JSON, so a ``text/plain`` (or other non-JSON)
+    Content-Type is a client error. LENIENT on a MISSING header (some MCP clients omit
+    it) and on any ``application/json`` / ``*+json`` media type (charset params ignored)."""
+    headers = getattr(request, "headers", None)
+    if headers is None:
+        return False
+    try:
+        ct = (headers.get("content-type") or "").split(";")[0].strip().lower()
+    except Exception:
+        return False
+    if not ct:
+        return False
+    return not (ct == "application/json" or ct.endswith("+json"))
+
+
+def _mcp_unsupported_media_type_response(request_id: str = "") -> JSONResponse:
+    return JSONResponse(
+        status_code=415,
+        content={
+            "error": "unsupported_media_type",
+            "code": "mcp_unsupported_media_type",
+            "message": "MCP tool-call body must be application/json.",
+            "request_id": request_id,
         },
     )
 
@@ -2110,7 +2152,19 @@ async def _mcp_security_scan(
     # posture (redact/block), which is itself explicit configuration.
     # NOTE: chat-only OG assessment (2026-07-10) deliberately does NOT change this
     # MCP gate — MCP/RAG hardening is out of scope for that lane.
-    if enabled_info is not None and enabled_info.get("scan_controls_configured") is False:
+    # CHG-0119: under an OBSERVE posture (tag/monitor) run a DETECT-ONLY scan even with
+    # zero scan controls, so tool-arg / result threats are VISIBLE in telemetry (never
+    # blocked or mutated). Any other posture (block/redact/unset) with zero controls keeps
+    # the pure off-by-default skip below — enforcement floors require explicit controls.
+    _detect_only = (
+        _MCP_OBSERVE_SCAN_UNCONFIGURED
+        and str(action).strip().lower() in _MCP_OBSERVE_POSTURES
+    )
+    if (
+        enabled_info is not None
+        and enabled_info.get("scan_controls_configured") is False
+        and not _detect_only
+    ):
         return (
             payload,
             False,
@@ -2171,6 +2225,22 @@ async def _mcp_security_scan(
         # ``extra_redaction_fields`` on the paired OUTPUT scan.
         "policy_redaction_fields": list(result.policy_redaction_fields),
     }
+    # CHG-0119: DETECT-ONLY observe scan (zero scan controls + tag/monitor posture) must
+    # NEVER block or mutate — the operator did not select an enforcing posture. Belt-and-
+    # suspenders over the orchestrator's own observe semantics: force blocked=False and
+    # return the ORIGINAL payload so findings/tags are emitted for telemetry without any
+    # enforcement side effect. FROZEN operator model: observe never acts.
+    if _detect_only:
+        meta["detect_only_observe"] = True
+        meta["redacted_fields"] = []
+        meta["policy_redaction_fields"] = []
+        return (
+            payload,
+            False,
+            result.compliance_tags,
+            [f.to_finding_dict() for f in result.findings],
+            meta,
+        )
     return (
         scanned,
         result.blocked,
@@ -5345,6 +5415,12 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
     except _MCPBodyTooLarge:
         return _mcp_body_too_large_response()
 
+    # A-28: the body is parsed as JSON below, so a non-JSON Content-Type is a client
+    # error (previously accepted silently). Reject with 415 only when a body is present
+    # and its declared Content-Type is clearly not JSON (missing header stays lenient).
+    if body and _mcp_content_type_rejected(request):
+        return _mcp_unsupported_media_type_response(_mcp_request_correlation_id(request))
+
     # ── Scan parity with org_mcp_jsonrpc (the bare REST route previously
     # forwarded verbatim with NO scan). Extract the tool args from the JSON body
     # and run the SAME inbound arg scan + credential hard-block before forwarding;
@@ -5380,7 +5456,14 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
         tool_name = str(parsed.get("name") or parsed.get("tool_name") or "")
         arguments = parsed.get("arguments")
         if arguments is None:
+            # A-35: unify omitted vs explicit-null `arguments` -> {} BEFORE forwarding.
+            # The control tool-call API 400s on `arguments:null` but accepts an omitted
+            # key; the original body is forwarded verbatim (content=body) further down, so
+            # without this an explicit null egressed and diverged from the omitted case.
+            # Re-serialize so both shapes present control an identical, valid {} body.
             arguments = {}
+            parsed["arguments"] = {}
+            body = json.dumps(parsed).encode()
 
     # TELEMETRY PARITY: audit EVERY tool call — allow/monitor too, not only block/redact —
     # so the MCP governance dashboard reflects all activity (it previously showed only
