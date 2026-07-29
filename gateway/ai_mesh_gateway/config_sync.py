@@ -526,7 +526,18 @@ class ConfigSync:
                 key = REDIS_KEY
             raw = await client.get(key)
             if raw is None:
-                LOG.warning("%s key missing during refresh; keeping current config", key)
+                # The GLOBAL `firewall:config` key was retired in favour of per-org
+                # `firewall:config:{slug}` keys (the control plane publishes only
+                # per-org configs now), so its absence is the expected steady state,
+                # not an error — logging it at WARNING floods the logs on every
+                # refresh. A missing PER-ORG key is still noteworthy.
+                if key == REDIS_KEY:
+                    LOG.debug(
+                        "%s absent (retired global key); per-org configs carry the config",
+                        key,
+                    )
+                else:
+                    LOG.warning("%s key missing during refresh; keeping current config", key)
                 return
 
             # M-19: validate before applying — a malformed payload must not
