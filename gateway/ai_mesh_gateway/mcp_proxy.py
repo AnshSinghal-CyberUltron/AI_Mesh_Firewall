@@ -2113,7 +2113,116 @@ def _mcp_operator_selected_block(
     return _resolved_tier1_action(tool_name, enabled_info, scan_direction) == "block"
 
 
+# ── L3 (2026-07-30): MONITOR-ONLY advisory detectors ────────────────────────
+# Toxicity / SQL-injection / exfil-URL in tool args or results. The operator chose
+# FLAG-ONLY (these are false-positive-prone in a GitHub search context): they SURFACE as
+# compliance tags + findings on the dashboard but NEVER block or mutate. Deterministic;
+# appended by the _mcp_security_scan wrapper AFTER the real scan so they can never touch the
+# ``blocked`` decision.
+_ADVISORY_TOXIC_TERMS = (
+    "kill", "murder", "exterminate", "genocide", "massacre", "behead", "lynch",
+    "rape", "racist", "nazi", "terrorist", "bomb", "slaughter", "torture",
+)
+_ADVISORY_SQLI_RE = re.compile(
+    r"(?i)(\bunion\s+select\b|\bor\s+1\s*=\s*1\b|\bdrop\s+table\b|\bselect\b[^;]{0,200}?\bfrom\b"
+    r"[^;]{0,200}?\bwhere\b|'\s*or\s*'?1'?\s*=\s*'?1|;\s*--|\binsert\s+into\b|\bdelete\s+from\b)"
+)
+# Only EXPLICIT exfil indicators (never a bare markdown image / CDN URL / presigned S3 URL —
+# those are benign and covered by strict-noop tests). A base64-payload beacon whose blob decodes
+# to an injection is already caught by the L1 decode-then-scan injection lane.
+_ADVISORY_EXFIL_URL_RE = re.compile(
+    r"(?i)https?://[^\s)\"']{0,300}?"
+    r"(?:[?&](?:data|payload|exfil|leak|dump)=|/(?:steal|exfil|collect|beacon|c2|gather|leak)\b)"
+)
+
+
+def _advisory_flags(payload) -> tuple[list[str], list[dict]]:
+    """MONITOR-ONLY advisory detections (toxicity / SQLi / exfil-URL). Deterministic, bounded.
+    Returns ``(tags, findings)`` to APPEND to a scan result for telemetry — never affects the
+    block decision. Findings carry ``action="monitor"`` so nothing downstream escalates."""
+    try:
+        text = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False, default=str)
+    except Exception:
+        return [], []
+    if not text:
+        return [], []
+    text = text[:100_000]
+    low = text.lower()
+    tags: list[str] = []
+    findings: list[dict] = []
+    # NOTE (red-team L3 Finding 1): the ``threat_type`` values here are deliberately
+    # ``advisory_*`` and MUST NOT collide with the real detector threat_types that downstream
+    # FLOOR gates key on — especially ``_findings_have_exfil`` (keys on threat_type=="exfil",
+    # ignores ``action``), which would otherwise treat a benign advisory URL as a real beacon and
+    # force a redundant re-scan (a second Tier-2 Bedrock call). ``kind`` carries the human label.
+    tox = [t for t in _ADVISORY_TOXIC_TERMS if t in low]
+    if len(tox) >= 2:  # >=2 distinct terms to cut noise on incidental single-word use
+        tags.append("TOXICITY")
+        findings.append({"threat_type": "advisory_toxicity", "kind": "toxicity", "severity": "low",
+                         "action": "monitor", "evidence": ",".join(sorted(set(tox))[:5])})
+    if _ADVISORY_SQLI_RE.search(text):
+        tags.append("SQL_INJECTION")
+        findings.append({"threat_type": "advisory_sqli", "kind": "sqli", "severity": "medium",
+                         "action": "monitor", "evidence": "sql-injection pattern"})
+    if _ADVISORY_EXFIL_URL_RE.search(text):
+        tags.append("EXFIL_URL")
+        findings.append({"threat_type": "advisory_exfil_url", "kind": "exfil_url", "severity": "medium",
+                         "action": "monitor", "evidence": "suspicious exfil url/beacon"})
+    # L1 decode-then-scan: an injection hidden behind base64/ROT13/HTML-entity encoding. FLAG-only
+    # (monitor) — hard-blocking decoded injection over-blocks routine encoded text in tool args
+    # (red-team L1 Finding A), so it is SURFACED for visibility, never blocked.
+    try:
+        from policy_engine import _encoded_injection_detected
+        if _encoded_injection_detected(text):
+            tags.append("ENCODED_INJECTION")
+            findings.append({"threat_type": "advisory_encoded_injection", "kind": "encoded_injection",
+                             "severity": "high", "action": "monitor",
+                             "evidence": "prompt-injection revealed by decoding base64/rot13/entity"})
+    except Exception:
+        pass
+    return tags, findings
+
+
 async def _mcp_security_scan(
+    payload,
+    *,
+    scan_direction: str,
+    tool_name: str,
+    enabled_info: dict | None,
+    org_slug: str = "",
+    server_slug: str = "",
+    actor: dict | None = None,
+    enforcement_override: str | None = None,
+    extra_redaction_fields: list | None = None,
+) -> tuple[object, bool, list[str], list[dict], dict]:
+    """Real scan (``_mcp_security_scan_inner``) + L3 MONITOR-ONLY advisory flags appended.
+    The advisory pass can NEVER change ``blocked``/``scanned`` — it only adds tags/findings
+    for dashboard visibility (operator chose flag-only for toxicity/SQLi/exfil)."""
+    scanned, blocked, tags, findings, meta = await _mcp_security_scan_inner(
+        payload,
+        scan_direction=scan_direction,
+        tool_name=tool_name,
+        enabled_info=enabled_info,
+        org_slug=org_slug,
+        server_slug=server_slug,
+        actor=actor,
+        enforcement_override=enforcement_override,
+        extra_redaction_fields=extra_redaction_fields,
+    )
+    try:
+        adv_tags, adv_findings = _advisory_flags(payload)
+        if adv_tags:
+            tags = list(tags) + [t for t in adv_tags if t not in tags]
+        if adv_findings:
+            findings = list(findings) + adv_findings
+        if adv_tags:
+            meta = {**meta, "advisory_flags": list(adv_tags)}
+    except Exception:  # pragma: no cover — advisory must never break the scan
+        pass
+    return scanned, blocked, tags, findings, meta
+
+
+async def _mcp_security_scan_inner(
     payload,
     *,
     scan_direction: str,

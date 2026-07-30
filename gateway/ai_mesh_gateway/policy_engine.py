@@ -118,6 +118,98 @@ def _encoded_variants(text: str) -> list[str]:
     except Exception:
         return []
 
+
+def _detector_injection_match_strict(text: str) -> bool:
+    """STRICT injection match — the ATTACK_PATTERNS regexes ONLY, WITHOUT the loose
+    ``_DETECTOR_INJECTION_KEYWORDS`` substring check. Used for DECODED views (L1): a benign
+    document that merely base64/hex-decodes to prose containing a common phrase like
+    ``system prompt`` / ``you are now`` / ``act as if`` must NOT be hard-BLOCKED, but a real
+    ``ignore all previous instructions``-style payload (which matches a strict pattern) still is.
+    Red-team Finding A: decoded-view matching on the loose keyword set over-blocked routine
+    base64 text (email bodies / git blobs / encoded docs) in tool args."""
+    try:
+        from scanner import ATTACK_PATTERNS  # local: scanner does not import this module
+        from patterns import compile_pattern
+    except Exception:
+        return False
+    for cat in ("prompt_injection", "jailbreak"):
+        for ps in ATTACK_PATTERNS.get(cat, ()):
+            try:
+                if compile_pattern(ps).search(text):
+                    return True
+            except Exception:  # noqa: BLE001 — never break the scan on a bad pattern
+                continue
+    return False
+
+
+# Cheap pre-gate: only pay the decode-then-scan cost when the text PLAUSIBLY carries an encoded
+# payload — HTML-entity/percent/backslash markers, a >=20-char base64-ish run, a long hex run, OR
+# a decode-intent wrapper word (``base64``/``rot13``/``decode``/``from hex``/``unescape``/``atob``;
+# ROT13 text is spaced natural language with none of the structural markers, so the wrapper word is
+# its only cheap signal). Ordinary short plaintext skips decoding entirely, so the injection lane
+# adds ~0 cost on it (red-team Finding D: avoid the ~2.5x per-leaf amplification).
+_INJ_ENCODING_MARKER_RE = re.compile(
+    r"[&%\\]|[A-Za-z0-9+/]{20,}={0,2}|(?:[0-9a-fA-F]{2}){12,}"
+    r"|(?i:\bbase\s?64\b|\brot[\s-]?13\b|\bdecode\b|\bfrom\s+hex\b|\bunescape\b|\batob\b|\bb64decode\b)"
+)
+
+
+def _has_encoding_markers(text: str) -> bool:
+    return bool(_INJ_ENCODING_MARKER_RE.search(text))
+
+
+def _iter_injection_decoded_views(text: str):
+    """LAZILY yield decoded VIEWS of TEXT for the injection lane, so ``any(...)`` short-circuits
+    on the first hit. Coverage: a top-level ROT13; base64/hex transport decodes (following nested
+    layers) each ALSO ROT13-expanded (catches base64∘ROT13 composition — red-team Finding C);
+    and HTML-entity/percent/backslash variants.
+
+    BOUNDED by the transport iterator's shared decoded-BYTE budget + nested-depth cap (NOT a fixed
+    view COUNT) — red-team Finding B: a fixed 12-view cap let 12 benign base64 decoys push the real
+    injection to view #13 and out of scan; the byte budget is the real DoS bound (the credential
+    lane retired the same count-cap bug in CHG-0060)."""
+    import codecs
+    try:  # top-level ROT13 (a common laundering wrapper)
+        rot = codecs.encode(text, "rot_13")
+        if rot != text:
+            yield rot
+    except Exception:
+        pass
+    try:  # base64 / hex transport decodes (byte-budget + depth bounded inside the iterator)
+        from patterns import _iter_transport_decodes  # local: avoid import cycle
+        for _tok, dec in _iter_transport_decodes(text):
+            if dec and dec != text:
+                yield dec
+                try:  # base64∘ROT13 composition
+                    drot = codecs.encode(dec, "rot_13")
+                    if drot != dec:
+                        yield drot
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    try:  # HTML-entity / percent / backslash escapes
+        for v in _encoded_variants(text):
+            yield v
+    except Exception:
+        pass
+
+
+def _encoded_injection_detected(text: str) -> bool:
+    """L1 decode-then-scan: True when a DECODED view of TEXT (base64/hex/ROT13/HTML-entity/
+    percent/backslash) is an injection/jailbreak attack — the ENCODED-injection delta the raw
+    surface scan misses (``decode and follow: <base64>`` / ROT13 / HTML-entity injection).
+
+    MONITOR-ONLY signal (surfaced by mcp_proxy._advisory_flags as a flag, NEVER a hard block):
+    red-team Finding A showed that hard-blocking on this over-blocks routine base64/hex text in
+    tool args. Uses the STRICT pattern-only matcher on decoded views. Bounded: skips decode
+    entirely unless the text carries an encoding marker (Finding D fast-path), the transport
+    iterator caps token/byte/depth (Finding B: no fixed view-count cap), and it short-circuits on
+    the first decoded hit."""
+    if not text or len(text) > _MAX_MATCH_INPUT_LEN or not _has_encoding_markers(text):
+        return False
+    return any(_detector_injection_match_strict(v) for v in _iter_injection_decoded_views(text))
+
 # FINDING-3 (ReDoS): mirror the control-plane write-time guard into the gateway
 # hot path so a catastrophic-backtracking pattern that lands in a compiled
 # bundle cannot pin the worker thread evaluating it.
@@ -999,6 +1091,12 @@ def _evaluate_rule_mcp(rule: dict[str, Any], context: dict[str, Any]) -> bool:
         for text in texts:
             if classes and redact_all_scoped(text, classes) != text:
                 return True
+            # NOTE: injection on the raw surface only (block path). Encoded-injection
+            # (base64/ROT13/HTML-entity) is handled by the L1 decode-then-scan as a MONITOR-only
+            # advisory flag (_encoded_injection_detected -> mcp_proxy._advisory_flags), NOT here:
+            # red-team Finding A showed hard-BLOCKING decoded injection over-blocks routine base64
+            # text in tool args (email bodies / git blobs / encoded docs that decode to common
+            # English like "you are now ..." / "system prompt").
             if want_injection and _detector_injection_match(text):
                 return True
             if encoded_check and (want_cred or want_infra):
