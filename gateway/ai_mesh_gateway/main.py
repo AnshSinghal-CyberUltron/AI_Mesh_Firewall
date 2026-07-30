@@ -340,6 +340,36 @@ async def _openai_compat_shim(request, call_next):
     return JSONResponse(status_code=response.status_code, content=coerced, headers=_hdrs)
 
 
+@app.middleware("http")
+async def _ensure_request_id(request, call_next):
+    """UNIVERSAL x-request-id guarantee for EVERY response (all routes, all methods).
+
+    The ``_openai_compat_shim`` above guarantees ``x-request-id`` only for ``/v1/*`` — so the
+    MCP ``/gateway/*`` routes (and framework 404/405/415) had no such guarantee, which is why
+    many MCP responses carried a blank request_id and were hard to trace. This seeds a stable
+    correlation id on ``request.state.gw_request_id`` BEFORE the handler runs (inbound
+    ``X-Request-ID`` header, else a generated ``zs-<uuid>``) — so a handler can write the SAME id
+    into its response body — and sets the ``x-request-id`` response header when the handler did
+    not. Set-only-when-absent, so it never clobbers a handler- or shim-chosen id; safe across
+    middleware ordering."""
+    try:
+        existing = getattr(request.state, "gw_request_id", "") or ""
+        if not existing:
+            inbound = request.headers.get("x-request-id") or request.headers.get("X-Request-ID")
+            request.state.gw_request_id = (str(inbound)[:200] if inbound
+                                           else f"zs-{_uuid.uuid4().hex[:12]}")
+    except Exception:
+        pass
+    response = await call_next(request)
+    try:
+        if not response.headers.get("x-request-id"):
+            rid = getattr(request.state, "gw_request_id", "") or f"zs-{_uuid.uuid4().hex[:12]}"
+            response.headers["x-request-id"] = rid
+    except Exception:
+        pass
+    return response
+
+
 # SEC-01 FIX: Environment-based CORS origins instead of wildcard
 def _split_csv_env(value: str) -> list[str]:
     return [s.strip() for s in value.split(",") if s.strip()]
