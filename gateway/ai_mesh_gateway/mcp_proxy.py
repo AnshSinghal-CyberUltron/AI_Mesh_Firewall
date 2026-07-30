@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import time
+import uuid
 from urllib.parse import urlparse
 
 import httpx
@@ -438,14 +439,26 @@ def _mcp_body_too_large(request) -> bool:
         return False
 
 
-def _mcp_body_too_large_response() -> JSONResponse:
+async def _mcp_body_too_large_response(
+    request_id: str = "", org_slug: str = "", server_slug: str = ""
+) -> JSONResponse:
+    # Audit the 413 so an oversized/DoS attempt is visible on the platform (not just dropped),
+    # attributed to the caller's org, with the SAME request_id the response carries.
+    if org_slug:
+        await _record_gateway_event(
+            org_slug=org_slug, server_slug=server_slug, tool_name="",
+            decision="block", reason="body_too_large", request_id=request_id,
+            metadata={"transport": "http", "enforced_at": "gateway"},
+        )
     return JSONResponse(
         status_code=413,
         content={
             "error": "payload_too_large",
             "code": "mcp_body_too_large",
             "message": f"MCP request body exceeds the {_MCP_MAX_BODY_BYTES}-byte ceiling.",
+            "request_id": request_id,
         },
+        headers={"x-request-id": request_id} if request_id else None,
     )
 
 
@@ -466,7 +479,15 @@ def _mcp_content_type_rejected(request) -> bool:
     return not (ct == "application/json" or ct.endswith("+json"))
 
 
-def _mcp_unsupported_media_type_response(request_id: str = "") -> JSONResponse:
+async def _mcp_unsupported_media_type_response(
+    request_id: str = "", org_slug: str = "", server_slug: str = ""
+) -> JSONResponse:
+    if org_slug:
+        await _record_gateway_event(
+            org_slug=org_slug, server_slug=server_slug, tool_name="",
+            decision="block", reason="unsupported_media_type", request_id=request_id,
+            metadata={"transport": "http", "enforced_at": "gateway"},
+        )
     return JSONResponse(
         status_code=415,
         content={
@@ -475,6 +496,7 @@ def _mcp_unsupported_media_type_response(request_id: str = "") -> JSONResponse:
             "message": "MCP tool-call body must be application/json.",
             "request_id": request_id,
         },
+        headers={"x-request-id": request_id} if request_id else None,
     )
 
 
@@ -756,7 +778,7 @@ def _server_disabled(server_config: dict | None) -> bool:
     )
 
 
-async def _rest_server_disabled_response(request, org_slug: str, server_slug: str):
+async def _rest_server_disabled_response(request, org_slug: str, server_slug: str, request_id: str = ""):
     """Bare-REST guard: HTTP 403 when the server registration is disabled/unexposed.
 
     Parity with ``org_mcp_jsonrpc``'s ``_server_disabled`` gate for the bare REST
@@ -774,15 +796,17 @@ async def _rest_server_disabled_response(request, org_slug: str, server_slug: st
         return None
     await _record_gateway_event(
         org_slug=org_slug, server_slug=server_slug, tool_name="",
-        decision="block", reason="server_disabled",
+        decision="block", reason="server_disabled", request_id=request_id,
         metadata={"transport": "http", "enforced_at": "gateway"},
     )
     return JSONResponse(
         content={
             "error": "Server is disabled or not exposed to agents",
             "reason": "server_disabled", "server_slug": server_slug,
+            "request_id": request_id,
         },
         status_code=403,
+        headers={"x-request-id": request_id} if request_id else None,
     )
 
 
@@ -1007,6 +1031,32 @@ def _mcp_request_correlation_id(request, msg_id=None) -> str:
     if hdr:
         return str(hdr)[:200]
     return str(msg_id) if msg_id is not None else ""
+
+
+def _mcp_ensure_request_id(request, msg_id=None) -> str:
+    """Single per-request correlation id for the MCP routes — inbound ``X-Request-ID`` header
+    (or the JSON-RPC ``id``), else a GENERATED ``zs-mcp-<uuid>``. Stashed on
+    ``request.state.gw_request_id`` so it is (a) reused across every terminal path of the
+    handler, (b) written into every response body's ``request_id`` field, and (c) surfaced as the
+    ``x-request-id`` response header by the universal middleware.
+
+    This replaces ``_mcp_request_correlation_id``'s empty-string fallback on the tool-call/
+    JSON-RPC routes: an MCP request with no inbound trace header used to get NO request_id in
+    gateway-terminated responses (scope/disabled/body-size/content-type/rate-limit/validation),
+    which is why those rows showed a blank request_id and were hard to trace. Now every MCP
+    response carries a stable, gateway-minted id even when the caller sent no header, and the same
+    id is threaded to the control backend (X-Request-Id) so the success body id matches too."""
+    existing = getattr(getattr(request, "state", None), "gw_request_id", "") or ""
+    if existing:
+        return existing
+    rid = _mcp_request_correlation_id(request, msg_id=msg_id)
+    if not rid:
+        rid = "zs-mcp-" + uuid.uuid4().hex[:12]
+    try:
+        request.state.gw_request_id = rid
+    except Exception:
+        pass
+    return rid
 
 
 async def _record_gateway_event(
@@ -2549,7 +2599,7 @@ async def ext_mcp_proxy(path: str, request: Request):
     # CHG-0034: reject an oversized body before buffering it (DoS guard).
     if _mcp_body_too_large(request):
         await _ext_audit("block", "request_too_large")  # CHG-0095: audit the DoS-guard reject
-        return _mcp_body_too_large_response()
+        return await _mcp_body_too_large_response()
 
     target_url = _ext_proxy_target_url(hostname, remaining)
 
@@ -2590,7 +2640,7 @@ async def ext_mcp_proxy(path: str, request: Request):
     try:  # CHG-0063: cap the ACTUAL bytes (chunked/no-Content-Length DoS guard)
         body = await _mcp_read_body_capped(request)
     except _MCPBodyTooLarge:
-        return _mcp_body_too_large_response()
+        return await _mcp_body_too_large_response()
 
     # ── Inbound credential hard-block on the transparent external proxy.
     # This path is transport-level (no org/server/tool scoping), so the posture is
@@ -3276,11 +3326,11 @@ async def internal_discover_tools(request: Request):
     # CHG-0140: cap the inbound body (DoS guard) — parity with the other MCP routes
     # (the two internal chat-pipeline routes had omitted the CHG-0034/0063 cap).
     if _mcp_body_too_large(request):
-        return _mcp_body_too_large_response()
+        return await _mcp_body_too_large_response()
     try:
         await _mcp_read_body_capped(request)
     except _MCPBodyTooLarge:
-        return _mcp_body_too_large_response()
+        return await _mcp_body_too_large_response()
 
     try:
         body = await request.json()
@@ -3542,11 +3592,11 @@ async def internal_tools_call(request: Request):
     # not buffer unbounded into the gateway. _mcp_read_body_capped caches the capped bytes
     # into request._body, so the request.json() below reuses them.
     if _mcp_body_too_large(request):
-        return _mcp_body_too_large_response()
+        return await _mcp_body_too_large_response()
     try:
         await _mcp_read_body_capped(request)
     except _MCPBodyTooLarge:
-        return _mcp_body_too_large_response()
+        return await _mcp_body_too_large_response()
 
     try:
         body = await request.json()
@@ -3983,8 +4033,29 @@ def _validate_org_scope(request: Request, org_slug: str):
     return None
 
 
+def _with_request_id(resp, request_id: str):
+    """Return a JSONResponse identical to ``resp`` but with ``request_id`` added to its JSON
+    object body (when it is one and doesn't already carry it). Used to stamp gateway-terminated
+    error responses that were built elsewhere (org-scope 403, rate-limit 429) so EVERY MCP
+    response body carries the same id as its x-request-id header. Best-effort — never raises."""
+    if not request_id or resp is None:
+        return resp
+    try:
+        raw = getattr(resp, "body", b"")
+        data = json.loads(raw) if raw else None
+        if not isinstance(data, dict) or data.get("request_id"):
+            return resp
+        data["request_id"] = request_id
+        headers = {k: v for k, v in resp.headers.items()
+                   if k.lower() not in ("content-length", "content-type")}
+        headers["x-request-id"] = request_id
+        return JSONResponse(content=data, status_code=resp.status_code, headers=headers)
+    except Exception:
+        return resp
+
+
 async def _audit_and_return_scope_error(
-    request: Request, org_slug: str, server_slug: str = ""
+    request: Request, org_slug: str, server_slug: str = "", request_id: str = ""
 ):
     """``_validate_org_scope`` + audit the cross-tenant 403 (CHG-0045, item 9 audit-
     completeness).
@@ -4010,6 +4081,7 @@ async def _audit_and_return_scope_error(
             tool_name="",
             decision="block",
             reason="org_scope_violation",
+            request_id=request_id,
             metadata={
                 "transport": "http",
                 "enforced_at": "gateway",
@@ -4017,6 +4089,7 @@ async def _audit_and_return_scope_error(
                 "key_prefix": getattr(auth, "prefix", "") or "",
             },
         )
+        return _with_request_id(err, request_id)
     return err
 
 
@@ -4517,7 +4590,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
 
     # CHG-0034: reject an oversized body before buffering it (DoS guard).
     if _mcp_body_too_large(request):
-        return _mcp_body_too_large_response()
+        return await _mcp_body_too_large_response()
 
     # M-04: actor identity ({user_id, agent_id, roles}) for actor-scoped MCP
     # policies, derived from the authenticated API key's context.
@@ -4537,7 +4610,7 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
     try:
         await _mcp_read_body_capped(request)
     except _MCPBodyTooLarge:
-        return _mcp_body_too_large_response()
+        return await _mcp_body_too_large_response()
     try:
         body = await request.json()
     except Exception:
@@ -5514,28 +5587,35 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
     - Timeouts → 504 with error_code=backend_timeout
     - Backend errors → pass-through with original status code
     """
-    err = await _audit_and_return_scope_error(request, org_slug, server_slug)
+    # Correlation id computed FIRST (before any early-return guard) so EVERY terminal path —
+    # scope / disabled / body-size / content-type / rate-limit / validation / success — carries
+    # the SAME request_id in its body and its x-request-id header, and every audit event is
+    # traceable. Stashed on request.state.gw_request_id for the universal header middleware.
+    _req_id = _mcp_ensure_request_id(request)
+
+    err = await _audit_and_return_scope_error(request, org_slug, server_slug, request_id=_req_id)
     if err:
         return err
 
-    _disabled = await _rest_server_disabled_response(request, org_slug, server_slug)
+    _disabled = await _rest_server_disabled_response(request, org_slug, server_slug, request_id=_req_id)
     if _disabled:
         return _disabled
 
     # CHG-0034: reject an oversized body before buffering it (DoS guard).
     if _mcp_body_too_large(request):
-        return _mcp_body_too_large_response()
+        return await _mcp_body_too_large_response(request_id=_req_id, org_slug=org_slug, server_slug=server_slug)
 
     try:  # CHG-0063: cap the ACTUAL bytes (chunked/no-Content-Length DoS guard)
         body = await _mcp_read_body_capped(request)
     except _MCPBodyTooLarge:
-        return _mcp_body_too_large_response()
+        return await _mcp_body_too_large_response(request_id=_req_id, org_slug=org_slug, server_slug=server_slug)
 
     # A-28: the body is parsed as JSON below, so a non-JSON Content-Type is a client
     # error (previously accepted silently). Reject with 415 only when a body is present
     # and its declared Content-Type is clearly not JSON (missing header stays lenient).
     if body and _mcp_content_type_rejected(request):
-        return _mcp_unsupported_media_type_response(_mcp_request_correlation_id(request))
+        return await _mcp_unsupported_media_type_response(
+            request_id=_req_id, org_slug=org_slug, server_slug=server_slug)
 
     # ── Scan parity with org_mcp_jsonrpc (the bare REST route previously
     # forwarded verbatim with NO scan). Extract the tool args from the JSON body
@@ -5549,10 +5629,6 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
             "agent_id": getattr(_mcp_auth, "prefix", None) or "",
             "roles": list(getattr(_mcp_auth, "roles", None) or []),
         }
-    # CHG-0050: per-request correlation id (honors an inbound X-Request-ID) threaded
-    # into every audit event below, so a bare-REST tool call is traceable end to end
-    # (this route previously recorded audit events with NO correlation id at all).
-    _req_id = _mcp_request_correlation_id(request)
 
     # S12 (CHG-0031): per-org TPM + burst/RPM rate limit — parity with
     # org_mcp_jsonrpc. This bare REST route enforced the per-key tool-call CAP but
@@ -5716,7 +5792,11 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
             resp = await client.post(
                 f"{_BACKEND_URL}/api/mcp-connector/tools/call/",
                 content=body,
-                headers=_backend_proxy_headers(request, org_slug, server_slug),
+                # Thread the gateway correlation id so the backend echoes it in the response
+                # body's request_id -> body id == x-request-id header (one id end to end),
+                # instead of the backend minting its own disconnected UUID.
+                headers={**_backend_proxy_headers(request, org_slug, server_slug),
+                         "X-Request-Id": _req_id},
             )
             data = resp.json()
             # ── Outbound result scan + redaction floor (parity with main path).
