@@ -686,7 +686,7 @@ async def _proxy(base_url: str, path: str, request: Request) -> JSONResponse:
                         status_code=502,
                     )
                 data = resp.text
-            return JSONResponse(content=data, status_code=resp.status_code)
+            return _data_response(data, resp.status_code, _mcp_ensure_request_id(request))
         except httpx.RequestError as exc:
             # CLEANUP-04: never leak the raw exception (host / connection internals).
             LOG.error("MCP proxy error [%s] → %s: %s", type(exc).__name__, url, exc)
@@ -4054,6 +4054,22 @@ def _with_request_id(resp, request_id: str):
         return resp
 
 
+def _data_response(data, status_code: int, request_id: str = "") -> JSONResponse:
+    """Return the backend/proxied ``data`` as a JSONResponse, stamping ``request_id`` into the
+    body (when it is a JSON object without one) and the x-request-id header — so a backend
+    passthrough (e.g. a 404 'Server not found', or a success the backend echoed) carries the same
+    id as every other MCP terminal path."""
+    if request_id and isinstance(data, dict) and not data.get("request_id"):
+        try:
+            data = {**data, "request_id": request_id}
+        except Exception:
+            pass
+    return JSONResponse(
+        content=data, status_code=status_code,
+        headers={"x-request-id": request_id} if request_id else None,
+    )
+
+
 async def _audit_and_return_scope_error(
     request: Request, org_slug: str, server_slug: str = "", request_id: str = ""
 ):
@@ -5728,8 +5744,9 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
             return JSONResponse(
                 content={"blocked": True, "error": "blocked",
                          "detail": f"Tool '{tool_name}' is disabled for this server.",
-                         "compliance_tags": []},
+                         "compliance_tags": [], "request_id": _req_id},
                 status_code=403,
+                headers={"x-request-id": _req_id} if _req_id else None,
             )
         scanned_args, in_blocked, in_tags, in_findings, scan_meta_in = await _scan_tool_args_block(
             arguments,
@@ -5888,7 +5905,7 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
                     compliance_tags=list(dict.fromkeys(_obs_tags)),
                     scan_findings=_obs_findings,
                 )
-            return JSONResponse(content=data, status_code=resp.status_code)
+            return _data_response(data, resp.status_code, _req_id)
         except httpx.TimeoutException as exc:
             LOG.error("Org MCP tool call timeout: %s", exc)
             return JSONResponse(
@@ -5971,7 +5988,7 @@ async def org_mcp_tools_list(org_slug: str, server_slug: str, request: Request):
                         data = _tl_scanned
                     else:
                         data["results"] = _tl_scanned
-            return JSONResponse(content=data, status_code=resp.status_code)
+            return _data_response(data, resp.status_code, _mcp_ensure_request_id(request))
         except httpx.TimeoutException as exc:
             return JSONResponse(
                 content={"error_code": "backend_timeout", "error": "Backend request timed out", "org": org_slug, "server": server_slug},
@@ -6005,7 +6022,7 @@ async def org_mcp_server_health(org_slug: str, server_slug: str, request: Reques
                 headers=_backend_proxy_headers(request, org_slug, server_slug),
             )
             data = resp.json()
-            return JSONResponse(content=data, status_code=resp.status_code)
+            return _data_response(data, resp.status_code, _mcp_ensure_request_id(request))
         except httpx.TimeoutException as exc:
             return JSONResponse(
                 content={"error_code": "backend_timeout", "error": "Backend request timed out", "org": org_slug, "server": server_slug},
