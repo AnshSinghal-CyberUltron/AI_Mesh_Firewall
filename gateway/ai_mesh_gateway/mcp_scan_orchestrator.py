@@ -1072,7 +1072,21 @@ def _mcp_policy_pass_sync(
     posture = (enforcement or "").strip().lower()
     # A rule authored action='block' is an explicit block intent honored under any
     # non-monitor posture; a block posture is a floor over any matched rule.
-    if _enforce_blocks(enforcement) or (eval_result.action == "block" and posture != "monitor"):
+    #
+    # ROOT-CAUSE FIX (2026-07-30): the block-posture FLOOR (``_enforce_blocks``) applies only
+    # to an ACTUAL rule match. Reaching this point with ZERO matched rules means only the
+    # ``render_floor`` was armed — an enforcing detector rule is APPLICABLE to this scan but its
+    # class did NOT match the payload (finding_count=0). The render-leak floor is a MASK-only
+    # floor that "never blocks" (see below); firing ``_enforce_blocks`` on it blocked EVERY clean
+    # tool call under a block posture (an enforcing detector rule matches every call as applicable),
+    # which made a blanket block posture unusable. Require a real match so a clean call falls
+    # through to the mask floor. A genuine encoded-credential/infra threat still matches via the
+    # encoded_check in _evaluate_rule_mcp, so it carries matched_rule_ids and still blocks; an
+    # explicit ``block`` rule action already implies a match (``eval_result.action`` is set only on
+    # a match), so it is unaffected.
+    if (eval_result.matched_rule_ids and _enforce_blocks(enforcement)) or (
+        eval_result.action == "block" and posture != "monitor"
+    ):
         return full_payload, findings, True, rfields, False
     # B1 render-leak floor: a posture-replicating enforcing entire-scope DETECTOR rule is
     # applicable → neutralize encoded-PII / markdown-split / exfil-beacon surfaces on the leaves,
