@@ -107,17 +107,60 @@ async def test_a09_valid_surrogate_pair_emoji_allowed():
     assert _decode(resp).get("code") != "invalid_encoding"
 
 
-# ── A-02: oversized args -> clean gateway 413 args_too_large ──────────────────
+# ── A-02: oversized args -> args_too_large (posture-gated, shared by REST + JSON-RPC) ─────────
 @pytest.mark.asyncio
-async def test_a02_oversized_args_returns_413_args_too_large():
+async def test_a02_oversized_args_blocked_under_enforcing_posture():
+    big = "A" * (mcp_proxy._MCP_MAX_ARGS_BYTES + 1000)
+    scanned, blocked, tags, findings, meta = await mcp_proxy._scan_tool_args_block(
+        {"query": big}, tool_name="search", enabled_info={"default_scan_action": "block"},
+        org_slug="o", server_slug="s")
+    assert blocked is True
+    assert tags == ["RESOURCE_LIMIT"]
+    assert meta.get("args_too_large") is True
+    reason, detail = mcp_proxy._inbound_block_reason("search", tags, meta)
+    assert reason == "args_too_large"
+    assert "credential" not in detail.lower()  # NOT mislabeled
+
+
+@pytest.mark.asyncio
+async def test_a02_oversized_args_forwarded_under_monitor_posture():
+    # FROZEN: observe-only (monitor/tag) posture must NOT block on the size cap — it forwards.
+    big = "A" * (mcp_proxy._MCP_MAX_ARGS_BYTES + 1000)
+    with patch.object(mcp_proxy, "_explicit_monitor_posture", return_value=True):
+        scanned, blocked, tags, findings, meta = await mcp_proxy._scan_tool_args_block(
+            {"query": big}, tool_name="search", enabled_info={"default_scan_action": "monitor"},
+            org_slug="o", server_slug="s")
+    assert blocked is False
+    assert meta.get("args_too_large") is True and meta.get("monitor_scan_skipped") is True
+
+
+@pytest.mark.asyncio
+async def test_a02_e2e_returns_413_with_honest_reason():
+    # End-to-end REST route: oversized args -> 413 args_too_large (enforcing posture).
     big = "A" * (mcp_proxy._MCP_MAX_ARGS_BYTES + 1000)
     req = _rest_request(_auth(), json.dumps({"name": "search", "arguments": {"query": big}}).encode())
-    with patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()):
+    with (
+        patch.object(mcp_proxy, "_get_enabled_tools", AsyncMock(return_value={"default_scan_action": "block"})),
+        patch.object(mcp_proxy, "_tool_allowed_by_key", return_value=True),
+        patch.object(mcp_proxy, "_is_tool_disabled", return_value=False),
+        patch.object(mcp_proxy, "_explicit_monitor_posture", return_value=False),
+        patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()),
+    ):
         resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
     assert resp.status_code == 413
     body = _decode(resp)
-    assert body["code"] == "args_too_large"
-    assert "credential" not in json.dumps(body).lower()  # NOT mislabeled
+    assert body["reason"] == "args_too_large"
+    assert "credential" not in json.dumps(body).lower()
+
+
+@pytest.mark.asyncio
+async def test_a10b_non_dict_arguments_rejected_400():
+    # A number/array/string `arguments` is not a valid tool-call object -> clean 400, not a 500.
+    req = _rest_request(_auth(), json.dumps({"name": "search", "arguments": 5}).encode())
+    with patch.object(mcp_proxy, "_record_gateway_event", AsyncMock()):
+        resp = await mcp_proxy.org_mcp_tool_call("demo", "srv", req)
+    assert resp.status_code == 400
+    assert _decode(resp)["code"] == "invalid_arguments"
 
 
 # ── A-02 / A-03: honest inbound block reasons ─────────────────────────────────
@@ -267,6 +310,24 @@ async def test_a21_valid_tool_conversation_passes(monkeypatch):
         }
         resp = await _post_chat(app, body)
         assert resp.status_code == 200  # valid sequence must NOT be flagged as orphan
+    finally:
+        await auth_redis.aclose()
+
+
+@pytest.mark.asyncio
+async def test_a21_non_iterable_tool_calls_no_500(monkeypatch):
+    # A malformed non-list `tool_calls` (e.g. an int) must NOT crash the message loop with a 500.
+    app, auth_redis = await T._make_sdk_app(monkeypatch, redis_client=None)
+    try:
+        body = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "assistant", "tool_calls": 5},
+                {"role": "user", "content": "hi"},
+            ],
+        }
+        resp = await _post_chat(app, body)
+        assert resp.status_code != 500, f"non-iterable tool_calls crashed: {resp.text[:200]}"
     finally:
         await auth_redis.aclose()
 

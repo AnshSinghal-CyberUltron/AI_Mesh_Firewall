@@ -12,7 +12,7 @@
 #
 # The 5 security add_headers are repeated here because nginx does not inherit http-level add_header
 # into a block that defines its own (X-Request-ID) — omitting them would drop them from error bodies.
-error_page 400 401 403 404 405 413 431 /__edge_error.json;
+error_page 400 401 403 404 405 413 414 431 /__edge_error.json;
 location = /__edge_error.json {
     internal;
     root /etc/nginx/edge_errors;

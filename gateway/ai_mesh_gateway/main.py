@@ -1452,7 +1452,10 @@ def _extract_prompt_from_messages(messages):
         # into the scannable text. Injection / PII / credentials hidden inside
         # tool_calls[].function.arguments previously bypassed Tier-1/Tier-2
         # entirely (only message *content* was scanned) — a live fail-open.
-        for _tc in (m.get("tool_calls") or []):
+        # Defensive: only iterate a list (a malformed non-list tool_calls is rejected at the
+        # proxy_chat boundary, but this helper is shared — never let it raise TypeError -> 500).
+        _m_tcs = m.get("tool_calls")
+        for _tc in (_m_tcs if isinstance(_m_tcs, list) else []):
             if not isinstance(_tc, dict):
                 continue
             _fn = _tc.get("function") or {}
@@ -6133,8 +6136,11 @@ async def proxy_chat(
             for _ti, _tool in enumerate(_tools_arr):
                 if not isinstance(_tool, dict):
                     continue
+                # Measure the WHOLE tool object, not just its ``function`` sub-tree: a huge sibling
+                # field (or a huge ``function.parameters``) otherwise bypasses the cap and still
+                # feeds the unbounded per-tool redaction recursion when folded into the scan.
                 try:
-                    _tsize = len(json.dumps(_tool.get("function") or _tool, ensure_ascii=False).encode("utf-8"))
+                    _tsize = len(json.dumps(_tool, ensure_ascii=False).encode("utf-8"))
                 except Exception:
                     _tsize = 0
                 if _tsize > MAX_TOOL_METADATA_BYTES:
@@ -6168,7 +6174,22 @@ async def proxy_chat(
                 # an orphan.
                 _role = msg.get("role")
                 if _role == "assistant":
-                    for _tc in (msg.get("tool_calls") or []):
+                    # ``tool_calls`` must be an array (OpenAI contract). A malformed non-list value
+                    # (int/string/dict) otherwise flows to several unguarded `for tc in tool_calls`
+                    # iterations downstream (_extract_prompt_from_messages, scan/redact walkers) and
+                    # raises TypeError -> unhandled 500. Reject it at the boundary as invalid_messages.
+                    _tcs = msg.get("tool_calls")
+                    if _tcs is not None and not isinstance(_tcs, list):
+                        return JSONResponse(
+                            status_code=400,
+                            content={
+                                "error": "invalid_request",
+                                "message": f"messages[{idx}].tool_calls must be an array.",
+                                "param": f"messages[{idx}].tool_calls",
+                                "code": "invalid_messages",
+                            },
+                        )
+                    for _tc in (_tcs or []):
                         if isinstance(_tc, dict) and _tc.get("id"):
                             _issued_tool_call_ids.add(str(_tc.get("id")))
                 elif _role == "tool":
