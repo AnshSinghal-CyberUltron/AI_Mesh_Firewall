@@ -8,6 +8,8 @@ import {
   buildRagKpis,
   buildTelemetryKpis,
   formatIncidentAge,
+  formatIncidentsBySourceChart,
+  formatRagDenialTypeRows,
   formatRagDocumentFunnel,
   formatRagStageChartData,
   exposureBandClass,
@@ -130,11 +132,30 @@ test("buildRagKpis aggregates stage and collection metrics", () => {
       },
     },
     { collections: [{ block_rate_pct: 60 }, { block_rate_pct: 10 }] },
+    { total: 7, by_event_type: { rag_query_blocked: 7 } },
   );
-  assert.equal(kpis[0].value, 10);
-  assert.equal(kpis[1].value, 9);
-  assert.equal(kpis[3].value, 1);
-  assert.equal(kpis[4].value, "50%");
+  assert.equal(kpis[0].key, "pre-pipeline-denials");
+  assert.equal(kpis[0].value, 7);
+  assert.equal(kpis[1].key, "pipeline-events");
+  assert.equal(kpis[1].value, 10);
+  assert.equal(kpis[2].value, 9);
+  assert.equal(kpis[4].value, 1);
+  assert.equal(kpis[5].value, "50%");
+});
+
+test("formatRagDenialTypeRows sorts by count", () => {
+  const rows = formatRagDenialTypeRows({
+    by_event_type: { rag_ingest_blocked: 2, rag_query_blocked: 7 },
+  });
+  assert.equal(rows[0].eventType, "rag_query_blocked");
+  assert.equal(rows[0].count, 7);
+  assert.equal(rows[1].count, 2);
+});
+
+test("formatIncidentsBySourceChart labels RAG lane distinctly", () => {
+  const rows = formatIncidentsBySourceChart({ rag: 8, chat: 2 });
+  assert.equal(rows.find((r) => r.lane === "rag")?.label, "RAG lane");
+  assert.equal(rows.find((r) => r.lane === "rag")?.count, 8);
 });
 
 test("formatRagStageChartData computes allowed and block rate", () => {

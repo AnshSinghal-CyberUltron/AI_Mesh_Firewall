@@ -16,7 +16,8 @@ export function RouteFallback({ label = "Loading module…" }) {
       {slow ? (
         <div className="max-w-sm space-y-2">
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Still loading — the firewall module bundle is large. If this does not finish, refresh the page.
+            Still loading — if this does not finish, a prior failed module load may be stuck. Hard-refresh
+            the page (Ctrl+Shift+R) to clear it.
           </p>
           <button
             type="button"

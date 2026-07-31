@@ -71,7 +71,7 @@ const RAG_STAGE_LABELS = {
   generator: "Generator",
 };
 
-export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
+export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}, prePipelineDenials = {}) {
   const stages = ragPipelineKpis?.stages || {};
   const stageList = Object.values(stages);
   const query = stages.query || {};
@@ -86,23 +86,34 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
   const passRate = retrieverTotal
     ? Math.round(((retrieverTotal - retrieverBlocked) / retrieverTotal) * 100)
     : 100;
+  const denialTotal = Number(prePipelineDenials?.total) || 0;
 
   const ingestEvents = ragPipelineKpis?.ingest_events || 0;
   const cards = [
     {
+      key: "pre-pipeline-denials",
+      label: "Policy / Access Denials",
+      value: denialTotal,
+      color: denialTotal > 0 ? "text-red-600" : undefined,
+      dataSource: RAG_KPI_SOURCE,
+      helpText:
+        "Pre-pipeline RAG denies (rag_query_blocked / stage=policy) — same event family that fills the Incidents Rag lane. Not pipeline-stage KPIs.",
+    },
+    {
       key: "pipeline-events",
-      label: "Pipeline Events",
+      label: "Pipeline Stage Events",
       value: pipelineIngress || totalStageChecks,
       dataSource: RAG_KPI_SOURCE,
-      helpText: "RAG query requests entering the pipeline (Query stage volume when present). Ingest is tracked separately.",
+      helpText:
+        "Only query/retriever/ranker/generator traffic (event_type=rag_pipeline or rag_query). Does not include early policy/access denials.",
     },
     {
       key: "blocked-at-gate",
-      label: "Blocked at Gate",
+      label: "Blocked at Pipeline Gate",
       value: totalBlocked,
       color: totalBlocked > 0 ? "text-red-600" : undefined,
       dataSource: RAG_KPI_SOURCE,
-      helpText: "Hard blocks recorded at any pipeline stage in this window.",
+      helpText: "Hard blocks at a pipeline stage only — not collection-policy denials before the pipeline.",
     },
     {
       key: "collections",
@@ -138,6 +149,18 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}) {
     });
   }
   return cards;
+}
+
+/** Top event types for the Health pre-pipeline denial card. */
+export function formatRagDenialTypeRows(prePipelineDenials = {}) {
+  const map = prePipelineDenials?.by_event_type || {};
+  return Object.entries(map)
+    .map(([eventType, count]) => ({
+      eventType,
+      count: Number(count) || 0,
+    }))
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.count - a.count);
 }
 
 export function formatRagStageChartData(stages = {}) {
@@ -678,14 +701,24 @@ export function incidentLaneDrillDown(source) {
 
 const INCIDENT_SOURCE_ORDER = ["chat", "rag", "vector", "mcp", "threat_intel", "generic"];
 
+/** Chart / chip labels — Rag lane ≠ Model & RAG Health pipeline KPIs alone. */
+export const INCIDENT_SOURCE_LABELS = {
+  chat: "Chat",
+  rag: "RAG lane",
+  vector: "Vector",
+  mcp: "MCP",
+  threat_intel: "Threat Intel",
+  generic: "Generic",
+};
+
+export const INCIDENT_SOURCE_CHART_HELP =
+  "Lane of the linked enforcement event. RAG lane = any rag_* event (pipeline-stage blocks and pre-pipeline policy/access denies like rag_query_blocked). Pipeline-stage KPIs live on Model & RAG Health; policy denies appear there as Policy / Access Denials.";
+
 export function formatIncidentsBySourceChart(bySource = {}) {
   const map = bySource && typeof bySource === "object" ? bySource : {};
   return INCIDENT_SOURCE_ORDER.map((lane) => ({
     lane,
-    label:
-      lane === "threat_intel"
-        ? "Threat Intel"
-        : lane.charAt(0).toUpperCase() + lane.slice(1),
+    label: INCIDENT_SOURCE_LABELS[lane] || lane.charAt(0).toUpperCase() + lane.slice(1),
     count: map[lane] ?? 0,
   })).filter((row) => row.count > 0);
 }

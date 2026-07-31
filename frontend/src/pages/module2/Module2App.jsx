@@ -4,9 +4,10 @@ import { DashboardLayout } from "../../components/layout/DashboardLayout";
 const ROUTE_TO_TAB = {
   "/dashboard": "m2-dashboard",
   "/ueba/api-keys": "m2-ueba-api-keys",
-  "/models/exposure": "m2-models-exposure",
   "/threat-intel": "m2-threat-intel",
   "/threats/intelligence": "m2-threat-intel",
+  "/models/exposure": "m2-models-exposure",
+  "/mcp/risk": "m2-mcp-risk",
   "/incidents": "m2-incidents",
 };
 

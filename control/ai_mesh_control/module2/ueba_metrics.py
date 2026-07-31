@@ -102,27 +102,11 @@ def count_lifetime_events_by_prefix(keys, events_qs) -> dict[str, int]:
     return counts
 
 
-def _gateway_key_has_field(name: str) -> bool:
-    """True when GatewayAPIKey defines ``name`` (prodtest UEBA columns may be absent on main)."""
-    from django.core.exceptions import FieldDoesNotExist
-
-    from core.models import GatewayAPIKey
-
-    try:
-        GatewayAPIKey._meta.get_field(name)
-        return True
-    except FieldDoesNotExist:
-        return False
-
-
 def increment_lifetime_request_counts(events) -> int:
     """Bump ueba_lifetime_request_count when telemetry events are persisted."""
     from django.db.models import F
 
     from core.models import GatewayAPIKey
-
-    if not _gateway_key_has_field("ueba_lifetime_request_count"):
-        return 0
 
     bumps: dict[tuple[int, str], int] = defaultdict(int)
     for ev in events:
@@ -153,14 +137,11 @@ def reconcile_lifetime_request_counts(keys, events_qs) -> int:
     """Full lifetime recount for org keys (hourly reconciliation)."""
     from core.models import GatewayAPIKey
 
-    if not _gateway_key_has_field("ueba_lifetime_request_count"):
-        return 0
-
     counts = count_lifetime_events_by_prefix(keys, events_qs)
     fixed = 0
     for key in keys:
         lifetime = counts.get(key.prefix, 0)
-        if (getattr(key, "ueba_lifetime_request_count", 0) or 0) != lifetime:
+        if key.ueba_lifetime_request_count != lifetime:
             GatewayAPIKey.objects.filter(pk=key.pk).update(ueba_lifetime_request_count=lifetime)
             key.ueba_lifetime_request_count = lifetime
             fixed += 1

@@ -19,11 +19,12 @@ from auth.utils import get_request_organization
 from core.admin_views import IsAdminOrSuperuser
 from core.models import FirewallConfig, GatewayAPIKey, KillSwitch, LLMModelConfig
 from module2.analytics import (
+    build_hybrid_mcp_activity_payload,
     build_incident_queue_summary,
     build_lane_summary,
-    build_mcp_activity_payload,
     build_model_exposure_payload,
     build_rag_pipeline_kpis,
+    build_rag_pre_pipeline_denials,
     build_recent_request_json,
     build_stage_hit_distribution,
     build_threat_telemetry_payload,
@@ -89,6 +90,16 @@ class _ReadOnlyOrAdminPermission(BasePermission):
 _hours_from_period = hours_from_period
 _key_prefix_from_meta = key_prefix_from_meta
 _event_source = event_source
+
+
+def _mcp_events_for_org(org, since):
+    """Org-scoped MCPEvent queryset for hybrid Module 2 MCP reads."""
+    from mcp_connector.models import MCPEvent
+
+    qs = MCPEvent.objects.filter(timestamp__gte=since)
+    if org is not None:
+        return qs.filter(organization=org)
+    return qs.none()
 
 
 _TIMELINE_META_ALLOWLIST = {
@@ -1124,6 +1135,13 @@ class UnifiedDashboardView(APIView):
             if cfg is not None:
                 telemetry_enabled = bool(cfg.audit_logging_enabled)
 
+        mcp_events = _mcp_events_for_org(org, since)
+        # Backfill EF for other M2 consumers when async MCP audit left MCPEvent-only rows.
+        if org is not None:
+            from module2.ondemand_refresh import maybe_ondemand_mcp_projection
+
+            maybe_ondemand_mcp_projection(org.id)
+
         response = Response(
             {
                 "period": period,
@@ -1151,7 +1169,7 @@ class UnifiedDashboardView(APIView):
                 "top_risky_keys": risky_rows[:8],
                 "key_risk_distribution": dict(Counter([r["risk_band"] for r in fleet_risk_rows])),
                 "incidents_snapshot": incidents_snapshot,
-                "lane_summary": build_lane_summary(events),
+                "lane_summary": build_lane_summary(events, mcp_events=mcp_events),
             }
         )
         elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
@@ -1193,6 +1211,36 @@ class ThreatIntelViewSet(OrgScopedViewSet):
     queryset = ThreatIntelEntry.objects.all()
     serializer_class = ThreatIntelEntrySerializer
     permission_classes = [IsAuthenticated, _ReadOnlyOrAdminPermission]
+
+    def list(self, request, *args, **kwargs):
+        # Heal wiped FirewallConfig.blocked_keywords / Redis drift on page load
+        # (simulator bootstrap can clear keywords; beat alone is too slow).
+        org = _org_or_403(request)
+        if org is not None:
+            try:
+                from module2.threat_intel_projection import apply_threat_intel_projection
+
+                apply_threat_intel_projection(org)
+            except Exception:
+                logger.warning(
+                    "ThreatIntelViewSet.list projection heal failed org=%s",
+                    getattr(org, "id", None),
+                    exc_info=True,
+                )
+        return super().list(request, *args, **kwargs)
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        org = _org_or_403(self.request)
+        if org is not None:
+            from core.models import FirewallConfig
+            from module2.threat_intel_projection import live_blocked_keyword_keys_from_csv
+
+            cfg = FirewallConfig.load(org)
+            ctx["live_blocked_keyword_keys"] = live_blocked_keyword_keys_from_csv(
+                cfg.blocked_keywords
+            )
+        return ctx
 
 
 class ThreatIntelSyncView(APIView):
@@ -1665,13 +1713,18 @@ class IncidentDetailView(APIView):
 
 
 class RagHealthView(APIView):
-    """GET /api/module2/rag/health/ — RAG pipeline KPIs and vector exposure for M2.3 Tab B."""
+    """GET /api/module2/rag/health/ — RAG pipeline KPIs, pre-pipeline denials, vector exposure."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         period = request.query_params.get("period", "24h")
         since = timezone.now() - timedelta(hours=_hours_from_period(period))
+        org = _org_or_403(request)
+        if org is not None:
+            from module2.ondemand_refresh import maybe_ondemand_telemetry_heal
+
+            maybe_ondemand_telemetry_heal(org.id)
         events_qs = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
@@ -1679,6 +1732,7 @@ class RagHealthView(APIView):
             {
                 "period": period,
                 "rag_pipeline_kpis": build_rag_pipeline_kpis(events_qs),
+                "rag_pre_pipeline_denials": build_rag_pre_pipeline_denials(events_qs),
                 "vector_exposure": build_vector_exposure_payload(events_qs),
             }
         )
@@ -1692,9 +1746,15 @@ class McpRiskView(APIView):
     def get(self, request):
         period = request.query_params.get("period", "24h")
         since = timezone.now() - timedelta(hours=_hours_from_period(period))
+        org = _org_or_403(request)
+        if org is not None:
+            from module2.ondemand_refresh import maybe_ondemand_mcp_projection
+
+            maybe_ondemand_mcp_projection(org.id)
         events_qs = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
-        payload = build_mcp_activity_payload(events_qs)
+        mcp_events = _mcp_events_for_org(org, since)
+        payload = build_hybrid_mcp_activity_payload(events_qs, mcp_events)
         payload["period"] = period
         return Response(payload)

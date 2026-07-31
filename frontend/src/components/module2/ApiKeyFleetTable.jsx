@@ -3,26 +3,26 @@ import {
   AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Loader2, Power, PowerOff, ShieldAlert, Zap,
 } from "lucide-react";
 import { createModule2Api } from "../../api/module2";
+import { adoptSimulatorKeyById } from "../../api/gatewayContext";
+import { syncModule2AfterGatewayKeyChange } from "../../utils/crossModuleSync";
 import { TELEMETRY_ACTIVITY_EVENT, TELEMETRY_STORAGE_KEY } from "../../utils/telemetryEvents";
 import {
+  buildCredentialKillSwitchPayload,
   buildAnalystKillSwitchReason,
   createKillSwitchApi,
-  buildCredentialKillSwitchPayload,
   describeContainmentSemantics,
   fetchActiveSimulatorContext,
   fetchGatewayModelNames,
-  filterEnforcedKillSwitches,
-  isGatewayEnforcedKillModel,
   isSimulatorKeyRow,
   mergeKillSwitchModelCandidates,
   readPreferredSimulatorModel,
   validateKillSwitchTarget,
 } from "../../api/killSwitch";
 import { ApiKeyRiskProfile } from "./ApiKeyRiskProfile";
+import { KillSwitchActionDialog } from "./KillSwitchActionDialog";
 import { RiskBandBadge } from "./RiskBandBadge";
 import { InfoTooltip } from "./InfoTooltip";
 import { LlMObservationBadge } from "./LlMObservationStatus";
-import { KillSwitchActionDialog } from "./KillSwitchActionDialog";
 
 const FLASH_DISMISS_MS = 5000;
 const BEHAVIOR_RELOAD_DELAYS_POLLING_MS = [0, 2000, 4000];
@@ -48,31 +48,52 @@ function riskBandClass(band) {
 function FleetRowActions({
   row,
   fetchWithAuth,
+  orgId,
+  simulatorKeyId,
   onActionComplete,
   onKillSwitchClick,
   onFlash,
+  onSimulatorKeyAdopted,
 }) {
   const api = useMemo(() => createKillSwitchApi(fetchWithAuth), [fetchWithAuth]);
   const [loading, setLoading] = useState(null);
+  const isSimulatorKey = simulatorKeyId && row.key_id === simulatorKeyId;
+
+  const handleSetAsSimulator = async () => {
+    if (!orgId) return;
+    const confirmed = window.confirm(
+      `Use API key ${row.prefix} as the Attack Simulator credential? `
+      + "Module 1 simulators and API Key & Identity Risk will track traffic under this key.",
+    );
+    if (!confirmed) return;
+    setLoading("simulator");
+    try {
+      const ctx = await adoptSimulatorKeyById(fetchWithAuth, row.key_id, orgId);
+      syncModule2AfterGatewayKeyChange("adopt-simulator", {
+        prefix: ctx.prefix,
+        key_id: ctx.keyId,
+      });
+      onSimulatorKeyAdopted?.(ctx);
+      onFlash?.(`Simulator key set to ${ctx.prefix}.`, "success");
+      onActionComplete?.();
+    } catch (err) {
+      onFlash?.(err.message || "Failed to set simulator key.", "error");
+    } finally {
+      setLoading(null);
+    }
+  };
 
   const handleToggleActive = async () => {
     const disabling = row.is_active !== false;
-    const semantics = describeContainmentSemantics();
     const confirmed = window.confirm(
       disabling
-        ? `Disable API key ${row.prefix}?\n\n${semantics.disableKey}`
+        ? `Disable API key ${row.prefix}? All requests with this credential will fail authentication.`
         : `Re-enable API key ${row.prefix}?`,
     );
     if (!confirmed) return;
     setLoading(disabling ? "disable" : "enable");
     try {
-      await api.setGatewayKeyActive(row.key_id, !disabling, { prefix: row.prefix });
-      onFlash?.(
-        disabling
-          ? `API key ${row.prefix} disabled — Auth will reject this credential (not Input Scan / Kill Switch).`
-          : `API key ${row.prefix} re-enabled.`,
-        "success",
-      );
+      await api.setGatewayKeyActive(row.key_id, !disabling);
       onActionComplete?.();
     } catch (err) {
       onFlash?.(err.message || "Failed to update API key status.", "error");
@@ -99,13 +120,23 @@ function FleetRowActions({
   };
 
   const activeKillSwitches = (row.active_kill_switches || []).filter((ks) => ks.is_active);
-  const enforcedKillSwitches = filterEnforcedKillSwitches(activeKillSwitches);
-  const hasActiveKillSwitch = enforcedKillSwitches.length > 0;
-  const primaryKillSwitch = enforcedKillSwitches[0] || activeKillSwitches[0];
-  const legacyOnlyKillSwitch = !hasActiveKillSwitch && activeKillSwitches.length > 0;
+  const hasActiveKillSwitch = activeKillSwitches.length > 0;
+  const primaryKillSwitch = activeKillSwitches[0];
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
+      {row.is_active !== false && !isSimulatorKey && (
+        <button
+          type="button"
+          disabled={!!loading}
+          onClick={handleSetAsSimulator}
+          className="inline-flex items-center gap-1 rounded-md border border-teal-300 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-800 hover:bg-teal-100 disabled:opacity-60 dark:border-teal-700 dark:bg-teal-950/30 dark:text-teal-200"
+          title="Bind this key to Module 1 Attack Simulator"
+        >
+          {loading === "simulator" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+          Set simulator
+        </button>
+      )}
       {row.is_active !== false && hasActiveKillSwitch && (
         <button
           type="button"
@@ -113,7 +144,7 @@ function FleetRowActions({
           disabled={!!loading}
           onClick={() => handleDeactivateKs(primaryKillSwitch.id)}
           className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-800 hover:bg-red-100 disabled:opacity-60 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"
-          title={`Deactivate kill switch on ${primaryKillSwitch.model_name}`}
+          title="Deactivate the active credential kill switch"
         >
           {loading === `ks-${primaryKillSwitch.id}` ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -129,12 +160,10 @@ function FleetRowActions({
           disabled={!!loading}
           onClick={() => onKillSwitchClick(row)}
           className="inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-          title={legacyOnlyKillSwitch
-            ? "Legacy __credential__ switch is not gateway-enforced — activate a per-model kill switch"
-            : "Activate per-model kill switch (client-requested model)"}
+          title="Block a specific client-requested model for this key"
         >
           {loading === "kill" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Power className="h-3 w-3" />}
-          Activate kill switch
+          Kill switch
         </button>
       )}
       <button
@@ -150,9 +179,7 @@ function FleetRowActions({
         )}
         {row.is_active !== false ? "Disable" : "Enable"}
       </button>
-      {activeKillSwitches
-        .filter((ks) => !hasActiveKillSwitch || ks.id !== primaryKillSwitch?.id)
-        .map((ks) => (
+      {(row.active_kill_switches || []).filter((ks) => ks.is_active).slice(1).map((ks) => (
         <button
           key={ks.id}
           type="button"
@@ -160,12 +187,9 @@ function FleetRowActions({
           disabled={loading === `ks-${ks.id}`}
           onClick={() => handleDeactivateKs(ks.id)}
           className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-medium text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300"
-          title={isGatewayEnforcedKillModel(ks.model_name)
-            ? `Deactivate kill switch on ${ks.model_name}`
-            : `Legacy ${ks.model_name} is not gateway-enforced — deactivate and use a real model or Disable key`}
+          title={`Deactivate kill switch on ${ks.model_name}`}
         >
-          Deactivate {ks.model_name}
-          {!isGatewayEnforcedKillModel(ks.model_name) ? " (legacy)" : ""}
+          Off {ks.model_name}
         </button>
       ))}
     </div>
@@ -190,9 +214,6 @@ export function ApiKeyFleetTable({
   liveConnected = false,
   riskCalculation = null,
 }) {
-  // Parent still passes these for page-level simulator context; row action button removed.
-  void orgId;
-  void onSimulatorKeyAdopted;
   const module2Api = useMemo(() => createModule2Api(fetchWithAuth), [fetchWithAuth]);
   const killApi = useMemo(() => createKillSwitchApi(fetchWithAuth), [fetchWithAuth]);
   const [filter, setFilter] = useState("all");
@@ -204,7 +225,7 @@ export function ApiKeyFleetTable({
   const telemetryDebounceRef = useRef(null);
   const hasLoadedExpandedBehaviorRef = useRef(false);
   const [killModalRow, setKillModalRow] = useState(null);
-  const [killSwitchDialogLoading, setKillSwitchDialogLoading] = useState(false);
+  const [killModalLoading, setKillModalLoading] = useState(false);
   const [killDialogModels, setKillDialogModels] = useState([]);
   const [killPreferredModel, setKillPreferredModel] = useState("");
   const [activeSimulator, setActiveSimulator] = useState(null);
@@ -215,37 +236,6 @@ export function ApiKeyFleetTable({
     const id = setTimeout(() => setFlash(null), FLASH_DISMISS_MS);
     return () => clearTimeout(id);
   }, [flash]);
-
-  useEffect(() => {
-    if (!killModalRow) {
-      setKillDialogModels([]);
-      setKillPreferredModel("");
-      setActiveSimulator(null);
-      return undefined;
-    }
-    let cancelled = false;
-    const preferred = readPreferredSimulatorModel();
-    setKillPreferredModel(preferred);
-    (async () => {
-      const [gatewayNames, liveSim] = await Promise.all([
-        fetchGatewayModelNames(fetchWithAuth),
-        fetchActiveSimulatorContext(fetchWithAuth),
-      ]);
-      if (cancelled) return;
-      setActiveSimulator(liveSim);
-      const isSimTarget = isSimulatorKeyRow(killModalRow, liveSim)
-        || String(killModalRow.prefix || "") === String(simulatorKeyPrefix || "")
-        || String(killModalRow.key_id || "") === String(simulatorKeyId || "");
-      setKillDialogModels(mergeKillSwitchModelCandidates({
-        telemetryRow: killModalRow,
-        gatewayModelNames: gatewayNames,
-        preferredModel: isSimTarget ? preferred : "",
-      }));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [killModalRow, fetchWithAuth, simulatorKeyPrefix, simulatorKeyId]);
 
   const showFlash = useCallback((message, tone = "success") => {
     setFlash({ message, tone });
@@ -372,6 +362,62 @@ export function ApiKeyFleetTable({
     };
   }, [expandedBehavior, expandedKeyId, rows, riskCalculation]);
 
+  const killTelemetryRow = useMemo(() => {
+    if (!killModalRow) return null;
+    if (profileBehavior && profileBehavior.key_id === killModalRow.key_id) {
+      return { ...killModalRow, ...profileBehavior };
+    }
+    return killModalRow;
+  }, [killModalRow, profileBehavior]);
+
+  const isKillSimulatorTarget = Boolean(
+    killModalRow
+    && (
+      (simulatorKeyId && killModalRow.key_id === simulatorKeyId)
+      || (simulatorKeyPrefix && killModalRow.prefix === simulatorKeyPrefix)
+      || isSimulatorKeyRow(killModalRow, activeSimulator)
+    ),
+  );
+
+  useEffect(() => {
+    if (!killModalRow) {
+      setKillDialogModels([]);
+      setKillPreferredModel("");
+      setActiveSimulator(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const preferred = readPreferredSimulatorModel();
+    setKillPreferredModel(preferred);
+    (async () => {
+      const [gatewayNames, liveSim] = await Promise.all([
+        fetchGatewayModelNames(fetchWithAuth),
+        fetchActiveSimulatorContext(fetchWithAuth),
+      ]);
+      if (cancelled) return;
+      setActiveSimulator(liveSim);
+      const simTarget = Boolean(
+        (simulatorKeyId && killModalRow.key_id === simulatorKeyId)
+        || (simulatorKeyPrefix && killModalRow.prefix === simulatorKeyPrefix)
+        || isSimulatorKeyRow(killModalRow, liveSim),
+      );
+      setKillDialogModels(mergeKillSwitchModelCandidates({
+        telemetryRow: killTelemetryRow || killModalRow,
+        gatewayModelNames: gatewayNames,
+        preferredModel: simTarget ? preferred : "",
+      }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    killModalRow,
+    killTelemetryRow,
+    fetchWithAuth,
+    simulatorKeyId,
+    simulatorKeyPrefix,
+  ]);
+
   useEffect(() => {
     if (expandedKeyId) {
       hasLoadedExpandedBehaviorRef.current = false;
@@ -412,9 +458,9 @@ export function ApiKeyFleetTable({
     onSelectKey?.(collapsing ? null : row.key_id);
   }, [expandedKeyId, onSelectKey]);
 
-  const handleKillSwitchConfirm = async (form) => {
+  const handleKillSwitchSubmit = async (form) => {
     if (!killModalRow) return;
-    setKillSwitchDialogLoading(true);
+    setKillModalLoading(true);
     try {
       const liveSim = activeSimulator || await fetchActiveSimulatorContext(fetchWithAuth);
       const check = validateKillSwitchTarget({
@@ -445,9 +491,9 @@ export function ApiKeyFleetTable({
         await loadExpandedBehavior(killModalRow.key_id);
       }
     } catch (err) {
-      showFlash(err.message || "Failed to activate kill switch.", "error");
+      showFlash(err.message || "Failed to apply kill switch.", "error");
     } finally {
-      setKillSwitchDialogLoading(false);
+      setKillModalLoading(false);
     }
   };
 
@@ -629,9 +675,12 @@ export function ApiKeyFleetTable({
                         <FleetRowActions
                           row={row}
                           fetchWithAuth={fetchWithAuth}
+                          orgId={orgId}
+                          simulatorKeyId={simulatorKeyId}
                           onActionComplete={onActionComplete}
                           onKillSwitchClick={setKillModalRow}
                           onFlash={showFlash}
+                          onSimulatorKeyAdopted={onSimulatorKeyAdopted}
                         />
                       </td>
                     </tr>
@@ -684,27 +733,19 @@ export function ApiKeyFleetTable({
       )}
 
       <KillSwitchActionDialog
-        open={!!killModalRow}
+        open={Boolean(killModalRow)}
         title="Activate kill switch"
         targetLabel={killModalRow?.prefix || ""}
         allowedModels={killDialogModels}
-        preferredModel={
-          isSimulatorKeyRow(killModalRow, activeSimulator)
-          || String(killModalRow?.prefix || "") === String(simulatorKeyPrefix || "")
-          || String(killModalRow?.key_id || "") === String(simulatorKeyId || "")
-            ? killPreferredModel
-            : ""
-        }
+        preferredModel={isKillSimulatorTarget ? killPreferredModel : ""}
         initialApiKeyPrefix={killModalRow?.prefix || ""}
-        defaultReason={killModalRow ? buildAnalystKillSwitchReason(killModalRow) : ""}
+        defaultReason={buildAnalystKillSwitchReason(killModalRow)}
         keyIsActive={killModalRow?.is_active !== false}
-        isSimulatorKey={isSimulatorKeyRow(killModalRow, activeSimulator)
-          || String(killModalRow?.prefix || "") === String(simulatorKeyPrefix || "")
-          || String(killModalRow?.key_id || "") === String(simulatorKeyId || "")}
+        isSimulatorKey={isKillSimulatorTarget}
         activeSimulatorPrefix={activeSimulator?.prefix || simulatorKeyPrefix || ""}
-        loading={killSwitchDialogLoading}
+        loading={killModalLoading}
         onClose={() => setKillModalRow(null)}
-        onSubmit={handleKillSwitchConfirm}
+        onSubmit={handleKillSwitchSubmit}
       />
     </div>
   );

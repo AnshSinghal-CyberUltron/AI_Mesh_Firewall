@@ -525,11 +525,9 @@ def reassess_api_key(key, org_settings=None, *, run_llm: bool = True):
     _, metrics = collect_key_metrics([key], window_events)
     metric = metrics.get(key.prefix) or empty_key_metric()
     lifetime = count_lifetime_events_by_prefix([key], all_events).get(key.prefix, 0)
-    # Main GatewayAPIKey has no UEBA counter field; only persist when the model has it.
-    if hasattr(key, "ueba_lifetime_request_count"):
-        if (getattr(key, "ueba_lifetime_request_count", 0) or 0) != lifetime:
-            key.ueba_lifetime_request_count = lifetime
-            key.save(update_fields=["ueba_lifetime_request_count"])
+    if key.ueba_lifetime_request_count != lifetime:
+        key.ueba_lifetime_request_count = lifetime
+        key.save(update_fields=["ueba_lifetime_request_count"])
 
     kill_switches = list(
         KillSwitch.objects.filter(organization=key.organization, is_active=True, api_key_prefix=key.prefix).values(
@@ -593,7 +591,7 @@ def assessment_to_risk_payload(key, metric: dict, assessment: ApiKeyRiskAssessme
             "name": key.name,
             "project_id": key.project_id,
             "is_active": key.is_active,
-            "key_purpose": getattr(key, "key_purpose", None) or "",
+            "key_purpose": key.key_purpose,
             "risk_band": risk_band,
             "risk_score": round(score, 3),
             "final_score": round(score, 3),
@@ -667,7 +665,7 @@ def assessment_to_risk_payload(key, metric: dict, assessment: ApiKeyRiskAssessme
         "name": key.name,
         "project_id": key.project_id,
         "is_active": key.is_active,
-        "key_purpose": getattr(key, "key_purpose", None) or "",
+        "key_purpose": key.key_purpose,
         "risk_band": a.get("risk_band", "low"),
         "risk_score": round(float(a.get("final_score", 0)), 3),
         "final_score": round(float(a.get("final_score", 0)), 3),

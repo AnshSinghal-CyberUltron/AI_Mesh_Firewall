@@ -279,7 +279,12 @@ def build_threat_intel_sync_meta(org) -> dict:
         .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
         .order_by("threat_type", "id")
     )
-    projection = summarize_projection(entries)
+    from core.models import FirewallConfig
+    from module2.threat_intel_projection import live_blocked_keyword_keys_from_csv
+
+    cfg = FirewallConfig.load(org)
+    live_keys = live_blocked_keyword_keys_from_csv(cfg.blocked_keywords)
+    projection = summarize_projection(entries, live_keyword_keys=live_keys)
     by_type = dict(Counter(e.threat_type for e in entries))
     return {
         "synced_by_threat_type": by_type,
@@ -316,6 +321,7 @@ def build_threat_intel_sync_meta(org) -> dict:
         ),
         "projection_mode": projection.get("projection_mode"),
         "blocking_entries": projection.get("blocking_entries", 0),
+        "pending_gateway_sync_entries": projection.get("pending_gateway_sync_entries", 0),
         "telemetry_only_entries": projection.get("telemetry_only_entries", 0),
         "managed_keywords_count": len(projection.get("managed_keywords") or []),
     }
@@ -582,6 +588,24 @@ def repair_threat_intel_projection():
         stats["failed"] += 1
         logger.warning("Threat intel projection repair failed org=%s err=%s", org.id, err)
     return stats
+
+
+@shared_task(queue="policy.compile")
+def repair_mcp_enforcement_projection(org_id=None):
+    """
+    Module-2-owned: project recent MCPEvent rows into EnforcementEvent when missing.
+    Covers async audit traffic without editing mcp_connector or emitting WS notify.
+    """
+    from django.conf import settings
+    from module2.mcp_enforcement_projection import (
+        repair_mcp_enforcement_projection as _repair,
+    )
+
+    return _repair(
+        lookback_hours=int(getattr(settings, "MODULE2_MCP_PROJECTION_LOOKBACK_HOURS", 24)),
+        batch_size=int(getattr(settings, "MODULE2_MCP_PROJECTION_BATCH_SIZE", 250)),
+        org_id=org_id,
+    )
 
 
 @shared_task(queue="compute.heavy")

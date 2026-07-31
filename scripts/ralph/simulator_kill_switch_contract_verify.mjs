@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * Contract gate for Module 2 simulator kill-switch alignment (no Module 1 edits).
  *

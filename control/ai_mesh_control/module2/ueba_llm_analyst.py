@@ -146,9 +146,9 @@ def build_triage_context(
             "prefix": key.prefix,
             "name": key.name,
             "project_id": key.project_id,
-            "purpose": getattr(key, "key_purpose", None) or "",
+            "purpose": key.key_purpose,
             "mode": "traditional",
-            "lifetime_requests": getattr(key, "ueba_lifetime_request_count", 0) or 0,
+            "lifetime_requests": key.ueba_lifetime_request_count,
         },
         "current": {
             "request_count": total,
@@ -175,8 +175,8 @@ def build_bootstrap_context(key, metric: dict, profile, org_settings=None) -> di
             "prefix": key.prefix,
             "name": key.name,
             "project_id": key.project_id,
-            "purpose": getattr(key, "key_purpose", None) or "",
-            "lifetime_requests": getattr(key, "ueba_lifetime_request_count", 0) or 0,
+            "purpose": key.key_purpose,
+            "lifetime_requests": key.ueba_lifetime_request_count,
         },
         "aggregate": {
             "sample_count": len(samples),

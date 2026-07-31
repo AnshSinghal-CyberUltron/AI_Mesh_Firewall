@@ -37,6 +37,7 @@ import {
   buildIncidentKpiItems,
   formatIncidentAge,
   formatIncidentsBySourceChart,
+  INCIDENT_SOURCE_CHART_HELP,
   incidentLaneDrillDown,
   sourceBadgeClass,
 } from "./pageData";
@@ -49,7 +50,7 @@ const DEFAULT_PERIOD = "7d";
 const SOURCE_CHIPS = [
   { value: "", label: "All lanes" },
   { value: "chat", label: "Chat" },
-  { value: "rag", label: "RAG" },
+  { value: "rag", label: "RAG lane" },
   { value: "vector", label: "Vector" },
   { value: "mcp", label: "MCP" },
   { value: "threat_intel", label: "Threat Intel" },
@@ -72,7 +73,7 @@ const STATUS_CLASS = {
 
 const SOURCE_LABELS = {
   chat: "Chat",
-  rag: "RAG",
+  rag: "RAG lane",
   vector: "Vector",
   mcp: "MCP",
   threat_intel: "Threat Intel",
@@ -651,10 +652,10 @@ function IncidentsPageInner() {
       </div>
 
       {sourceChart.length > 0 && (
-        <div className="mt-4">
+        <div className="mt-4 space-y-2">
           <ChartCard
             title="Incidents by Enforcement Lane"
-            titleHelpText="Counts for the selected time range (table filters apply separately below)."
+            titleHelpText={INCIDENT_SOURCE_CHART_HELP}
           >
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={sourceChart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -666,6 +667,16 @@ function IncidentsPageInner() {
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
+          <p
+            className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-[11px] leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-900/30 dark:text-slate-300"
+            data-testid="incidents-rag-lane-legend"
+          >
+            <span className="font-semibold text-slate-800 dark:text-slate-100">RAG lane</span> counts
+            incident cases linked to any <code className="text-[10px]">rag_*</code> enforcement event —
+            including pre-pipeline policy/access denies (<code className="text-[10px]">rag_query_blocked</code>
+            ). That is not the same number as Model &amp; RAG Health → Pipeline Stage Events. Health shows
+            those denials separately as <span className="font-medium">Policy / Access Denials</span>.
+          </p>
         </div>
       )}
 

@@ -112,14 +112,23 @@ class ThreatIntelEntrySerializer(serializers.ModelSerializer):
     effective_reason = serializers.SerializerMethodField()
     projected_keyword = serializers.SerializerMethodField()
 
+    def _live_keyword_keys(self) -> set[str] | None:
+        keys = self.context.get("live_blocked_keyword_keys")
+        if keys is None:
+            return None
+        return keys
+
+    def _row(self, obj):
+        return resolve_projection_row(obj, live_keyword_keys=self._live_keyword_keys())
+
     def get_effective_mode(self, obj):
-        return resolve_projection_row(obj).effective_mode
+        return self._row(obj).effective_mode
 
     def get_effective_reason(self, obj):
-        return resolve_projection_row(obj).effective_reason
+        return self._row(obj).effective_reason
 
     def get_projected_keyword(self, obj):
-        return resolve_projection_row(obj).keyword or ""
+        return self._row(obj).keyword or ""
 
     class Meta:
         model = ThreatIntelEntry

@@ -7,7 +7,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("auth_api", "0008_remove_aiguardx_roles"),
-        ("core", "0029_gatewayapikey_encrypted_secret"),
+        ("core", "0029_gatewayapikey_ueba_v2_fields"),
         ("module2", "0001_initial"),
     ]
 

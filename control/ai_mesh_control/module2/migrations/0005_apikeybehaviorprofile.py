@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("core", "0029_gatewayapikey_encrypted_secret"),
+        ("core", "0029_gatewayapikey_ueba_v2_fields"),
         ("module2", "0004_rename_module2_api_gateway_7f0e2a_idx_module2_api_gateway_ee42c6_idx_and_more"),
     ]
 

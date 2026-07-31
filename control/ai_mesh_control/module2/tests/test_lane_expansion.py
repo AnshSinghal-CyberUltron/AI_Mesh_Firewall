@@ -170,6 +170,26 @@ class LaneHelperUnitTests(SimpleTestCase):
         self.assertEqual(kpis["stages"]["retriever"]["total"], 1)
         self.assertEqual(kpis["stages"]["retriever"]["avg_latency_ms"], 40.0)
 
+    def test_build_rag_pre_pipeline_denials_counts_query_blocked(self):
+        from module2.analytics import build_rag_pre_pipeline_denials
+
+        qs = FakeQS([
+            _row(ACTION_BLOCK, event_type="rag_query_blocked", pipeline_stage="policy", collection="docs"),
+            _row(ACTION_BLOCK, event_type="rag_query_blocked", pipeline_stage="policy"),
+            _row(ACTION_BLOCK, event_type="rag_pipeline", pipeline_stage="retriever"),
+            _row("allow", event_type="rag_query", pipeline_stage="query"),
+            _row(ACTION_BLOCK, event_type="mcp_tool_call"),
+        ])
+        denials = build_rag_pre_pipeline_denials(qs)
+        self.assertEqual(denials["total"], 2)
+        self.assertEqual(denials["by_event_type"]["rag_query_blocked"], 2)
+        self.assertEqual(denials["by_stage"]["policy"], 2)
+        self.assertEqual(denials["by_collection"].get("docs"), 1)
+        # Pipeline KPIs must ignore the blocked events
+        kpis = build_rag_pipeline_kpis(qs)
+        self.assertEqual(kpis["stages"]["query"]["total"], 1)
+        self.assertEqual(kpis["stages"]["retriever"]["total"], 1)
+
     def test_build_mcp_activity_payload_ledger_direction_servers(self):
         qs = FakeQS([
             _row(ACTION_BLOCK, event_type="mcp_tool_call", tools_invoked=["execute_sql"],
@@ -279,14 +299,25 @@ class LaneExpansionApiTests(TestCase):
         self._event("allow", event_type="rag_pipeline", pipeline_stage="query")
         self._event(ACTION_BLOCK, event_type="rag_pipeline", pipeline_stage="retriever")
         self._event(ACTION_BLOCK, collection="finance_docs")
+        self._event(
+            ACTION_BLOCK,
+            event_type="rag_query_blocked",
+            pipeline_stage="policy",
+            collection="docs",
+        )
 
         resp = self.client.get("/api/module2/rag/health/?period=24h")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(data["period"], "24h")
         self.assertIn("rag_pipeline_kpis", data)
+        self.assertIn("rag_pre_pipeline_denials", data)
         self.assertIn("vector_exposure", data)
         self.assertEqual(data["rag_pipeline_kpis"]["stages"]["retriever"]["blocked"], 1)
+        self.assertEqual(data["rag_pre_pipeline_denials"]["total"], 1)
+        self.assertEqual(
+            data["rag_pre_pipeline_denials"]["by_event_type"]["rag_query_blocked"], 1
+        )
         collections = {r["collection"] for r in data["vector_exposure"]["collections"]}
         self.assertIn("finance_docs", collections)
 
