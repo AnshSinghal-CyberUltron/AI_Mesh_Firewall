@@ -153,6 +153,20 @@ async def test_a02_e2e_returns_413_with_honest_reason():
     assert "credential" not in json.dumps(body).lower()
 
 
+# ── L8-01: JSON-RPC unregistered-tool gateway rejection (route parity) ────────
+def test_unregistered_tool_rejected_when_known_set_present():
+    info = {"known": {"search_repositories", "get_file_contents"}, "disabled": set()}
+    assert mcp_proxy._is_tool_unregistered("delete_all_repositories", info) is True
+    assert mcp_proxy._is_tool_unregistered("search_repositories", info) is False
+
+
+def test_unregistered_tool_fail_open_when_known_empty():
+    # a not-yet-synced server (empty/absent known set) must NOT falsely block any tool
+    assert mcp_proxy._is_tool_unregistered("anything", {"known": set()}) is False
+    assert mcp_proxy._is_tool_unregistered("anything", {}) is False
+    assert mcp_proxy._is_tool_unregistered("anything", None) is False
+
+
 @pytest.mark.asyncio
 async def test_a10b_non_dict_arguments_rejected_400():
     # A number/array/string `arguments` is not a valid tool-call object -> clean 400, not a 500.

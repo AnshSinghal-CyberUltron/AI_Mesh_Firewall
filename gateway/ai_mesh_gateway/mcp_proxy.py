@@ -1021,6 +1021,24 @@ def _is_tool_disabled(tool_name: str, enabled_info: dict | None) -> bool:
     return tool_name in (enabled_info.get("disabled") or set())
 
 
+def _is_tool_unregistered(tool_name: str, enabled_info: dict | None) -> bool:
+    """True iff the server has a KNOWN (registered) tool set and this tool is NOT in it.
+
+    Route-parity (2026-07-31): the bare-REST path proxies through the control backend, which
+    rejects an unregistered tool with ``tool_not_registered`` (403). The primary JSON-RPC path
+    for streamable-http/adapter transports forwards DIRECTLY to the upstream MCP server, so an
+    unregistered/unknown tool bypassed that check and was relayed upstream (the known-open L8-01
+    "known_tools never read"). This reads the ``known`` set (already synced into ``enabled_info``)
+    to reject at the gateway. FAIL-OPEN when the set is empty/absent (a not-yet-synced server) so
+    a freshly-connected server whose tool list has not cached is never falsely blocked."""
+    if not enabled_info or not tool_name:
+        return False
+    known = enabled_info.get("known")
+    if not known:
+        return False
+    return tool_name not in known
+
+
 def _filter_tools_by_key_allowlist(tools: list, auth) -> list:
     """Drop tools NOT permitted by the caller's per-key ``mcp_allowed_tools``.
 
@@ -5038,6 +5056,25 @@ async def org_mcp_jsonrpc(org_slug: str, server_slug: str, request: Request):
                         ],
                         "isError": True,
                     },
+                },
+                status_code=200,
+            )
+        # Route-parity (2026-07-31): reject an UNREGISTERED tool at the gateway (parity with the
+        # bare-REST -> control backend ``tool_not_registered`` 403). Streamable-http/adapter
+        # JSON-RPC forwards direct-to-upstream, so without this an unknown tool was relayed upstream
+        # (known-open L8-01). Fail-open when the known set is unsynced (see _is_tool_unregistered).
+        if _is_tool_unregistered(tool_name, enabled_info):
+            await _record_gateway_event(
+                org_slug=org_slug, server_slug=server_slug, tool_name=tool_name,
+                decision="block", reason="tool_not_registered",
+                latency_ms=int((time.time() - call_t0) * 1000),
+                metadata={"transport": transport, "enforced_at": "gateway"},
+            )
+            return JSONResponse(
+                content={
+                    "jsonrpc": jsonrpc, "id": msg_id,
+                    "error": {"code": -32601,
+                              "message": f"Tool '{tool_name}' is not registered for this server"},
                 },
                 status_code=200,
             )
