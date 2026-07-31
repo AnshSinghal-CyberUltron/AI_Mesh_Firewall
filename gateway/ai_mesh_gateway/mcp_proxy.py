@@ -353,6 +353,19 @@ _MCP_MAX_RESULT_DEPTH = int(os.environ.get("MCP_MAX_RESULT_DEPTH", "200"))
 # CHG-0116: same cap for inbound tool ARGS (attacker-controlled). Defaults to the result
 # cap; separately env-tunable.
 _MCP_MAX_ARG_DEPTH = int(os.environ.get("MCP_MAX_ARG_DEPTH", str(_MCP_MAX_RESULT_DEPTH)))
+# A-02 (2026-07-31): transport-level cap on the total serialized INBOUND args size. A single
+# multi-hundred-KB argument value is (a) not legitimate for these tools and (b) makes the raw
+# regex detectors ``.search()`` a huge leaf -> scan-cost/exception that used to fail-closed and
+# MISLABEL as "credential/PII". Reject it fast with a clean gateway 413 BEFORE the scan. Like the
+# body cap (_mcp_body_too_large) this is a resource guard, posture-INDEPENDENT (always on).
+_MCP_MAX_ARGS_BYTES = int(os.environ.get("MCP_MAX_ARGS_BYTES", str(512 * 1024)))
+# A-04 (2026-07-31): element-COUNT cap on inbound args — input-side twin of the OUTPUT
+# ``_MCP_MAX_RESULT_NODES`` node-bomb guard (a wide-but-shallow 100k-element array passes the
+# depth + byte caps today and is relayed upstream until it times out). Counts structural nodes
+# (dict keys + list items), so a big STRING value is 1 node (bounded by the byte cap instead).
+# 50k is generous — real MCP tool args have <100 nodes — while catching a 100k-element bomb.
+# Posture-gated like the depth cap (monitor forwards). Env-tunable.
+_MCP_MAX_ARG_NODES = int(os.environ.get("MCP_MAX_ARG_NODES", "50000"))
 
 # CHG-0119 (2026-07-29): observe-posture DETECT-ONLY scan for orgs with ZERO
 # MCPScanControl rows. The 'tag'/'monitor' posture contract is "detect, tag and emit
@@ -496,6 +509,27 @@ async def _mcp_unsupported_media_type_response(
             "message": "MCP tool-call body must be application/json.",
             "request_id": request_id,
         },
+        headers={"x-request-id": request_id} if request_id else None,
+    )
+
+
+async def _mcp_client_error_response(
+    *, status_code: int, code: str, message: str, reason: str = "",
+    request_id: str = "", org_slug: str = "", server_slug: str = "",
+) -> JSONResponse:
+    """Deterministic gateway-terminated client error with a clean JSON envelope + request_id +
+    x-request-id header, audited on the platform. Used by the boundary validators (A-02 oversized
+    args, A-09 invalid encoding, A-10 malformed JSON) so these are rejected AT the gateway with an
+    HONEST, machine-readable reason instead of being swallowed / forwarded raw / mislabeled."""
+    if org_slug:
+        await _record_gateway_event(
+            org_slug=org_slug, server_slug=server_slug, tool_name="",
+            decision="block", reason=(reason or code), request_id=request_id,
+            metadata={"transport": "http", "enforced_at": "gateway"},
+        )
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": code, "code": code, "message": message, "request_id": request_id},
         headers={"x-request-id": request_id} if request_id else None,
     )
 
@@ -1408,6 +1442,35 @@ def _findings_have_exfil(findings: list[dict] | None) -> bool:
     )
 
 
+def _inbound_block_reason(tool_name: str, tags, meta: dict | None) -> tuple[str, str]:
+    """A-02/A-03 (2026-07-31): map an inbound-arg block's scan meta + tags to an HONEST
+    ``(reason, detail)``. A resource-limit block (depth / node) and a scan FAILURE were both
+    surfaced as ``pii_blocked_inbound`` / 'credential/PII', misleading operators. Real
+    compliance-tag matches keep the PII wording."""
+    meta = meta or {}
+    tags = list(tags or [])
+    if meta.get("arg_scan_error"):
+        return "arg_scan_error", (
+            f"Tool '{tool_name}' arguments could not be scanned (scan error); blocked fail-closed.")
+    if meta.get("args_too_large"):
+        return "args_too_large", f"Tool '{tool_name}' arguments exceed the size limit."
+    if meta.get("args_too_deeply_nested"):
+        return "args_too_deeply_nested", (
+            f"Tool '{tool_name}' arguments exceed the max nesting depth "
+            f"({meta.get('max_arg_depth', _MCP_MAX_ARG_DEPTH)}).")
+    if meta.get("args_too_many_nodes"):
+        return "args_too_many_nodes", (
+            f"Tool '{tool_name}' arguments exceed the max element count "
+            f"({meta.get('max_arg_nodes', _MCP_MAX_ARG_NODES)}).")
+    if meta.get("credential_force_block"):
+        return "credential_blocked_inbound", (
+            f"Tool '{tool_name}' arguments contain a detected credential.")
+    if tags:
+        return "pii_blocked_inbound", (
+            f"Tool '{tool_name}' arguments matched compliance tags: {', '.join(tags)}.")
+    return "blocked_inbound", f"Tool '{tool_name}' arguments were blocked by policy."
+
+
 async def _scan_tool_args_block(
     arguments,
     *,
@@ -1453,6 +1516,21 @@ async def _scan_tool_args_block(
         return arguments, True, ["RESOURCE_LIMIT"], [], {
             "args_too_deeply_nested": True, "max_arg_depth": _MCP_MAX_ARG_DEPTH,
         }
+    # A-04 (2026-07-31): element-COUNT cap — input-side twin of the OUTPUT node-bomb guard
+    # (_scan_tool_result_floor / _exceeds_node_count). A wide-but-shallow 100k-element array
+    # passes the depth + byte caps but is a resource/DoS anomaly; posture-gated like depth above.
+    if isinstance(arguments, (dict, list)) and _exceeds_node_count(arguments, _MCP_MAX_ARG_NODES):
+        LOG.warning(
+            "mcp_proxy.args_too_many_nodes org=%s server=%s tool=%s (>%d) action=%s",
+            org_slug, server_slug, tool_name, _MCP_MAX_ARG_NODES, scan_action,
+        )
+        if _explicit_monitor_posture(tool_name, enabled_info, "input"):
+            return arguments, False, [], [], {
+                "args_too_many_nodes": True, "monitor_scan_skipped": True,
+            }
+        return arguments, True, ["RESOURCE_LIMIT"], [], {
+            "args_too_many_nodes": True, "max_arg_nodes": _MCP_MAX_ARG_NODES,
+        }
     try:
         scanned, blocked, tags, findings, meta = await _mcp_security_scan(
             arguments,
@@ -1468,9 +1546,11 @@ async def _scan_tool_args_block(
             "mcp_proxy.arg_scan_failed org=%s server=%s tool=%s: %s (fail-closed: blocking)",
             org_slug, server_slug, tool_name, exc,
         )
-        # Prefer blocking on an arg-scan failure: a credential in args that we
-        # could not inspect must not egress to the backend / upstream MCP server.
-        return arguments, True, [], [], {"arg_scan_error": True, "credential_force_block": True}
+        # Prefer blocking on an arg-scan failure: content we could not inspect must not egress.
+        # A-02 (2026-07-31): this is a SCAN ERROR, not a credential match — do NOT set
+        # ``credential_force_block`` (which made the caller mislabel the block as "credential/PII").
+        # The ``arg_scan_error`` flag drives an honest ``arg_scan_error`` reason downstream.
+        return arguments, True, [], [], {"arg_scan_error": True}
 
     if (
         not blocked
@@ -5654,10 +5734,34 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
     if _rl_rest is not None:
         return _rl_rest
 
-    try:
-        parsed = json.loads(body) if body else {}
-    except Exception:
+    # A-10 (2026-07-31): a NON-EMPTY body that fails to parse is a malformed request — return a
+    # clean gateway 400 ``invalid_json`` instead of swallowing the error and forwarding raw bytes
+    # (which made the caller see a downstream 'Missing name'/parse error, not a gateway decision).
+    # An empty body stays lenient (falls through to the missing-name path, matching prior behavior).
+    if body:
+        try:
+            parsed = json.loads(body)
+        except Exception:
+            return await _mcp_client_error_response(
+                status_code=400, code="invalid_json", reason="invalid_json",
+                message="MCP tool-call body is not valid JSON.",
+                request_id=_req_id, org_slug=org_slug, server_slug=server_slug)
+    else:
         parsed = {}
+    # A-09 (2026-07-31): reject a lone UTF-16 surrogate / non-UTF-8-encodable argument AT the
+    # gateway (json.loads accepts ``\ud800`` but it fails at the upstream UTF-8 boundary and came
+    # back as an opaque 'Adapter error'). Cheap pre-gate on a surrogate escape marker in the raw
+    # body, then confirm via a UTF-8 encode of the parsed content (ensure_ascii=False keeps the raw
+    # surrogate so a LONE surrogate raises; a valid surrogate PAIR encodes fine and is allowed).
+    _lb = body.lower() if isinstance(body, (bytes, bytearray)) else b""
+    if b"\\ud" in _lb:
+        try:
+            json.dumps(parsed, ensure_ascii=False).encode("utf-8")
+        except (UnicodeEncodeError, ValueError):
+            return await _mcp_client_error_response(
+                status_code=400, code="invalid_encoding", reason="invalid_encoding",
+                message="MCP tool-call arguments contain an invalid UTF-16 surrogate.",
+                request_id=_req_id, org_slug=org_slug, server_slug=server_slug)
     tool_name = ""
     arguments = {}
     if isinstance(parsed, dict):
@@ -5672,6 +5776,23 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
             arguments = {}
             parsed["arguments"] = {}
             body = json.dumps(parsed).encode()
+
+    # A-02 (2026-07-31): transport-level cap on the total serialized args size, BEFORE the scan.
+    # A single multi-hundred-KB value is not legitimate for these tools and makes the raw regex
+    # detectors run on a huge leaf -> the scan used to error and fail-closed, MISLABELING the block
+    # as "credential/PII". Reject fast with an honest gateway 413 ``args_too_large``. Resource guard
+    # (posture-independent, like the body cap). Bounded by the 10MB body cap already read.
+    if arguments not in (None, {}):
+        try:
+            _args_bytes = len(json.dumps(arguments, ensure_ascii=False).encode("utf-8"))
+        except Exception:
+            _args_bytes = 0
+        if _args_bytes > _MCP_MAX_ARGS_BYTES:
+            return await _mcp_client_error_response(
+                status_code=413, code="args_too_large", reason="args_too_large",
+                message=(f"MCP tool-call arguments exceed the {_MCP_MAX_ARGS_BYTES}-byte limit "
+                         f"(got {_args_bytes})."),
+                request_id=_req_id, org_slug=org_slug, server_slug=server_slug)
 
     # TELEMETRY PARITY: audit EVERY tool call — allow/monitor too, not only block/redact —
     # so the MCP governance dashboard reflects all activity (it previously showed only
@@ -5759,12 +5880,17 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
         _obs_tags += list(in_tags or [])
         _obs_findings += list(in_findings or [])
         if in_blocked:
+            # A-02 / A-03 (2026-07-31): derive an HONEST reason + detail from the scan meta so a
+            # resource-limit block (depth/node) is not reported as "pii_blocked_inbound", and a
+            # scan FAILURE is not mislabeled "credential/PII". Real compliance-tag matches keep the
+            # PII wording.
+            _in_reason, _in_detail = _inbound_block_reason(tool_name, in_tags, scan_meta_in)
             await _record_gateway_event(
                 org_slug=org_slug,
                 server_slug=server_slug,
                 tool_name=tool_name,
                 decision="block",
-                reason="pii_blocked_inbound",
+                reason=_in_reason,
                 request_id=_req_id,
                 latency_ms=int((time.time() - call_t0) * 1000),
                 metadata={"transport": "rest", "enforced_at": "gateway", **scan_meta_in},
@@ -5775,13 +5901,13 @@ async def org_mcp_tool_call(org_slug: str, server_slug: str, request: Request):
                 content={
                     "blocked": True,
                     "error": "blocked",
-                    "detail": (
-                        f"Tool '{tool_name}' arguments matched compliance tags: "
-                        f"{', '.join(in_tags) or 'credential/PII'}."
-                    ),
+                    "reason": _in_reason,
+                    "detail": _in_detail,
                     "compliance_tags": list(in_tags),
+                    "request_id": _req_id,
                 },
                 status_code=403,
+                headers={"x-request-id": _req_id} if _req_id else None,
             )
         # Forward any per-tier inbound redaction the orchestrator applied.
         if scanned_args is not arguments and isinstance(parsed, dict):
