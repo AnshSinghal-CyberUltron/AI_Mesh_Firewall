@@ -8,6 +8,12 @@ RUN apk add --no-cache openssl \
 COPY deploy/nginx.conf /etc/nginx/conf.d/01-http.conf
 COPY deploy/nginx-ssl.conf /etc/nginx/conf.d/02-ssl.conf
 
+# A-14/A-34: JSON edge-error handler included by every server{} block, plus the static JSON
+# body it serves via error_page. Kept OUT of conf.d/ so nginx does not auto-load the .inc as a
+# standalone config (only conf.d/*.conf is auto-included).
+COPY deploy/edge-error.inc /etc/nginx/edge-error.inc
+COPY deploy/edge-error.json /etc/nginx/edge_errors/__edge_error.json
+
 # Superuser gate for the /demo/ reference app (HTTP Basic Auth). Credentials are
 # baked from build args sourced from .env at build time; the htpasswd stores only
 # the apr1 hash, never the plaintext password.

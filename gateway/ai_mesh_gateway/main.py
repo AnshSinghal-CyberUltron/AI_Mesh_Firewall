@@ -1452,7 +1452,10 @@ def _extract_prompt_from_messages(messages):
         # into the scannable text. Injection / PII / credentials hidden inside
         # tool_calls[].function.arguments previously bypassed Tier-1/Tier-2
         # entirely (only message *content* was scanned) — a live fail-open.
-        for _tc in (m.get("tool_calls") or []):
+        # Defensive: only iterate a list (a malformed non-list tool_calls is rejected at the
+        # proxy_chat boundary, but this helper is shared — never let it raise TypeError -> 500).
+        _m_tcs = m.get("tool_calls")
+        for _tc in (_m_tcs if isinstance(_m_tcs, list) else []):
             if not isinstance(_tc, dict):
                 continue
             _fn = _tc.get("function") or {}
@@ -2881,6 +2884,11 @@ MAX_MESSAGES = 200               # max entries in a /v1/chat/completions message
 # NOT bound (it caps the scanned string, not the per-tool redaction recursion). OpenAI's own
 # practical limit is ~128 tools, so 256 is generous headroom.
 MAX_TOOLS = 256                  # max entries in a `tools` / `functions` array
+# A-19 (2026-07-31): per-tool metadata (name+description+parameters) byte ceiling. Without it a
+# single huge tool description folds untruncated into the scanned prompt and trips the generic
+# MAX_PROMPT_LENGTH DoS guard -> reported as a SECURITY block, not a size limit. A dedicated cap
+# returns a clean, honest `tool_metadata_too_large`. Env-tunable.
+MAX_TOOL_METADATA_BYTES = int(os.environ.get("MAX_TOOL_METADATA_BYTES", str(64 * 1024)))
 MAX_OUTPUT_TOKENS_CEILING = 1_000_000  # C5: absolute upper bound on max_tokens
 
 # C2: allowlist of recognized multimodal content-part ``type`` values. An
@@ -6121,7 +6129,33 @@ async def proxy_chat(
                     "code": "too_many_tools",
                 },
             )
+        # A-19 (2026-07-31): per-tool metadata SIZE limit — reject an oversized tool
+        # description/parameters as a clean size error (not the generic DoS/security block it would
+        # otherwise trip when folded into the scanned prompt).
+        if isinstance(_tools_arr, list):
+            for _ti, _tool in enumerate(_tools_arr):
+                if not isinstance(_tool, dict):
+                    continue
+                # Measure the WHOLE tool object, not just its ``function`` sub-tree: a huge sibling
+                # field (or a huge ``function.parameters``) otherwise bypasses the cap and still
+                # feeds the unbounded per-tool redaction recursion when folded into the scan.
+                try:
+                    _tsize = len(json.dumps(_tool, ensure_ascii=False).encode("utf-8"))
+                except Exception:
+                    _tsize = 0
+                if _tsize > MAX_TOOL_METADATA_BYTES:
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "error": "tool_metadata_too_large",
+                            "message": (f"tools[{_ti}] metadata exceeds the "
+                                        f"{MAX_TOOL_METADATA_BYTES}-byte limit (got {_tsize})."),
+                            "param": f"tools[{_ti}]",
+                            "code": "tool_metadata_too_large",
+                        },
+                    )
         if isinstance(messages_raw, list):
+            _issued_tool_call_ids: set = set()  # A-21: assistant-issued tool_call ids seen so far
             for idx, msg in enumerate(messages_raw):
                 if not isinstance(msg, dict):
                     return JSONResponse(
@@ -6133,6 +6167,45 @@ async def proxy_chat(
                             "code": "invalid_messages",
                         },
                     )
+                # A-21 (2026-07-31): conversation-shape validation — a ``role=tool`` message must
+                # answer a PRECEDING assistant ``tool_calls`` with a matching ``tool_call_id``.
+                # Previously ``tool_call_id`` was never inspected, so a forged orphan tool message
+                # was accepted (more lenient than OpenAI, which 400s it). Track ids in order; reject
+                # an orphan.
+                _role = msg.get("role")
+                if _role == "assistant":
+                    # ``tool_calls`` must be an array (OpenAI contract). A malformed non-list value
+                    # (int/string/dict) otherwise flows to several unguarded `for tc in tool_calls`
+                    # iterations downstream (_extract_prompt_from_messages, scan/redact walkers) and
+                    # raises TypeError -> unhandled 500. Reject it at the boundary as invalid_messages.
+                    _tcs = msg.get("tool_calls")
+                    if _tcs is not None and not isinstance(_tcs, list):
+                        return JSONResponse(
+                            status_code=400,
+                            content={
+                                "error": "invalid_request",
+                                "message": f"messages[{idx}].tool_calls must be an array.",
+                                "param": f"messages[{idx}].tool_calls",
+                                "code": "invalid_messages",
+                            },
+                        )
+                    for _tc in (_tcs or []):
+                        if isinstance(_tc, dict) and _tc.get("id"):
+                            _issued_tool_call_ids.add(str(_tc.get("id")))
+                elif _role == "tool":
+                    _tcid = msg.get("tool_call_id")
+                    if not _tcid or str(_tcid) not in _issued_tool_call_ids:
+                        return JSONResponse(
+                            status_code=400,
+                            content={
+                                "error": "invalid_request",
+                                "message": (f"messages[{idx}] is an orphan tool message: its "
+                                            f"tool_call_id does not match any preceding assistant "
+                                            f"tool_call."),
+                                "param": f"messages[{idx}].tool_call_id",
+                                "code": "invalid_messages",
+                            },
+                        )
                 # ``content`` must be a string (normal) or a list (multimodal
                 # content-parts); ``None`` is valid for assistant/tool messages.
                 # A non-string/non-list content (e.g. a dict or int) otherwise
