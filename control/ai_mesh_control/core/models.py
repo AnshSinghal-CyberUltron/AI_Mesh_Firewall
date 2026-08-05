@@ -331,6 +331,16 @@ class GatewayAPIKey(models.Model):
     rate_limit_tokens_per_minute = models.PositiveIntegerField(
         default=DEFAULT_RATE_LIMIT_TPM, help_text="Rate limit in Tokens Per Minute (TPM)."
     )
+    KEY_PURPOSE_CHOICES = [
+        ("production", "Production"),
+        ("test", "Test"),
+        ("simulator", "Simulator"),
+        ("scanner", "Scanner"),
+    ]
+    UEBA_MODE_CHOICES = [
+        ("learning", "Learning"),
+        ("active", "Active"),
+    ]
     # UNIT (M-25a): FRACTION in [0.0, 1.0]. This is NOT the same scale as
     # ModelState.risk_score, which is a PERCENTAGE in [0.0, 100.0]. Never
     # compare or assign one to the other without an explicit conversion:
@@ -343,8 +353,38 @@ class GatewayAPIKey(models.Model):
     risk_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
-        help_text="Baseline risk score (0.0 = trusted, 1.0 = highest risk).",
+        help_text=(
+            "Unified UEBA final risk score (0.0 = trusted, 1.0 = highest risk). "
+            "Written by scoring engine."
+        ),
     )
+    # UEBA v2 columns (migrations 0029/0036). Must stay on the model: the DB
+    # columns are NOT NULL without a server DEFAULT, so ORM creates that omit
+    # them insert NULL → IntegrityError on POST /api/gateways/keys/.
+    key_purpose = models.CharField(
+        max_length=16,
+        choices=KEY_PURPOSE_CHOICES,
+        default="production",
+        db_index=True,
+    )
+    ueba_mode = models.CharField(
+        max_length=16,
+        choices=UEBA_MODE_CHOICES,
+        default="learning",
+        db_index=True,
+    )
+    ueba_graduation_requests = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Override org default minimum requests before active mode.",
+    )
+    ueba_graduation_days = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Override org default minimum days before active mode.",
+    )
+    ueba_lifetime_request_count = models.PositiveIntegerField(default=0)
+    ueba_baseline_locked_at = models.DateTimeField(null=True, blank=True)
     max_context_tokens = models.PositiveIntegerField(
         default=0,
         help_text="Max context tokens per request. 0 = unlimited.",
@@ -404,6 +444,7 @@ class GatewayAPIKey(models.Model):
         max_context_tokens: int = 0,
         mcp_allowed_tools: list | None = None,
         mcp_max_tool_calls: int = 0,
+        key_purpose: str = "production",
     ) -> tuple["GatewayAPIKey", str]:
         """
         Create a new GatewayAPIKey with a cryptographically secure key.
@@ -412,6 +453,7 @@ class GatewayAPIKey(models.Model):
         raw_key = secrets.token_urlsafe(KEY_LENGTH)[:KEY_LENGTH]
         key_hash = cls.hash_raw_key(raw_key)
         prefix = raw_key[:KEY_PREFIX_LENGTH]
+        purpose = key_purpose if key_purpose in {c[0] for c in cls.KEY_PURPOSE_CHOICES} else "production"
 
         instance = cls.objects.create(
             prefix=prefix,
@@ -427,6 +469,7 @@ class GatewayAPIKey(models.Model):
             max_context_tokens=max_context_tokens,
             mcp_allowed_tools=mcp_allowed_tools if mcp_allowed_tools is not None else [],
             mcp_max_tool_calls=mcp_max_tool_calls,
+            key_purpose=purpose,
         )
         return instance, raw_key
 
@@ -561,6 +604,7 @@ class GatewayAPIKey(models.Model):
                 owner=owner,
                 project_id=project_id,
                 allowed_models=[],
+                key_purpose="simulator",
             )
             if not instance.organization_id:
                 instance.organization = organization
@@ -594,6 +638,7 @@ class GatewayAPIKey(models.Model):
             owner=owner,
             project_id=project_id,
             allowed_models=[],
+            key_purpose="simulator",
         )
         if not instance.organization_id:
             instance.organization = organization
@@ -689,6 +734,7 @@ class GatewayAPIKey(models.Model):
             permissions=_playground_permissions(),
             allowed_models=[],
             risk_score=0.0,
+            key_purpose="test",
         )
         if not instance.organization_id:
             instance.organization = organization
