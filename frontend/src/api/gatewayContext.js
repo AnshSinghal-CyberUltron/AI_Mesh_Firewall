@@ -119,39 +119,6 @@ export async function adoptGatewayKeyForSimulator(fetchWithAuth, apiKey, orgId) 
   return ctx;
 }
 
-/**
- * Focus an existing fleet key in UEBA (client-side context only).
- * Main has no adopt-simulator endpoint — does not rotate or re-issue plaintext.
- */
-export async function adoptSimulatorKeyById(fetchWithAuth, keyId, orgId, { plaintext = "" } = {}) {
-  const id = String(keyId || "").trim();
-  if (!id) {
-    throw new Error("key id required");
-  }
-
-  const keys = await listGatewayKeys(fetchWithAuth);
-  const match = keys.find((k) => String(k.id || k.key_id) === id);
-  if (!match) {
-    throw new Error(`Gateway key ${id} not found`);
-  }
-
-  const apiKey = plaintext || "";
-  if (apiKey) {
-    writeOrgScopedGatewayKey(apiKey, orgId, orgGatewayKeyStorageKey(orgId));
-  }
-
-  const ctx = {
-    prefix: match.prefix || "",
-    keyId: id,
-    name: match.name || "",
-    isSimulatorDefault: !!(match.is_simulator_default || match.name === "simulator"),
-    storageKey: orgGatewayKeyStorageKey(orgId),
-  };
-  writeStoredGatewayKeyContext(ctx);
-  notifySimulatorKeyChanged(ctx);
-  return ctx;
-}
-
 export async function fetchSimulatorDefaultContext(fetchWithAuth) {
   const res = await fetchWithAuth("/api/gateways/simulator-default/");
   if (!res.ok) return null;
