@@ -27,6 +27,13 @@ import redis.asyncio as aioredis
 LOG = logging.getLogger("gateway.vector_provider_sync")
 
 REDIS_KEY_COMPILED = "vector:providers:compiled"
+# RAG-16: the control plane now writes ONE KEY PER ORG so a single Redis read
+# cannot yield every tenant's provider credentials (the payload carries the
+# vector-DB + embedding API keys in plaintext). The legacy all-tenant key is
+# still read as a FALLBACK so a new gateway keeps working against an older
+# control plane mid-rollout; once both sides are deployed the legacy key is
+# deleted by the writer and this fallback simply finds nothing.
+REDIS_KEY_ORG_PREFIX = "vector:providers:compiled:"
 PUBSUB_CHANNEL = "vector_provider_updates"
 RECONNECT_DELAY_SECONDS = 5
 DEBOUNCE_DELAY_SECONDS = 2  # Batch updates within 2 seconds
@@ -99,11 +106,27 @@ class VectorProviderSync:
                 socket_timeout=3.0,
                 socket_connect_timeout=2.0,
             )
-            raw = await client.get(REDIS_KEY_COMPILED)
+            # RAG-16: merge the per-ORG keys into the same {org}::{type} shape the
+            # cache has always used, so every consumer is unchanged.
+            merged: dict = {}
+            found_org_keys = False
+            async for _k in client.scan_iter(match=f"{REDIS_KEY_ORG_PREFIX}*", count=200):
+                _rawk = await client.get(_k)
+                if not _rawk:
+                    continue
+                try:
+                    _sub = json.loads(_rawk)
+                except Exception:  # noqa: BLE001 — one bad org must not blank the cache
+                    LOG.warning("Skipping unparseable vector provider key %s", _k)
+                    continue
+                if isinstance(_sub, dict):
+                    merged.update(_sub)
+                    found_org_keys = True
+            raw = None if found_org_keys else await client.get(REDIS_KEY_COMPILED)
             await client.aclose()
 
-            if raw is not None:
-                new_cache = json.loads(raw)
+            if found_org_keys or raw is not None:
+                new_cache = merged if found_org_keys else json.loads(raw)
                 # DEBOUNCE FIX: Only update if content actually changed
                 new_hash = hashlib.sha256(json.dumps(new_cache, sort_keys=True).encode()).hexdigest()
                 if new_hash != self._cache_hash:
