@@ -32,6 +32,187 @@ _EMBEDDING_MAX_L2_NORM = 1e4
 _INF = float("inf")
 
 
+def _milvus_collection_name(namespaced: str) -> str:
+    """Map a tenant namespace to a VALID Milvus collection identifier.
+
+    RAG-13 (2026-08-03): Milvus identifiers allow only ``[0-9A-Za-z_]`` and must start
+    with a letter/underscore, but the tenant namespace ``org{id}-{project}__{collection}``
+    always contains hyphens (from the ``org{id}-`` prefix). ``Collection(name=…)`` therefore
+    raised "Invalid collection name" for EVERY tenant, which a bare ``except`` swallowed into
+    a silent empty-200 — masquerading a hard failure as "no results". Sanitize invalid chars
+    to ``_`` and append a short deterministic hash of the ORIGINAL namespace so two distinct
+    tenants can never collide onto one physical collection.
+    """
+    import hashlib
+    import re
+
+    safe = re.sub(r"[^0-9A-Za-z_]", "_", namespaced or "")
+    if not safe or not (safe[0].isalpha() or safe[0] == "_"):
+        safe = "t_" + safe
+    digest = hashlib.sha1((namespaced or "").encode("utf-8")).hexdigest()[:10]
+    return f"{safe[:230]}_{digest}"
+
+
+def _tenant_namespace(project_id: str, collection_name: str) -> str:
+    """Build the Pinecone tenant namespace, failing CLOSED on a missing tenant key.
+
+    RAG-03 (2026-08-03): a falsy/``None`` ``project_id`` used to interpolate literally
+    into ``None__{collection}`` — one shared namespace that every affected tenant read
+    and wrote (silent cross-tenant collapse). Tenant isolation is not optional.
+    """
+    if not project_id or str(project_id).strip().lower() in ("", "none", "null"):
+        raise ValueError(
+            "refusing to build a vector namespace without a tenant project_id "
+            "(tenant isolation cannot be disabled)"
+        )
+    return f"{project_id}__{collection_name}"
+
+
+# ── Chroma distance-metric normalization (RAG-05b) ──
+#
+# The whole policy contract treats ``anomaly_distance_threshold`` as a COSINE
+# distance in [0,1] (control-plane FloatField, default 0.85, MaxValue 1.0 — the
+# serializer validators cap it, so an operator CANNOT compensate for a provider
+# that emits a differently-scaled number). Pinecone honors that contract
+# (``distance = 1.0 - score``). Chroma did NOT: collections created without an
+# explicit ``metadata={"hnsw:space": ...}`` use Chroma's DEFAULT ``l2`` space,
+# whose "distance" is SQUARED L2 — exactly 2x the cosine distance for
+# unit-normalized vectors (measured on chromadb 1.5.9: query/doc pairs 60deg and
+# 90deg apart return 1.0 / 2.0 where the cosine space returns 0.5 / 1.0).
+#
+# Passing that through verbatim is an AVAILABILITY break, not a miscalibration:
+# every document in a perfectly legitimate result set lands above 0.85, so
+# ranker_stage flags them all, empties the document list, sets
+# ``anomaly_removed_all`` and resolves the verdict to "block". Because setting
+# ``anomaly_distance_threshold`` is ALSO what force-enables the ranker, any
+# Chroma-backed policy that configures a threshold turns normal retrieval into a
+# 100% block. The same mis-scaling silently zeroes the retriever's relevance
+# filter (``1.0 - distance`` clamps to 0.0) and degrades ``compute_trust_score``.
+#
+# So the scale is normalized at the CLIENT boundary: the ``distance`` a client
+# emits is a cosine distance whenever we can PROVE it is one, and is explicitly
+# marked ``_distance_metric: "unknown"`` when we cannot — never silently guessed.
+
+# Chroma's default space when a collection is created without an explicit
+# ``hnsw:space`` (chromadb ``segment/impl/vector/hnsw_params.py``:
+# ``metadata.get("hnsw:space", "l2")``). Recorded for documentation only — it is
+# deliberately never ASSUMED: guessing "l2" for a collection whose space we could
+# not read would halve every distance and silently disable absolute-threshold
+# anomaly detection if that collection were really cosine.
+_CHROMA_DEFAULT_SPACE = "l2"
+
+# A cosine distance (``1 - cosine_similarity``) is bounded by [0, 2]. The squared
+# L2 distance between UNIT-NORMALIZED vectors is bounded by [0, 4] (it is exactly
+# 2x the cosine distance). A result set that breaches its bound PROVES the corpus
+# is not unit-normalized, so the conversion below does not apply to it.
+_COSINE_DISTANCE_MAX = 2.0
+_UNIT_NORM_MAX_L2_SQ = 4.0
+_METRIC_BOUND_TOLERANCE = 1e-6
+
+
+def _chroma_collection_space(collection: Any) -> str | None:
+    """Return the space a Chroma collection is CONFIGURED with (``"l2"`` /
+    ``"cosine"`` / ``"ip"``), or ``None`` when it cannot be determined.
+
+    RAG-05b: pre-existing collections are the important half of the fix — they
+    were created with no ``hnsw:space`` and are stuck on the default ``l2``, so
+    the conversion has to be driven by what the server actually reports, not by
+    what we now create. chromadb >= 1.x materializes the EFFECTIVE space on
+    ``collection.configuration`` even when the caller never set one (verified on
+    1.5.9: a default ``get_or_create_collection`` reports
+    ``{"hnsw": {"space": "l2", ...}}`` while ``collection.metadata`` is ``None``),
+    so prefer that, then the raw ``configuration_json``, then the legacy
+    ``metadata["hnsw:space"]``. Every access is defensive: a client version that
+    does not expose the space must degrade to "unknown", never to a guess.
+    """
+    for source in ("configuration", "configuration_json"):
+        try:
+            config = getattr(collection, source, None)
+            if isinstance(config, dict):
+                for index_kind in ("hnsw", "spann"):
+                    sub = config.get(index_kind)
+                    if isinstance(sub, dict):
+                        space = sub.get("space")
+                        if isinstance(space, str) and space.strip():
+                            return space.strip().lower()
+        except Exception:  # noqa: BLE001 - introspection must never break a query
+            continue
+    try:
+        metadata = getattr(collection, "metadata", None)
+        if isinstance(metadata, dict):
+            space = metadata.get("hnsw:space")
+            if isinstance(space, str) and space.strip():
+                return space.strip().lower()
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _within_bound(values: list[float], upper: float) -> bool:
+    """True when every value sits inside ``[0, upper]`` (with float tolerance)."""
+    return all(
+        -_METRIC_BOUND_TOLERANCE <= v <= upper + _METRIC_BOUND_TOLERANCE
+        for v in values
+    )
+
+
+def _chroma_cosine_distances(
+    raw_distances: list[Any],
+    space: str | None,
+) -> tuple[list[Any], str]:
+    """Convert Chroma's per-space distances to COSINE distance (RAG-05b).
+
+    Returns ``(distances, metric)``, where ``metric`` is ``"cosine"`` when every
+    emitted value is provably a cosine distance and ``"unknown"`` when the values
+    are the provider's raw, unconverted numbers.
+
+    Conversions (measured against chromadb 1.5.9, not inferred):
+      * ``cosine`` — already ``1 - cosine_similarity``; passed through. Chroma
+        normalizes internally for this space, so it needs no corpus assumption.
+      * ``ip``     — hnswlib returns ``1 - inner_product``, which EQUALS the
+        cosine distance for unit-normalized vectors; passed through. (It is NOT
+        the bare inner product, so ``1 - value`` would INVERT the metric.)
+      * ``l2``     — hnswlib returns SQUARED L2, which is ``2x`` the cosine
+        distance for unit-normalized vectors; halved.
+
+    UNIT-NORMALIZATION ASSUMPTION: the ``l2`` halving and the ``ip`` equivalence
+    hold only for unit-normalized embeddings. That is not assumed — it is CHECKED
+    against the returned values (squared L2 between unit vectors cannot exceed 4;
+    a cosine distance cannot exceed 2). A set that breaches its bound proves the
+    corpus is not unit-normalized, so the raw values are passed through and
+    reported as "unknown" rather than converted into a wrong number.
+
+    Fail-safe by construction: a conversion only ever makes a distance SMALLER,
+    so this can never flag MORE documents than the unconverted behaviour did, and
+    the "unknown" fallback is byte-identical to the previous behaviour — leaving
+    the scale-invariant 2-sigma path in ``detect_embedding_anomaly`` as the
+    meaningful signal for corpora we cannot calibrate.
+    """
+    try:
+        values = [float(d) for d in raw_distances]
+    except (TypeError, ValueError):
+        # A non-numeric distance means the scale cannot be verified for the set;
+        # keep the WHOLE set raw rather than emitting mixed units.
+        return list(raw_distances), "unknown"
+
+    if space == "cosine":
+        return values, "cosine"
+
+    if space == "ip" and _within_bound(values, _COSINE_DISTANCE_MAX):
+        return values, "cosine"
+
+    if space == "l2" and _within_bound(values, _UNIT_NORM_MAX_L2_SQ):
+        # Clamped to the true cosine-distance range so an out-of-band value can
+        # never become a nonsense distance. NOTE: the clamp is [0, 2], not [0, 1]
+        # — a cosine distance legitimately reaches 2.0 for anti-correlated
+        # vectors, and capping at 1.0 would both diverge from the native-cosine
+        # path above and make a real outlier unflaggable at the contract's
+        # maximum threshold of 1.0 (the comparison is a strict ``>``).
+        return [min(max(v / 2.0, 0.0), _COSINE_DISTANCE_MAX) for v in values], "cosine"
+
+    return list(raw_distances), "unknown"
+
+
 def _embedding_validity_reason(vector: Any) -> str | None:
     """Return a rejection reason if ``vector`` is a degenerate/adversarial
     embedding that must NOT be written to the vector store, else ``None``.
@@ -168,6 +349,44 @@ class ChromaDBClient:
         self._client = None
         LOG.info("ChromaDBClient initialized (url=%s)", url)
 
+    def _parse_url(self) -> tuple[str, int, bool]:
+        """Parse ``connection_url`` ONCE into ``(host, port, use_tls)``.
+
+        RAG-01 (2026-08-03): uses the SAME parser (urlsplit) the SSRF guard uses.
+        The previous inline ``replace("http://","").split(":")[0]`` disagreed with
+        ``urlparse().hostname`` on a userinfo URL, so a connection_url of
+        ``http://169.254.169.254:8000@example.com`` cleared the guard (which validated
+        ``example.com``) while this client connected to ``169.254.169.254`` — a
+        live-proven SSRF to the cloud metadata endpoint that also leaked the org's
+        provider token. Userinfo is additionally rejected by the guard (defense in
+        depth) and here, so the two layers can never disagree again.
+
+        RAG-09: the scheme decides TLS. ``chromadb.HttpClient`` defaults ``ssl=False``,
+        so an ``https://`` endpoint was silently downgraded to cleartext, exposing the
+        bearer token and every retrieved document on the wire.
+        """
+        from urllib.parse import urlsplit
+
+        split = urlsplit(self._url if "://" in (self._url or "") else f"http://{self._url or ''}")
+        if split.username is not None or split.password is not None:
+            raise ValueError("Chroma connection_url must not contain userinfo ('@')")
+        host = split.hostname
+        if not host:
+            raise ValueError(f"Chroma connection_url has no host: {self._url!r}")
+        use_tls = (split.scheme or "http").lower() == "https"
+        try:
+            port = split.port or (443 if use_tls else 8000)
+        except ValueError as exc:  # malformed port -> fail closed
+            raise ValueError(f"Chroma connection_url has an invalid port: {self._url!r}") from exc
+        return host, port, use_tls
+
+    # Test seams (the parse is security-critical; tests assert client/guard agreement).
+    def _url_parts_for_test(self) -> tuple[str, int, bool]:
+        return self._parse_url()
+
+    def _url_host_for_test(self) -> str:
+        return self._parse_url()[0]
+
     def _get_client(self):
         """Lazy-init the ChromaDB HTTP client."""
         if self._client is None:
@@ -178,13 +397,15 @@ class ChromaDBClient:
                     chroma_api_impl="chromadb.api.fastapi.FastAPI",
                     anonymized_telemetry=False,
                 )
-                host = self._url.replace("http://", "").replace("https://", "").split(":")[0]
-                port_str = self._url.split(":")[-1].rstrip("/")
-                port = int(port_str) if port_str.isdigit() else 8000
+                host, port, _is_tls = self._parse_url()
 
                 kwargs: dict[str, Any] = {
                     "host": host,
                     "port": port,
+                    # RAG-09: an https:// endpoint was silently downgraded to cleartext
+                    # (chromadb defaults ssl=False), exposing the bearer token and every
+                    # retrieved document on the wire. Honor the scheme.
+                    "ssl": _is_tls,
                     "settings": settings,
                 }
                 if self._auth_token:
@@ -198,7 +419,19 @@ class ChromaDBClient:
         return self._client
 
     def _build_collection_name(self, project_id: str, collection_name: str) -> str:
-        """Construct the namespaced collection name for tenant isolation."""
+        """Construct the namespaced collection name for tenant isolation.
+
+        RAG-03 (2026-08-03): fail CLOSED on a missing tenant key. A falsy/``None``
+        ``project_id`` used to interpolate literally, producing the shared namespace
+        ``None__{collection}`` that every affected tenant then read and wrote — a silent
+        cross-tenant collapse. A namespace without a tenant key is never legitimate, so
+        raise instead of building one. Callers surface this as a clean block.
+        """
+        if not project_id or str(project_id).strip().lower() in ("", "none", "null"):
+            raise ValueError(
+                "refusing to build a vector namespace without a tenant project_id "
+                "(tenant isolation cannot be disabled)"
+            )
         return f"{project_id}__{collection_name}"
 
     def _query_sync(
@@ -230,8 +463,20 @@ class ChromaDBClient:
         try:
             results = collection.query(**query_params)
         except Exception:
+            # RAG-P1 (2026-08-06): this used to ``return []``, which the pipeline
+            # cannot distinguish from "the collection genuinely has no match" —
+            # so a vector store that answered its control calls but ERRORED the
+            # query (500 / 429 / rate-limit / partial outage) produced a clean
+            # ``HTTP 200 documents:[]`` AND the retriever recorded circuit-breaker
+            # SUCCESS, so the breaker never tripped. Measured: 500 and 429 both
+            # returned empty-200 indefinitely while a healthy call still worked,
+            # i.e. a degraded DB silently served "no documents" forever and the
+            # application could not tell retrieval was broken.
+            # Connection-level faults already fail closed; this makes the
+            # QUERY-level failure behave the same. Raising lets retriever_stage
+            # record the error, open the breaker, and return a block verdict.
             LOG.exception("ChromaDB query failed for collection '%s'", namespaced)
-            return []
+            raise
 
         documents: list[dict[str, Any]] = []
         ids = results.get("ids", [[]])[0]
@@ -239,13 +484,45 @@ class ChromaDBClient:
         metadatas = results.get("metadatas", [[]])[0]
         distances = results.get("distances", [[]])[0]
 
+        # RAG-05b: Chroma's distance is whatever its collection SPACE emits —
+        # squared L2 for the default ``l2`` space, i.e. 2x the cosine distance the
+        # policy's ``anomaly_distance_threshold`` is defined in. Normalize to a
+        # cosine distance here so downstream absolute-threshold math (ranker
+        # anomaly detection, trust scoring, relevance filtering) is comparing like
+        # with like; when the scale cannot be PROVEN the raw value is kept and
+        # marked "unknown" rather than guessed at.
+        space = _chroma_collection_space(collection)
+        distances, distance_metric = _chroma_cosine_distances(distances, space)
+        if distance_metric != "cosine":
+            LOG.warning(
+                "ChromaDB collection '%s': distance scale is not provably cosine "
+                "(space=%s) — emitting raw distances marked _distance_metric=unknown. "
+                "Absolute anomaly_distance_threshold comparisons are NOT calibrated "
+                "for this collection; the scale-invariant 2-sigma path still applies.",
+                namespaced, space or "undetermined",
+            )
+
         for i, doc_id in enumerate(ids):
-            documents.append({
+            doc: dict[str, Any] = {
                 "id": doc_id,
                 "content": docs[i] if i < len(docs) else "",
                 "metadata": metadatas[i] if i < len(metadatas) else {},
                 "distance": distances[i] if i < len(distances) else 0.0,
-            })
+                # Firewall-internal marker (underscore keys are stripped before
+                # client egress by main._strip_internal_doc_fields): tells a
+                # downstream consumer whether ``distance`` is provably a cosine
+                # distance or an uncalibrated provider-native number.
+                "_distance_metric": distance_metric,
+            }
+            if distance_metric == "cosine":
+                # Emit the similarity alongside the distance (parity with the
+                # Pinecone path) so the retriever's relevance filter stops
+                # deriving it. Clamped to [0,1]: the filter is defined on a
+                # similarity, and this is never BELOW the value the filter would
+                # have derived from ``distance``, so it cannot drop a document
+                # that previously survived.
+                doc["score"] = min(max(1.0 - float(doc["distance"]), 0.0), 1.0)
+            documents.append(doc)
 
         return documents
 
@@ -290,7 +567,15 @@ class ChromaDBClient:
         # upstream in the RAG pipeline.
         client = self._get_client()
         namespaced = self._build_collection_name(project_id, collection_name)
-        collection = client.get_or_create_collection(name=namespaced)
+        # RAG-05b: pin the space to cosine so a NEW collection speaks the same
+        # unit as the policy's ``anomaly_distance_threshold`` instead of Chroma's
+        # default squared-L2. This only affects collections created here — on an
+        # existing collection Chroma ignores the metadata and keeps its original
+        # space (verified on 1.5.9: no raise, no mutation), which is why
+        # ``_query_sync`` still converts on read.
+        collection = client.get_or_create_collection(
+            name=namespaced, metadata={"hnsw:space": "cosine"},
+        )
         kwargs: dict[str, Any] = {"ids": ids, "documents": documents}
         if metadatas:
             kwargs["metadatas"] = metadatas
@@ -345,7 +630,11 @@ class ChromaDBClient:
     def _create_collection_sync(self, collection_name: str, project_id: str) -> str:
         client = self._get_client()
         namespaced = self._build_collection_name(project_id, collection_name)
-        client.get_or_create_collection(name=namespaced)
+        # RAG-05b: see _add_sync — new collections are created in cosine space so
+        # their distances match the policy contract's unit.
+        client.get_or_create_collection(
+            name=namespaced, metadata={"hnsw:space": "cosine"},
+        )
         return namespaced
 
     async def create_collection(self, collection_name: str, project_id: str = "") -> str:
@@ -398,6 +687,7 @@ class PineconeClient:
         embedding_api_key: str = "",
         reranker_model: str = "",
         is_org_byok: bool = False,
+        embedding_dimension: int | None = None,
     ) -> None:
         self._api_key = api_key
         self._environment = environment
@@ -415,6 +705,17 @@ class PineconeClient:
         # client, where one account holds many tenants' indexes and listing must
         # stay namespace-scoped to avoid leaking other tenants' collection names.
         self._is_org_byok = bool(is_org_byok)
+        # RAG-32: the collection policy's ``embedding_dimension``, enforced
+        # FAIL-CLOSED against the vectors actually produced. The only prior check
+        # compared the policy value to a CLIENT-SUPPLIED body field, so simply
+        # omitting ``embedding_dimension`` from the request skipped it entirely
+        # and a 1024-dim index happily served a 1536-pinned collection — the
+        # firewall never saw the mismatch, the provider SDK did. ``embed_texts``
+        # already implements the check (byok_embedder.expected_dim); it was just
+        # never given the value.
+        self._embedding_dimension = (
+            int(embedding_dimension) if embedding_dimension else None
+        )
         self._executor = ThreadPoolExecutor(
             max_workers=thread_pool_size,
             thread_name_prefix="pinecone",
@@ -531,6 +832,8 @@ class PineconeClient:
             input_type=input_type,
             pinecone_client=self._get_client() if is_pinecone_hosted else None,
             provider_api_key=None if is_pinecone_hosted else (self._embedding_api_key or None),
+            # RAG-32: enforce the operator's pinned dimension on the REAL vectors.
+            expected_dim=self._embedding_dimension,
         )
 
     def _query_sync(
@@ -543,7 +846,7 @@ class PineconeClient:
     ) -> list[dict[str, Any]]:
         """Synchronous Pinecone query execution."""
         pc = self._get_client()
-        namespace = f"{project_id}__{collection_name}"
+        namespace = _tenant_namespace(project_id, collection_name)
 
         try:
             index = pc.Index(collection_name)
@@ -599,6 +902,12 @@ class PineconeClient:
                 # (it defaulted to 1.0 — a silent no-op — when only `distance`
                 # was present, so degenerate matches were never filtered). (H6)
                 "score": _raw_score,
+                # RAG-05b metric marker (underscore keys are stripped before
+                # client egress). Pinecone already emits a true cosine distance
+                # via ``1 - score``, which is the unit the policy's
+                # ``anomaly_distance_threshold`` is defined in — declare it so a
+                # downstream consumer never has to guess the scale.
+                "_distance_metric": "cosine",
             })
 
         return documents
@@ -644,7 +953,7 @@ class PineconeClient:
         project_id: str,
     ) -> int:
         pc = self._get_client()
-        namespace = f"{project_id}__{collection_name}"
+        namespace = _tenant_namespace(project_id, collection_name)
         try:
             index = pc.Index(collection_name)
         except Exception:
@@ -709,7 +1018,7 @@ class PineconeClient:
 
     def _delete_sync(self, collection_name: str, ids: list[str], project_id: str) -> int:
         pc = self._get_client()
-        namespace = f"{project_id}__{collection_name}"
+        namespace = _tenant_namespace(project_id, collection_name)
         try:
             index = pc.Index(collection_name)
             index.delete(ids=ids, namespace=namespace)
@@ -809,42 +1118,27 @@ class MilvusClient:
         where: dict[str, Any] | None,
         project_id: str,
     ) -> list[dict[str, Any]]:
-        """Synchronous Milvus search execution."""
+        """Synchronous Milvus search execution.
+
+        FAIL-CLOSED by contract: the Milvus client does not embed the query text (no
+        embedding model is wired here), so a real vector search is impossible; searching
+        with a placeholder vector would return arbitrary nearest-neighbours as if they
+        were real matches — silently-wrong RAG. So this RAISES (the retriever turns that
+        into a clean block) instead of returning results.
+
+        RAG-13 (2026-08-03): the previous implementation checked ``Collection(name=…)``
+        first inside a bare ``except Exception: return []``. Because the tenant namespace
+        contains hyphens (invalid in a Milvus identifier), that check raised for EVERY
+        tenant and was swallowed into a silent empty-200 — a hard failure disguised as
+        "no results found" (a red-team-confirmed silent-wrong bypass), so the intended
+        fail-closed raise below was never reached. We no longer probe the collection (the
+        query fail-closes regardless), and the name is now sanitized so it is at least a
+        valid Milvus identifier for when server-side embedding is wired.
+        """
         self._ensure_connection()
-        namespaced = f"{project_id}__{collection_name}"
-
-        try:
-            from pymilvus import Collection
-
-            collection = Collection(name=namespaced)
-            collection.load()
-        except Exception:
-            LOG.warning("Milvus collection '%s' not found or not loadable", namespaced)
-            return []
-
-        search_params: dict[str, Any] = {
-            "metric_type": "COSINE",
-            "params": {"nprobe": 10},
-        }
-
-        expr = None
-        if where:
-            conditions = []
-            for field_name, field_value in where.items():
-                if isinstance(field_value, str):
-                    conditions.append(f'{field_name} == "{field_value}"')
-                elif isinstance(field_value, (int, float)):
-                    conditions.append(f"{field_name} == {field_value}")
-            if conditions:
-                expr = " and ".join(conditions)
-
-        # FAIL-CLOSED: the Milvus client does not embed the query text (no
-        # embedding model is wired here), so a real vector search is not
-        # possible. Searching with a placeholder zero vector returns arbitrary
-        # nearest-neighbours as if they were real matches — silently-wrong RAG.
-        # RAISE (instead of a quiet empty-200) so the retriever surfaces a
-        # retrieval_error/block, consistent with the Pinecone fail-closed path
-        # and the byok_embedder contract.
+        # RAG-03: guarded builder — fail CLOSED on a missing tenant key (parity with the
+        # Chroma/Pinecone paths; never query the shared None__ namespace).
+        namespaced = _milvus_collection_name(_tenant_namespace(project_id, collection_name))
         try:
             from byok_embedder import EmbeddingConfigError
         except ImportError:  # pragma: no cover - top-level import path
@@ -852,7 +1146,7 @@ class MilvusClient:
         raise EmbeddingConfigError(
             f"Milvus query embedding is not implemented for collection "
             f"'{namespaced}'; refusing to search with a placeholder vector "
-            f"(fail-closed). Configure a provider with an embedding model."
+            f"(fail-closed). Configure a provider with a wired embedding model."
         )
 
     async def query(

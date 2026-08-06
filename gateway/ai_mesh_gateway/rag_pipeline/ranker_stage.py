@@ -16,6 +16,17 @@ LOG = logging.getLogger("gateway.rag_pipeline.ranker_stage")
 
 _REDACTED_PLACEHOLDER = "[REDACTED]"
 
+# RAG-05a: trust ceiling applied to a document the guard flagged as a LOWER-tail
+# distance outlier (near-duplicate / "cloned authority" poisoning — see
+# ContextGuard.detect_near_duplicate_anomaly). 0.5 is chosen deliberately:
+#   * it sits well below the ~1.0 score an ordinary in-band document earns, so a
+#     clone can no longer sort to rank 1, and
+#   * it equals the STRICTEST escalation ``trust_score_minimum`` (level 2 = 0.5)
+#     and that gate is ``>=``, so capping never pushes a document below the
+#     minimum at ANY escalation level. This is a demotion, never a drop — the
+#     detector must not escalate the operator's chosen action.
+_NEAR_DUPLICATE_TRUST_CAP = 0.5
+
 
 def _redact_sensitive_fields(documents: list, sensitive_fields: list) -> int:
     """Redact policy-declared sensitive metadata fields from retrieved docs.
@@ -46,12 +57,19 @@ def _redact_sensitive_fields(documents: list, sensitive_fields: list) -> int:
     return redacted
 
 
-def compute_trust_score(document: dict, policy: dict) -> float:
+def compute_trust_score(document: dict, policy: dict, *, near_duplicate: bool = False) -> float:
     """Compute a trust score [0.0-1.0] for a retrieved document.
 
     Canonical implementation (moved from rag_orchestrator.py).
     Score degrades as distance approaches anomaly threshold.
     Bonuses for verified_source (+0.1) and system-created (+0.05).
+
+    RAG-05a: ``near_duplicate=True`` caps the result at
+    ``_NEAR_DUPLICATE_TRUST_CAP``. The distance term above only ever penalises a
+    HIGH distance, so a cloned document sitting at distance ~0.01 scored a
+    perfect 1.0 and out-ranked the corpus it was cloned from. Keyword-only with a
+    safe default: ``compute_trust_score`` is re-exported by rag_orchestrator and
+    called positionally elsewhere, and every existing caller keeps its behaviour.
     """
     score = 1.0
     distance = document.get("distance", 0.0)
@@ -63,7 +81,24 @@ def compute_trust_score(document: dict, policy: dict) -> float:
         score += 0.1
     if metadata.get("created_by") == "system":
         score += 0.05
-    return max(0.0, min(1.0, round(score, 3)))
+    score = max(0.0, min(1.0, round(score, 3)))
+    if near_duplicate:
+        score = min(score, _NEAR_DUPLICATE_TRUST_CAP)
+    return score
+
+
+def _with_near_duplicates(out: RankerStageOutput, indices: list[int]) -> RankerStageOutput:
+    """RAG-05a: attach lower-tail (near-duplicate) indices to the stage output.
+
+    ``RankerStageOutput`` is a shared contract consumed by pipeline.py, so the
+    indices ride as an attribute rather than a new contract field; every existing
+    consumer is untouched. Kept DISTINCT from ``anomalous_indices`` on purpose —
+    that list drives the "all documents anomalous -> BLOCK" path and the
+    escalation ``block_on_any_flag`` gate, neither of which a near-duplicate may
+    ever trigger (flag + trust demotion only).
+    """
+    out.near_duplicate_indices = list(indices)
+    return out
 
 
 class RankerStage:
@@ -92,18 +127,23 @@ class RankerStage:
         initial_count = len(documents)
         escalation = get_escalation_config(inp.escalation_level)
         anomalous_indices: list[int] = []
+        near_duplicate_indices: list[int] = []
         flagged_indices: list[int] = []
         trust_scores: dict[int, float] = {}
 
         if not documents:
-            return RankerStageOutput(
-                verdict=StageVerdict(action="allow"),
+            return _with_near_duplicates(
+                RankerStageOutput(verdict=StageVerdict(action="allow")),
+                near_duplicate_indices,
             )
 
         if self._guard is None:
-            return RankerStageOutput(
-                verdict=StageVerdict(action="allow"),
-                ranked_documents=documents,
+            return _with_near_duplicates(
+                RankerStageOutput(
+                    verdict=StageVerdict(action="allow"),
+                    ranked_documents=documents,
+                ),
+                near_duplicate_indices,
             )
 
         # ── 1. Embedding anomaly detection (escalation-adjusted threshold) ──
@@ -142,6 +182,33 @@ class RankerStage:
 
             anomalous_indices = self._guard.detect_embedding_anomaly(distances, adjusted_threshold)
 
+            # RAG-05a: the LOWER distance tail — a document matching the query far
+            # more tightly than the genuine corpus does — is the near-duplicate /
+            # "cloned authority" signature (seed a near-copy of a real document
+            # that contradicts it; its ~0 distance made it the single best match).
+            # Advisory ONLY: these indices must never join ``anomalous_indices``,
+            # which drops documents and blocks outright when it covers the whole
+            # set. Marked on the documents here — before the anomaly filter below
+            # renumbers them — so the mark survives filtering and re-ranking.
+            # Probed via getattr: guards predating this detector stay supported.
+            _near_dup_detect = getattr(self._guard, "detect_near_duplicate_anomaly", None)
+            if callable(_near_dup_detect):
+                try:
+                    near_duplicate_indices = list(_near_dup_detect(distances) or [])
+                except (TypeError, ValueError):
+                    near_duplicate_indices = []  # malformed distances never break ranking
+                for i in near_duplicate_indices:
+                    if 0 <= i < len(documents):
+                        documents[i]["_near_duplicate"] = True
+                if near_duplicate_indices:
+                    LOG.warning(
+                        "RAG ranker (RAG-05a): %d near-duplicate outlier document(s) at "
+                        "indices %s — trust capped at %.2f and demoted below the genuine "
+                        "corpus (flag only, nothing dropped; project=%s).",
+                        len(near_duplicate_indices), near_duplicate_indices,
+                        _NEAR_DUPLICATE_TRUST_CAP, getattr(inp, "project_id", ""),
+                    )
+
             if anomalous_indices:
                 anomalous_set = set(anomalous_indices)
                 filtered_documents = [doc for i, doc in enumerate(documents) if i not in anomalous_set]
@@ -160,10 +227,17 @@ class RankerStage:
 
         # ── 2. Trust scoring and re-ranking ──
         for i, doc in enumerate(documents):
-            ts = compute_trust_score(doc, inp.policy)
+            ts = compute_trust_score(
+                doc, inp.policy, near_duplicate=bool(doc.get("_near_duplicate"))
+            )
             doc["_trust_score"] = ts
             trust_scores[i] = ts
-        documents.sort(key=lambda d: d.get("_trust_score", 0.0), reverse=True)
+        # RAG-05a: a near-duplicate outlier sorts AFTER every genuine document
+        # regardless of score, so a clone cannot take rank 1 even in the corner
+        # where the genuine corpus itself scores at or below the trust cap.
+        # Within each group the order is unchanged (descending trust, stable),
+        # so a result set with no near-duplicates ranks exactly as it did before.
+        documents.sort(key=lambda d: (bool(d.get("_near_duplicate")), -d.get("_trust_score", 0.0)))
 
         # Drop docs below escalation-adjusted trust minimum
         if escalation.trust_score_minimum > 0:
@@ -197,18 +271,21 @@ class RankerStage:
                     documents = [doc for i, doc in enumerate(documents) if i not in flagged_set]
                 else:
                     # No specific docs flagged = entire batch rejected
-                    return RankerStageOutput(
-                        verdict=StageVerdict(
-                            action="block",
-                            threat_type=str(scan_threat) if scan_threat else "context_scan",
-                            confidence=scan_confidence,
-                            detail=str(scan_detail),
-                            matched_patterns=list(scan_patterns) if scan_patterns else [],
+                    return _with_near_duplicates(
+                        RankerStageOutput(
+                            verdict=StageVerdict(
+                                action="block",
+                                threat_type=str(scan_threat) if scan_threat else "context_scan",
+                                confidence=scan_confidence,
+                                detail=str(scan_detail),
+                                matched_patterns=list(scan_patterns) if scan_patterns else [],
+                            ),
+                            anomalous_indices=anomalous_indices,
+                            flagged_indices=flagged_list,
+                            trust_scores=trust_scores,
+                            documents_removed=initial_count,
                         ),
-                        anomalous_indices=anomalous_indices,
-                        flagged_indices=flagged_list,
-                        trust_scores=trust_scores,
-                        documents_removed=initial_count,
+                        near_duplicate_indices,
                     )
             elif scan_flagged:
                 flagged_set = set(scan_flagged)
@@ -319,21 +396,38 @@ class RankerStage:
         elif anomaly_removed_all:
             verdict_threat = "anomaly"
             verdict_detail = "All retrieved documents matched anomaly heuristics; dropped (fail-closed), none served"
+        elif anomalous_indices:
+            verdict_threat = "anomaly"
+            verdict_detail = ""
+        elif near_duplicate_indices:
+            # RAG-05a: observable in the verdict, but ``verdict_action`` is NOT
+            # touched — it stays whatever the operator's controls resolved to
+            # (allow, by default). A detector may surface a threat_type; it may
+            # never escalate the action. Deliberately excluded from the
+            # ``block_on_any_flag`` gate above for the same reason.
+            verdict_threat = "near_duplicate"
+            verdict_detail = (
+                f"{len(near_duplicate_indices)} near-duplicate outlier document(s) "
+                "demoted below the genuine corpus (trust capped); none dropped"
+            )
         else:
-            verdict_threat = "anomaly" if anomalous_indices else ""
+            verdict_threat = ""
             verdict_detail = ""
 
-        return RankerStageOutput(
-            verdict=StageVerdict(
-                action=verdict_action,
-                threat_type=verdict_threat,
-                confidence=0.4 if (anomaly_removed_all or sensitive_redactions) else 0.0,
-                detail=verdict_detail,
+        return _with_near_duplicates(
+            RankerStageOutput(
+                verdict=StageVerdict(
+                    action=verdict_action,
+                    threat_type=verdict_threat,
+                    confidence=0.4 if (anomaly_removed_all or sensitive_redactions) else 0.0,
+                    detail=verdict_detail,
+                ),
+                ranked_documents=documents,
+                anomalous_indices=anomalous_indices,
+                flagged_indices=flagged_indices,
+                trust_scores=trust_scores,
+                documents_removed=removed,
+                approved_manifest=approved_manifest,
             ),
-            ranked_documents=documents,
-            anomalous_indices=anomalous_indices,
-            flagged_indices=flagged_indices,
-            trust_scores=trust_scores,
-            documents_removed=removed,
-            approved_manifest=approved_manifest,
+            near_duplicate_indices,
         )

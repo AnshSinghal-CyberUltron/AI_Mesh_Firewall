@@ -42,6 +42,10 @@ class QueryStageInput:
     namespace: str
     policy: dict[str, Any]
     key_hash: str
+    # RAG-27: the org's RAG-domain compiled policy bundle, so operator rules
+    # scoped to pipeline_stage="query" actually evaluate. Optional with a safe
+    # default so every existing constructor call keeps working unchanged.
+    compiled_policies: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -74,6 +78,9 @@ class RetrieverStageInput:
     policy: dict[str, Any]
     escalation_level: int
     key_hash: str
+    # RAG-30: org RAG-domain bundle so rules scoped to pipeline_stage="retriever"
+    # evaluate. Optional with a safe default — existing constructors unchanged.
+    compiled_policies: list[dict[str, Any]] = field(default_factory=list)
     # Request-scoped vector client resolved from the caller's per-org provider
     # config (VectorProviderConfig). When set, the retriever uses it instead of
     # the pipeline's static, env-built client dict — this is what lets an org's
@@ -133,6 +140,9 @@ class GeneratorStageInput:
     escalation_level: int
     key_hash: str
     approved_manifest: list[DocumentManifest] = field(default_factory=list)
+    # RAG-30: org RAG-domain bundle so rules scoped to pipeline_stage="generator"
+    # evaluate. Optional with a safe default — existing constructors unchanged.
+    compiled_policies: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

@@ -147,10 +147,81 @@ class QueryStage:
             except Exception as e:
                 LOG.warning("Embedding vault check failed (fail-open, layer skipped): %s", e)
 
+        # ── RAG-27: operator policy rules scoped to the QUERY stage ──
+        # The control plane lets an operator target a rule at pipeline_stage
+        # "query" / "retriever" / "ranker" / "generator", and the UI advertises
+        # all four. Only ranker_stage ever called ``evaluate_for_stage``, so a
+        # rule scoped to "query" saved, compiled, shipped to Redis and displayed
+        # as Enabled while evaluating ZERO times — a silent bypass the UI itself
+        # invites. This evaluates the org's RAG-domain bundle against the raw
+        # query text with stage="query"; rules with an empty pipeline_stage
+        # already match every stage, so they are unaffected here (the ranker
+        # still evaluates them against document content, which is a different
+        # haystack and a different decision).
+        if inp.compiled_policies:
+            try:
+                try:
+                    from policy_engine import evaluate_for_stage
+                except ImportError:
+                    from gateway.policy_engine import evaluate_for_stage
+                _pol = evaluate_for_stage(
+                    prompt=inp.query_text,
+                    response_text="",
+                    compiled_policies=inp.compiled_policies,
+                    stage="query",
+                    actor=getattr(inp, "actor", None),
+                )
+                if _pol.action == "block":
+                    LOG.info(
+                        "RAG query blocked by operator policy rule (RAG-27): %s",
+                        _pol.message,
+                    )
+                    return QueryStageOutput(
+                        verdict=StageVerdict(
+                            action="block",
+                            threat_type="policy_violation",
+                            confidence=1.0,
+                            detail=_pol.message or "Blocked by policy",
+                            matched_patterns=[],
+                        ),
+                        sanitized_query=inp.query_text,
+                        original_query=inp.query_text,
+                        injection_flags=list(_pol.matched_rule_names or []),
+                        scan_tier="policy",
+                        latency_ms=(time.perf_counter() - start) * 1000,
+                    )
+            except Exception:  # noqa: BLE001
+                # Advisory layer: a malformed bundle must never break retrieval.
+                # (The scanner below is the baseline control and still runs.)
+                LOG.warning("RAG-27 query-stage policy evaluation failed", exc_info=True)
+
         # ── Scanner: Tier1 regex + Tier1.5 fuzzy + optional Tier2 Bedrock ──
         scan_tier = "none"
         if self._scanner is not None:
-            verdict = await self._scanner.scan_prompt(inp.query_text, is_rag=True)
+            # RAG-33: honor the org's Tier-2 (Bedrock guard model) switch.
+            # This stage called the Tier-1-only ``scan_prompt``, so semantic-only
+            # injections — the exact class Tier-2 exists to catch — passed on the
+            # RAG path even when the operator had Tier-2 ON for the org. (RAG
+            # INGEST already ran Tier-2, so the asymmetry was query-vs-ingest,
+            # not just RAG-vs-chat.)
+            # The override is passed BY IDENTITY: the scanner distinguishes None
+            # ("no org opinion — use the gateway default") from False ("the
+            # operator explicitly turned it OFF"), so collapsing them with
+            # ``or``/``bool()`` would silently re-enable a stage the operator
+            # disabled. Default stays OFF (FirewallConfig.rag_tier2_enabled
+            # default=False) — Tier-2 runs only when the operator switches it on.
+            _t2 = inp.policy.get("rag_tier2_enabled", None)
+            _scan_t2 = getattr(self._scanner, "scan_prompt_with_tier2", None)
+            if _t2 is True and callable(_scan_t2):
+                verdict = await _scan_t2(
+                    inp.query_text,
+                    is_rag=True,
+                    org_tier2_override=True,
+                    org_slug=str(inp.policy.get("_org_slug", "") or ""),
+                    org_tier2_strict=bool(inp.policy.get("tier2_strict", True)),
+                )
+            else:
+                verdict = await self._scanner.scan_prompt(inp.query_text, is_rag=True)
             scan_tier = getattr(verdict, "tier", "tier_1") or "tier_1"
             # Per-request policy overrides the static startup config so the RAG
             # query stage honors the SAME per-org FirewallConfig the chat path
@@ -181,8 +252,45 @@ class QueryStage:
                 inp.query_text, verdict, input_scan_enabled=input_scan_on
             )
             threshold = _thr("prompt_injection_threshold", 0.80)
-            rewrite_threshold = _thr("prompt_rewrite_threshold", 0.50)
-            downgrade_threshold = _thr("prompt_downgrade_threshold", 0.40)
+            # RAG-12c: the threshold band must stay MONOTONIC. The rewrite arm below
+            # fires on ``rewrite_threshold <= confidence < threshold``, so RAISING the
+            # block threshold WIDENED the rewrite band and silently converted hard
+            # blocks into pass-with-rewrite: at the fully-legal max 1.0, rag_poisoning
+            # (0.9), tier-0.5 obfuscated injection (0.95), obfuscated pii/secret (0.9)
+            # and tier-1.5 fuzzy (0.75-1.0) ALL flipped from block to rewrite. Clamping
+            # to ``threshold`` makes the band COLLAPSE rather than invert as the block
+            # threshold rises — raising it can now only block more, never less.
+            rewrite_threshold = min(_thr("prompt_rewrite_threshold", 0.50), threshold)
+            downgrade_threshold = min(
+                _thr("prompt_downgrade_threshold", 0.40), rewrite_threshold
+            )
+            # RAG-12c: rewriting silently EDITS the user's query — an enforcement
+            # action in its own right. The north-star invariant is that the firewall
+            # never takes an action the operator did not select, so the rewrite arm is
+            # opt-in per-org (default OFF). With it off a would-be rewrite is NOT newly
+            # blocked: it falls through to the sub-threshold arm and returns allow+flag,
+            # so this can only relax enforcement, never over-block.
+            rewrite_enabled = bool(
+                inp.policy.get(
+                    "rag_rewrite_enabled", self._config.get("rag_rewrite_enabled", False)
+                )
+            )
+
+            # ── RAG-12b: scanner ``redact`` verdicts were invisible in the audit ──
+            #
+            # The scanner returns action="redact" for pii (0.85) / secret (0.9) /
+            # credential (0.9) / multi-turn-split (0.85). Every arm below gates on
+            # "block" or ("block", "flag"), so "redact" matched NONE of them and the
+            # request fell through to the terminal action="allow" return — a query
+            # carrying a live AWS key was audited as clean. (The data leak itself is
+            # already closed: ``embed_query`` above is the redacted text.) Record the
+            # detection so the stage verdict and telemetry stop under-reporting it.
+            # This is the SAME treatment the sub-threshold arm already gives a "flag"
+            # verdict, and the same treatment Tier-2 redaction already gets (the
+            # Bedrock adapter maps recommended="redact" onto action="flag") — Tier-1
+            # redact was the ONLY detection class missing from the audit trail.
+            if verdict.action == "redact" and verdict.threat_type:
+                injection_flags.append(verdict.threat_type)
 
             if verdict.action == "block" and verdict.confidence >= threshold:
                 # Hard block: confidence exceeds block threshold
@@ -213,9 +321,53 @@ class QueryStage:
                     intent_verdict=intent_result,
                 )
 
+            # ── RAG-12b: fail-closed when redaction DETECTED but could not mask ──
+            #
+            # Ported from the ingest path's byte-verify (G4). ``_redact_pii`` is
+            # best-effort by design, so a pii/secret verdict whose redactor handed back
+            # byte-identical text means the detector found a value it has no mask for —
+            # embedding it ships the raw value to the third-party embedding provider.
+            # Gated on the operator's EXISTING ``scan_block_on_pii`` posture (default
+            # OFF, matching config.py:109) — FROZEN invariant: no action the operator
+            # did not select. With the posture off this stays a flag-only detection
+            # (recorded above) and the query proceeds exactly as it does today.
+            if self._redaction_incomplete(inp.query_text, embed_query, verdict, input_scan_on):
+                block_on_pii = bool(
+                    inp.policy.get(
+                        "scan_block_on_pii", self._config.get("scan_block_on_pii", False)
+                    )
+                )
+                LOG.warning(
+                    "Query redaction masked NOTHING for a %s detection (%s) — "
+                    "unmaskable value would be embedded (block_on_pii=%s)",
+                    verdict.threat_type, verdict.detail, block_on_pii,
+                )
+                if block_on_pii:
+                    return QueryStageOutput(
+                        verdict=StageVerdict(
+                            action="block",
+                            threat_type=verdict.threat_type,
+                            confidence=verdict.confidence,
+                            detail=(
+                                f"{verdict.threat_type} detected but not maskable — "
+                                f"refusing to embed unredacted query: {verdict.detail}"
+                            ),
+                            matched_patterns=verdict.matched_patterns,
+                        ),
+                        sanitized_query=inp.query_text,
+                        original_query=inp.query_text,
+                        injection_flags=injection_flags,
+                        scan_tier=scan_tier,
+                        latency_ms=(time.perf_counter() - start) * 1000,
+                        embedding_vault_verdict=vault_result,
+                        intent_verdict=intent_result,
+                    )
+
             # Rewrite path: confidence between rewrite and block thresholds
+            # (RAG-12c: gated on the operator's explicit ``rag_rewrite_enabled`` opt-in)
             if (
-                verdict.action in ("block", "flag")
+                rewrite_enabled
+                and verdict.action in ("block", "flag")
                 and rewrite_threshold <= verdict.confidence < threshold
                 and verdict.matched_patterns
             ):
@@ -400,6 +552,30 @@ class QueryStage:
                 redacted = redacted.replace(run, f"***-***-{run[-4:]}")
         return redacted
 
+    def _redaction_incomplete(
+        self, original: str, redacted: str, verdict: Any, input_scan_enabled: bool
+    ) -> bool:
+        """RAG-12b: True when a pii/secret verdict produced NO masking at all.
+
+        ``_redact_pii`` is best-effort by design (see its docstring): it never
+        raises, so "the redactor could not mask what the detector found" was
+        indistinguishable from "nothing needed masking" and the raw value was
+        embedded silently. This is the query-path analog of the ingest path's
+        byte-verify (G4): the verdict NAMES a pii/secret detection, yet the
+        verdict-aware redactor plus the 7+-digit backstop handed back
+        byte-identical text — so the detected value survives into the embedding
+        request to the third-party provider.
+
+        Returns False (never a detection) when redaction did not run at all —
+        no scanner, or input scanning disabled — since unchanged text is the
+        expected, operator-selected outcome there, not a failure.
+        """
+        if self._scanner is None or not input_scan_enabled:
+            return False
+        if getattr(verdict, "threat_type", "") not in ("pii", "secret"):
+            return False
+        return bool(original) and redacted == original
+
     @staticmethod
     def _attempt_rewrite(query: str, patterns: list[str]) -> str:
         """Strip injection patterns while preserving legitimate query content.
@@ -407,14 +583,28 @@ class QueryStage:
         Returns the cleaned query if meaningful content remains (>20% of
         original length), otherwise returns empty string so the caller
         can fall through to another action.
+
+        RAG-12d: ``patterns`` is ``ScanVerdict.matched_patterns``, which holds
+        matched TEXT / evidence — never a regex. Every producer stores either the
+        matched span (``redact_all(match.group(0))``), a detector LABEL
+        (``list(pii_matched.keys())``), or free-text Tier-2 Bedrock evidence
+        (``bedrock_evidence[:5]``). Compiling that as a PATTERN treated
+        attacker-influenced text as code: a stray ``[`` raised ``re.error`` and a
+        nested quantifier (``(((((a+)+)+)+)+)$``) is catastrophic backtracking
+        (ReDoS) burning the request thread. Latent today because no reachable
+        producer carries metacharacters — but live the moment Tier-2 is enabled,
+        since Bedrock free-text evidence flows straight in. ``re.escape`` makes
+        every pattern a LITERAL sequence: no metacharacter is interpreted, and a
+        literal pattern cannot backtrack. ``re.IGNORECASE`` is kept (rather than a
+        plain ``str.replace``) because the Tier-0.5 producer stores evidence taken
+        from the LOWERCASED deobfuscation buffer, which a case-sensitive replace
+        would silently fail to strip.
         """
         rewritten = query
         for pattern in patterns:
-            try:
-                rewritten = re.sub(pattern, "", rewritten, flags=re.IGNORECASE).strip()
-            except re.error:
-                # Pattern may not be a valid regex — try literal removal
-                rewritten = rewritten.replace(pattern, "").strip()
+            rewritten = re.sub(
+                re.escape(str(pattern)), "", rewritten, flags=re.IGNORECASE
+            ).strip()
         # Collapse multiple spaces
         rewritten = re.sub(r"\s{2,}", " ", rewritten).strip()
         # Only return if meaningful content remains

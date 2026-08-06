@@ -65,7 +65,15 @@ _BOOL_KEYS = (
 )
 _NUM_KEYS = (  # bools are explicitly excluded in _value_type_ok
     "requests_per_minute", "burst_limit", "toxicity_threshold",
-    "prompt_injection_threshold", "tier2_stream_hold_timeout_ms",
+    # RAG-12c: ``prompt_rewrite_threshold``/``prompt_downgrade_threshold`` are
+    # already propagated per-request by main.py (:12260) and vector_routes
+    # (_RAG_GUARDRAIL_KEYS) and read by the RAG QueryStage, but they were MISSING
+    # here — so an org payload carrying them was not recognised as numeric and the
+    # pair was not per-org syncable. That left the operator unable to move the
+    # rewrite band after raising ``prompt_injection_threshold``, which is what made
+    # the non-monotonic block→rewrite flip unfixable from the control plane.
+    "prompt_injection_threshold", "prompt_rewrite_threshold",
+    "prompt_downgrade_threshold", "tier2_stream_hold_timeout_ms",
     "routing_risk_weight", "routing_cost_weight", "routing_latency_weight",
     "routing_priority_weight", "hallucination_grounding_threshold",
     "max_response_tokens", "rag_default_max_results",

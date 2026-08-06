@@ -459,9 +459,16 @@ async def test_embedding_model_allowlist_and_type_confusion_enforced(rig):
 
 @pytest.mark.asyncio
 async def test_rag_native_fields_on_chat_are_dropped_not_forwarded(rig):
-    """A caller-supplied ``rag_context`` / ``documents`` payload on a chat
-    request is NOT relayed to the provider — so it cannot be used to smuggle
-    an unscanned retrieved corpus past the firewall onto the wire."""
+    """A caller-supplied ``rag_context`` / ``documents`` payload on a chat request is NOT
+    relayed to the provider and never reaches the model — it is inert.
+
+    RAG-02 (2026-08-03): the request is now correctly CLASSIFIED as RAG (for governance/
+    telemetry) via the preserved-off-raw-body path, but because the fields are inert the
+    gateway does not content-block on them (blocking inert, legitimately-large retrieved
+    corpora over-blocked real RAG traffic). The internal reserved key must also not leak
+    into the upstream body. Retrieved context that actually reaches the model — carried in
+    a message — IS scanned (see the companion system-message test below).
+    """
     _client, raw, up, _gm = rig
     r = await raw.post("/v1/chat/completions", headers=AUTH, json={
         "model": "gpt-4o-mini",
@@ -472,6 +479,7 @@ async def test_rag_native_fields_on_chat_are_dropped_not_forwarded(rig):
     assert r.status_code == 200
     sent = up.last_chat()
     assert sent.get("rag_context") is None and sent.get("documents") is None
+    assert sent.get("_zs_declared_rag_context") is None  # reserved key never leaks upstream
 
 
 @pytest.mark.asyncio
