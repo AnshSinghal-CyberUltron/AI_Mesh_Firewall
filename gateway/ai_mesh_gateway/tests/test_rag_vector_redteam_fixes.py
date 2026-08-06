@@ -431,30 +431,17 @@ def test_rag04_encoded_secret_backstop_leaves_benign_base64_untouched():
     assert _redact_retrieved_pii(text) == text
 
 
-@pytest.mark.parametrize("text,secret", [
-    ("the DB password is Sup3rS3cret2026", "Sup3rS3cret2026"),
-    ("the api key for prod is Xyz9-abc123def", "Xyz9-abc123def"),
-    ("the passphrase was hunter2-Zx99", "hunter2-Zx99"),
-])
-def test_rag04_prose_credential_redacted(text, secret):
-    """password_assignment requires a literal ':'/'=', so the prose form — the form that
-    actually appears in retrieved runbooks/wiki pages — leaked."""
-    assert secret not in _redact_retrieved_pii(text)
 
-
-@pytest.mark.parametrize("benign", [
-    "the password is required",                        # instructional prose word
-    "your password is too short",                      # value under the 8-char floor
-    "the secret is something you should never share",  # all-letter value, no digit/symbol
-    "The password is forgotten? click reset",
-    "The API key is documented in the runbook",
-    "Your secret is safe with us",
-    "a secret is a secret",
-])
-def test_rag04_prose_pattern_does_not_fire_on_benign_prose(benign):
-    """The prose pattern must not mangle ordinary documentation. Byte-identical or bust."""
-    assert _redact_retrieved_pii(benign) == benign
-
+# RAG-04 prose-credential matcher WITHDRAWN 2026-08-06 (tests removed with it).
+# It ran ahead of the semantic (Tier-2) redact path and masked the value with a
+# generic "***", pre-empting the TYPED [REDACTED_SECRET] placeholder that the
+# golden behaviour-freeze suite asserts (test_g10_semantic_redact_masks_span).
+# The span was still removed — no leak — but the typed-placeholder contract broke,
+# and emitting the typed token mid-span broke three further cases. Prose
+# credentials remain an OPEN gap; the right instrument is entropy scoring, which
+# this codebase does not have. The valuable half of RAG-04 (the length-exact
+# gh?_ pattern that leaked a real 38-char token, plus decode-before-scan) is
+# unaffected and still covered by the tests above.
 
 def test_rag04_encoded_backstop_never_raises_and_is_bounded():
     """The backstop sits on the egress hot path: it must degrade, never throw, and must

@@ -785,41 +785,6 @@ SECRET_PATTERNS: Dict[str, str] = {
     # digit, not an instructional prose word) so ``api_key=none`` / ``api key:
     # forgotten?`` stay false-positive-safe. Case-insensitive via compile_pattern.
     "api_key_assignment": r'(?:api[_-]?key|access[_-]?key)["\s]*[:=][\s"\']*' + _TOKEN_VALUE,
-    # RAG-04 (2026-08-04): every credential pattern above requires a literal ``:``/``=``
-    # separator, so a credential disclosed in PROSE — "the DB password is Sup3rS3cret2026" —
-    # egressed in cleartext (PROVEN against the retrieved-document egress redactor). Retrieved
-    # RAG chunks are natural-language documents (runbooks, wiki pages, support threads), which is
-    # exactly where the prose form appears, so the assignment-only inventory had the gap where it
-    # mattered most. Match the same cue words followed by a copula.
-    #
-    # False positives are held off by REUSING ``_CREDENTIAL_VALUE`` (the fragment
-    # ``password_assignment`` already uses) rather than inventing a value pattern: it requires >= 8
-    # non-space chars containing a digit or symbol AND rejects a leading instructional prose word,
-    # so "the password is required" (prose word), "your password is too short" (< 8 chars) and
-    # "the secret is something you should never share" (no digit/symbol) do NOT match.
-    #
-    # ``_CREDENTIAL_VALUE`` alone is NOT sufficient here. Its "looks like a secret" lookahead,
-    # ``(?=[^\s"']*[\d\W])``, can satisfy ``[\d\W]`` with the value's own TRAILING WHITESPACE —
-    # whitespace is ``\W`` and is only excluded from the ``[^\s"']*`` prefix, not from the class
-    # that terminates it. So an all-letter word passes it, and "the secret is something you should
-    # never share" matched (observed, not theorised). That is tolerable for the assignment patterns,
-    # which additionally require a literal ``:``/``=``, but a bare copula is far too common in prose
-    # to lean on. ``_CREDENTIAL_VALUE`` is left UNTOUCHED (it is shared with password_assignment /
-    # secret_assignment / exposed_password); this pattern instead prepends its OWN stricter guard:
-    # after zero or more letters there must be a char that is neither a letter nor whitespace, which
-    # forces the digit/symbol to sit INSIDE the value rather than being the space after it.
-    #
-    # ReDoS: the ``(?:\s+\w+){0,3}?`` gap is a BOUNDED (max 3) outer repetition whose body is two
-    # quantifiers over DISJOINT character classes (``\s`` vs ``\w``) — disjoint both within an
-    # iteration and across the iteration boundary — so no input can make it backtrack ambiguously.
-    # The added ``[A-Za-z]*`` guard is a single quantifier over one class inside a lookahead.
-    # Bounded outer + unambiguous inner => linear time. Case-insensitivity comes from
-    # ``compile_pattern`` (re.IGNORECASE), so no inline ``(?i)`` is needed.
-    "password_prose": (
-        r"\b(?:password|passphrase|secret|api[_ -]?key)\b"
-        r"(?:\s+\w+){0,3}?\s+(?:is|was)\s+"
-        r"(?=[A-Za-z]*[^A-Za-z\s\"'])" + _CREDENTIAL_VALUE
-    ),
     # RAG-C5-CRED-COVERAGE: standalone credential FORMATS the assignment patterns
     # above miss. detect_secrets had no Slack token / JWT / Bearer inventory, so
     # these credential forms were stored unblocked at RAG ingest (and unredacted in
@@ -1031,8 +996,6 @@ COMPLIANCE_TAG_MAP: Dict[str, List[str]] = {
     "github_token": ["SECRET"],
     "private_key_header": ["SECRET"],
     "password_assignment": ["SECRET"],
-    # RAG-04: prose-form disclosure carries the same class as the assignment form.
-    "password_prose": ["SECRET"],
     "secret_assignment": ["SECRET"],
     "token_assignment": ["SECRET"],
     "api_key_assignment": ["SECRET"],
@@ -1337,21 +1300,6 @@ def _mask_secret_assignment(m: re.Match) -> str:
     return raw[:4] + "***"
 
 
-def _mask_credential_prose(m: re.Match) -> str:
-    """RAG-04: "the password is Sup3rS3cret2026" → "the password is ***".
-
-    Keeps the cue + copula (so the sentence still reads, and an operator reviewing the
-    transcript can see WHAT was disclosed) and masks only the credential value. Without
-    this the ``[{TYPE}_REDACTED]`` fallback in ``redact_all`` would swallow the whole
-    clause. Anchored on the LAST ``is``/``was`` so a cue word inside the gap cannot shift
-    the split; falls back to masking everything when the copula is somehow absent.
-    """
-    raw = m.group(0)
-    verb = None
-    for verb in re.finditer(r"\b(?:is|was)\s+", raw, re.IGNORECASE):
-        pass
-    return (raw[: verb.end()] + "***") if verb else "***"
-
 
 
 def _mask_phone_bare_contextual(m: re.Match) -> str:
@@ -1394,7 +1342,6 @@ _PII_MASKERS = {
 
 _SECRET_MASKERS = {
     "password_assignment": _mask_secret_assignment,
-    "password_prose": _mask_credential_prose,  # RAG-04
     "secret_assignment": _mask_secret_assignment,
     "token_assignment": _mask_secret_assignment,
     "api_key_assignment": _mask_secret_assignment,
