@@ -11952,6 +11952,26 @@ def _resolve_vector_client(
 # handler: 'delete' is dropped from the fallback unconditionally).
 _RAG_ALLOW_DEFAULT_COLLECTION_FALLBACK = False
 
+# RAG-36 TWO-TIER OPERATOR MODEL — implemented, DEFAULT OFF. Flip to True to
+# enforce it: the client-egress content controls (E11 PII redaction, E11b
+# indirect-injection drop) then run ONLY where the operator selected a Tier-1
+# policy control or switched Tier-2 on.
+#
+# WHY IT DEFAULTS OFF (read before flipping): the E11b floor is UNCONDITIONAL by
+# deliberate design — it was added to close a real finding, that a pre-poisoned
+# vector in a collection WITHOUT a content policy was served to the client
+# unscanned. Three tests freeze that guarantee, including
+# ``test_retrieved_injection_drop_is_unconditional_not_ranker_gated``. Turning
+# this on REOPENS that gap for any org that has selected nothing: retrieved
+# documents carrying indirect injection or PII will be served verbatim.
+#
+# That is a legitimate operator choice — it is exactly "nothing the operator did
+# not select" — but it is a security-posture decision, not a bug fix, so it ships
+# switchable rather than silently applied. Access control is unaffected either
+# way: an unconfigured collection still fails closed at the policy gate long
+# before this block, so "no policy" never reaches here.
+_RAG_EGRESS_REQUIRES_OPERATOR_SELECTION = False
+
 # RAG-25 (2026-08-04): providers whose WRITE path has upsert (overwrite)
 # semantics, so an "insert" grant alone cannot promise insert-only.
 #   pinecone — PineconeClient.add() delegates to upsert() -> index.upsert(),
@@ -12817,9 +12837,47 @@ async def rag_query(request: Request):
         # scan is sync (ThreadPoolExecutor-backed); call it via asyncio.to_thread to
         # keep the async handler non-blocking. Fail-safe: if CONTEXT_GUARD is None,
         # skip entirely (no crash, no behaviour change).
+        # ── RAG-36 (2026-08-06): TWO-TIER OPERATOR MODEL ──
+        # Tier 1 = the RAG/Vector collection POLICY. Tier 2 = the per-org LLM
+        # (Bedrock) switch. The operator's selection is the ONLY thing that makes
+        # the gateway act on content:
+        #   * no Tier-1 content control AND Tier-2 off -> pass through untouched
+        #     (no redact, no drop) — the request is still fully audited.
+        #   * Tier-1 declares a control                -> apply the policy control
+        #   * Tier-2 on                                -> apply the model judgement
+        #   * both                                     -> POLICY FIRST, THEN LLM
+        #     (the ranker runs upstream of this block, and the Tier-2 document
+        #     pass below runs only after the Tier-1 regex pass has had its say).
+        # E11/E11b were previously UNCONDITIONAL — they scanned and dropped for
+        # every org whether or not anyone asked, which is precisely the
+        # by-default enforcement the operator model forbids. Access control is
+        # NOT affected: an unconfigured collection still fails closed at the
+        # policy gate long before this point, so "no policy" never reaches here.
+        _t1_controls = any((
+            policy.get("require_context_scan"),
+            policy.get("block_sensitive_documents"),
+            policy.get("sensitive_fields"),
+            policy.get("anomaly_distance_threshold") is not None,
+            policy.get("pii_redaction_enabled"),
+            policy.get("blocked_keywords"),
+        ))
+        _t2_on = rag_policy.get("rag_tier2_enabled") is True
+        _egress_controls_selected = bool(_t1_controls or _t2_on)
+        if not _egress_controls_selected and _RAG_EGRESS_REQUIRES_OPERATOR_SELECTION:
+            LOG.info(
+                "RAG egress content controls SKIPPED (RAG-36): collection '%s' declares "
+                "no Tier-1 content control and Tier-2 is off — serving retrieved "
+                "documents unmodified per the operator's configuration.",
+                collection_name,
+            )
+
         _egress_dropped_injection: list[dict] = []
         _egress_documents = result.documents
-        if CONTEXT_GUARD is not None and isinstance(_egress_documents, list):
+        if (
+            CONTEXT_GUARD is not None
+            and isinstance(_egress_documents, list)
+            and (_egress_controls_selected or not _RAG_EGRESS_REQUIRES_OPERATOR_SELECTION)
+        ):
             _kept_after_injection: list = []
             for _doc in _egress_documents:
                 if not isinstance(_doc, dict):
@@ -12919,7 +12977,13 @@ async def rag_query(request: Request):
             _egress_documents = _kept_after_injection
             result.documents = _egress_documents
 
-        if isinstance(_egress_documents, list):
+        # RAG-36: the E11 PII redaction obeys the same operator gate as E11b above.
+        # Redacting a retrieved document is a CONTENT MUTATION; doing it for an org
+        # that selected no Tier-1 control and left Tier-2 off is enforcement nobody
+        # asked for (and it silently alters the corpus the caller sees).
+        if isinstance(_egress_documents, list) and (
+            _egress_controls_selected or not _RAG_EGRESS_REQUIRES_OPERATOR_SELECTION
+        ):
             for _doc in _egress_documents:
                 if not isinstance(_doc, dict):
                     continue
