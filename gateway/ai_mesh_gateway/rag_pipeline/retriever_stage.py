@@ -42,6 +42,38 @@ class RetrieverStage:
         start = time.perf_counter()
         cb_state = "closed"
 
+        # ── RAG-30: operator policy rules scoped to the RETRIEVER stage ──
+        # The control plane lets an operator target a rule at pipeline_stage
+        # "retriever" and the UI offers it, but only ranker_stage ever called
+        # evaluate_for_stage — so such a rule saved, compiled, shipped to Redis
+        # and displayed as Enabled while evaluating ZERO times. Rules with an
+        # empty pipeline_stage already match every stage and are unaffected.
+        if getattr(inp, "compiled_policies", None):
+            try:
+                try:
+                    from policy_engine import evaluate_for_stage
+                except ImportError:
+                    from gateway.policy_engine import evaluate_for_stage
+                _pol = evaluate_for_stage(
+                    prompt=inp.query_text,
+                    response_text="",
+                    compiled_policies=inp.compiled_policies,
+                    stage="retriever",
+                    actor=getattr(inp, "actor", None),
+                )
+                if _pol.action == "block":
+                    LOG.info("RAG retriever blocked by operator policy rule (RAG-30): %s", _pol.message)
+                    return RetrieverStageOutput(
+                        verdict=StageVerdict(
+                            action="block",
+                            threat_type="policy_violation",
+                            confidence=1.0,
+                            detail=_pol.message or "Blocked by policy",
+                        ),
+                    )
+            except Exception:  # noqa: BLE001 — advisory layer, never break retrieval
+                LOG.warning("RAG-30 retriever-stage policy evaluation failed", exc_info=True)
+
         # ── 1. Rate limiting for RAG queries ──
         if self._rl is not None:
             rag_rpm = self._config.get("rag_rate_limit_rpm", 0)
@@ -106,7 +138,24 @@ class RetrieverStage:
 
         # ── 4. Execute query ──
         try:
-            project_id = inp.project_id if self._config.get("vector_db_isolation", True) else None
+            # RAG-03 (2026-08-03): tenant isolation is UNCONDITIONAL. This previously read
+            # ``inp.project_id if self._config.get("vector_db_isolation", True) else None`` —
+            # with the toggle off, project_id became None and every affected tenant's reads
+            # and writes collapsed into ONE shared physical namespace ``None__{collection}``
+            # (vector_client._build_collection_name), silently mixing tenants. There is no
+            # legitimate reason to address a vector store without a tenant key, so the
+            # off-switch is gone; a missing project_id now fails CLOSED below.
+            project_id = inp.project_id
+            if not project_id:
+                return RetrieverStageOutput(
+                    verdict=StageVerdict(
+                        action="block",
+                        threat_type="tenant_isolation_missing",
+                        confidence=1.0,
+                        detail="No tenant namespace resolved for this request; refusing to query the vector store.",
+                    ),
+                    circuit_breaker_state=cb_state,
+                )
             # Bound the vector query so a hanging/slow provider (network failure,
             # unresponsive server) cannot block the request indefinitely — the SDK
             # calls run in a ThreadPoolExecutor with no timeout, and Chroma's

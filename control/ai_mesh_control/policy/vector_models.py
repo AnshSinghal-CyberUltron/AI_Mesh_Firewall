@@ -18,6 +18,17 @@ from django.db import models
 VECTOR_DB_TYPE_CHOICES = [
     ("pinecone", "Pinecone"),
     ("milvus", "Milvus"),
+    # RAG-34 (2026-08-06): restored. Migration 0021 dropped "chroma" from the
+    # COLLECTION-POLICY choices while leaving it on VectorProviderConfig
+    # (vector_provider_models.VECTOR_PROVIDER_CHOICES), so an operator could
+    # connect a BYOK Chroma provider and then NOT create a policy for it — the
+    # serializer 400s on the choice. With no policy the collection fails closed,
+    # so every query returned 403 rag_access_denied and the provider was
+    # unusable. The DATA PLANE always supported Chroma (main.py resolves it
+    # directly, and maps "custom" -> chroma), so the only thing missing was the
+    # operator's ability to SELECT it. The undocumented workaround was to pick
+    # "Custom"; this makes the real value selectable.
+    ("chroma", "Chroma"),
     ("custom", "Custom"),
 ]
 

@@ -370,6 +370,103 @@ async def _ensure_request_id(request, call_next):
     return response
 
 
+@app.middleware("http")
+async def _rag_telemetry_backstop(request, call_next):
+    """RAG-28: guarantee a telemetry event for EVERY /v1/rag|/v1/vector request.
+
+    The RAG handlers emit on their main paths but return early from many guard
+    branches (auth, policy miss, operation denied, rate limit, malformed body,
+    provider error), so the dashboard silently under-reported exactly the events
+    an operator most needs — the refusals. Worse, the branch an operator is most
+    likely to hit (``default_action`` allow/monitor with the operation not
+    listed) returns 403 with NO event at all, so the most permissive-looking
+    setting produced the LEAST visible blocks. Framework-level failures (422
+    validation, 404/405, an unhandled 500) never reach a handler and so could
+    never have emitted.
+
+    This runs OUTSIDE the handler, so it also covers the request that "just
+    touched the gateway or corrupted something": if the handler raised, the
+    exception is reported and then re-raised unchanged.
+
+    It is a BACKSTOP, never a second source of truth — when the handler already
+    called ``_emit_telemetry`` the flag is set and this does nothing, so no
+    request is double-counted.
+    """
+    path = ""
+    try:
+        path = request.url.path or ""
+    except Exception:  # noqa: BLE001
+        pass
+    if not (path.startswith("/v1/rag") or path.startswith("/v1/vector")):
+        return await call_next(request)
+
+    token = _RAG_EVENT_EMITTED.set({"emitted": False})
+    try:
+        try:
+            response = await call_next(request)
+        except Exception as exc:  # handler blew up — report, then re-raise
+            if not _rag_event_was_emitted():
+                _emit_rag_backstop_event(request, path, 500, error=repr(exc)[:300])
+            raise
+        if not _rag_event_was_emitted():
+            _emit_rag_backstop_event(
+                request, path, getattr(response, "status_code", 0) or 0
+            )
+        return response
+    finally:
+        try:
+            _RAG_EVENT_EMITTED.reset(token)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _emit_rag_backstop_event(request, path: str, status_code: int, error: str = ""):
+    """Emit the terminal event for a RAG/Vector request no handler reported."""
+    try:
+        # Derive the operator-facing outcome from the status the caller actually
+        # received, so the dashboard groups these with handler-emitted rows.
+        if status_code and 200 <= status_code < 300:
+            action = "allow"
+        elif status_code in (401, 403):
+            action = "block"
+        elif status_code and 400 <= status_code < 500:
+            action = "invalid_request"
+        else:
+            action = "error"
+        segment = path.rstrip("/").rsplit("/", 1)[-1] or "request"
+        prefix = "vector" if path.startswith("/v1/vector") else "rag"
+        module = "1.3" if prefix == "vector" else "1.2"
+        # build_telemetry_event has a STRICT signature (no **kwargs) — anything
+        # outside it belongs in ``metadata``, which is what the dashboard renders
+        # as free text. Passing these as top-level kwargs raises TypeError, and
+        # the except below would swallow it, emitting nothing at all.
+        _emit_telemetry(
+            status_code=status_code or 500,
+            event_type=f"{prefix}_{segment}",
+            action=action,
+            pipeline_stage=segment,
+            metadata={
+                "module": module,
+                "module_id": module,
+                "blocked": action == "block",
+                "request_id": (
+                    getattr(getattr(request, "state", None), "gw_request_id", "")
+                    or _REQUEST_ID.get()
+                ),
+                "path": path,
+                "telemetry_source": "backstop",
+                "detail": (
+                    error
+                    or f"Terminal outcome recorded by the gateway telemetry "
+                       f"backstop (handler returned {status_code} without "
+                       f"emitting an event)."
+                ),
+            },
+        )
+    except Exception:  # noqa: BLE001 — observability must never break a request
+        LOG.debug("RAG telemetry backstop failed to emit", exc_info=True)
+
+
 # SEC-01 FIX: Environment-based CORS origins instead of wildcard
 def _split_csv_env(value: str) -> list[str]:
     return [s.strip() for s in value.split(",") if s.strip()]
@@ -1654,6 +1751,36 @@ def _strip_internal_doc_fields(documents) -> None:
         if isinstance(_doc, dict):
             for _k in [k for k in _doc if isinstance(k, str) and k.startswith("_")]:
                 _doc.pop(_k, None)
+
+
+def _client_safe_pipeline_audit(audit):
+    """Return a client-facing COPY of a pipeline audit dict with the corpus
+    identifiers stripped from every stage.
+
+    RAG-08 (2026-08-04): ``PipelineContext.to_audit_dict`` records
+    ``approved_doc_ids`` / ``rejected_doc_ids`` — the REAL vector-store document
+    ids of every retrieved doc (the retriever's full manifest). It is built
+    BEFORE the client-egress backstop drops anything and is never reconciled, so
+    returning it verbatim hands the caller the ids of documents the firewall
+    REFUSED to serve: corpus enumeration over a store the caller may not read.
+
+    Everything else — stage names, actions, threat types, confidences, timings,
+    docs_in/docs_out counts, final_action — is preserved, because the frontend
+    pipeline views (RAGFeatureTestPanel, RAGAttackTrustSimulator,
+    SemanticSearchPanel, module-specific-log-charts) render exactly those. The
+    ORIGINAL object is never mutated: operator telemetry keeps full fidelity.
+    """
+    if not isinstance(audit, dict):
+        return audit
+    _safe = dict(audit)
+    _stages = audit.get("stages")
+    if isinstance(_stages, list):
+        _safe["stages"] = [
+            {k: v for k, v in _s.items() if k not in ("approved_doc_ids", "rejected_doc_ids")}
+            if isinstance(_s, dict) else _s
+            for _s in _stages
+        ]
+    return _safe
 
 
 def _strip_platform_trust_metadata(meta):
@@ -4757,9 +4884,73 @@ _CATEGORY_THREAT_MAP: dict[str, str] = {
 }
 
 
+# RAG-35 (2026-08-06): ``Policy.category`` is a FREE-TEXT field with no picker
+# in the UI, but only the 7 exact keys above do anything — anything else fell
+# through to "policy_violation", silently losing the Prometheus threat label and
+# the LLM-rewrite steering that category drives. The operator got no error and no
+# way to discover the working values: a policy filed as ``tenancy`` for a
+# cross-tenant rule (a natural, correct-sounding word) was downgraded to a
+# generic violation. Normalise case/spacing/punctuation and accept the obvious
+# synonyms, so a reasonable category behaves the way its author intended; an
+# unmapped one is now LOGGED rather than silently degraded.
+_CATEGORY_ALIASES: dict[str, str] = {
+    # tenancy / isolation -> access control
+    "tenancy": "access_control", "multi_tenancy": "access_control",
+    "isolation": "access_control", "tenant_isolation": "access_control",
+    "authz": "access_control", "authorization": "access_control",
+    "access": "access_control", "rbac": "access_control",
+    # injection / jailbreak -> threat detection
+    "jailbreak": "threat_detection", "prompt_injection": "threat_detection",
+    "injection": "threat_detection", "injection_prevention": "threat_detection",
+    "threat": "threat_detection", "security": "threat_detection",
+    # privacy
+    "pii": "pii_protection", "privacy": "pii_protection", "pd": "pii_protection",
+    # data protection / DLP
+    "dlp": "data_protection", "data_loss_prevention": "data_protection",
+    "exfiltration": "data_protection", "secrets": "data_protection",
+    # safety
+    "toxicity": "content_safety", "safety": "content_safety",
+    "moderation": "content_safety",
+    # compliance
+    "gdpr": "compliance", "hipaa": "compliance", "pci": "compliance",
+    "audit": "compliance",
+    # rag
+    "rag": "rag_security", "retrieval": "rag_security",
+    "poisoning": "rag_security", "vector": "rag_security",
+}
+
+
+def _normalize_policy_category(category: str) -> str:
+    """Fold case/spacing/punctuation so 'PII Protection' == 'pii_protection'."""
+    if not isinstance(category, str):
+        return ""
+    norm = category.strip().lower()
+    for ch in (" ", "-", "/", "."):
+        norm = norm.replace(ch, "_")
+    while "__" in norm:
+        norm = norm.replace("__", "_")
+    return norm.strip("_")
+
+
 def _category_to_threat_type(category: str) -> str:
     """Map a policy category to a threat_type for telemetry enrichment."""
-    return _CATEGORY_THREAT_MAP.get(category, "policy_violation")
+    # Exact match first so existing behaviour is byte-identical for the 7 keys.
+    mapped = _CATEGORY_THREAT_MAP.get(category)
+    if mapped:
+        return mapped
+    norm = _normalize_policy_category(category)
+    mapped = _CATEGORY_THREAT_MAP.get(norm) or _CATEGORY_THREAT_MAP.get(
+        _CATEGORY_ALIASES.get(norm, "")
+    )
+    if mapped:
+        return mapped
+    if norm:
+        LOG.info(
+            "Policy category %r does not map to a known threat_type "
+            "(known: %s) — telemetry will label it 'policy_violation'. (RAG-35)",
+            category, ", ".join(sorted(_CATEGORY_THREAT_MAP)),
+        )
+    return "policy_violation"
 
 
 # ── Per-request context for telemetry enrichment ──
@@ -4772,6 +4963,38 @@ _REQUEST_ORG_ID: _ctxvars.ContextVar[int | None] = _ctxvars.ContextVar("_req_org
 _REQUEST_ORG_SLUG: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_org_slug", default="")
 _REQUEST_SOURCE_IP: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_src_ip", default="")
 _REQUEST_METHOD: _ctxvars.ContextVar[str] = _ctxvars.ContextVar("_req_method", default="POST")
+# RAG-28 (2026-08-04): "nothing escapes the gateway" telemetry guarantee.
+# The RAG/Vector handlers have far more exit points than telemetry emissions
+# (rag_query: 23 returns vs 4 emits; rag_ingest: 27 vs 2), so blocks, validation
+# failures, 500s and framework 404/405s left NO trace on the dashboard — the same
+# class of gap MCP hit (#82, clean-allow never emitted). Patching every branch
+# would leak again the moment someone adds one, so a middleware backstop emits a
+# terminal event for any /v1/rag|/v1/vector request that finished without one.
+# This flag is how the backstop knows whether the handler already reported.
+# MUST be a MUTABLE CONTAINER, not a bool. Starlette's BaseHTTPMiddleware runs
+# the downstream app in a CHILD context, so a ``ContextVar.set()`` performed
+# inside the handler is invisible to the middleware that wrapped it — measured:
+# one successful query produced BOTH a handler event and a backstop event (5
+# rows for 1 request). A child context inherits the same object REFERENCE, so
+# mutating a shared dict propagates upward where rebinding does not.
+_RAG_EVENT_EMITTED: _ctxvars.ContextVar[dict | None] = _ctxvars.ContextVar(
+    "_rag_event_emitted", default=None
+)
+
+
+def _mark_rag_event_emitted() -> None:
+    """Record that this request already produced a telemetry event."""
+    try:
+        flag = _RAG_EVENT_EMITTED.get()
+        if isinstance(flag, dict):
+            flag["emitted"] = True
+    except Exception:  # noqa: BLE001 — telemetry must never break a request
+        pass
+
+
+def _rag_event_was_emitted() -> bool:
+    flag = _RAG_EVENT_EMITTED.get()
+    return bool(isinstance(flag, dict) and flag.get("emitted"))
 # Mutable per-request pipeline context for blocked-event telemetry enrichment
 # (PIPELINE-0019). Holds live stage_metrics + prompt so input_blocked/output_guard
 # events carry the same full stages[] as the HTTP block envelope.
@@ -5035,6 +5258,11 @@ _AUDIT_DROP_LOG_THROTTLE: dict = {}  # org_id -> last monotonic ts of the drop w
 
 def _emit_telemetry(status_code: int = 200, **kwargs):
     """Convenience: build_telemetry_event + inject per-request context + emit."""
+    # RAG-28: record that this request produced an event BEFORE the TELEMETRY
+    # None-guard — the backstop's job is to prove a request was reported, and a
+    # handler that called us did its part even if the sink is unconfigured.
+    # Suppressing the backstop here also prevents a duplicate row per request.
+    _mark_rag_event_emitted()
     if TELEMETRY is None:
         return
     from telemetry import build_telemetry_event
@@ -5705,6 +5933,10 @@ def _detect_rag_request(body: dict, messages: list[dict]) -> bool:
         return True
     if body.get("documents") is not None:
         return True
+    # RAG-02: the OpenAI normalizer strips the two fields above from the top level, so
+    # the gateway preserves them under this reserved key (see proxy_chat).
+    if body.get("_zs_declared_rag_context"):
+        return True
     for msg in messages:
         # I-15: a ``role=tool`` message IS retrieved, third-party content — the result
         # of a tool/MCP/retrieval call being fed back to the model. It is the PRIMARY
@@ -5717,16 +5949,28 @@ def _detect_rag_request(body: dict, messages: list[dict]) -> bool:
         # allowed through. Treat tool results as retrieved context.
         if msg.get("role") == "tool":
             return True
-        if msg.get("role") == "system":
-            # B-39: content may be a LIST of parts ({"type":"text",...}); (list or "").lower()
-            # raised AttributeError (neither ValueError nor TypeError → escaped the 400 handler
-            # → 500). Flatten to text first (list-aware, safe for str/dict/None too).
-            content = _content_to_text(msg.get("content")).lower()
-            if any(
-                marker in content
-                for marker in ("context:", "retrieved documents:", "knowledge base:", "search results:")
-            ):
-                return True
+        # RAG-02 (2026-08-03): the context markers are checked on EVERY role, not only
+        # ``system``. A red-team proved the old system-only rule was trivially evaded:
+        # the same retrieved document pasted into a ``user`` turn — which is what most
+        # RAG frameworks actually emit — was classified NON-RAG, so the rag_poisoning
+        # detector tier stayed off and an indirect injection that IS blocked under the
+        # system framing was allowed through. Retrieved context is retrieved context
+        # regardless of which turn carries it.
+        # B-39: content may be a LIST of parts ({"type":"text",...}); (list or "").lower()
+        # raised AttributeError (neither ValueError nor TypeError → escaped the 400 handler
+        # → 500). Flatten to text first (list-aware, safe for str/dict/None too).
+        content = _content_to_text(msg.get("content")).lower()
+        if any(
+            marker in content
+            for marker in (
+                "context:", "retrieved documents:", "knowledge base:", "search results:",
+                # Additional markers emitted by common RAG frameworks/templates.
+                "retrieved context:", "relevant documents:", "source documents:",
+                "context information", "use the following context", "based on the following context",
+                "<document>", "[document]", "passage:",
+            )
+        ):
+            return True
     return False
 
 
@@ -5900,6 +6144,19 @@ async def proxy_chat(
         raw_body = _strip_lone_surrogates(raw_body)
         try:
             body = normalize_openai_chat_request(raw_body, strip_unknown_top_level=True)
+            # RAG-02 (2026-08-03): ``documents`` / ``rag_context`` are the gateway's own
+            # (non-OpenAI) retrieved-context fields, and ``strip_unknown_top_level`` removes
+            # them here — so the RAG classifier and the scanner downstream never saw them.
+            # Preserve them off the RAW body under a reserved key so the request is still
+            # classified as RAG and, crucially, their CONTENT is folded into the scanner
+            # input. They remain stripped from the upstream provider call.
+            if isinstance(raw_body, dict) and isinstance(body, dict):
+                _zs_ctx = [
+                    _v for _v in (raw_body.get("rag_context"), raw_body.get("documents"))
+                    if _v is not None
+                ]
+                if _zs_ctx:
+                    body["_zs_declared_rag_context"] = _zs_ctx
         except (ValueError, TypeError) as exc:
             # Do NOT echo the raw CPython exception string to the client (it
             # leaks internals like "'int' object is not iterable"). Log the
@@ -7347,6 +7604,18 @@ async def proxy_chat(
         hallucination_flagged = False
         output_enforcement = None
         is_rag_request = _detect_rag_request(body, messages)
+        # RAG-02 (2026-08-03): the gateway's own ``documents`` / ``rag_context`` fields are
+        # preserved off the raw body (the OpenAI normalizer strips them from the top level)
+        # so the request is correctly CLASSIFIED as RAG for governance/telemetry. They are
+        # NOT relayed to the provider (not in the passthrough allowlist) and never reach the
+        # model — they are inert. We therefore do NOT content-block on them: blocking on
+        # inert, legitimately-large retrieved corpora folded into the 10k-char chat scanner
+        # over-blocked real RAG traffic (DoS length/repetition cap), and a truncated fold
+        # also created a starvation fail-open (both red-team-confirmed). The retrieved
+        # context that ACTUALLY reaches the model — carried in a message (any role) — is
+        # scanned via the role-agnostic RAG classification above + normal message scanning.
+        # Consume the reserved key so it cannot leak into the router kwargs.
+        body.pop("_zs_declared_rag_context", None)
 
         # ── Blocked keywords check (from firewall config) ──
         if not firewall_disabled:
@@ -11563,6 +11832,7 @@ def _resolve_vector_client(
     vector_db_type: str,
     org_id: int | str | None = None,
     embedding_model_override: str | None = None,
+    embedding_dimension_override: int | None = None,
 ):
     """
     Resolve a vector DB client using the credential hierarchy:
@@ -11620,6 +11890,13 @@ def _resolve_vector_client(
                             embedding_api_key=cfg.get("embedding_api_key", ""),
                             reranker_model=cfg.get("reranker_model", ""),
                             is_org_byok=True,  # org's own key → list_collections returns all its indexes
+                            # RAG-32: the collection policy's pinned dimension,
+                            # enforced against the REAL vectors (fail-closed).
+                            embedding_dimension=(
+                                embedding_dimension_override
+                                or cfg.get("dimension")
+                                or cfg.get("embedding_dimension")
+                            ),
                         ), "pinecone"
                     elif resolved_type == "chroma" and cfg.get("connection_url"):
                         # BYOK Chroma: the org connects their own Chroma server.
@@ -11663,23 +11940,77 @@ def _resolve_vector_client(
     return None, None
 
 
+# RAG-18 (2026-08-04): the collection literally named 'default' used to get a
+# synthesized PERMISSIVE monitor policy on a policy MISS, while every other
+# unconfigured name failed closed 403 — a name-based enforcement escape that
+# violates the frozen north-star invariant "no defaults; every enforcement is
+# operator-selected" (``_normalize_collection_name`` case-folds first, so
+# 'DEFAULT'/'Default' hit the same branch). A miss now fails CLOSED on query,
+# ingest and delete alike. Flip this to True to restore the LEGACY permissive
+# fallback for query/ingest if an onboarding flow still depends on an
+# unconfigured 'default' collection — delete is NEVER restored (see the delete
+# handler: 'delete' is dropped from the fallback unconditionally).
+_RAG_ALLOW_DEFAULT_COLLECTION_FALLBACK = False
+
+# RAG-36 TWO-TIER OPERATOR MODEL — implemented, DEFAULT OFF. Flip to True to
+# enforce it: the client-egress content controls (E11 PII redaction, E11b
+# indirect-injection drop) then run ONLY where the operator selected a Tier-1
+# policy control or switched Tier-2 on.
+#
+# WHY IT DEFAULTS OFF (read before flipping): the E11b floor is UNCONDITIONAL by
+# deliberate design — it was added to close a real finding, that a pre-poisoned
+# vector in a collection WITHOUT a content policy was served to the client
+# unscanned. Three tests freeze that guarantee, including
+# ``test_retrieved_injection_drop_is_unconditional_not_ranker_gated``. Turning
+# this on REOPENS that gap for any org that has selected nothing: retrieved
+# documents carrying indirect injection or PII will be served verbatim.
+#
+# That is a legitimate operator choice — it is exactly "nothing the operator did
+# not select" — but it is a security-posture decision, not a bug fix, so it ships
+# switchable rather than silently applied. Access control is unaffected either
+# way: an unconfigured collection still fails closed at the policy gate long
+# before this block, so "no policy" never reaches here.
+_RAG_EGRESS_REQUIRES_OPERATOR_SELECTION = False
+
+# RAG-25 (2026-08-04): providers whose WRITE path has upsert (overwrite)
+# semantics, so an "insert" grant alone cannot promise insert-only.
+#   pinecone — PineconeClient.add() delegates to upsert() -> index.upsert(),
+#              which REPLACES an existing vector id.
+#   chroma   — _upsert_sync calls collection.add(), which RAISES on a duplicate
+#              id (Chroma's own upsert() is never called), so it is genuinely
+#              insert-only and is deliberately NOT listed here.
+#   milvus   — query-only on this path; ingest fails at the client.
+# Listed providers require the operator to have granted "update" as well.
+_UPSERT_SEMANTICS_PROVIDERS = frozenset({"pinecone"})
+
+# RAG-25 enforcement is OPT-IN and default-OFF. Turning it on is a genuine
+# behaviour change: today an "insert" grant on Pinecone silently carries
+# overwrite rights, and existing deployments (and the ingest test-suite) depend
+# on that. Flipping this to True makes the gateway honour the operator's
+# insert-vs-update split by refusing writes it cannot prove are insert-only.
+# Left False so this lands as a visible, reversible control rather than an
+# unannounced break — the finding is real, but the remedy is the operator's to
+# select, per the "no enforcement the operator did not choose" invariant.
+_RAG_ENFORCE_UPDATE_FOR_UPSERT_PROVIDERS = False
+
+
 def _alert_vector_policy_miss(*, project_id, collection_name, organization_id, user_id, operation):
-    """Loud, high-signal alert when a vector request finds NO compiled policy and
-    falls back to the PERMISSIVE default-monitor policy.
+    """Loud, high-signal alert when a vector request finds NO compiled policy.
 
     This is the fail-OPEN seam at the root of the rag #1 bypass class: a miss
     (stale/slug-keyed bundle, key drift, an unknown collection, or org_id None)
-    silently degrades enforcement to monitor-only. Per the chosen posture we KEEP
-    availability (permissive default) but make every miss observable — a warning
-    log, a counter, and a telemetry event — so a bypass can never hide silently."""
+    used to silently degrade enforcement to monitor-only. The request itself now
+    fails CLOSED (RAG-18), but every miss stays observable — a warning log, a
+    counter, and a telemetry event — so an enforcement gap can never hide
+    silently (and so an operator can tell a misconfiguration from an attack)."""
     try:
         METRICS["vector_policy_miss"] = METRICS.get("vector_policy_miss", 0) + 1
     except Exception:  # noqa: BLE001 - metrics must never break the request
         pass
     LOG.warning(
         "VECTOR POLICY MISS — no compiled policy for org=%s project=%s collection=%s op=%s; "
-        "falling back to PERMISSIVE default-monitor (enforcement degraded). Verify the compiled "
-        "bundle is organization_id-keyed and the gateway VectorPolicySync reloaded it.",
+        "request FAILS CLOSED (RAG-18). Verify the compiled bundle is organization_id-keyed "
+        "and the gateway VectorPolicySync reloaded it.",
         organization_id, project_id, collection_name, operation,
     )
     try:
@@ -12041,11 +12372,13 @@ async def rag_query(request: Request):
                 organization_id=getattr(auth_ctx, "organization_id", None),
                 user_id=getattr(auth_ctx, "user_id", ""), operation="query",
             )
-            # Fail CLOSED for any named (non-'default') collection that resolves to
-            # NO policy. The permissive default-monitor fallback is reserved for the
-            # 'default' collection only; otherwise a case-variant or unknown name
-            # could quietly bypass a deny / block_sensitive policy (R10).
-            if collection_name != "default":
+            # Fail CLOSED for ANY collection that resolves to NO policy — a
+            # case-variant or unknown name must not quietly bypass a deny /
+            # block_sensitive policy (R10). RAG-18 (2026-08-04): the carve-out for
+            # the collection literally named 'default' was itself the bypass (an
+            # unconfigured 'default' got a synthesized permissive monitor policy),
+            # so it is now gated off by _RAG_ALLOW_DEFAULT_COLLECTION_FALLBACK.
+            if collection_name != "default" or not _RAG_ALLOW_DEFAULT_COLLECTION_FALLBACK:
                 METRICS["blocked"] += 1
                 return JSONResponse(
                     status_code=403,
@@ -12055,13 +12388,19 @@ async def rag_query(request: Request):
                         "code": "rag_access_denied",
                     },
                 )
-            # Fallback: generate a permissive default policy for the default
-            # collection so the pipeline still runs (with monitoring).
+            # LEGACY fallback (only reachable with the constant flipped True):
+            # a permissive policy for the 'default' collection so the pipeline
+            # still runs, with monitoring.
             policy = {
                 "enabled": True,
                 "collection_name": collection_name,
                 "project_id": str(project_id),
                 "default_action": "monitor",
+                # RAG-29: SYNTHESIZED by the gateway — the operator never chose it.
+                # ``_synthesized`` stops the honor-the-operator rule below from
+                # treating this invented "monitor" as an operator selection and
+                # permitting operations that were never granted.
+                "_synthesized": True,
                 "allowed_operations": ["query", "insert"],
                 "max_results_per_query": 50,
                 "max_query_length": 2048,
@@ -12128,14 +12467,54 @@ async def rag_query(request: Request):
                         "code": "rag_access_denied",
                     },
                 )
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "error": "forbidden",
-                    "message": "Query operation not permitted on this collection.",
-                    "code": "rag_operation_denied",
-                },
-            )
+            # RAG-29 (2026-08-04): HONOR the operator's selected default_action.
+            # Previously BOTH arms returned 403 — ``default_action`` only chose
+            # which error code came back, so an operator who deliberately picked
+            # "Allow" (a permissive/staging collection) or "Monitor"
+            # (observe-only) still got a hard block. That is enforcement the
+            # operator did not select, and "monitor blocks" contradicts the
+            # monitor-never-blocks invariant the rest of the product freezes.
+            # Worse, this arm emitted NO telemetry, so the most permissive
+            # setting produced the LEAST visible blocks.
+            # Now: deny/block → 403 (unchanged); allow/monitor → PERMIT and
+            # record the decision, so the operator's choice is what happens and
+            # it is fully observable either way.
+            if _default_action in ("allow", "monitor") and not policy.get("_synthesized"):
+                _emit_telemetry(
+                    status_code=200,
+                    event_type="rag_query",
+                    user_id=getattr(auth_ctx, "user_id", ""),
+                    project_id=str(project_id),
+                    key_prefix=getattr(auth_ctx, "prefix", ""),
+                    organization_id=getattr(auth_ctx, "organization_id", None),
+                    action=_default_action,
+                    risk_score=0.0,
+                    threat_type="",
+                    pipeline_stage="policy",
+                    latency_ms=(time.perf_counter() - start_rag) * 1000,
+                    metadata={
+                        "collection": collection_name,
+                        "vector_db_type": vector_db_type,
+                        "default_action": _default_action,
+                        "detail": (
+                            "Operation 'query' is not in allowed_operations, but the "
+                            f"collection's default_action is '{_default_action}' — "
+                            "permitted by operator selection and recorded."
+                        ),
+                        "module": "1.3",
+                        "module_id": "1.3",
+                    },
+                )
+                METRICS["blocked"] -= 1  # counted above; this request was NOT blocked
+            else:
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "error": "forbidden",
+                        "message": "Query operation not permitted on this collection.",
+                        "code": "rag_operation_denied",
+                    },
+                )
 
         # ── Embedding access control enforcement ──
         req_embedding_model = body.get("embedding_model", "")
@@ -12221,6 +12600,17 @@ async def rag_query(request: Request):
                 "prompt_downgrade_threshold",
                 "input_scan_enabled",
                 "rag_relevance_threshold",
+                # RAG-33: the per-org Tier-2 (Bedrock guard model) switch for RAG.
+                # ``rag_tier2_enabled`` already existed on FirewallConfig
+                # (default False) and config_sync already mirrored it per-org —
+                # but rag_query never copied it into the policy dict, so the RAG
+                # QueryStage had no way to see it and called the Tier-1-only
+                # ``scan_prompt``. Result: an operator could switch Tier-2 ON for
+                # the org and RAG queries/documents were still never judged by
+                # the model. ``tier2_strict`` rides along so a Tier-2 outage
+                # follows the operator's fail-open/fail-closed choice.
+                "rag_tier2_enabled",
+                "tier2_strict",
             ):
                 if _gk not in rag_policy and _gk in _rag_oc:
                     rag_policy[_gk] = _rag_oc[_gk]
@@ -12284,6 +12674,8 @@ async def rag_query(request: Request):
             # the org's provider-default so mixed-dimension collections retrieve
             # with the right model. Empty policy value → provider default.
             embedding_model_override=(policy_embedding_model or None),
+            # RAG-32: enforce the operator's pinned dimension on the real vectors.
+            embedding_dimension_override=(policy_embedding_dim or None),
         )
         result = await RAG_PIPELINE.execute(
             query_text=query_text,
@@ -12445,9 +12837,47 @@ async def rag_query(request: Request):
         # scan is sync (ThreadPoolExecutor-backed); call it via asyncio.to_thread to
         # keep the async handler non-blocking. Fail-safe: if CONTEXT_GUARD is None,
         # skip entirely (no crash, no behaviour change).
+        # ── RAG-36 (2026-08-06): TWO-TIER OPERATOR MODEL ──
+        # Tier 1 = the RAG/Vector collection POLICY. Tier 2 = the per-org LLM
+        # (Bedrock) switch. The operator's selection is the ONLY thing that makes
+        # the gateway act on content:
+        #   * no Tier-1 content control AND Tier-2 off -> pass through untouched
+        #     (no redact, no drop) — the request is still fully audited.
+        #   * Tier-1 declares a control                -> apply the policy control
+        #   * Tier-2 on                                -> apply the model judgement
+        #   * both                                     -> POLICY FIRST, THEN LLM
+        #     (the ranker runs upstream of this block, and the Tier-2 document
+        #     pass below runs only after the Tier-1 regex pass has had its say).
+        # E11/E11b were previously UNCONDITIONAL — they scanned and dropped for
+        # every org whether or not anyone asked, which is precisely the
+        # by-default enforcement the operator model forbids. Access control is
+        # NOT affected: an unconfigured collection still fails closed at the
+        # policy gate long before this point, so "no policy" never reaches here.
+        _t1_controls = any((
+            policy.get("require_context_scan"),
+            policy.get("block_sensitive_documents"),
+            policy.get("sensitive_fields"),
+            policy.get("anomaly_distance_threshold") is not None,
+            policy.get("pii_redaction_enabled"),
+            policy.get("blocked_keywords"),
+        ))
+        _t2_on = rag_policy.get("rag_tier2_enabled") is True
+        _egress_controls_selected = bool(_t1_controls or _t2_on)
+        if not _egress_controls_selected and _RAG_EGRESS_REQUIRES_OPERATOR_SELECTION:
+            LOG.info(
+                "RAG egress content controls SKIPPED (RAG-36): collection '%s' declares "
+                "no Tier-1 content control and Tier-2 is off — serving retrieved "
+                "documents unmodified per the operator's configuration.",
+                collection_name,
+            )
+
         _egress_dropped_injection: list[dict] = []
         _egress_documents = result.documents
-        if CONTEXT_GUARD is not None and isinstance(_egress_documents, list):
+        if (
+            CONTEXT_GUARD is not None
+            and isinstance(_egress_documents, list)
+            and (_egress_controls_selected or not _RAG_EGRESS_REQUIRES_OPERATOR_SELECTION)
+        ):
             _kept_after_injection: list = []
             for _doc in _egress_documents:
                 if not isinstance(_doc, dict):
@@ -12472,6 +12902,44 @@ async def rag_query(request: Request):
                             _doc.get("_doc_id") or _doc.get("id") or "",
                         )
                         _inj_verdict = None
+                    _t2_blocked = False
+                    # RAG-33: Tier-2 (Bedrock guard model) on RETRIEVED documents,
+                    # gated on the operator's per-org switch. The regex pass above
+                    # catches injection-SHAPED text; the model catches the semantic
+                    # cases regex cannot. RAG INGEST already ran Tier-2 on documents
+                    # (see the ingest handler), so retrieval was the asymmetric half:
+                    # a document that would have been refused at write time was
+                    # served unjudged at read time if it was already in the corpus
+                    # (BYOK tenants write directly to their own index, so this is
+                    # the common case, not an edge case).
+                    # Runs ONLY when the regex pass did not already drop the doc,
+                    # and only when the operator switched Tier-2 on — default OFF.
+                    if (
+                        _inj_verdict is None
+                        or getattr(_inj_verdict, "action", "allow") != "block"
+                    ) and rag_policy.get("rag_tier2_enabled") is True and INPUT_SCANNER is not None:
+                        try:
+                            _t2v = await INPUT_SCANNER.scan_prompt_with_tier2(
+                                _scan_text,
+                                is_rag=True,
+                                org_tier2_override=True,
+                                org_slug=str(rag_policy.get("_org_slug", "") or ""),
+                                org_tier2_strict=bool(rag_policy.get("tier2_strict", True)),
+                            )
+                            if getattr(_t2v, "action", "allow") == "block":
+                                _inj_verdict = _t2v
+                                # The drop gate below matches a fixed set of
+                                # Tier-1 threat_types; a Tier-2 verdict carries a
+                                # model-assigned label that is not in it, so
+                                # without this flag the document would be judged
+                                # unsafe and served anyway.
+                                _t2_blocked = True
+                        except Exception:  # noqa: BLE001 — Tier-2 outage must not 500 egress
+                            LOG.warning(
+                                "Egress Tier-2 document scan failed (fail-safe: "
+                                "Tier-1 verdict stands) doc_id=%s",
+                                _doc.get("_doc_id") or _doc.get("id") or "",
+                            )
                     if (
                         _inj_verdict is not None
                         and getattr(_inj_verdict, "action", "allow") == "block"
@@ -12484,23 +12952,38 @@ async def rag_query(request: Request):
                         # unscanned" contract the ranker + ContextGuard uphold. Drop
                         # it too (fail-closed), matching the ranker.
                         in ("indirect_injection", "hidden_instruction", "scan_budget_exceeded")
-                    ):
+                    ) or _t2_blocked:
                         _did = _doc.get("_doc_id") or _doc.get("id") or ""
                         _egress_dropped_injection.append({
                             "id": _did,
                             "threat_type": getattr(_inj_verdict, "threat_type", ""),
                             "detail": getattr(_inj_verdict, "detail", ""),
                         })
+                        # RAG-22 (2026-08-04): this record is OPERATOR-ONLY. The
+                        # ``detail`` for an indirect_injection is a <=100-char
+                        # SLICE OF THE WITHHELD DOCUMENT (context_guard
+                        # SNIPPET_MAX_CHARS), and ``id`` is a real vector-store
+                        # id — returning either handed the caller the id of, the
+                        # reason for, and a sample of, the very content the
+                        # firewall refused to serve. The log keeps both; the
+                        # client-facing projection below keeps only threat_type.
                         LOG.warning(
-                            "Egress backstop DROPPED retrieved doc for %s (id=%s)",
+                            "Egress backstop DROPPED retrieved doc for %s (id=%s) detail=%r",
                             getattr(_inj_verdict, "threat_type", ""), _did,
+                            getattr(_inj_verdict, "detail", ""),
                         )
                         continue  # do NOT serve this document
                 _kept_after_injection.append(_doc)
             _egress_documents = _kept_after_injection
             result.documents = _egress_documents
 
-        if isinstance(_egress_documents, list):
+        # RAG-36: the E11 PII redaction obeys the same operator gate as E11b above.
+        # Redacting a retrieved document is a CONTENT MUTATION; doing it for an org
+        # that selected no Tier-1 control and left Tier-2 off is enforcement nobody
+        # asked for (and it silently alters the corpus the caller sees).
+        if isinstance(_egress_documents, list) and (
+            _egress_controls_selected or not _RAG_EGRESS_REQUIRES_OPERATOR_SELECTION
+        ):
             for _doc in _egress_documents:
                 if not isinstance(_doc, dict):
                     continue
@@ -12548,7 +13031,12 @@ async def rag_query(request: Request):
             _egress_filtered_count = (result.filtered_count or 0) + len(_egress_dropped_injection)
             if isinstance(_client_scan_verdict, dict):
                 _client_scan_verdict.setdefault("flagged_documents", [])
-                _client_scan_verdict["egress_filtered"] = _egress_dropped_injection
+                # RAG-22: project to threat_type ONLY — the id and the
+                # withheld-content ``detail`` snippet stay operator-side (LOG).
+                _client_scan_verdict["egress_filtered"] = [
+                    {"threat_type": _d.get("threat_type", "")}
+                    for _d in _egress_dropped_injection
+                ]
                 _client_scan_verdict["egress_filtered_count"] = len(_egress_dropped_injection)
                 if not _client_scan_verdict.get("threat_type"):
                     _client_scan_verdict["threat_type"] = _egress_dropped_injection[0]["threat_type"]
@@ -12557,14 +13045,24 @@ async def rag_query(request: Request):
         # from returned documents before client egress (see _strip_internal_doc_fields).
         _strip_internal_doc_fields(_egress_documents)
 
+        # RAG-22 (2026-08-04): ``result.total_retrieved`` is the RAW PRE-filter
+        # retriever count, and it was returned even when zero documents survived —
+        # an existence/relevance oracle over a corpus the caller may not read
+        # ("your query matched 7 documents; you get none"). The client sees the
+        # POST-filter count (== len(documents)); the true pre-filter count stays on
+        # the operator telemetry emit above and in the completion LOG.info.
+        _client_total_retrieved = (
+            len(_egress_documents) if isinstance(_egress_documents, list) else 0
+        )
         response_content = {
             "collection": collection_name,
             "query": query_text,
             "documents": _egress_documents,
-            "total_retrieved": result.total_retrieved,
+            "total_retrieved": _client_total_retrieved,
             "filtered_count": _egress_filtered_count,
             "scan_verdict": _client_scan_verdict,
-            "pipeline_audit": result.pipeline_audit,
+            # RAG-08: sanitized COPY — the object handed to telemetry is untouched.
+            "pipeline_audit": _client_safe_pipeline_audit(result.pipeline_audit),
             "context_binding_id": result.context_binding_id or "",
             "canary_word": result.canary_word or "",
             "model_downgrade": _client_model_downgrade,
@@ -12640,8 +13138,14 @@ async def rag_ingest(request: Request):
         documents = body.get("documents", [])
         ids = body.get("ids", [])
         metadatas = body.get("metadatas", [])
-        _vdb = body.get("vector_db_type", "pinecone")
-        vector_db_type = (_vdb.strip() if isinstance(_vdb, str) else "pinecone") or "pinecone"
+        _vdb = body.get("vector_db_type", "")
+        # RAG-15 (2026-08-04): remember whether the CLIENT actually pinned a
+        # provider. The collection policy's pin is authoritative (see the
+        # effective_vector_db_type block after the policy resolves); only an
+        # explicit, CONFLICTING client value is a 403 — an omitted one must defer
+        # to the policy silently, not trip the mismatch on the "pinecone" default.
+        _vdb_client_supplied = bool(_vdb.strip()) if isinstance(_vdb, str) else False
+        vector_db_type = (_vdb.strip() if isinstance(_vdb, str) else "") or "pinecone"
 
         # Also accept single-document shorthand
         if not documents and body.get("content"):
@@ -12756,11 +13260,13 @@ async def rag_ingest(request: Request):
                 organization_id=getattr(auth_ctx, "organization_id", None),
                 user_id=getattr(auth_ctx, "user_id", ""), operation="insert",
             )
-            # Fail CLOSED on a write to any named (non-'default') collection with no
-            # policy — persisting documents under a case-variant / unknown name
-            # would let PII land in a namespace a deny/block_sensitive policy is
-            # meant to guard (R10).
-            if collection_name != "default":
+            # Fail CLOSED on a write to ANY collection with no policy — persisting
+            # documents under a case-variant / unknown name would let PII land in a
+            # namespace a deny/block_sensitive policy is meant to guard (R10).
+            # RAG-18 (2026-08-04): the 'default' carve-out is now gated off by
+            # _RAG_ALLOW_DEFAULT_COLLECTION_FALLBACK (see its definition) — an
+            # unconfigured collection is not a writable one.
+            if collection_name != "default" or not _RAG_ALLOW_DEFAULT_COLLECTION_FALLBACK:
                 METRICS["blocked"] += 1
                 return JSONResponse(
                     status_code=403,
@@ -12770,9 +13276,16 @@ async def rag_ingest(request: Request):
                         "code": "rag_access_denied",
                     },
                 )
+            # LEGACY fallback (only reachable with the constant flipped True).
             policy = {
                 "enabled": True, "collection_name": collection_name,
-                "project_id": project_id, "default_action": "monitor",
+                "project_id": project_id,
+                "default_action": "monitor",
+                # RAG-29: SYNTHESIZED by the gateway — the operator never chose it.
+                # ``_synthesized`` stops the honor-the-operator rule below from
+                # treating this invented "monitor" as an operator selection and
+                # permitting operations that were never granted.
+                "_synthesized": True,
                 "allowed_operations": ["query", "insert"],
                 "max_results_per_query": 50, "require_context_scan": True,
             }
@@ -12799,10 +13312,115 @@ async def rag_ingest(request: Request):
                         "code": "rag_access_denied",
                     },
                 )
+            # RAG-29: honor the operator's selected default_action (see the query
+            # gate for the full rationale) — allow/monitor PERMIT and record.
+            if _default_action in ("allow", "monitor") and not policy.get("_synthesized"):
+                METRICS["blocked"] -= 1  # counted above; not actually blocked
+                _emit_telemetry(
+                    status_code=200,
+                    event_type="rag_ingest",
+                    user_id=getattr(auth_ctx, "user_id", ""),
+                    project_id=str(project_id or ""),
+                    key_prefix=getattr(auth_ctx, "prefix", ""),
+                    organization_id=getattr(auth_ctx, "organization_id", None),
+                    action=_default_action,
+                    pipeline_stage="policy",
+                    metadata={
+                        "collection": collection_name,
+                        "default_action": _default_action,
+                        "detail": (
+                            "Operation 'insert' is not in allowed_operations, but "
+                            f"default_action is '{_default_action}' — permitted by "
+                            "operator selection and recorded."
+                        ),
+                        "module": "1.3", "module_id": "1.3",
+                    },
+                )
+            else:
+                return JSONResponse(
+                    status_code=403,
+                    content={"error": "forbidden", "message": "Insert operation not permitted.", "code": "rag_operation_denied"},
+                )
+
+        # ── RAG-25 (2026-08-04): "update" was an UNENFORCED operation ──
+        # ``allowed_operations`` offers query/insert/update/delete, but "update"
+        # appeared NOWHERE in the gateway as an operation name — only query,
+        # insert and delete were ever checked. Meanwhile PineconeClient.add()
+        # delegates straight to upsert() (vector_client.py add -> upsert ->
+        # index.upsert), and a Pinecone upsert OVERWRITES an existing vector id.
+        # So an operator who granted "insert" and deliberately withheld "update"
+        # could still have existing documents silently REPLACED — precisely the
+        # corpus-poisoning primitive the operation split exists to prevent.
+        # ChromaDB's ``collection.add`` does NOT overwrite (upsert is a separate
+        # call we never make) and Milvus is fail-closed on this path, so the
+        # exposure is specific to providers whose write is upsert-semantics.
+        # Honoring the operator's selection means failing CLOSED here: if the
+        # write cannot guarantee insert-only semantics and "update" was not
+        # granted, refuse rather than silently overwrite.
+        # NOTE: computed inline — ``effective_vector_db_type`` is resolved a few
+        # lines below (RAG-15), and this gate must run BEFORE any write is
+        # dispatched, so it re-derives the pinned type with the same precedence.
+        _write_provider = str(
+            policy.get("vector_db_type") or vector_db_type or ""
+        ).strip().lower()
+        if (
+            _RAG_ENFORCE_UPDATE_FOR_UPSERT_PROVIDERS
+            and "update" not in allowed_ops
+            and _write_provider in _UPSERT_SEMANTICS_PROVIDERS
+        ):
+            METRICS["blocked"] += 1
+            LOG.warning(
+                "RAG ingest refused (RAG-25): provider=%s has upsert (overwrite) write "
+                "semantics but policy for collection '%s' does not grant 'update'; "
+                "cannot guarantee insert-only.",
+                _write_provider, collection_name,
+            )
             return JSONResponse(
                 status_code=403,
-                content={"error": "forbidden", "message": "Insert operation not permitted.", "code": "rag_operation_denied"},
+                content={
+                    "error": "forbidden",
+                    "message": (
+                        f"Update operation not permitted: writes to '{effective_vector_db_type}' "
+                        f"use upsert semantics and can overwrite an existing document. "
+                        f"Grant the 'update' operation on this collection to allow it."
+                    ),
+                    "code": "rag_update_denied",
+                },
             )
+
+        # ── RAG-15 (2026-08-04): the policy-pinned provider is authoritative ──
+        # Ingest used the CLIENT-supplied ``vector_db_type`` for the support check,
+        # the queued async payload and ``_resolve_vector_client``, while the query
+        # path pins ``policy.get("vector_db_type", …)``. A write therefore landed in
+        # a provider the GOVERNED read path never reads — documents stored outside
+        # the enforced retrieval surface (and ``_resolve_vector_client`` falls back
+        # to "try any available", so it could silently land on a THIRD provider).
+        # Only the killswitch below read the pin. Pin it for the whole write path,
+        # and reject a conflicting explicit client value the way an embedding-model
+        # conflict is rejected above.
+        _policy_vdb = str(policy.get("vector_db_type", "") or "").strip()
+        if (
+            _policy_vdb
+            and _vdb_client_supplied
+            and _policy_vdb.lower() != vector_db_type.lower()
+        ):
+            METRICS["blocked"] += 1
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": "forbidden",
+                    "message": (
+                        f"Vector DB type mismatch: collection '{collection_name}' is pinned to "
+                        f"'{_policy_vdb}', got '{vector_db_type}'."
+                    ),
+                    "code": "vector_db_type_mismatch",
+                },
+            )
+        effective_vector_db_type = _policy_vdb or vector_db_type
+        # Rebind the name the rest of the handler already threads through the
+        # provider-support check, the queued payload, _resolve_vector_client and
+        # telemetry — one authoritative value, no parallel variable to miss.
+        vector_db_type = effective_vector_db_type
 
         # BYOK availability — checked AFTER the policy/deny/operation checks so a
         # denied collection returns 403 (not a provider-status 422). The env-var
@@ -13130,6 +13748,9 @@ async def rag_ingest(request: Request):
         client, used_vdb = _resolve_vector_client(
             vector_db_type, org_id,
             embedding_model_override=(policy.get("embedding_model") or None),
+            # RAG-32: pin the operator's embedding_dimension so a REAL mismatch
+            # fails closed (previously only a client-supplied value was checked).
+            embedding_dimension_override=(policy.get("embedding_dimension") or None),
         )
         if client is None:
             return JSONResponse(
@@ -13137,6 +13758,29 @@ async def rag_ingest(request: Request):
                 content={
                     "error": "no_provider_configured",
                     "message": "No vector client is resolvable for this organization.",
+                    "code": "rag_no_provider",
+                },
+            )
+        # RAG-15 defense-in-depth: _resolve_vector_client's last resort is "try any
+        # available" (see its tail), so even a PINNED type could silently land the
+        # write on a THIRD provider — outside the governed read surface, which is
+        # the whole defect. When the policy pins a type, refuse the substitution
+        # rather than store the documents somewhere the query path never reads.
+        if _policy_vdb and used_vdb and used_vdb.lower() != _policy_vdb.lower():
+            LOG.warning(
+                "RAG ingest: resolver substituted provider=%s for policy-pinned %s "
+                "(collection=%s, org=%s) — refusing the write.",
+                used_vdb, _policy_vdb, collection_name, org_id,
+            )
+            METRICS["blocked"] += 1
+            return JSONResponse(
+                status_code=422,
+                content={
+                    "error": "no_provider_configured",
+                    "message": (
+                        f"Collection '{collection_name}' is pinned to vector provider "
+                        f"'{_policy_vdb}', which is not connected for this organization."
+                    ),
                     "code": "rag_no_provider",
                 },
             )
@@ -13325,9 +13969,11 @@ async def rag_delete_documents(request: Request):
                 organization_id=getattr(auth_ctx, "organization_id", None),
                 user_id=getattr(auth_ctx, "user_id", ""), operation="delete",
             )
-            # Fail CLOSED for any named (non-'default') collection with no policy
-            # (R10) — a case-variant name must not bypass a deny policy.
-            if collection_name != "default":
+            # Fail CLOSED for ANY collection with no policy (R10) — a case-variant
+            # name must not bypass a deny policy. RAG-18 (2026-08-04): the
+            # 'default' carve-out is gated off by
+            # _RAG_ALLOW_DEFAULT_COLLECTION_FALLBACK.
+            if collection_name != "default" or not _RAG_ALLOW_DEFAULT_COLLECTION_FALLBACK:
                 METRICS["blocked"] += 1
                 return JSONResponse(
                     status_code=403,
@@ -13337,7 +13983,14 @@ async def rag_delete_documents(request: Request):
                         "code": "rag_access_denied",
                     },
                 )
-            policy = {"allowed_operations": ["query", "insert", "delete"], "default_action": "monitor"}
+            # LEGACY fallback (only reachable with the constant flipped True).
+            # RAG-18: 'delete' is dropped UNCONDITIONALLY — an unconfigured
+            # collection was DESTRUCTIBLE by anyone who could name it, and no
+            # legacy onboarding flow justifies restoring that. The per-operation
+            # gate below therefore 403s the delete even in legacy mode.
+            policy = {"allowed_operations": ["query", "insert"],
+                      "default_action": "monitor",
+                      "_synthesized": True}  # RAG-29: not an operator selection
         # Per-operation gate: delete permitted iff listed; otherwise a deny/block
         # default is access_denied (delete used to ignore default_action).
         _del_allowed = policy.get("allowed_operations", [])
@@ -13349,10 +14002,35 @@ async def rag_delete_documents(request: Request):
                     status_code=403,
                     content={"error": "forbidden", "message": f"Access denied: policy for collection '{collection_name}' denies access.", "code": "rag_access_denied"},
                 )
-            return JSONResponse(
-                status_code=403,
-                content={"error": "forbidden", "message": "Delete operation not permitted.", "code": "rag_operation_denied"},
-            )
+            # RAG-29: honor the operator's selected default_action (see the query
+            # gate for the full rationale) — allow/monitor PERMIT and record.
+            if _del_default in ("allow", "monitor") and not policy.get("_synthesized"):
+                METRICS["blocked"] -= 1  # counted above; not actually blocked
+                _emit_telemetry(
+                    status_code=200,
+                    event_type="rag_delete_documents",
+                    user_id=getattr(auth_ctx, "user_id", ""),
+                    project_id=str(project_id or ""),
+                    key_prefix=getattr(auth_ctx, "prefix", ""),
+                    organization_id=getattr(auth_ctx, "organization_id", None),
+                    action=_del_default,
+                    pipeline_stage="policy",
+                    metadata={
+                        "collection": collection_name,
+                        "default_action": _del_default,
+                        "detail": (
+                            "Operation 'delete' is not in allowed_operations, but "
+                            f"default_action is '{_del_default}' — permitted by "
+                            "operator selection and recorded."
+                        ),
+                        "module": "1.3", "module_id": "1.3",
+                    },
+                )
+            else:
+                return JSONResponse(
+                    status_code=403,
+                    content={"error": "forbidden", "message": "Delete operation not permitted.", "code": "rag_operation_denied"},
+                )
 
         # Resolve the per-org BYOK client(s). Named provider -> that one;
         # unspecified -> attempt across all of the org's active providers and sum.
@@ -13375,6 +14053,11 @@ async def rag_delete_documents(request: Request):
 
         deleted = 0
         _del_unsupported: list[str] = []
+        # RAG-15 (2026-08-04): a provider whose delete() RAISED (or timed out) was
+        # logged and then silently folded into a 200 ``"status": "deleted"`` — a
+        # GDPR-style erasure reported as clean success while the documents are
+        # still in the store. Track the failures and report a non-success shape.
+        _del_failed: list[str] = []
         _ran_supported = False
         for _ptype, _client in targets:
             # #13: MilvusClient is query-only. Previously its missing delete()
@@ -13395,6 +14078,10 @@ async def rag_delete_documents(request: Request):
                     timeout=_del_timeout,
                 )
             except Exception as exc:
+                # RAG-15: record the provider so the response cannot claim success.
+                # The exception TEXT stays operator-side (log only) — provider error
+                # strings can echo store internals.
+                _del_failed.append(_ptype)
                 LOG.warning(
                     "RAG delete failed on provider=%s collection=%s: %s",
                     _ptype, collection_name, exc,
@@ -13426,10 +14113,21 @@ async def rag_delete_documents(request: Request):
             vector_db_type = targets[0][0]
 
         elapsed_ms = (time.perf_counter() - start) * 1000
-        LOG.info("RAG delete completed (project=%s, collection=%s, deleted=%d)", project_id, collection_name, deleted)
+        # RAG-15: an erasure is "deleted" ONLY when every resolved provider honored
+        # it. Any raise/timeout (_del_failed) or query-only skip (_del_unsupported)
+        # makes it PARTIAL — 207 Multi-Status, with the affected providers always
+        # named in the body so a caller can never read a partial erasure as clean.
+        _del_partial = bool(_del_failed or _del_unsupported)
+        _del_status = "partial" if _del_partial else "deleted"
+        _del_http = 207 if _del_partial else 200
+        LOG.info(
+            "RAG delete completed (project=%s, collection=%s, deleted=%d, status=%s, failed=%s, skipped=%s)",
+            project_id, collection_name, deleted, _del_status,
+            sorted(set(_del_failed)), sorted(set(_del_unsupported)),
+        )
 
         _emit_telemetry(
-            status_code=200,
+            status_code=_del_http,
             event_type="rag_delete",
             model="",
             user_id=getattr(auth_ctx, "user_id", ""),
@@ -13442,14 +14140,19 @@ async def rag_delete_documents(request: Request):
                 "collection": collection_name,
                 "deleted_count": deleted,
                 "ids": doc_ids,
+                "status": _del_status,
+                "failed_providers": sorted(set(_del_failed)),
+                "skipped_providers": sorted(set(_del_unsupported)),
                 "module": "1.3",
                 "module_id": "1.3",
             },
         )
 
-        return JSONResponse(content={
-            "status": "deleted", "collection": collection_name,
+        return JSONResponse(status_code=_del_http, content={
+            "status": _del_status, "collection": collection_name,
             "deleted_count": deleted, "ids": doc_ids,
+            "failed_providers": sorted(set(_del_failed)),
+            "skipped_providers": sorted(set(_del_unsupported)),
             "processing_time_ms": round(elapsed_ms, 1),
         })
     finally:
@@ -13659,7 +14362,37 @@ async def rag_delete_collection(request: Request):
 
     # Check policy allows delete
     policy = VECTOR_POLICY_SYNC.get_policy(project_id, collection_name, organization_id=getattr(auth_ctx, "organization_id", None)) if VECTOR_POLICY_SYNC else None
-    if policy and "delete" not in policy.get("allowed_operations", []):
+    # RAG-26 (2026-08-04): this gate used to be ``if policy and "delete" not in
+    # …``, which SKIPPED it entirely whenever no policy resolved — so COLLECTION
+    # delete failed OPEN while every sibling verb (query 12134, ingest 12880,
+    # document-delete 13497) fails CLOSED on a policy miss. Two ways to reach it:
+    # a collection that was never configured, and — perversely — one whose policy
+    # an operator DISABLED, since the compiler emits only ``enabled=True`` rows,
+    # so unchecking "Enabled" to pause enforcement made the collection *easier*
+    # to destroy. Dropping a whole collection is the most destructive verb in the
+    # data plane, so it now matches the others: no policy → 403, and the miss is
+    # surfaced through the same alert path.
+    if policy is None:
+        METRICS["blocked"] += 1
+        try:
+            _alert_vector_policy_miss(
+                project_id=project_id,
+                collection_name=collection_name,
+                organization_id=getattr(auth_ctx, "organization_id", None),
+                user_id=getattr(auth_ctx, "user_id", None),
+                operation="collection_delete",
+            )
+        except Exception:  # noqa: BLE001 — alerting must never gate the refusal
+            pass
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": "forbidden",
+                "message": f"Access denied: no policy for collection '{collection_name}'.",
+                "code": "rag_access_denied",
+            },
+        )
+    if "delete" not in policy.get("allowed_operations", []):
         METRICS["blocked"] += 1
         return JSONResponse(
             status_code=403,

@@ -136,6 +136,18 @@ def is_safe_outbound_url(
     if scheme not in {s.lower() for s in allowed_schemes}:
         return False, f"scheme '{scheme or '(none)'}' not allowed (allowed: {', '.join(allowed_schemes)})"
 
+    # RAG-01 (2026-08-03): reject URL userinfo outright. A ``user:pass@host`` (or bare
+    # ``target@decoy``) URL is the root of PARSER DIFFERENTIALS: this guard resolves
+    # ``urlparse().hostname`` (the part AFTER the '@'), while a downstream client that
+    # re-derives the host by naive string splitting takes the part BEFORE it. A red-team
+    # proved the split live: ``http://169.254.169.254:8000@example.com`` passed this guard
+    # (example.com) while ChromaDBClient connected to 169.254.169.254 (cloud metadata) and
+    # sent the org's provider token there. No legitimate vector-provider URL carries
+    # credentials in the URL — the provider config has a dedicated ``api_key`` field — so
+    # rejecting userinfo removes the whole differential class at the boundary.
+    if parsed.username is not None or parsed.password is not None or "@" in (parsed.netloc or ""):
+        return False, "URL must not contain userinfo ('@') — credentials belong in the api_key field"
+
     host = parsed.hostname
     if not host:
         return False, "URL has no host"

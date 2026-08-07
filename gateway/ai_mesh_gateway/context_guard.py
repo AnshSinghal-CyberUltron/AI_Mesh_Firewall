@@ -194,6 +194,45 @@ class ContextGuard:
             document_text,
         )
 
+    @staticmethod
+    def _distance_tail_outliers(distances: list[float]) -> tuple[list[int], list[int]]:
+        """Return ``(upper_tail, lower_tail)`` 2-sigma outlier indices.
+
+        Single place where mean/std are computed, so the numpy path and the
+        pure-Python ImportError fallback can never disagree about either tail
+        (they previously duplicated the upper-tail loop verbatim). Uses the
+        POPULATION std (``np.std`` default ddof=0), preserving the historical
+        upper-tail behaviour exactly.
+
+        NOTE (shared by BOTH tails): with the population std the largest possible
+        |z| for n samples is ``(n - 1) / sqrt(n)``, which only reaches 2.0 at
+        n >= 6. A 2-sigma test therefore cannot fire on a result set of 5 or
+        fewer documents — a pre-existing property of the upper tail that the
+        lower tail inherits, deliberately, so both tails stay calibrated the same.
+        """
+        if len(distances) < 3:
+            return [], []
+
+        try:
+            import numpy as np
+
+            arr = np.array(distances, dtype=float)
+            mean_dist = float(np.mean(arr))
+            std_dist = float(np.std(arr))
+        except ImportError:
+            mean_dist = sum(distances) / len(distances)
+            variance = sum((d - mean_dist) ** 2 for d in distances) / len(distances)
+            std_dist = variance ** 0.5
+
+        if std_dist <= 0:
+            return [], []
+
+        hi = mean_dist + 2 * std_dist
+        lo = mean_dist - 2 * std_dist
+        upper = [i for i, dist in enumerate(distances) if dist > hi]
+        lower = [i for i, dist in enumerate(distances) if dist < lo]
+        return upper, lower
+
     def detect_embedding_anomaly(
         self,
         distances: list[float],
@@ -202,6 +241,12 @@ class ContextGuard:
         """
         Detect anomalous results using distance threshold and statistical
         outlier analysis (2-sigma deviation from mean).
+
+        UPPER tail only: a distance far ABOVE the corpus mean is an off-topic /
+        injected vector. The LOWER tail (a document matching far more tightly
+        than the rest of the corpus) is a different threat with a different
+        response and is reported separately by ``detect_near_duplicate_anomaly``
+        — see the RAG-05a note there for why the two must never be merged.
 
         Returns indices of documents flagged as anomalous.
         """
@@ -214,26 +259,10 @@ class ContextGuard:
             if dist > threshold:
                 flagged.append(i)
 
-        if len(distances) >= 3:
-            try:
-                import numpy as np
-
-                arr = np.array(distances, dtype=float)
-                mean_dist = float(np.mean(arr))
-                std_dist = float(np.std(arr))
-
-                if std_dist > 0:
-                    for i, dist in enumerate(distances):
-                        if i not in flagged and dist > mean_dist + 2 * std_dist:
-                            flagged.append(i)
-            except ImportError:
-                mean_dist = sum(distances) / len(distances)
-                variance = sum((d - mean_dist) ** 2 for d in distances) / len(distances)
-                std_dist = variance ** 0.5
-                if std_dist > 0:
-                    for i, dist in enumerate(distances):
-                        if i not in flagged and dist > mean_dist + 2 * std_dist:
-                            flagged.append(i)
+        upper, _lower = self._distance_tail_outliers(distances)
+        for i in upper:
+            if i not in flagged:
+                flagged.append(i)
 
         if flagged:
             LOG.info(
@@ -244,6 +273,67 @@ class ContextGuard:
             )
 
         return sorted(set(flagged))
+
+    def detect_near_duplicate_anomaly(self, distances: list[float]) -> list[int]:
+        """RAG-05a: detect LOWER-tail distance outliers (near-duplicate poisoning).
+
+        ``detect_embedding_anomaly`` is strictly one-tailed, so a "cloned
+        authority" attack — seed a near-copy of a legitimate document that
+        contradicts it — was not merely missed: the clone's ~0 distance made it
+        the single BEST match, it took rank 1, kept a full 1.0 trust score
+        (``compute_trust_score`` only ever penalises HIGH distance) and was
+        served verbatim. A document that matches the query dramatically more
+        tightly than the genuine corpus does is exactly that signature.
+
+        Reported SEPARATELY from ``detect_embedding_anomaly`` on purpose, and the
+        caller must keep the two lists distinct:
+          * ranker_stage turns "every document anomalous" into a hard BLOCK, and
+          * an exact-match query legitimately produces a low-distance outlier,
+        so folding the lower tail into the anomaly list would fail CLOSED on
+        valid traffic. The lower tail is advisory: flag + trust demotion only,
+        never a drop and never a block.
+
+        Takes no threshold — the test is purely relative to this result set (an
+        absolute "too close" bound would fire on every exact match).
+
+        Returns indices of documents flagged as near-duplicate outliers.
+        """
+        if not distances:
+            return []
+
+        _upper, lower = self._distance_tail_outliers(distances)
+
+        if lower:
+            LOG.info(
+                "Near-duplicate anomaly detected (RAG-05a): %d/%d documents are "
+                "lower-tail distance outliers (indices=%s)",
+                len(lower),
+                len(distances),
+                lower,
+            )
+
+        return lower
+
+    # RAG-06 / RAG-05a (NOT FIXED — recorded so it is not re-attempted blindly):
+    # a pairwise CONTENT near-duplicate detector was implemented here and REMOVED
+    # after live calibration. Token containment (|A n B| / min) saturates at 1.00
+    # for BOTH the malicious clone and a legitimate longer document covering the
+    # same facts:
+    #     an1 "refund policy returns 30 days"  (the victim, 5 tokens)
+    #       vs a1  "Refund policy: returns accepted within 30 days with a receipt."
+    #              -> 1.00  (LEGITIMATE — false positive)
+    #       vs ndpoison "...returns 30 days: ACTUALLY refunds are DENIED..."
+    #              -> 1.00  (the attack)
+    # Thresholds 0.80/0.90/0.95/1.00 all produce the identical flag set, so this
+    # is not a tuning problem. A symmetric measure (difflib ratio) fails the other
+    # way: the clone is ~4x longer than its victim, so the length gap dominates
+    # and the pair scores LOW. Distance-tail statistics cannot work either — see
+    # detect_near_duplicate_anomaly, whose lower 2-sigma bound goes NEGATIVE on a
+    # realistic spread because the outlier being hunted inflates sigma.
+    # The separating feature is SEMANTIC CONTRADICTION ("this document asserts the
+    # opposite of that one"), which needs an NLI/LLM judgement over retrieved
+    # pairs, not a lexical heuristic. Shipping the lexical version would demote
+    # legitimate documents, which the FROZEN operator model forbids.
 
     def _scan_documents_sync(
         self,

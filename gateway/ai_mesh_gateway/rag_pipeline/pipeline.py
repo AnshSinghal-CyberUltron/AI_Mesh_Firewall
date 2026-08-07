@@ -38,6 +38,10 @@ if TYPE_CHECKING:
 
 LOG = logging.getLogger("gateway.rag_pipeline")
 
+# Every stage the pipeline can run, in execution order. Used to record the
+# stages a terminated request never reached. (RAG-19)
+CANONICAL_STAGES: tuple[str, ...] = ("query", "retriever", "ranker", "generator")
+
 
 class RAGFirewallPipeline:
     """Orchestrates the 4-stage RAG firewall pipeline.
@@ -100,12 +104,22 @@ class RAGFirewallPipeline:
         vector_client_override: Any = None,
         actor: dict[str, Any] | None = None,
         telemetry_enabled: bool = True,
+        escalation_level: int = 0,
     ) -> PipelineResult:
         effective_policy = policy or {}
         ctx = PipelineContext(
             project_id=project_id,
             collection_name=collection_name,
             query_text=query_text,
+            # Starting escalation level, clamped to the configured range. No
+            # caller sets it today, which is why level 2 (the only config with
+            # block_on_any_flag) was structurally unreachable: it needs two
+            # upstream "flag" verdicts, and the only stage that can flag twice
+            # is itself gated on level 2. This is the explicit opt-in that makes
+            # the level reachable — it must stay caller-driven, since arming
+            # strict enforcement the operator did not select is an over-block.
+            # (RAG-20)
+            escalation_level=min(max(int(escalation_level or 0), 0), 2),
             # Honor the caller's per-org audit gate for per-stage telemetry
             # (mirrors the chat path). The handler resolves this from the org's
             # telemetry_enabled/audit_logging_enabled config.
@@ -132,6 +146,9 @@ class RAGFirewallPipeline:
             namespace=namespace,
             policy=effective_policy,
             key_hash=key_hash,
+            # RAG-27: pass the already-fetched RAG-domain bundle so QueryStage can
+            # evaluate rules the operator scoped to pipeline_stage="query".
+            compiled_policies=compiled_policies or [],
         ))
         ctx.add_stage(StageRecord(
             stage_name="query",
@@ -166,6 +183,7 @@ class RAGFirewallPipeline:
         # ──────── Stage 2: Retriever ────────
         t1 = time.perf_counter()
         r_out = await self._retriever.execute(RetrieverStageInput(
+            compiled_policies=compiled_policies or [],  # RAG-30
             query_text=effective_query,
             collection_name=collection_name,
             project_id=project_id,
@@ -212,8 +230,33 @@ class RAGFirewallPipeline:
         # guardrails-only fast path only applies when none of these are requested.
         if not rag_ranker_on and self._policy_requires_ranker(effective_policy):
             rag_ranker_on = True
+        # RAG-31: a stage the operator wrote a rule for MUST run, otherwise their
+        # selection silently does nothing. The generator was reachable ONLY via
+        # the gateway-wide GATEWAY_RAG_GENERATOR_ENABLED env var — absent from
+        # the per-org config and from every policy field — so an operator could
+        # create a rule scoped to pipeline_stage="generator", see it Enabled in
+        # the UI, and have it evaluate zero times with no way to switch the stage
+        # on. That is the inverse of operator control: not "enforcement they did
+        # not choose", but "a choice they cannot act on".
+        # Activation stays OPERATOR-DRIVEN (their own rule turns the stage on) —
+        # the stage is NOT defaulted on, so an org with no such rule keeps the
+        # cheap guardrails-only path.
+        if not rag_generator_on and self._bundle_targets_stage(compiled_policies, "generator"):
+            rag_generator_on = True
+        if not rag_ranker_on and self._bundle_targets_stage(compiled_policies, "ranker"):
+            rag_ranker_on = True
         if not rag_ranker_on and not rag_generator_on:
             ctx.final_action = r_out.verdict.action
+            # The ranker is the SOLE producer of flagged_documents /
+            # anomalous_documents and the generator the sole producer of
+            # context_binding_id / canary_word. Neither ran, so the empty values
+            # below are absences, not clean results. Record the skip and label
+            # the scan state explicitly — an empty flagged_documents on its own
+            # reads as "scanned, nothing found", which is how a prior review
+            # concluded anomaly detection was a hardcoded empty literal.
+            # (RAG-19)
+            ctx.mark_stage_skipped("ranker", "disabled")
+            ctx.mark_stage_skipped("generator", "disabled")
             audit = ctx.to_audit_dict()
             return PipelineResult(
                 action=r_out.verdict.action,
@@ -222,8 +265,13 @@ class RAGFirewallPipeline:
                 filtered_count=0,
                 scan_verdict={
                     "action": r_out.verdict.action,
+                    # Kept as lists (never None): rag_orchestrator feeds
+                    # anomalous_documents straight into RAGVerdict.anomalous_indices
+                    # and main.py setdefaults flagged_documents. The not-run
+                    # signal rides alongside them in document_content_scan.
                     "flagged_documents": [],
                     "anomalous_documents": [],
+                    "document_content_scan": self._content_scan_state(ctx),
                     "detail": r_out.verdict.detail,
                 },
                 context_binding_id="",
@@ -269,6 +317,7 @@ class RAGFirewallPipeline:
         # registration are RAG-application plumbing the client owns.
         if not rag_generator_on:
             ctx.final_action = rank_out.verdict.action
+            ctx.mark_stage_skipped("generator", "disabled")
             audit = ctx.to_audit_dict()
             return PipelineResult(
                 action=rank_out.verdict.action,
@@ -279,6 +328,19 @@ class RAGFirewallPipeline:
                     "action": rank_out.verdict.action,
                     "flagged_documents": rank_out.flagged_indices,
                     "anomalous_documents": rank_out.anomalous_indices,
+                    # RAG-05a: the LOWER distance tail, kept DISTINCT from
+                    # ``anomalous_documents`` on purpose — the ranker turns "every
+                    # document anomalous" into a hard block, and an exact-match
+                    # query legitimately produces a low-distance outlier, so
+                    # folding these in would fail-closed on valid traffic. They
+                    # carry a trust PENALTY only (ranker_stage.compute_trust_score
+                    # ``near_duplicate=True``); surfacing them here is what makes
+                    # that penalty observable instead of silent.
+                    "near_duplicate_documents": getattr(
+                        rank_out, "near_duplicate_indices", []
+                    ),
+                    # The ranker ran: these lists are real findings. (RAG-19)
+                    "document_content_scan": self._content_scan_state(ctx),
                     "detail": rank_out.verdict.detail,
                 },
                 context_binding_id="",
@@ -292,6 +354,7 @@ class RAGFirewallPipeline:
         # ──────── Stage 4: Generator ────────
         t3 = time.perf_counter()
         gen_out = await self._generator.execute(GeneratorStageInput(
+            compiled_policies=compiled_policies or [],  # RAG-30
             documents=rank_out.ranked_documents,
             query_text=effective_query,
             project_id=project_id,
@@ -332,6 +395,13 @@ class RAGFirewallPipeline:
                 "action": rank_out.verdict.action,
                 "flagged_documents": rank_out.flagged_indices,
                 "anomalous_documents": rank_out.anomalous_indices,
+                # RAG-05a: lower-tail near-duplicates — see the guardrails path
+                # above for why these stay separate from ``anomalous_documents``.
+                "near_duplicate_documents": getattr(
+                    rank_out, "near_duplicate_indices", []
+                ),
+                # The ranker ran: these lists are real findings. (RAG-19)
+                "document_content_scan": self._content_scan_state(ctx),
                 "detail": rank_out.verdict.detail,
             },
             context_binding_id=gen_out.context_binding_id,
@@ -341,6 +411,44 @@ class RAGFirewallPipeline:
             canary_word=gen_out.canary_word,
             model_downgrade=model_downgrade or gen_out.model_downgrade,
         )
+
+    @staticmethod
+    def _content_scan_state(ctx: PipelineContext) -> str:
+        """"ran" once RankerStage executed for this request, else "not_run".
+
+        Derived from the audit trail rather than written as a literal, so the
+        reported scan state cannot drift from what the pipeline actually did.
+        (RAG-19)
+        """
+        return "ran" if "ranker" in ctx.executed_stages else "not_run"
+
+    @staticmethod
+    def _bundle_targets_stage(compiled_policies: Any, stage: str) -> bool:
+        """True when the org's compiled bundle holds an ENABLED rule aimed at *stage*.
+
+        RAG-31: activation must follow the operator's own selection. A rule with
+        an EMPTY ``pipeline_stage`` means "all stages" and deliberately does NOT
+        count here — it would switch on the generator (and its Redis grounding
+        writes) for every org that ever wrote a generic rule, which is exactly
+        the by-default enforcement the operator did not ask for. Only an
+        explicit stage target activates the stage.
+        """
+        if not compiled_policies:
+            return False
+        try:
+            for entry in compiled_policies:
+                if not isinstance(entry, dict):
+                    continue
+                for rule in entry.get("rules") or []:
+                    if not isinstance(rule, dict):
+                        continue
+                    if rule.get("enabled") is False:
+                        continue
+                    if str(rule.get("pipeline_stage") or "").strip().lower() == stage:
+                        return True
+        except Exception:  # noqa: BLE001 — a malformed bundle must not break retrieval
+            LOG.debug("RAG-31 stage-activation scan failed", exc_info=True)
+        return False
 
     @staticmethod
     def _policy_requires_ranker(policy: dict[str, Any]) -> bool:
@@ -433,9 +541,15 @@ class RAGFirewallPipeline:
             },
         ))
 
-    @staticmethod
-    def _build_result(ctx: PipelineContext, total_retrieved: int, blocked: bool = False) -> PipelineResult:
+    @classmethod
+    def _build_result(cls, ctx: PipelineContext, total_retrieved: int, blocked: bool = False) -> PipelineResult:
         last_stage = ctx.stages[-1] if ctx.stages else None
+        # A terminating verdict returns before the remaining stages run. Record
+        # them, so their absence from the audit cannot be read as "these
+        # controls evaluated and passed". (RAG-19)
+        for name in CANONICAL_STAGES:
+            if name not in ctx.executed_stages:
+                ctx.mark_stage_skipped(name, "not_reached")
         audit = ctx.to_audit_dict()
         return PipelineResult(
             action="block" if blocked else (last_stage.verdict.action if last_stage else "allow"),
@@ -443,6 +557,10 @@ class RAGFirewallPipeline:
             filtered_count=total_retrieved,
             scan_verdict={
                 "action": last_stage.verdict.action if last_stage else "block",
+                # No flagged/anomalous keys here by design: emitting empty lists
+                # for a request that terminated before the ranker would assert a
+                # clean document scan that never happened. (RAG-19)
+                "document_content_scan": cls._content_scan_state(ctx),
                 "detail": last_stage.verdict.detail if last_stage else "",
             },
             pipeline_context=ctx,

@@ -715,10 +715,18 @@ PII_PATTERNS: Dict[str, str] = {
     # avoid false positives on arbitrary base64/hash blobs. Without this the
     # output guard masked only the AKIA id and egressed the secret in cleartext.
     "aws_secret_access_key": r"(?i)\baws[_-]?secret[_-]?access[_-]?key\b\s*[:=]\s*[\"']?[A-Za-z0-9/+=]{16,}",
-    # G93: ALL GitHub token classes share the ``gh?_`` + 36 base62 format — ghp_ (classic PAT),
+    # G93: ALL GitHub token classes share the ``gh?_`` + base62 format — ghp_ (classic PAT),
     # gho_ (OAuth), ghu_ (app user-to-server), ghs_ (app server-to-server), ghr_ (refresh). The
     # pattern previously matched only ghp_, so gho_/ghu_/ghs_/ghr_ tokens egressed undetected.
-    "github_token": r"\bgh[pousr]_[a-zA-Z0-9]{36}\b",
+    # RAG-04 (2026-08-04): the length was EXACT (``{36}``), so a real leaked token whose body is
+    # not precisely 36 base62 chars egressed in cleartext — PROVEN with a 38-char body
+    # (``ghp_ABCdef…abcdRT``), which the egress redactor passed through untouched. GitHub does not
+    # guarantee 36 forever (tokens have grown with the checksum suffix), so pin a RANGE that covers
+    # every shipped ``gh?_`` shape instead of one length. {32,40} keeps the 4-char provider prefix
+    # doing the false-positive work — a bare 32-40 base62 run only matches when it follows
+    # ``gh[pousr]_`` — so widening costs no meaningful FP. Single bounded quantifier over one
+    # character class, nothing nested => linear time, ReDoS-safe.
+    "github_token": r"\bgh[pousr]_[a-zA-Z0-9]{32,40}\b",
     # CHG-0054: match the ENTIRE PEM block (BEGIN header + base64 BODY + END footer),
     # not just the BEGIN line — else redact_all masked only the header and the key
     # MATERIAL (the actual secret) egressed intact. Generic key-type prefix covers
@@ -783,6 +791,15 @@ SECRET_PATTERNS: Dict[str, str] = {
     # chat input). bearer_token already existed in CREDENTIAL_EXPOSURE_PATTERNS (the
     # output guard) — fold the class into the ingest secret inventory too.
     "slack_token": r'\bxox[baprs]-[0-9A-Za-z-]{10,}\b',
+    # RAG-04 (2026-08-04): Slack APP-LEVEL tokens use the ``xapp-`` prefix, which the ``xox[baprs]-``
+    # class above does not cover — so a leaked app token (Socket Mode / org-wide app auth) egressed
+    # undetected. Same shape and same near-zero-FP rationale as ``slack_token``: a fixed distinctive
+    # provider prefix carries the specificity. Single bounded-below quantifier over one character
+    # class, nothing nested => ReDoS-safe.
+    # NOTE (RAG-04 audit): GitLab (``gitlab_pat``), GitHub fine-grained PATs
+    # (``github_fine_grained_pat``, in CREDENTIAL_EXPOSURE_PATTERNS) and the OpenAI ``sk-`` family
+    # (``api_key_openai``) were verified ALREADY PRESENT and firing — deliberately not duplicated.
+    "slack_app_token": r'\bxapp-[0-9A-Za-z-]{20,}\b',
     "jwt": r'\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b',
     "bearer_token": r'Bearer\s+[A-Za-z0-9_\-\.]{20,}',
     # G24: modern cloud/registry credential FORMATS the inventory missed, so a bare
@@ -1024,6 +1041,7 @@ COMPLIANCE_TAG_MAP: Dict[str, List[str]] = {
     "twilio_api_key": ["SECRET", "SOC2"],
     "gcp_service_account_key": ["SECRET", "SOC2"],
     "slack_token": ["SECRET", "SOC2"],
+    "slack_app_token": ["SECRET", "SOC2"],  # RAG-04
     "jwt": ["SECRET", "SOC2"],
 }
 
@@ -1280,6 +1298,7 @@ def _mask_secret_assignment(m: re.Match) -> str:
     if sep_match:
         return raw[: sep_match.end()] + "***"
     return raw[:4] + "***"
+
 
 
 

@@ -83,10 +83,26 @@ async def test_vector_db_isolation_default_on_passes_project_id():
     assert c.calls[0]["project_id"] == "org7-default"
 
 
-async def test_vector_db_isolation_off_passes_none():
+async def test_vector_db_isolation_cannot_be_disabled():
+    """RAG-03: tenant isolation is UNCONDITIONAL.
+
+    This previously asserted the VULNERABLE contract — with ``vector_db_isolation``
+    off the stage passed ``project_id=None``, which ``_build_collection_name``
+    interpolated into the single shared namespace ``None__{collection}`` that every
+    affected tenant then read and wrote. The toggle no longer suppresses the tenant
+    key: the authenticated project_id is always forwarded.
+    """
     c = _RecordingVectorClient([{"id": "d1", "content": "x", "score": 0.9}])
     await _run(_pipeline({"vector_db_isolation": False}), c, project_id="org7-default")
-    assert c.calls[0]["project_id"] is None
+    assert c.calls[0]["project_id"] == "org7-default"
+
+
+async def test_missing_tenant_namespace_fails_closed():
+    """RAG-03: no tenant key -> refuse to query the vector store (never query unscoped)."""
+    c = _RecordingVectorClient([{"id": "d1", "content": "x", "score": 0.9}])
+    result = await _run(_pipeline(), c, project_id="")
+    assert result.action == "block"
+    assert c.calls == [], "vector store must not be queried without a tenant namespace"
 
 
 # ── where_filter + namespace reach the client unchanged (no drop/mutation) ──

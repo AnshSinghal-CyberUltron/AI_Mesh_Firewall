@@ -27,7 +27,18 @@ ESCALATION_LEVELS: dict[int, EscalationConfig] = {
         force_sensitive_scan=True,
         relevance_threshold_boost=0.05,
     ),
-    # Level 2 — Strict: tighten anomaly by 40%, block on any flag
+    # Level 2 — Strict: tighten anomaly by 40%, block on any flag.
+    #
+    # Reachable ONLY via an explicit RAGFirewallPipeline.execute(escalation_level=…)
+    # opt-in. Auto-escalation cannot get here: it needs two upstream "flag"
+    # verdicts, the retriever never flags, and the ranker's only flag output
+    # (ranker_stage.py, "block_on_any_flag and (anomalous_indices or
+    # flagged_indices)") is itself gated on this level — circular.
+    #
+    # block_on_any_flag is therefore inert under auto-escalation, and stays that
+    # way deliberately. Moving it down to level 1 would arm blocking for every
+    # request a single upstream flag touched — the firewall taking an action the
+    # operator never selected. Level 2 is opt-in, not emergent. (RAG-20)
     2: EscalationConfig(
         anomaly_threshold_multiplier=0.60,
         trust_score_minimum=0.5,
