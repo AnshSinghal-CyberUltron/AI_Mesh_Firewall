@@ -146,7 +146,6 @@ def build_triage_context(
             "prefix": key.prefix,
             "name": key.name,
             "project_id": key.project_id,
-            "purpose": key.key_purpose,
             "mode": "traditional",
             "lifetime_requests": key.ueba_lifetime_request_count,
         },
@@ -175,7 +174,6 @@ def build_bootstrap_context(key, metric: dict, profile, org_settings=None) -> di
             "prefix": key.prefix,
             "name": key.name,
             "project_id": key.project_id,
-            "purpose": key.key_purpose,
             "lifetime_requests": key.ueba_lifetime_request_count,
         },
         "aggregate": {
@@ -294,7 +292,12 @@ def _call_bedrock_bootstrap(context: dict, client=None) -> dict[str, Any]:
 
 
 def run_llm_triage(context: dict, client=None, timeout_sec: float | None = None) -> dict[str, Any]:
-    """Call Bedrock for SOC triage. Returns degraded skip payload on failure or timeout."""
+    """Call Bedrock for SOC triage. Returns degraded skip payload on failure or timeout.
+
+    Timeout defaults to MODULE2_UEBA_LLM_TIMEOUT_SEC (30). A hung model must not
+    block Celery forever — degraded → assess_api_key keeps traditional score.
+    Rate admission is MODULE2_UEBA_LLM_MAX_PER_MIN (callers use _llm_rate_limit_ok).
+    """
     degraded = {
         "verdict": "skipped",
         "confidence": None,
@@ -324,6 +327,12 @@ def run_llm_triage(context: dict, client=None, timeout_sec: float | None = None)
 
 
 def run_llm_behavior_bootstrap(context: dict, client=None, timeout_sec: float | None = None) -> dict[str, Any]:
+    """Call Bedrock to bootstrap a behavior profile.
+
+    Same timeout / degrade contract as triage (MODULE2_UEBA_LLM_TIMEOUT_SEC).
+    Rate admission: MODULE2_UEBA_LLM_MAX_PER_MIN via caller _llm_rate_limit_ok.
+    Not invoked per gateway request — only during UEBA assess when profile needs bootstrap.
+    """
     degraded = {
         "expected_use_case": "",
         "behavior_class": "unknown",

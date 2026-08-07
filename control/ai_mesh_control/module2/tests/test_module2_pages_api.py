@@ -538,6 +538,51 @@ class Module2PagesApiTests(TestCase):
         self.assertIn("api_key_metrics", body)
         self.assertIn("weights", body["settings"])
         self.assertIn("weight_guardrails", body["settings"])
+        self.assertIn("prompt_target_locked", body["settings"])
+
+    @patch("module2.tasks.reassess_org_ueba_keys.delay")
+    @patch("module2.ueba_service.prompt_target_lock_state")
+    def test_ueba_risk_calculation_patch_rejects_prompt_target_when_profile_built(
+        self, lock_state, reassess_delay
+    ):
+        from module2.models import OrgUebaSettings
+        from module2.ueba_service import PROMPT_TARGET_LOCKED_PROFILE
+
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        settings_obj, _ = OrgUebaSettings.objects.get_or_create(organization=self.org)
+        settings_obj.behavior_profile_prompt_target = 50
+        settings_obj.save(update_fields=["behavior_profile_prompt_target"])
+
+        lock_state.return_value = {
+            "prompt_target_locked": True,
+            "prompt_target_lock_reason": PROMPT_TARGET_LOCKED_PROFILE,
+            "built_profile_count": 1,
+            "active_key_count": 0,
+        }
+
+        resp = self.client.patch(
+            "/api/module2/ueba/risk-calculation/",
+            {"behavior_profile_prompt_target": 75},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertIn("already built", resp.json().get("detail", "").lower())
+        settings_obj.refresh_from_db()
+        self.assertEqual(settings_obj.behavior_profile_prompt_target, 50)
+        reassess_delay.assert_not_called()
+
+        # Same value is allowed (no-op); other settings still editable.
+        resp_ok = self.client.patch(
+            "/api/module2/ueba/risk-calculation/",
+            {
+                "behavior_profile_prompt_target": 50,
+                "llm_triage_min_traditional_score": 0.5,
+            },
+            format="json",
+        )
+        self.assertEqual(resp_ok.status_code, 200, resp_ok.content)
+        self.assertTrue(resp_ok.json()["settings"]["prompt_target_locked"])
 
     @patch("module2.tasks.reassess_org_ueba_keys.delay")
     def test_ueba_risk_calculation_patch_updates_settings_for_admin(self, reassess_delay):

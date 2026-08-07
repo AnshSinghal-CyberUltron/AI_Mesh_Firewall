@@ -36,6 +36,9 @@ urlpatterns = [
     path("api/models/", include("core.model_state_urls")),
     path("api/mcp-connector/", include("mcp_connector.urls")),
     path("api/admin/", include("core.admin_urls")),
+    # Module 2 HTTP API mount (UEBA / fleet / alerts / threat intel / …).
+    # App code + route tables live under module2.urls; registration must stay
+    # here because Django root urlpatterns are owned by main_app.
     path("api/module2/", include("module2.urls")),
     path("ai-mesh-poc", poc_questionnaire_page, name="poc-questionnaire-page"),
     path("api/poc-questionnaire", poc_questionnaire_submit, name="poc-questionnaire-submit"),

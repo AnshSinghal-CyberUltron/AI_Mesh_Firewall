@@ -35,6 +35,8 @@ from module2.ueba_scoring import (
     baseline_deviation_factor,
     clamp,
     compute_traditional_score,
+    graduation_progress,
+    resolve_ueba_mode,
     risk_band_for_score,
     score_learning_mode,
 )
@@ -57,6 +59,74 @@ def get_or_create_org_settings(org):
         return None
     settings_obj, _ = OrgUebaSettings.objects.get_or_create(organization=org)
     return settings_obj
+
+
+PROMPT_TARGET_LOCKED_PROFILE = (
+    "Behavior profile already built for one or more API keys. "
+    "Prompt target cannot be changed."
+)
+PROMPT_TARGET_LOCKED_ACTIVE = (
+    "One or more API keys are already in active mode. "
+    "Prompt target cannot be changed."
+)
+
+
+def prompt_target_lock_state(org, org_settings=None) -> dict[str, Any]:
+    """Lock org prompt-target once any key has a built profile or is active.
+
+    Changing the target after graduation/profile-build would not rebuild those
+    keys (profiles stay ready), so operators must keep the locked value.
+    """
+    if org is None:
+        return {
+            "prompt_target_locked": False,
+            "prompt_target_lock_reason": "",
+            "built_profile_count": 0,
+            "active_key_count": 0,
+        }
+
+    from core.models import GatewayAPIKey
+    from module2.models import ApiKeyBehaviorProfile
+
+    settings_obj = org_settings or get_or_create_org_settings(org)
+    target = int(getattr(settings_obj, "behavior_profile_prompt_target", 50) or 50)
+
+    built_count = ApiKeyBehaviorProfile.objects.filter(
+        gateway_api_key__organization_id=org.id,
+        profile_built_at__isnull=False,
+    ).count()
+
+    # Active = lifetime requests already meet the current prompt target
+    # (same gate as resolve_ueba_mode / is_graduated without per-key override).
+    active_count = GatewayAPIKey.objects.filter(
+        organization_id=org.id,
+        ueba_lifetime_request_count__gte=target,
+    ).count()
+
+    if built_count > 0:
+        locked, reason = True, PROMPT_TARGET_LOCKED_PROFILE
+    elif active_count > 0:
+        locked, reason = True, PROMPT_TARGET_LOCKED_ACTIVE
+    else:
+        locked, reason = False, ""
+
+    return {
+        "prompt_target_locked": locked,
+        "prompt_target_lock_reason": reason,
+        "built_profile_count": built_count,
+        "active_key_count": active_count,
+    }
+
+
+def assert_prompt_target_change_allowed(org_settings, new_target: int) -> None:
+    """Raise ValueError when prompt target would change under a lock."""
+    current = int(getattr(org_settings, "behavior_profile_prompt_target", 50) or 50)
+    if int(new_target) == current:
+        return
+    org = getattr(org_settings, "organization", None)
+    lock = prompt_target_lock_state(org, org_settings)
+    if lock["prompt_target_locked"]:
+        raise ValueError(lock["prompt_target_lock_reason"] or PROMPT_TARGET_LOCKED_PROFILE)
 
 
 def latest_assessment_for_key(key):
@@ -144,6 +214,8 @@ def risk_calc_settings_payload(org_settings) -> dict:
         + weights["velocity"]
         + weights["policy_escalation"]
     )
+    org = getattr(org_settings, "organization", None)
+    lock = prompt_target_lock_state(org, org_settings)
     return {
         "behavior_profile_prompt_target": int(getattr(org_settings, "behavior_profile_prompt_target", 50)),
         "llm_triage_enabled": bool(getattr(org_settings, "llm_triage_enabled", True)),
@@ -151,6 +223,10 @@ def risk_calc_settings_payload(org_settings) -> dict:
         "high_risk_threshold": float(getattr(org_settings, "high_risk_threshold", 0.70)),
         "medium_risk_threshold": float(getattr(org_settings, "medium_risk_threshold", 0.35)),
         "weights": weights,
+        "prompt_target_locked": lock["prompt_target_locked"],
+        "prompt_target_lock_reason": lock["prompt_target_lock_reason"],
+        "built_profile_count": lock["built_profile_count"],
+        "active_key_count": lock["active_key_count"],
         "weight_guardrails": {
             "traditional_weight_max": TRADITIONAL_WEIGHT_MAX,
             "traditional_weight_min_sum": TRADITIONAL_WEIGHT_MIN_SUM,
@@ -277,6 +353,11 @@ def update_org_ueba_settings(org_settings, payload: dict):
         "high_risk_threshold": "high_risk_threshold",
         "medium_risk_threshold": "medium_risk_threshold",
     }
+    if "behavior_profile_prompt_target" in payload:
+        assert_prompt_target_change_allowed(
+            org_settings,
+            int(payload["behavior_profile_prompt_target"]),
+        )
     for src, dst in mapping.items():
         if src in payload:
             setattr(org_settings, dst, payload[src])
@@ -328,6 +409,12 @@ def _risk_metric_extras(breakdown: dict, metric: dict) -> dict:
 
 
 def _llm_rate_limit_ok(org_id: int | None) -> bool:
+    """Allow another UEBA Bedrock call for this org within MODULE2_UEBA_LLM_MAX_PER_MIN.
+
+    Sliding 60s window, per organization. Used only for behavior-profile
+    bootstrap and LLM triage inside assess_api_key — never for live gateway
+    request admission. Over budget → skip LLM; traditional score still applies.
+    """
     if org_id is None:
         return True
     max_per_min = int(getattr(settings, "MODULE2_UEBA_LLM_MAX_PER_MIN", 10))
@@ -375,6 +462,7 @@ def assess_api_key(
     org_id = getattr(key, "organization_id", None)
     llm_allowed = run_llm if run_llm is not None else True
 
+    # LLM bootstrap (rare): once profile samples hit prompt-target — not per API request.
     if llm_allowed and needs_bootstrap(profile, org_settings) and _llm_rate_limit_ok(org_id):
         if org_settings is None or org_settings.llm_triage_enabled:
             bootstrap_ctx = build_bootstrap_context(key, metric, profile, org_settings=org_settings)
@@ -409,6 +497,8 @@ def assess_api_key(
         if run_llm is False:
             do_triage = False
 
+    # LLM triage (occasional): only when profile ready + score/anomaly gates fire.
+    # Shared org budget MODULE2_UEBA_LLM_MAX_PER_MIN; timeout MODULE2_UEBA_LLM_TIMEOUT_SEC.
     if do_triage and _llm_rate_limit_ok(org_id):
         context = build_triage_context(
             key,
@@ -441,8 +531,13 @@ def assess_api_key(
     if breakdown.get("band_cap") == "medium" and risk_band == "high":
         risk_band = "medium"
 
+    mode = resolve_ueba_mode(key, org_settings, now)
+    progress = graduation_progress(key, org_settings, now)
+
     return {
         "computed_at": now,
+        "ueba_mode": mode,
+        "graduation_progress": progress,
         "traditional_score": traditional,
         "llm_score": llm_score,
         "final_score": final_score,
@@ -483,7 +578,7 @@ def persist_assessment(key, assessment: dict):
     snapshot = ApiKeyRiskAssessment.objects.create(
         gateway_api_key=key,
         computed_at=assessment["computed_at"],
-        ueba_mode="learning",
+        ueba_mode=assessment.get("ueba_mode") or "learning",
         traditional_score=assessment["traditional_score"],
         llm_score=assessment["llm_score"],
         final_score=assessment["final_score"],
@@ -493,7 +588,7 @@ def persist_assessment(key, assessment: dict):
         llm_confidence=assessment["llm_confidence"],
         llm_reasoning=assessment["llm_reasoning"],
         llm_recommended_action=assessment["llm_recommended_action"],
-        graduation_progress={},
+        graduation_progress=assessment.get("graduation_progress") or {},
     )
     prune_assessment_history(key)
     return snapshot
@@ -591,7 +686,6 @@ def assessment_to_risk_payload(key, metric: dict, assessment: ApiKeyRiskAssessme
             "name": key.name,
             "project_id": key.project_id,
             "is_active": key.is_active,
-            "key_purpose": key.key_purpose,
             "risk_band": risk_band,
             "risk_score": round(score, 3),
             "final_score": round(score, 3),
@@ -665,7 +759,6 @@ def assessment_to_risk_payload(key, metric: dict, assessment: ApiKeyRiskAssessme
         "name": key.name,
         "project_id": key.project_id,
         "is_active": key.is_active,
-        "key_purpose": key.key_purpose,
         "risk_band": a.get("risk_band", "low"),
         "risk_score": round(float(a.get("final_score", 0)), 3),
         "final_score": round(float(a.get("final_score", 0)), 3),

@@ -257,6 +257,10 @@ function UebaApiKeysPageInner() {
   const restoreRiskCalculationDefaults = useCallback(async () => {
     if (!canEditRiskCalc) return;
     const defaults = cloneDefaultRiskCalcSettings();
+    // Keep locked prompt target — profiles already built cannot retarget.
+    if (riskCalcDraft?.prompt_target_locked) {
+      defaults.behavior_profile_prompt_target = riskCalcDraft.behavior_profile_prompt_target;
+    }
     setRiskCalcSaving(true);
     setRiskCalcSaveError(null);
     try {
@@ -272,7 +276,7 @@ function UebaApiKeysPageInner() {
     } finally {
       setRiskCalcSaving(false);
     }
-  }, [api, canEditRiskCalc, load]);
+  }, [api, canEditRiskCalc, load, riskCalcDraft]);
 
   useEffect(() => {
     const onTelemetry = () => {

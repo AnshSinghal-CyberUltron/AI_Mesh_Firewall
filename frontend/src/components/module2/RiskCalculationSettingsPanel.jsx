@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Settings2 } from "lucide-react";
 import {
   buildRiskCalcFormulaLines,
@@ -24,6 +24,71 @@ function NumberInput({ label, value, step = "0.01", min = "0", max = "1", onChan
   );
 }
 
+/**
+ * Free-type integer field (no spinner steppers). User types any digits;
+ * value is clamped to [min, max] on blur. Used for prompt target so
+ * operators can enter a custom target (default 50) instead of clicking arrows.
+ */
+function FreeIntegerInput({
+  label,
+  value,
+  min = 10,
+  max = 500,
+  onChange,
+  disabled = false,
+  helperText = null,
+}) {
+  const [text, setText] = useState(value == null ? "" : String(value));
+
+  useEffect(() => {
+    setText(value == null ? "" : String(value));
+  }, [value]);
+
+  const commit = (raw) => {
+    const digits = String(raw ?? "").replace(/\D/g, "");
+    if (digits === "") {
+      setText(String(min));
+      onChange(min);
+      return;
+    }
+    let n = Number(digits);
+    if (Number.isNaN(n)) n = min;
+    if (n < min) n = min;
+    if (n > max) n = max;
+    setText(String(n));
+    onChange(n);
+  };
+
+  return (
+    <label className="text-xs text-slate-600 dark:text-slate-300">
+      <span className="mb-1 block font-medium">{label}</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        spellCheck={false}
+        className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm tabular-nums disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800"
+        value={text}
+        disabled={disabled}
+        aria-label={label}
+        onChange={(e) => {
+          // Allow free typing of digits only; no spinner UI.
+          const digits = e.target.value.replace(/\D/g, "");
+          setText(digits);
+          if (digits === "") return;
+          const n = Number(digits);
+          if (!Number.isNaN(n)) onChange(n);
+        }}
+        onBlur={() => commit(text)}
+      />
+      <span className="mt-0.5 block text-[10px] text-slate-400">
+        {helperText
+          || `Default 50. Type any integer ${min}–${max}; Save & reassess applies it to scoring.`}
+      </span>
+    </label>
+  );
+}
+
 export function RiskCalculationSettingsPanel({
   draft,
   guardrails,
@@ -41,6 +106,13 @@ export function RiskCalculationSettingsPanel({
   const liveWeightSum = useMemo(() => traditionalWeightSum(draft), [draft]);
   if (!draft) return null;
 
+  const promptMin = guardrails?.prompt_target_min ?? 10;
+  const promptMax = guardrails?.prompt_target_max ?? 500;
+  const promptLocked = Boolean(draft.prompt_target_locked);
+  const promptLockReason = draft.prompt_target_lock_reason
+    || "Behavior profile already built. Prompt target cannot be changed.";
+  const promptEditable = canEdit && !promptLocked;
+
   const handleRestoreDefaults = async () => {
     if (!canEdit || restoring) return;
     if (onRestoreDefaults) {
@@ -53,6 +125,11 @@ export function RiskCalculationSettingsPanel({
       return;
     }
     const defaults = applyDefaultRiskCalcSettings(draft);
+    if (promptLocked) {
+      defaults.behavior_profile_prompt_target = draft.behavior_profile_prompt_target;
+      defaults.prompt_target_locked = draft.prompt_target_locked;
+      defaults.prompt_target_lock_reason = draft.prompt_target_lock_reason;
+    }
     onChange((next) => {
       Object.keys(next).forEach((key) => delete next[key]);
       Object.assign(next, defaults);
@@ -86,15 +163,24 @@ export function RiskCalculationSettingsPanel({
               Read-only: only platform admins can change calculation settings.
             </p>
           )}
+          {promptLocked && (
+            <p className="mb-3 text-xs text-amber-700 dark:text-amber-300">
+              {promptLockReason}
+            </p>
+          )}
           {saveError && <p className="mb-3 text-xs text-red-600">{saveError}</p>}
           <div className="grid gap-3 sm:grid-cols-2">
-            <NumberInput
+            <FreeIntegerInput
               label="Prompt target for behavior profile"
               value={draft.behavior_profile_prompt_target}
-              step="1"
-              min="10"
-              max="500"
-              disabled={!canEdit}
+              min={promptMin}
+              max={promptMax}
+              disabled={!promptEditable}
+              helperText={
+                promptLocked
+                  ? "Locked — profile already built or key already active."
+                  : undefined
+              }
               onChange={(v) => onChange((next) => { next.behavior_profile_prompt_target = v; })}
             />
             <NumberInput

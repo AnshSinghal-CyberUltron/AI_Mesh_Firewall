@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from module2.ueba_metrics import hourly_counts_chronological, latest_hourly_count
@@ -33,8 +33,8 @@ MIN_CURRENT_EVENTS = 20
 LOW_BASELINE_EPS = 0.01
 LLM_BLEND_WEIGHT = 0.45
 
-SCANNER_DEFAULT_GRADUATION_REQUESTS = 10
-SCANNER_DEFAULT_GRADUATION_DAYS = 1.0
+# Fallback when org settings / key override are absent.
+DEFAULT_GRADUATION_REQUESTS = 50
 
 
 def clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
@@ -109,43 +109,45 @@ def _resolve_learning_weights(weights: dict[str, float] | None) -> dict[str, flo
     return {k: max(0.0, v) / total for k, v in merged.items()}
 
 
-def graduation_thresholds(
-    key,
-    org_settings,
-) -> tuple[int, float]:
-    purpose = getattr(key, "key_purpose", None)
-    if purpose == "scanner":
-        req = getattr(key, "ueba_graduation_requests", None)
-        if req is None and org_settings is not None:
-            req = getattr(org_settings, "scanner_graduation_min_requests", None)
-        if req is None:
-            req = SCANNER_DEFAULT_GRADUATION_REQUESTS
-        days = getattr(key, "ueba_graduation_days", None)
-        if days is None and org_settings is not None:
-            days = getattr(org_settings, "scanner_graduation_min_days", None)
-        if days is None:
-            days = SCANNER_DEFAULT_GRADUATION_DAYS
-        return int(req), float(days)
+def graduation_threshold_requests(key, org_settings) -> int:
+    """Requests/prompts required before learning → active.
 
-    req = key.ueba_graduation_requests
-    if req is None and org_settings:
-        req = org_settings.graduation_min_requests
-    if req is None:
-        req = 50
-    days = key.ueba_graduation_days
-    if days is None and org_settings:
-        days = org_settings.graduation_min_days
-    if days is None:
-        days = 7.0
-    return int(req), float(days)
+    Single org source of truth: UI ``behavior_profile_prompt_target``
+    (default 50). Same number drives baseline profile building AND
+    learning→active. Days are NOT a gate.
+
+    Resolution order:
+      1. per-key ``ueba_graduation_requests`` override (if set)
+      2. org ``behavior_profile_prompt_target`` (UI prompt target)
+      3. ``DEFAULT_GRADUATION_REQUESTS`` (50)
+    """
+    override = getattr(key, "ueba_graduation_requests", None)
+    if override is not None:
+        return int(override)
+
+    if org_settings is not None:
+        prompt_target = getattr(org_settings, "behavior_profile_prompt_target", None)
+        if prompt_target is not None:
+            return int(prompt_target)
+
+    return DEFAULT_GRADUATION_REQUESTS
+
+
+# Back-compat alias for callers that still import the old name.
+def graduation_thresholds(key, org_settings) -> int:
+    return graduation_threshold_requests(key, org_settings)
 
 
 def is_graduated(key, org_settings, now: datetime | None = None) -> bool:
-    now = now or datetime.now(key.created_at.tzinfo)
-    threshold_requests, threshold_days = graduation_thresholds(key, org_settings)
+    """True when lifetime request count meets the prompt/request threshold.
+
+    ``now`` is accepted for call-site compatibility but unused — graduation is
+    not time-based.
+    """
+    del now  # prompts-only; calendar age must not graduate a key
+    threshold = graduation_threshold_requests(key, org_settings)
     lifetime = int(getattr(key, "ueba_lifetime_request_count", 0) or 0)
-    age_days = (now - key.created_at).total_seconds() / 86400.0
-    return lifetime >= threshold_requests or age_days >= threshold_days
+    return lifetime >= threshold
 
 
 def resolve_ueba_mode(key, org_settings, now: datetime | None = None) -> str:
@@ -156,21 +158,18 @@ def resolve_ueba_mode(key, org_settings, now: datetime | None = None) -> str:
 
 
 def graduation_progress(key, org_settings, now: datetime | None = None) -> dict[str, Any]:
-    now = now or datetime.now(key.created_at.tzinfo)
-    threshold_requests, threshold_days = graduation_thresholds(key, org_settings)
+    """Progress toward learning → active (requests only; no days field)."""
+    del now
+    threshold = graduation_threshold_requests(key, org_settings)
     lifetime = int(getattr(key, "ueba_lifetime_request_count", 0) or 0)
-    age_days = (now - key.created_at).total_seconds() / 86400.0
-    req_pct = min(100.0, (lifetime / threshold_requests) * 100.0) if threshold_requests else 100.0
-    day_pct = min(100.0, (age_days / threshold_days) * 100.0) if threshold_days else 100.0
+    req_pct = min(100.0, (lifetime / threshold) * 100.0) if threshold else 100.0
     return {
         "requests": lifetime,
-        "days": round(age_days, 2),
         "thresholds": {
-            "requests": threshold_requests,
-            "days": threshold_days,
+            "requests": threshold,
         },
-        "pct_complete": round(max(req_pct, day_pct), 1),
-        "graduated": is_graduated(key, org_settings, now),
+        "pct_complete": round(req_pct, 1),
+        "graduated": lifetime >= threshold,
     }
 
 

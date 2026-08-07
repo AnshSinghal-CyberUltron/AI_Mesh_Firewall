@@ -125,6 +125,8 @@ INSTALLED_APPS = [
     "ws.apps.WsConfig",
     "security_engines.apps.SecurityEnginesConfig",
     "mcp_connector.apps.McpConnectorConfig",
+    # Module 2 (UEBA / fleet / threat intel) — app code lives under module2/;
+    # registration must stay here because Django INSTALLED_APPS is main_app-owned.
     "module2.apps.Module2Config",
     # "console.apps.ConsoleConfig",
 ]
@@ -440,12 +442,29 @@ TELEMETRY_DRAIN_INTERVAL_SEC = float(os.environ.get("TELEMETRY_DRAIN_INTERVAL_SE
 TELEMETRY_GATEWAY_JOB_DRAIN_INTERVAL_SEC = float(os.environ.get("TELEMETRY_GATEWAY_JOB_DRAIN_INTERVAL_SEC", "1.0"))
 TELEMETRY_DRAIN_MODE = os.environ.get("TELEMETRY_DRAIN_MODE", "beat").strip().lower()
 
+# ---------------------------------------------------------------------------
+# Module 2 env knobs (UEBA + projection repair)
+# ---------------------------------------------------------------------------
+# Location: main_app/settings.py (Django/Celery settings are centralized here).
+# Product code lives under module2/; these knobs are NOT Module 1 features.
+#
+# They tune BACKGROUND Module 2 work (Celery beat / assessments). They do NOT
+# throttle live gateway traffic for an API key. A key can still serve thousands
+# of requests/minute; telemetry → traditional UEBA scoring still runs without
+# needing Bedrock.
+# ---------------------------------------------------------------------------
+
+# --- Telemetry / threat-intel projection self-heal (beat jobs) ---
+# repair_telemetry_metadata / repair_threat_intel_projection use these so
+# heal jobs stay bounded (interval + batch + lookback), not continuous scans.
 MODULE2_TELEMETRY_REPAIR_INTERVAL_SEC = float(os.environ.get("MODULE2_TELEMETRY_REPAIR_INTERVAL_SEC", "300"))
 MODULE2_TELEMETRY_REPAIR_BATCH_SIZE = int(os.environ.get("MODULE2_TELEMETRY_REPAIR_BATCH_SIZE", "250"))
 MODULE2_TELEMETRY_REPAIR_LOOKBACK_HOURS = int(os.environ.get("MODULE2_TELEMETRY_REPAIR_LOOKBACK_HOURS", "720"))
 MODULE2_THREAT_INTEL_REPAIR_INTERVAL_SEC = float(
     os.environ.get("MODULE2_THREAT_INTEL_REPAIR_INTERVAL_SEC", "300")
 )
+
+# --- Optional UEBA auto kill-switch (destructive; default OFF) ---
 MODULE2_UEBA_AUTO_KILL_ENABLED = os.environ.get("MODULE2_UEBA_AUTO_KILL_ENABLED", "false").lower() in (
     "1",
     "true",
@@ -453,9 +472,40 @@ MODULE2_UEBA_AUTO_KILL_ENABLED = os.environ.get("MODULE2_UEBA_AUTO_KILL_ENABLED"
     "on",
 )
 MODULE2_UEBA_AUTO_KILL_LOOKBACK_HOURS = int(os.environ.get("MODULE2_UEBA_AUTO_KILL_LOOKBACK_HOURS", "24"))
+
+# Seed / fallback when org has no OrgUebaSettings.behavior_profile_prompt_target.
+# Product default is 50 (UI "prompt target"); org UI override wins when set.
 MODULE2_UEBA_BEHAVIOR_PROMPT_TARGET = int(os.environ.get("MODULE2_UEBA_BEHAVIOR_PROMPT_TARGET", "50"))
+
+# --- UEBA Bedrock LLM budget (profile bootstrap + triage ONLY) ---
+#
+# Consumers:
+#   * module2.ueba_service._llm_rate_limit_ok  → MODULE2_UEBA_LLM_MAX_PER_MIN
+#   * module2.ueba_llm_analyst.run_llm_triage / run_llm_behavior_bootstrap
+#       → MODULE2_UEBA_LLM_TIMEOUT_SEC
+#
+# Called from assess_api_key during Celery reassessment / post-drain hooks —
+# NOT from the gateway request path. One busy key with 3000 req/min still gets
+# at most one LLM attempt per reassessment that needs bootstrap/triage, not
+# one LLM call per request.
+#
+# MODULE2_UEBA_LLM_MAX_PER_MIN (default 10):
+#   Sliding 60s budget of Bedrock calls PER ORGANIZATION (in-process bucket).
+#   Covers both behavior-profile bootstrap and SOC triage. When the org is
+#   over budget, that assess skips LLM and keeps traditional (+ baseline)
+#   scoring — product stays available; enrichment is deferred.
+#   Scale note: raise this if one org has many keys needing triage in the
+#   same minute — not because a single key has high RPS.
+#
+# MODULE2_UEBA_LLM_TIMEOUT_SEC (default 30):
+#   Wall-clock cap for one Bedrock call. On timeout/error the analyst returns
+#   a degraded payload; assess_api_key continues with traditional score so
+#   Celery workers are not wedged on a hung model.
+#
 MODULE2_UEBA_LLM_MAX_PER_MIN = int(os.environ.get("MODULE2_UEBA_LLM_MAX_PER_MIN", "10"))
 MODULE2_UEBA_LLM_TIMEOUT_SEC = float(os.environ.get("MODULE2_UEBA_LLM_TIMEOUT_SEC", "30"))
+
+# Keep last N UEBA assessment rows per key (storage hygiene after reassess).
 MODULE2_UEBA_ASSESSMENT_RETENTION_COUNT = int(os.environ.get("MODULE2_UEBA_ASSESSMENT_RETENTION_COUNT", "48"))
 
 CELERY_BEAT_SCHEDULE = {
@@ -477,6 +527,7 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.tasks.update_risk_scores_from_telemetry",
         "schedule": 300.0,
     },
+    # --- Module 2 beat jobs (tasks implemented in module2.tasks) ---
     "module2-reassess-ueba-keys": {
         "task": "module2.tasks.reassess_all_active_ueba_keys",
         "schedule": 300.0,
@@ -516,6 +567,7 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
+# Module 2: opt-in UEBA auto kill-switch evaluator (default OFF via env above).
 if MODULE2_UEBA_AUTO_KILL_ENABLED:
     CELERY_BEAT_SCHEDULE["module2-ueba-auto-kill"] = {
         "task": "module2.tasks.evaluate_ueba_auto_kill_switches",

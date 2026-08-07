@@ -21,8 +21,16 @@ test("buildRiskCalcFormulaLines substitutes draft weights", () => {
     },
   });
   assert.match(lines.traditional, /0\.5×block_rate/);
-  assert.match(lines.post_profile, /0\.2 × behavior_deviation_factor/);
+  assert.match(lines.post_profile, /0\.2 × behavior_deviation_factor \(after 50 prompts\)/);
   assert.match(lines.final, /0\.45 × llm_adjustment/);
+});
+
+test("buildRiskCalcFormulaLines reflects user prompt-target override", () => {
+  const lines = buildRiskCalcFormulaLines({
+    behavior_profile_prompt_target: 75,
+    weights: { baseline_deviation: 0.2 },
+  });
+  assert.match(lines.post_profile, /after 75 prompts/);
 });
 
 test("buildRiskCalcFormulaLines updates when weights change", () => {

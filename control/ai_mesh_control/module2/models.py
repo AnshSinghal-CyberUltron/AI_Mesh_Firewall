@@ -224,19 +224,23 @@ class ThreatIntelProjectionState(models.Model):
 
 
 class OrgUebaSettings(models.Model):
-    """Organization-wide UEBA graduation and scoring thresholds."""
+    """Organization-wide UEBA scoring thresholds.
+
+    One operator knob: ``behavior_profile_prompt_target`` (default 50).
+    That value is the sample count for behavior-profile building and the
+    request threshold shown for observation / learning→active progress.
+    Operators override it in Configure score calculation; Save & reassess
+    applies it org-wide. Calendar-day gates were removed.
+    """
 
     organization = models.OneToOneField(
         "auth_api.Organization",
         on_delete=models.CASCADE,
         related_name="ueba_settings",
     )
-    graduation_min_requests = models.PositiveIntegerField(default=50)
-    graduation_min_days = models.FloatField(default=7.0)
-    scanner_graduation_min_requests = models.PositiveIntegerField(default=10)
-    scanner_graduation_min_days = models.FloatField(default=1.0)
     llm_triage_enabled = models.BooleanField(default=True)
     llm_triage_min_traditional_score = models.FloatField(default=0.45)
+    # UI "Prompt target for behavior profile" — default 50; user override.
     behavior_profile_prompt_target = models.PositiveIntegerField(default=50)
     weight_block_rate = models.FloatField(default=0.50)
     weight_threat_severity = models.FloatField(default=0.25)

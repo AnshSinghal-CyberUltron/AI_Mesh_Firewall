@@ -2127,10 +2127,13 @@ def _record_event(
             scan_findings=safe_scan_findings,
         )
 
-        # ── Mirror to EnforcementEvent so AI Mesh Firewall dashboard
-        #    (graphs, OWASP stats, "Recent MCP and context evidence") shows
-        #    MCP traffic. The Module 1.4 page filters EnforcementEvent by
-        #    metadata.source == "mcp_scan", so we always tag it that way.
+        # ── Mirror to EnforcementEvent (shared security log)
+        #    Module 1.4 threat-feed / MCP evidence filters metadata.source
+        #    == "mcp_scan". Module 2 (UEBA / API-key risk / MCP Risk) also
+        #    scores keys from EnforcementEvent — without this copy, sync
+        #    MCP tool calls stay MCPEvent-only and look "quiet" to Module 2.
+        #    Async gateway audits mirror in mcp_connector.tasks; this is the
+        #    sync/control-plane path (Policy Simulator, tools/call UI, etc.).
         if org is not None:
             try:
                 from policy.models import EnforcementEvent as _EnforcementEvent
@@ -2283,6 +2286,10 @@ def _record_event(
                     user_id=actor_user_id,
                     metadata=_ef_metadata,
                 )
+                # PR #71: push a live toast/WS update after the mirror so
+                # operators (and Module 2 live panels) see MCP blocks/redacts
+                # immediately — same notify path as chat EnforcementEvents.
+                # Failure here must not undo the MCPEvent or EF row above.
                 try:
                     from ws.notify import send_enforcement_notification
 

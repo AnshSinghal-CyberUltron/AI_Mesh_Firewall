@@ -331,12 +331,12 @@ class GatewayAPIKey(models.Model):
     rate_limit_tokens_per_minute = models.PositiveIntegerField(
         default=DEFAULT_RATE_LIMIT_TPM, help_text="Rate limit in Tokens Per Minute (TPM)."
     )
-    KEY_PURPOSE_CHOICES = [
-        ("production", "Production"),
-        ("test", "Test"),
-        ("simulator", "Simulator"),
-        ("scanner", "Scanner"),
-    ]
+    # ------------------------------------------------------------------
+    # Module 2 UEBA (identity risk) — fields live on GatewayAPIKey in core/
+    # because API keys are shared infra; logic/UI live under module2/.
+    # Schema: core migration 0029. No key_purpose column (simulator =
+    # project_id/name simulator-{slug}). No ueba_graduation_days gate.
+    # ------------------------------------------------------------------
     UEBA_MODE_CHOICES = [
         ("learning", "Learning"),
         ("active", "Active"),
@@ -350,6 +350,7 @@ class GatewayAPIKey(models.Model):
     # (fraction -> 0-100 int security_risk_score) and the gateway service
     # (ai_mesh_gateway/main.py divides ModelState verdict scores by 100.0
     # before mixing them with fraction-scale telemetry risk).
+    # Module 2: help_text documents unified UEBA final score (engine writes it).
     risk_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
@@ -358,33 +359,34 @@ class GatewayAPIKey(models.Model):
             "Written by scoring engine."
         ),
     )
-    # UEBA v2 columns (migrations 0029/0036). Must stay on the model: the DB
-    # columns are NOT NULL without a server DEFAULT, so ORM creates that omit
-    # them insert NULL → IntegrityError on POST /api/gateways/keys/.
-    key_purpose = models.CharField(
-        max_length=16,
-        choices=KEY_PURPOSE_CHOICES,
-        default="production",
-        db_index=True,
-    )
+    # Must stay on the ORM: DB columns are NOT NULL without a server DEFAULT;
+    # creates that omit them insert NULL → IntegrityError on
+    # POST /api/gateways/keys/.
     ueba_mode = models.CharField(
         max_length=16,
         choices=UEBA_MODE_CHOICES,
         default="learning",
         db_index=True,
+        help_text="learning = observe + soft score; active = full UEBA posture.",
     )
+    # Optional per-key override. NULL → org behavior_profile_prompt_target
+    # (UI default 50). Same knob drives behavior-profile baseline building.
     ueba_graduation_requests = models.PositiveIntegerField(
         null=True,
         blank=True,
-        help_text="Override org default minimum requests before active mode.",
+        help_text="Override org prompt-target before active mode.",
     )
-    ueba_graduation_days = models.FloatField(
+    # Incremented on telemetry ingest; compared to prompt-target / override.
+    ueba_lifetime_request_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Lifetime requests ever seen for this key (UEBA).",
+    )
+    # Set when learning baseline is locked / key enters active; NULL while learning.
+    ueba_baseline_locked_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="Override org default minimum days before active mode.",
+        help_text="When the UEBA learning baseline was locked (active).",
     )
-    ueba_lifetime_request_count = models.PositiveIntegerField(default=0)
-    ueba_baseline_locked_at = models.DateTimeField(null=True, blank=True)
     max_context_tokens = models.PositiveIntegerField(
         default=0,
         help_text="Max context tokens per request. 0 = unlimited.",
@@ -444,7 +446,6 @@ class GatewayAPIKey(models.Model):
         max_context_tokens: int = 0,
         mcp_allowed_tools: list | None = None,
         mcp_max_tool_calls: int = 0,
-        key_purpose: str = "production",
     ) -> tuple["GatewayAPIKey", str]:
         """
         Create a new GatewayAPIKey with a cryptographically secure key.
@@ -453,7 +454,6 @@ class GatewayAPIKey(models.Model):
         raw_key = secrets.token_urlsafe(KEY_LENGTH)[:KEY_LENGTH]
         key_hash = cls.hash_raw_key(raw_key)
         prefix = raw_key[:KEY_PREFIX_LENGTH]
-        purpose = key_purpose if key_purpose in {c[0] for c in cls.KEY_PURPOSE_CHOICES} else "production"
 
         instance = cls.objects.create(
             prefix=prefix,
@@ -469,7 +469,6 @@ class GatewayAPIKey(models.Model):
             max_context_tokens=max_context_tokens,
             mcp_allowed_tools=mcp_allowed_tools if mcp_allowed_tools is not None else [],
             mcp_max_tool_calls=mcp_max_tool_calls,
-            key_purpose=purpose,
         )
         return instance, raw_key
 
@@ -604,7 +603,6 @@ class GatewayAPIKey(models.Model):
                 owner=owner,
                 project_id=project_id,
                 allowed_models=[],
-                key_purpose="simulator",
             )
             if not instance.organization_id:
                 instance.organization = organization
@@ -638,7 +636,6 @@ class GatewayAPIKey(models.Model):
             owner=owner,
             project_id=project_id,
             allowed_models=[],
-            key_purpose="simulator",
         )
         if not instance.organization_id:
             instance.organization = organization
@@ -734,7 +731,6 @@ class GatewayAPIKey(models.Model):
             permissions=_playground_permissions(),
             allowed_models=[],
             risk_score=0.0,
-            key_purpose="test",
         )
         if not instance.organization_id:
             instance.organization = organization

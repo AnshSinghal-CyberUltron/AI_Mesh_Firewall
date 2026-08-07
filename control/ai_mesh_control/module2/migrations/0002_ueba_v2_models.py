@@ -16,8 +16,8 @@ class Migration(migrations.Migration):
             name="OrgUebaSettings",
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("graduation_min_requests", models.PositiveIntegerField(default=50)),
-                ("graduation_min_days", models.FloatField(default=7.0)),
+                # graduation_min_requests / graduation_min_days intentionally omitted:
+                # single org knob is behavior_profile_prompt_target (migration 0006).
                 ("llm_triage_enabled", models.BooleanField(default=True)),
                 ("llm_triage_min_traditional_score", models.FloatField(default=0.45)),
                 ("high_risk_threshold", models.FloatField(default=0.70)),
