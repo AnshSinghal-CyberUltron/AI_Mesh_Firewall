@@ -331,12 +331,7 @@ class GatewayAPIKey(models.Model):
     rate_limit_tokens_per_minute = models.PositiveIntegerField(
         default=DEFAULT_RATE_LIMIT_TPM, help_text="Rate limit in Tokens Per Minute (TPM)."
     )
-    # ------------------------------------------------------------------
-    # Module 2 UEBA (identity risk) — fields live on GatewayAPIKey in core/
-    # because API keys are shared infra; logic/UI live under module2/.
-    # Schema: core migration 0029. No key_purpose column (simulator =
-    # project_id/name simulator-{slug}). No ueba_graduation_days gate.
-    # ------------------------------------------------------------------
+    # Module 2 UEBA fields on shared GatewayAPIKey (schema: core.0029; no key_purpose / days)
     UEBA_MODE_CHOICES = [
         ("learning", "Learning"),
         ("active", "Active"),

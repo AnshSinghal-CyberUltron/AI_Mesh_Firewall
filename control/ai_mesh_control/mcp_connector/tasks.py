@@ -1,27 +1,4 @@
-"""Celery tasks for MCP connector audit ingestion.
-
-Primary job: persist gateway MCP audit envelopes as ``MCPEvent`` rows.
-
-Module 2 bridge (PR #71): after a successful MCPEvent write, also mirror the
-decision into ``EnforcementEvent`` + push a websocket notification so Module 2
-MCP risk / threat-feed / live UI (which read EnforcementEvent + WS) see MCP
-outcomes in near real time. Historical gaps are healed by
-``module2.mcp_enforcement_projection.repair_mcp_enforcement_projection``.
-
-E2E (happy path)
-----------------
-1. Gateway finishes an MCP tool call (block/redact/allow/…) and enqueues an
-   ``mcp_audit`` gateway job (or posts to the internal record-event path).
-2. ``core.tasks._handle_gateway_job`` → ``record_mcp_event_task.delay(payload)``.
-3. This task creates ``MCPEvent`` (MCP Observability / compliance tags).
-4. If ``organization_id`` is known: create mirrored ``EnforcementEvent``
-   (``metadata.source=mcp_scan``) and ``send_enforcement_notification``.
-5. Frontend Module 2 / §1.4 threat-feed (``source=mcp_scan``) and live toasts
-   consume the EnforcementEvent / WS payload.
-
-Mirror failures are logged and must NOT fail MCPEvent persistence (audit
-must survive even if the Module 2 bridge errors).
-"""
+"""MCP audit Celery tasks. Module 2: after MCPEvent, mirror to EnforcementEvent + WS."""
 
 import logging
 
@@ -29,8 +6,8 @@ from celery import shared_task
 
 from auth.models import Organization
 from mcp_connector.models import MCPEvent
-from policy.models import EnforcementEvent
-from ws.notify import send_enforcement_notification
+from policy.models import EnforcementEvent  # Module 2 bridge target
+from ws.notify import send_enforcement_notification  # Module 2 live toast
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +29,7 @@ def _normalize_compliance_tags(tags) -> list:
 
 
 def _mcp_decision_to_action(decision: str) -> str:
-    """Map MCP audit ``decision`` onto EnforcementEvent.action vocabulary.
-
-    Module 2 / threat-feed collapse treat block > redact > monitor. Unknown or
-    allow/scan_skipped/error-ish values collapse to ``monitor`` so they still
-    appear in aggregates without looking like a hard block.
-    """
+    """Module 2: map MCP decision → EnforcementEvent.action (block/redact/monitor)."""
     action = (decision or "").strip().lower()
     if action == "block":
         return "block"
@@ -67,13 +39,7 @@ def _mcp_decision_to_action(decision: str) -> str:
 
 
 def _mirror_metadata(payload: dict, _event: MCPEvent) -> dict:
-    """Build EnforcementEvent.metadata so Module 2 can filter ``source=mcp_scan``.
-
-    Copies gateway metadata, stamps MCP identity fields (tool/server/request_id),
-    and fills default risk/status when the gateway omitted them — matching how
-    chat-pipeline enforcement rows look to the shared threat-feed serializers.
-    ``_event`` reserved for future correlation (e.g. mcp_event_id); unused today.
-    """
+    """Module 2: EF metadata with source=mcp_scan for threat-feed / UEBA filters."""
     incoming_meta = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
     decision = str(payload.get("decision") or "allow").strip().lower()
     policy_reason = str(payload.get("policy_reason") or "")
@@ -112,7 +78,7 @@ def _mirror_metadata(payload: dict, _event: MCPEvent) -> dict:
 
 
 def _build_notification_payload(ev: EnforcementEvent) -> dict:
-    """Shape the mirrored row for ``send_enforcement_notification`` (live UI)."""
+    """Module 2: WS payload shape for send_enforcement_notification."""
     meta = ev.metadata or {}
     return {
         "type": "enforcement_event",
@@ -133,11 +99,7 @@ def _build_notification_payload(ev: EnforcementEvent) -> dict:
 
 @shared_task
 def record_mcp_event_task(payload: dict) -> str:
-    """Persist an MCP audit event asynchronously from a gateway envelope.
-
-    Step A — always write MCPEvent (MCP Observability / compliance).
-    Step B — best-effort Module 2 mirror: EnforcementEvent + WS notify.
-    """
+    """Write MCPEvent; Module 2 best-effort mirrors to EnforcementEvent + WS."""
     if not payload:
         return ""
 
@@ -164,8 +126,7 @@ def record_mcp_event_task(payload: dict) -> str:
         # ``presidio_findings`` for in-flight envelopes during the rename window.
         scan_findings=payload.get("scan_findings") or payload.get("presidio_findings") or [],
     )
-    # Module 2 live bridge: MCP-only rows are invisible to EnforcementEvent-based
-    # dashboards. Mirror when we know the org; never raise out of this task.
+    # Module 2: mirror so UEBA / threat-feed see MCP (never fail MCPEvent write)
     if organization_id:
         try:
             mirrored = EnforcementEvent.objects.create(

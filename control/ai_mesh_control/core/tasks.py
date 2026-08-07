@@ -548,11 +548,7 @@ def _safe_bulk_create_enforcement_events(events_to_create: list) -> list:
 
 
 def _post_drain_ueba_hooks(events: list) -> None:
-    """Best-effort Module 2 UEBA updates after telemetry rows are persisted.
-
-    Uses org ``behavior_profile_prompt_target`` (default 50) when collecting
-    prompt samples. Failures are logged by the caller — never block drain ack.
-    """
+    """Module 2: after drain, sample prompts / bump lifetime / queue UEBA reassess."""
     if not events:
         return
 
@@ -861,8 +857,7 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
                     exc_info=True,
                 )
 
-            # Module 2 UEBA: collect prompt samples up to org prompt target,
-            # bump lifetime request counts, then queue risk reassess for touched keys.
+            # Module 2 UEBA hooks (best-effort; never block drain ack)
             try:
                 _post_drain_ueba_hooks(events_to_create)
             except Exception:

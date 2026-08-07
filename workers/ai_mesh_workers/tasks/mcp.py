@@ -4,13 +4,14 @@ from celery import shared_task
 
 from auth.models import Organization
 from mcp_connector.models import MCPEvent
-from policy.models import EnforcementEvent
-from ws.notify import send_enforcement_notification
+from policy.models import EnforcementEvent  # Module 2 bridge
+from ws.notify import send_enforcement_notification  # Module 2 live toast
 
 logger = logging.getLogger(__name__)
 
 
 def _mcp_decision_to_action(decision: str) -> str:
+    """Module 2: MCP decision → EnforcementEvent.action."""
     action = (decision or "").strip().lower()
     if action == "block":
         return "block"
@@ -20,6 +21,7 @@ def _mcp_decision_to_action(decision: str) -> str:
 
 
 def _mirror_metadata(payload: dict) -> dict:
+    """Module 2: tag mirrored row source=mcp_scan."""
     incoming_meta = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
     return {
         **incoming_meta,
@@ -38,6 +40,7 @@ def _mirror_metadata(payload: dict) -> dict:
 
 
 def _build_notification_payload(ev: EnforcementEvent) -> dict:
+    """Module 2: WS notify payload."""
     meta = ev.metadata or {}
     return {
         "type": "enforcement_event",
@@ -58,7 +61,7 @@ def _build_notification_payload(ev: EnforcementEvent) -> dict:
 
 @shared_task
 def record_mcp_event_task(payload: dict) -> str:
-    """Persist an MCP audit event asynchronously from a gateway envelope."""
+    """Persist MCPEvent; Module 2 best-effort EF mirror + notify."""
     if not payload:
         return ""
 
@@ -81,6 +84,7 @@ def record_mcp_event_task(payload: dict) -> str:
         request_id=payload.get("request_id", ""),
         metadata=payload.get("metadata") or {},
     )
+    # Module 2: mirror for UEBA / threat-feed (do not fail MCPEvent)
     if organization_id:
         try:
             mirrored = EnforcementEvent.objects.create(

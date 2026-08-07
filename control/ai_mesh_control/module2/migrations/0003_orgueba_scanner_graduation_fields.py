@@ -1,11 +1,4 @@
-"""Scanner/org graduation day columns are not part of Module 2.
-
-Kept as graph node ``0002 → 0003 → 0004``. Prompt/request threshold is only
-org ``behavior_profile_prompt_target`` (see ``0006``).
-
-Idempotent DROP here (not a new 0008 file) cleans shared DBs that applied an
-older 0002/0003 which created graduation_* / scanner_graduation_* columns.
-"""
+"""Module 2: graph 0002→0003; DROP legacy org graduation_* columns IF EXISTS (prompt-target only)."""
 
 from django.db import migrations
 

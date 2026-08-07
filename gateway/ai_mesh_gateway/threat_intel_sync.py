@@ -1,22 +1,4 @@
-"""
-Gateway half of Module 2 Threat Intel (IOC library).
-
-NECESSITY
----------
-Module 2 lets operators maintain a threat-intel catalog in Postgres. Live
-prompts are inspected on the gateway — which must NOT hit the control DB per
-request. Without this file, indicators stay UI-only and never enforce on
-traffic. This is the gateway enforcement half of Module 2 Threat Intel
-(not MCP audit, not UEBA scoring).
-
-WORK
-----
-1. At start: scan Redis ``firewall:threat_intel:*`` into an in-memory cache.
-2. At runtime: ``match(org_slug, text)`` — cheap tier-0 IOC check for the
-   chat pipeline (first hit wins).
-3. On change: subscribe to ``threat_intel_updates`` (published by
-   ``module2.tasks.sync_threat_intel_to_redis``) and refresh that org only.
-"""
+"""Module 2 Threat Intel gateway half: Redis IOC cache + match(org, text) for chat tier-0."""
 
 from __future__ import annotations
 
@@ -91,22 +73,17 @@ class ThreatIntelSync:
         return list(self._cache.get(org_slug or "", []) or [])
 
     def match(self, org_slug: str, text: str) -> Optional[dict[str, Any]]:
-        """Tier-0 check: first matching IOC for this org's prompt text, or None.
-
-        Called from the chat pipeline (tenant-scoped by org_slug). Returning a
-        hit lets main.py treat the request as threat_intel (block when
-        ``auto_block`` / org policy says so).
-        """
+        """Module 2: first IOC hit for org prompt (tier-0); None if clean."""
         if not org_slug or not text:
             return None
         for entry in self.get_entries(org_slug):
             indicator = str(entry.get("indicator") or "")
             if _indicator_matches(indicator, text):
-                return entry  # first hit wins — ordered as Module 2 pushed
+                return entry  # first hit wins
         return None
 
     async def _load_initial(self) -> None:
-        """Cold start: SCAN every ``firewall:threat_intel:*`` key into memory."""
+        """Module 2: cold-load Redis firewall:threat_intel:* into memory."""
         client = aioredis.from_url(self._redis_url, decode_responses=True)
         try:
             async for key in client.scan_iter(match=f"{REDIS_KEY_PREFIX}*"):
@@ -115,18 +92,14 @@ class ThreatIntelSync:
                     await self._refresh_org(client, slug)
         finally:
             await client.aclose()
-        self._sync_completed = True  # mark ready even if zero orgs had keys
+        self._sync_completed = True
 
     async def _refresh_org(self, client: aioredis.Redis, org_slug: str) -> None:
-        """Pull one org's Redis JSON list → replace that org's cache entry.
-
-        Missing/invalid payload clears the org from cache (fail closed for
-        that tenant's IOC set — no stale indicators after delete/wipe).
-        """
+        """Module 2: refresh one org cache from Redis (missing key clears cache)."""
         key = f"{REDIS_KEY_PREFIX}{org_slug}"
         raw = await client.get(key)
         if not raw:
-            self._cache.pop(org_slug, None)  # deleted library → stop matching
+            self._cache.pop(org_slug, None)
             return
         try:
             payload = json.loads(raw)
@@ -145,7 +118,6 @@ class ThreatIntelSync:
             indicator = str(row.get("indicator") or "").strip()
             if not indicator:
                 continue
-            # Keep only fields the gateway match/block path needs (small + stable).
             cleaned.append(
                 {
                     "threat_type": str(row.get("threat_type") or "threat_intel_match"),
@@ -159,11 +131,7 @@ class ThreatIntelSync:
         LOG.debug("Threat intel cache refreshed org=%s entries=%d", org_slug, len(cleaned))
 
     async def _subscriber_loop(self) -> None:
-        """Stay subscribed to Module 2's pub/sub; refresh one org per message.
-
-        Reconnects on transient Redis errors so gateway keeps receiving IOC
-        updates without a process restart.
-        """
+        """Module 2: listen threat_intel_updates and refresh that org."""
         while self._running:
             client = aioredis.from_url(self._redis_url, decode_responses=True)
             pubsub = client.pubsub()

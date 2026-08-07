@@ -29,20 +29,11 @@ django.setup()
 # Import the package (whose __init__ imports every submodule) as a belt-and-suspenders
 # guarantee that handlers register even if `include` import timing changes.
 app.autodiscover_tasks(["ai_mesh_workers"])
-# NECESSITY (Module 2): workers-beat must also discover Django app tasks
-# (module2.tasks — UEBA reassess, alerts, anomaly, threat-intel repair, …).
-# Without ``autodiscover_tasks()``, those @shared_task names stay unregistered
-# even when listed in CELERY_BEAT_SCHEDULE.
+# Module 2: discover Django app tasks (module2.tasks) + merge beat schedule below.
 app.autodiscover_tasks(["ai_mesh_workers.tasks"])
 app.autodiscover_tasks()
 
-# NECESSITY (Module 2): workers-beat is the stack's Celery Beat process.
-# Old code set ``app.conf.beat_schedule = {_workers_beat only}``, which
-# REPLACED Django ``settings.CELERY_BEAT_SCHEDULE`` and dropped every
-# Module 2 periodic job (UEBA key reassess, org alerts, anomaly detection,
-# telemetry repair, threat-intel projection repair, optional auto-kill).
-# WORK: merge settings schedule first, then overlay workers-only entries
-# (workers keys win on name collision — e.g. process-gateway-jobs / resync).
+# Module 2: merge settings CELERY_BEAT_SCHEDULE (do not replace — keeps UEBA beats).
 from django.conf import settings
 
 _workers_beat = {
