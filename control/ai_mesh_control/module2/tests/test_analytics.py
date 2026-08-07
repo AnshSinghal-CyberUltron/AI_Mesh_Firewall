@@ -186,7 +186,113 @@ class Module2AnalyticsTests(SimpleTestCase):
             "threat_intel_matches",
         )
 
+    def test_classify_threat_intel_block_code_counts_as_ioc_match(self):
+        meta = {
+            "code": "threat_intel_blocked",
+            "key_prefix": "zs_demo",
+            "threat_type": "prompt_injection",
+        }
+        self.assertEqual(
+            classify_telemetry_bucket(meta, ACTION_BLOCK),
+            "threat_intel_matches",
+        )
+
+    def test_classify_threat_intel_blocked_by_counts_as_ioc_match(self):
+        meta = {
+            "blocked_by": "threat_intel_blocked",
+            "api_key_prefix": "zs_demo",
+            "threat_type": "prompt_injection",
+        }
+        self.assertEqual(
+            classify_telemetry_bucket(meta, ACTION_BLOCK),
+            "threat_intel_matches",
+        )
+
+    def test_classify_projected_keyword_block_counts_as_ioc_match(self):
+        meta = {
+            "code": "content_blocked",
+            "detail": "Blocked keyword(s) detected: noo",
+            "key_prefix": "zs_demo",
+        }
+        self.assertEqual(
+            classify_telemetry_bucket(
+                meta,
+                ACTION_BLOCK,
+                threat_intel_keyword_keys={"noo"},
+            ),
+            "threat_intel_matches",
+        )
+
+    def test_classify_projected_keyword_block_counts_as_ioc_match_alt_detail_shape(self):
+        meta = {
+            "threat_type": "blocked_keyword",
+            "extra": {"detail": "Blocked keyword(s): noo"},
+            "key_prefix": "zs_demo",
+        }
+        self.assertEqual(
+            classify_telemetry_bucket(
+                meta,
+                ACTION_BLOCK,
+                threat_intel_keyword_keys={"noo"},
+            ),
+            "threat_intel_matches",
+        )
+
+    def test_classify_manual_keyword_block_stays_non_ioc(self):
+        meta = {
+            "code": "content_blocked",
+            "detail": "Blocked keyword(s) detected: manual_term",
+            "key_prefix": "zs_demo",
+        }
+        self.assertEqual(
+            classify_telemetry_bucket(
+                meta,
+                ACTION_BLOCK,
+                threat_intel_keyword_keys={"noo"},
+            ),
+            "behavior_scoring",
+        )
+        self.assertEqual(
+            event_source(meta, threat_intel_keyword_keys={"noo"}),
+            "chat",
+        )
+
+    def test_event_source_projected_keyword_block_is_threat_intel_lane(self):
+        """Hub Threat Intel lane must match IOC Matches for projected keywords."""
+        meta = {
+            "threat_type": "blocked_keyword",
+            "source": "security_scan",
+            "detail": "Blocked keyword(s): noo",
+            "key_prefix": "zs_demo",
+        }
+        self.assertEqual(event_source(meta), "chat")  # no keys → stay chat
+        self.assertEqual(
+            event_source(meta, threat_intel_keyword_keys={"noo"}),
+            "threat_intel",
+        )
+        self.assertEqual(
+            classify_telemetry_bucket(
+                meta,
+                ACTION_BLOCK,
+                threat_intel_keyword_keys={"noo"},
+            ),
+            "threat_intel_matches",
+        )
+
+    def test_event_source_threat_intel_blocked_code_is_threat_intel_lane(self):
+        meta = {
+            "code": "threat_intel_blocked",
+            "threat_type": "high_risk_actor",
+            "source": "security_scan",
+        }
+        self.assertEqual(event_source(meta), "threat_intel")
+        self.assertEqual(
+            classify_telemetry_bucket(meta, ACTION_BLOCK),
+            "threat_intel_matches",
+        )
+
     def test_build_rag_pipeline_kpis_dedupes_same_request_stage_rows(self):
+        """Module 1 parity: per-row rag_pipeline counts (no request-id collapse)."""
         class _Events:
             def values(self, *_args):
                 return [
@@ -223,9 +329,11 @@ class Module2AnalyticsTests(SimpleTestCase):
                 ]
 
         payload = build_rag_pipeline_kpis(_Events())
-        self.assertEqual(payload["stages"]["query"]["total"], 1)
-        self.assertEqual(payload["stages"]["query"]["blocked"], 1)
-        self.assertEqual(payload["stages"]["query"]["avg_latency_ms"], 50)
+        self.assertEqual(payload["stages"]["query"]["total"], 2)
+        self.assertEqual(payload["stages"]["query"]["blocked"], 2)
+        self.assertEqual(payload["stages"]["query"]["avg_latency_ms"], 62.5)
         self.assertEqual(payload["stages"]["retriever"]["total"], 1)
+        self.assertEqual(payload["module1_aligned"]["stages"]["query"]["total"], 2)
         self.assertEqual(payload["escalation_distribution"]["strict"], 1)
+        self.assertEqual(payload["escalation_distribution"]["elevated"], 1)
         self.assertEqual(payload["escalation_distribution"]["normal"], 1)

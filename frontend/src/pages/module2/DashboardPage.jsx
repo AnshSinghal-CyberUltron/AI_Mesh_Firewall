@@ -4,7 +4,8 @@ import {
   Area, AreaChart, CartesianGrid,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { RefreshCw, MessageSquare, BookOpen, Database, Wrench, Shield, Radio, ArrowRight } from "lucide-react";
+import { MessageSquare, BookOpen, Wrench, Shield, Radio, ArrowRight } from "lucide-react";
+import { Module2RefreshButton } from "../../components/module2/Module2RefreshButton";
 import { useAuth } from "../../context/AuthContext";
 import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
@@ -25,7 +26,9 @@ import {
   formatTickerAnalystSummary,
   formatTickerDetail,
   formatTickerHeadline,
+  mergeRagVectorLaneStats,
   mergeTickerFeed,
+  formatLaneDisplayLabel,
   resolveEventLane,
 } from "./pageData";
 import { ANALYST_BRIEF_TITLE, PAGE_BRIEFS } from "./pageCopy";
@@ -51,17 +54,9 @@ const LANE_META = {
     color: "text-violet-500",
     bg: "bg-violet-50 dark:bg-violet-900/20",
     border: "border-violet-200 dark:border-violet-700",
-    helpText: "Knowledge-base and retrieval-assisted prompts scanned by the gateway.",
+    helpText:
+      "Knowledge-base retrieval through the gateway — pipeline searches and document-library lookups. Open RAG health for stage KPIs and collection risk.",
     drillDown: { to: "/models/exposure?tab=rag", label: "RAG health" },
-  },
-  vector: {
-    label: "Vector",
-    icon: Database,
-    color: "text-emerald-500",
-    bg: "bg-emerald-50 dark:bg-emerald-900/20",
-    border: "border-emerald-200 dark:border-emerald-700",
-    helpText: "Vector database lookups that accompany retrieval through the gateway.",
-    drillDown: { to: "/models/exposure?tab=rag", label: "Vector collections" },
   },
   mcp: {
     label: "MCP",
@@ -101,7 +96,8 @@ function tickerRowKey(item, lane, index) {
 function HighRiskTickerRow({ item, index }) {
   const [expanded, setExpanded] = useState(false);
   const lane = resolveEventLane(item);
-  const badge = LANE_BADGE[lane] || LANE_BADGE.chat;
+  const displayLane = lane === "vector" ? "rag" : lane;
+  const badge = LANE_BADGE[displayLane] || LANE_BADGE.chat;
   const headline = formatTickerHeadline(item);
   const detail = formatTickerDetail(item);
   const summary = formatTickerAnalystSummary(item);
@@ -119,7 +115,7 @@ function HighRiskTickerRow({ item, index }) {
         title={summary}
       >
         <span className={`shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${badge}`}>
-          {lane.replace("_", " ")}
+          {formatLaneDisplayLabel(lane)}
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-medium truncate">{headline}</p>
@@ -156,7 +152,10 @@ function LaneSummaryGrid({ laneSummary, period = "24h" }) {
   return (
     <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {Object.entries(LANE_META).map(([key, meta]) => {
-        const stats = laneSummary?.[key] || { total: 0, blocked: 0, block_rate_pct: 0 };
+        const stats =
+          key === "rag"
+            ? mergeRagVectorLaneStats(laneSummary)
+            : laneSummary?.[key] || { total: 0, blocked: 0, block_rate_pct: 0 };
         const Icon = meta.icon;
         const rateLabel = stats.total > 0 ? `${stats.block_rate_pct}%` : "—";
         const drillTo = meta.drillDown
@@ -328,14 +327,13 @@ export function DashboardPage() {
               {wsConnected ? "Live" : "Polling"}
             </span>
             <PeriodSelector value={period} onChange={setPeriod} />
-            <button
-              type="button"
-              onClick={() => load()}
-              className="rounded-lg border border-slate-200 p-2 dark:border-slate-600"
-              aria-label="Refresh dashboard"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
+            <Module2RefreshButton
+              label="Refresh"
+              onRefresh={async () => {
+                clearTimeout(refreshTimerRef.current);
+                await load({ silent: true });
+              }}
+            />
           </>
         }
       />
@@ -413,7 +411,7 @@ export function DashboardPage() {
 
         <ChartCard
           title="High-Risk Ticker"
-          titleHelpText="Live enforcement events merged with open incidents. Hover a row for a plain-language summary; click Details to expand forensics."
+          titleHelpText="Live enforcement events merged with cases opened in the selected window that are still open. Hover a row for a plain-language summary; click Details to expand forensics."
         >
           <div className="max-h-72 space-y-2 overflow-y-auto">
             {tickerItems.map((item, i) => (
@@ -422,7 +420,7 @@ export function DashboardPage() {
             {!tickerItems.length && (
               <Module2EmptyState
                 title="No active alerts"
-                message="Open incidents and live enforcement events will appear here during active shifts."
+                message="Cases opened in the selected window that are still open, plus live enforcement events, appear here during active shifts."
               />
             )}
           </div>

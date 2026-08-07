@@ -19,6 +19,7 @@ import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
+import { Module2RefreshButton } from "../../components/module2/Module2RefreshButton";
 import { KPIBar } from "../../components/module2/KPIBar";
 import { ChartCard } from "../../components/module2/ChartCard";
 import { DataTable } from "../../components/module2/DataTable";
@@ -678,18 +679,16 @@ function ThreatIntelPageInner() {
               {wsConnected ? "Live" : "On activity"}
             </span>
             <PeriodSelector value={period} onChange={setPeriod} />
-            <button
-              type="button"
-              onClick={() => {
-                loadTelemetry();
-                loadEntries();
+            <Module2RefreshButton
+              label="Refresh"
+              onRefresh={async () => {
+                clearTimeout(refreshTimerRef.current);
+                await Promise.all([
+                  loadTelemetry({ silent: true }),
+                  loadEntries({ silent: true, useCache: false }),
+                ]);
               }}
-              className="rounded-lg border border-slate-200 p-2 dark:border-slate-600"
-              aria-label="Refresh threat intel data"
-              title={telemetryRefreshing ? "Refreshing in background…" : "Refresh threat intel data"}
-            >
-              <RefreshCw className={`h-4 w-4 ${telemetryRefreshing ? "animate-spin text-teal-600 dark:text-teal-400" : ""}`} />
-            </button>
+            />
             <button
               type="button"
               onClick={handleSync}

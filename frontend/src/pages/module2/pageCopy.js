@@ -4,17 +4,17 @@ export const ANALYST_BRIEF_TITLE = "Page Objective";
 
 export const PAGE_BRIEFS = {
   dashboard:
-    "SOC command view across Chat, RAG, Vector, and MCP enforcement lanes. Scan live gateway pressure and lane totals-then open API Key & Identity Risk, Threat Intelligence Ops, Model & RAG Health, or MCP & Context Risk for deep dives.",
+    "SOC command view across Chat, RAG & retrieval, MCP, and Threat Intel lanes. Scan live gateway pressure and lane totals—then open API Key & Identity Risk, Threat Intelligence Ops, Model & RAG Health, or MCP & Context Risk for deep dives.",
   ueba:
     "Identity-centric UEBA for API keys. Baseline normal usage, surface anomaly flags, and correlate key activity to vector collections and MCP tools when investigating compromise or data harvesting.",
   modelRag:
-    "Assess LLM attack surface and RAG retrieval health. Tab A covers model exposure and block posture. Tab B separates two RAG signals: Policy / Access Denials (pre-pipeline rag_query_blocked — same family as the Incidents Rag lane) vs Pipeline Stage Events (query/retriever/ranker/generator only).",
+    "Review how exposed your models are and how healthy RAG searches look. Use Model Exposure for model risk, and RAG & Retrieval for search-step health and document-library risk. Hover the info icon on each KPI card for a plain-language explanation.",
   mcp:
-    "See which MCP tools and servers trigger blocks or redactions. Inbound scans inspect tool arguments before they reach the model; outbound scans trim sensitive data in tool responses.",
+    "See which connected tools and servers trigger blocks or redactions. Hover the info icon on each KPI card to learn what that number means.",
   threatIntel:
     "Manage your IOC library (patterns pushed to the gateway Redis cache) and measure live enforcement telemetry separately. The indicator table is configuration; KPIs and charts reflect blocks, redactions, and IOC matches from production or simulator traffic.",
   incidents:
-    "Incident triage queue with enforcement-lane attribution. The Rag lane counts cases from any rag_* event (pipeline blocks and early policy/access denies). That is not the same as Model & RAG Health pipeline-stage KPIs — Health splits those into Policy / Access Denials vs Pipeline Stage Events.",
+    "Incident triage queue with enforcement-lane attribution. RAG & retrieval includes knowledge-base pipeline cases and standalone document-library lookups. That is not the same as Model & RAG Health stage KPIs — Health splits denials vs pipeline stages and shows collection risk.",
   incidentDetail:
     "Single-incident forensics: replay the enforcement timeline, inspect event metadata, and validate pipeline-stage actions before escalation or closure.",
 };
@@ -32,13 +32,13 @@ export const INCIDENTS_GUIDE = {
   tableSummary:
     "Each row is one incident case. You will see where it came from (chat, RAG, MCP, threat intel, etc.), how severe it is, and the model or API key involved. Use the case ID to open full timeline and evidence, or use Escalate / Resolve directly from the table.",
   kpiHelp:
-    "The KPI cards at the top count your entire org queue (they do not shrink when you filter the table). Click a card to filter the table to that slice — for example Open or Escalated. Click again to clear.",
+    "The KPI cards at the top count your org queue for the selected time window (they do not shrink when you filter the table). Click a card to filter the table to that slice — for example Open or Escalated. Click again to clear. The lane chart below follows the table filters.",
   filterHelp: {
     search: "Find cases by words in the title or analyst notes.",
     status: "Show only incidents in one workflow state: Open, Investigating, Escalated, or Resolved.",
     severity: "Limit the table to Critical, High, Medium, or Low business-impact tiers.",
     source:
-      "Show cases tied to a specific enforcement lane. RAG lane = pipeline-stage RAG blocks plus pre-pipeline policy/access denies (rag_query_blocked). Compare Health → Policy / Access Denials for the same deny family without requiring an incident case.",
+      "Show cases tied to a specific enforcement lane. RAG & retrieval includes knowledge-base pipeline events and standalone document-library lookups. Compare Health → Policy / Access Denials and Collection Block Rate for the same families without requiring an incident case.",
     activeQueue: "The Active Queue KPI shows open + investigating + escalated work still in progress.",
   },
 };

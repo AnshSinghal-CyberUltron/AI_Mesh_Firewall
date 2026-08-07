@@ -390,6 +390,10 @@ export function ApiKeyRiskProfile({
     () => filterKillSwitchesForPrefix(killSwitches, behavior?.prefix),
     [killSwitches, behavior?.prefix],
   );
+  const activeScopedKillSwitches = useMemo(
+    () => scopedKillSwitches.filter((ks) => ks?.is_active !== false),
+    [scopedKillSwitches],
+  );
   const enforcedKillSwitches = useMemo(
     () => filterEnforcedKillSwitches(scopedKillSwitches),
     [scopedKillSwitches],
@@ -397,6 +401,10 @@ export function ApiKeyRiskProfile({
   const legacyKillSwitches = useMemo(
     () => scopedKillSwitches.filter((ks) => ks?.is_active !== false
       && !isGatewayEnforcedKillModel(ks?.model_name)),
+    [scopedKillSwitches],
+  );
+  const inactiveScopedKillSwitches = useMemo(
+    () => scopedKillSwitches.filter((ks) => ks?.is_active === false),
     [scopedKillSwitches],
   );
 
@@ -470,6 +478,10 @@ export function ApiKeyRiskProfile({
 
   const band = behavior.risk_band || "low";
   const displayScore = behavior.final_score ?? behavior.risk_score ?? 0;
+  const hasKillSwitchThreatHistory = useMemo(
+    () => (behavior.top_threat_types || []).some(([threat]) => String(threat || "").toLowerCase() === "kill_switch"),
+    [behavior.top_threat_types],
+  );
 
   const handleApplyKillSwitch = async () => {
     setActionError(null);
@@ -655,6 +667,11 @@ export function ApiKeyRiskProfile({
           <p className="text-slate-700 dark:text-slate-300">
             {(behavior.top_threat_types || []).slice(0, 3).map(([t, c]) => `${t} (${c})`).join(", ") || "—"}
           </p>
+          {hasKillSwitchThreatHistory && activeScopedKillSwitches.length === 0 && (
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="font-semibold">Note:</span> <span className="font-mono">kill_switch</span> here means historical blocked requests in this window, not an active switch right now.
+            </p>
+          )}
         </div>
         <div className="rounded-lg border border-slate-200 p-2 dark:border-slate-600">
           <p className="mb-1 font-semibold uppercase text-slate-500">Models used</p>
@@ -675,51 +692,72 @@ export function ApiKeyRiskProfile({
       <div className="rounded-lg border border-slate-200 p-3 dark:border-slate-600">
         <p className="mb-2 flex items-center gap-1 text-xs font-semibold uppercase text-slate-500">
           <ShieldAlert className="h-3.5 w-3.5" />
-          Active credential kill switches
+          Credential kill-switch status
         </p>
         {ksLoading ? (
           <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
         ) : scopedKillSwitches.length === 0 ? (
-          <p className="text-xs text-slate-400">No kill switches scoped to this key prefix.</p>
+          <p className="text-xs text-slate-400">No kill-switch records for this key prefix.</p>
         ) : (
-          <ul className="space-y-1.5">
-            {scopedKillSwitches.map((ks) => {
-              const enforced = enforcedKillSwitches.some((row) => row.id === ks.id);
-              return (
-              <li key={ks.id} className="flex items-center justify-between text-xs">
-                <span className="font-mono text-slate-700 dark:text-slate-200">
-                  {ks.model_name}
-                  {ks.is_active ? (
-                    <span className={`ml-2 ${enforced ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>
-                      {enforced ? "active · Kill Switch stage" : "active · legacy (not enforced)"}
+          <div className="space-y-2">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Active now: <strong>{activeScopedKillSwitches.length}</strong>
+              {inactiveScopedKillSwitches.length > 0 && (
+                <> · Past inactive records: <strong>{inactiveScopedKillSwitches.length}</strong></>
+              )}
+            </p>
+            {activeScopedKillSwitches.length === 0 ? (
+              <p className="text-xs text-slate-400">No active kill switch right now.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {activeScopedKillSwitches.map((ks) => {
+                  const enforced = enforcedKillSwitches.some((row) => row.id === ks.id);
+                  return (
+                  <li key={ks.id} className="flex items-center justify-between text-xs">
+                    <span className="font-mono text-slate-700 dark:text-slate-200">
+                      {ks.model_name}
+                      <span className={`ml-2 ${enforced ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>
+                        {enforced ? "active · enforced by Kill Switch stage" : "active · legacy (not enforced)"}
+                      </span>
                     </span>
-                  ) : (
-                    <span className="ml-2 text-slate-400">inactive</span>
-                  )}
-                </span>
-                {ks.is_active && (
-                  <button
-                    type="button"
-                    disabled={actionLoading === `deactivate-${ks.id}`}
-                    onClick={async () => {
-                      setActionLoading(`deactivate-${ks.id}`);
-                      try {
-                        await api.deactivateKillSwitch(ks.id);
-                        await loadKillSwitches();
-                        onActionComplete?.();
-                      } finally {
-                        setActionLoading(null);
-                      }
-                    }}
-                    className="text-teal-600 hover:underline dark:text-teal-400"
-                  >
-                    Deactivate
-                  </button>
-                )}
-              </li>
-              );
-            })}
-          </ul>
+                    <button
+                      type="button"
+                      disabled={actionLoading === `deactivate-${ks.id}`}
+                      onClick={async () => {
+                        setActionLoading(`deactivate-${ks.id}`);
+                        try {
+                          await api.deactivateKillSwitch(ks.id);
+                          await loadKillSwitches();
+                          onActionComplete?.();
+                        } finally {
+                          setActionLoading(null);
+                        }
+                      }}
+                      className="text-teal-600 hover:underline dark:text-teal-400"
+                    >
+                      Deactivate
+                    </button>
+                  </li>
+                  );
+                })}
+              </ul>
+            )}
+            {inactiveScopedKillSwitches.length > 0 && (
+              <details className="rounded-md border border-slate-200 p-2 dark:border-slate-700">
+                <summary className="cursor-pointer text-xs font-medium text-slate-600 dark:text-slate-300">
+                  View past kill-switch history ({inactiveScopedKillSwitches.length})
+                </summary>
+                <ul className="mt-2 space-y-1.5">
+                  {inactiveScopedKillSwitches.map((ks) => (
+                    <li key={ks.id} className="text-xs">
+                      <span className="font-mono text-slate-700 dark:text-slate-200">{ks.model_name}</span>
+                      <span className="ml-2 text-slate-400">inactive</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
         )}
         {legacyKillSwitches.length > 0 && (
           <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">

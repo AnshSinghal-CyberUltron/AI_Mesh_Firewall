@@ -24,6 +24,8 @@ from module2.analytics import (
     count_monitored_events,
     count_rerouted_events,
     event_source,
+    hours_from_period,
+    trend_bucket_hours,
 )
 from policy.constants import ACTION_BLOCK, ACTION_MONITOR, ACTION_REDACT
 
@@ -72,6 +74,15 @@ class EventSourceLaneTests(SimpleTestCase):
     def test_chat_default(self):
         self.assertEqual(event_source({}), "chat")
 
+
+class TrendBucketHoursTests(SimpleTestCase):
+    def test_shared_bucket_sizes(self):
+        self.assertEqual(trend_bucket_hours(1), 1)
+        self.assertEqual(trend_bucket_hours(24), 1)
+        self.assertEqual(trend_bucket_hours(168), 6)
+        self.assertEqual(trend_bucket_hours(720), 24)
+        self.assertEqual(hours_from_period("30d"), 720)
+
     def test_event_type_beats_collection(self):
         # An MCP event with a collection key still classifies as mcp.
         self.assertEqual(
@@ -111,6 +122,48 @@ class LaneHelperUnitTests(SimpleTestCase):
             self.assertEqual(summary[lane]["blocked"], 0)
             self.assertEqual(summary[lane]["block_rate_pct"], 0.0)
 
+    def test_build_lane_summary_projected_ioc_keyword_counts_threat_intel(self):
+        """IOC keyword blocks must not stay on Chat when projected keys are known."""
+        qs = FakeQS([
+            _row(
+                ACTION_BLOCK,
+                threat_type="blocked_keyword",
+                source="security_scan",
+                detail="Blocked keyword(s): noo",
+                key_prefix="zs_demo",
+            ),
+            _row(
+                ACTION_BLOCK,
+                code="content_blocked",
+                detail="Blocked keyword(s) detected: manual_term",
+                key_prefix="zs_demo",
+            ),
+            _row(ACTION_BLOCK, source="threat_intel"),
+        ])
+        without_keys = build_lane_summary(qs)
+        self.assertEqual(without_keys["threat_intel"]["total"], 1)
+        self.assertEqual(without_keys["chat"]["total"], 2)
+
+        with_keys = build_lane_summary(qs, threat_intel_keyword_keys={"noo"})
+        self.assertEqual(with_keys["threat_intel"]["total"], 2)
+        self.assertEqual(with_keys["threat_intel"]["blocked"], 2)
+        self.assertEqual(with_keys["chat"]["total"], 1)
+
+    def test_build_stage_hit_distribution_includes_projected_keyword(self):
+        qs = FakeQS([
+            _row(
+                ACTION_BLOCK,
+                threat_type="blocked_keyword",
+                detail="Blocked keyword(s): noo",
+                pipeline_stage="ingress",
+            ),
+            _row(ACTION_BLOCK, event_type="mcp_tool_call"),
+        ])
+        empty = build_stage_hit_distribution(qs)
+        self.assertEqual(empty, [])
+        dist = build_stage_hit_distribution(qs, threat_intel_keyword_keys={"noo"})
+        self.assertEqual(dist, [{"stage": "ingress", "count": 1}])
+
     def test_build_rag_pipeline_kpis_stages_and_funnel(self):
         qs = FakeQS([
             _row("allow", event_type="rag_pipeline", pipeline_stage="query"),
@@ -135,6 +188,7 @@ class LaneHelperUnitTests(SimpleTestCase):
         self.assertIn("escalation_distribution", kpis)
 
     def test_build_rag_pipeline_kpis_includes_rag_query_events(self):
+        """rag_query no longer inflates primary stages — lives under module2_extra."""
         qs = FakeQS([
             _row(ACTION_BLOCK, event_type="rag_query", blocked_at_stage="retriever", collection="demo_knowledge"),
             _row("allow", event_type="rag_query", stages_executed=2, collection="demo_knowledge"),
@@ -142,22 +196,31 @@ class LaneHelperUnitTests(SimpleTestCase):
         ])
         kpis = build_rag_pipeline_kpis(qs)
         stages = kpis["stages"]
-        self.assertEqual(stages["retriever"]["blocked"], 1)
-        self.assertEqual(stages["query"]["total"], 1)
-        self.assertEqual(stages["retriever"]["total"], 2)
+        self.assertEqual(stages["retriever"]["blocked"], 0)
+        self.assertEqual(stages["query"]["total"], 0)
+        self.assertEqual(stages["retriever"]["total"], 0)
         self.assertEqual(kpis["ingest_events"], 1)
+        extra = kpis["module2_extra"]["rag_query_in_query_stage"]
+        self.assertEqual(extra["total"], 2)
+        self.assertEqual(extra["blocked"], 1)
+        self.assertEqual(extra["by_attributed_stage"]["retriever"], 2)  # block + allow stages_executed>=2
+        self.assertEqual(extra["by_attributed_stage"]["query"], 1)
 
     def test_build_rag_pipeline_kpis_query_block_without_stage_goes_to_query(self):
-        """Prompt-injection blocks with unknown/missing stage must count under query."""
+        """Prompt-injection rag_query blocks without stage land in Module 2 extras only."""
         qs = FakeQS([
             _row(ACTION_BLOCK, event_type="rag_query", collection="default"),
             _row(ACTION_BLOCK, event_type="rag_query", blocked_at_stage="unknown", collection="default"),
         ])
         kpis = build_rag_pipeline_kpis(qs)
         stages = kpis["stages"]
-        self.assertEqual(stages["query"]["blocked"], 2)
-        self.assertEqual(stages["query"]["total"], 2)
+        self.assertEqual(stages["query"]["blocked"], 0)
+        self.assertEqual(stages["query"]["total"], 0)
         self.assertEqual(stages["retriever"]["total"], 0)
+        extra = kpis["module2_extra"]["rag_query_in_query_stage"]
+        self.assertEqual(extra["total"], 2)
+        self.assertEqual(extra["blocked"], 2)
+        self.assertEqual(extra["by_attributed_stage"]["query"], 2)
 
     def test_build_rag_pipeline_kpis_prefers_rag_pipeline_over_rag_query(self):
         qs = FakeQS([
@@ -169,6 +232,8 @@ class LaneHelperUnitTests(SimpleTestCase):
         self.assertEqual(kpis["stages"]["query"]["total"], 1)
         self.assertEqual(kpis["stages"]["retriever"]["total"], 1)
         self.assertEqual(kpis["stages"]["retriever"]["avg_latency_ms"], 40.0)
+        # Matching request_id is not double-counted as Module 2 extra.
+        self.assertEqual(kpis["module2_extra"]["rag_query_in_query_stage"]["total"], 0)
 
     def test_build_rag_pre_pipeline_denials_counts_query_blocked(self):
         from module2.analytics import build_rag_pre_pipeline_denials
@@ -185,10 +250,11 @@ class LaneHelperUnitTests(SimpleTestCase):
         self.assertEqual(denials["by_event_type"]["rag_query_blocked"], 2)
         self.assertEqual(denials["by_stage"]["policy"], 2)
         self.assertEqual(denials["by_collection"].get("docs"), 1)
-        # Pipeline KPIs must ignore the blocked events
+        # Primary stages = Module 1 rag_pipeline only; rag_query is extra.
         kpis = build_rag_pipeline_kpis(qs)
-        self.assertEqual(kpis["stages"]["query"]["total"], 1)
+        self.assertEqual(kpis["stages"]["query"]["total"], 0)
         self.assertEqual(kpis["stages"]["retriever"]["total"], 1)
+        self.assertEqual(kpis["module2_extra"]["rag_query_in_query_stage"]["total"], 1)
 
     def test_build_mcp_activity_payload_ledger_direction_servers(self):
         qs = FakeQS([
@@ -318,6 +384,10 @@ class LaneExpansionApiTests(TestCase):
         self.assertEqual(
             data["rag_pre_pipeline_denials"]["by_event_type"]["rag_query_blocked"], 1
         )
+        self.assertIn("module1_aligned", data)
+        self.assertEqual(data["module1_aligned"]["stages"]["retriever"]["blocked"], 1)
+        self.assertIn("module2_extra", data)
+        self.assertEqual(data["module2_extra"]["pre_pipeline_denials"]["total"], 1)
         collections = {r["collection"] for r in data["vector_exposure"]["collections"]}
         self.assertIn("finance_docs", collections)
 
@@ -450,10 +520,27 @@ class LaneExpansionApiTests(TestCase):
             titles = [r["title"] for r in resp.json()["results"]]
             if source == "mcp":
                 self.assertEqual(titles, ["MCP legacy case", "MCP case"], f"source={source} -> {titles}")
-            elif source == "rag":
-                self.assertEqual(titles, ["RAG blocked case", "RAG case"], f"source={source} -> {titles}")
+            elif source in ("rag", "vector"):
+                # RAG & retrieval couple: pipeline rag_* + standalone collection lookups.
+                self.assertEqual(
+                    titles,
+                    ["Vector case", "RAG blocked case", "RAG case"],
+                    f"source={source} -> {titles}",
+                )
             else:
                 self.assertEqual(titles, [expected_title], f"source={source} -> {titles}")
+
+    def test_dashboard_lane_summary_still_exposes_vector_key(self):
+        """API keeps vector separate; Hub FE merges for display."""
+        self._event(ACTION_BLOCK, event_type="rag_pipeline", pipeline_stage="query")
+        self._event("allow", collection="kb_docs")
+        resp = self.client.get("/api/module2/dashboard/?period=24h")
+        self.assertEqual(resp.status_code, 200)
+        lanes = resp.json()["lane_summary"]
+        self.assertIn("vector", lanes)
+        self.assertIn("rag", lanes)
+        self.assertGreaterEqual(lanes["rag"]["total"], 1)
+        self.assertGreaterEqual(lanes["vector"]["total"], 1)
 
     def test_new_endpoints_require_auth(self):
         anon = APIClient()

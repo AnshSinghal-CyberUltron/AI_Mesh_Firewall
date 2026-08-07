@@ -84,6 +84,26 @@ def test_block_path_input_shown_output_withheld():
     assert trace["prompt_submitted"] == trace["input_text"]
 
 
+def test_block_path_firewall_keyword_alias_skips_only_downstream_stages():
+    trace = build_pipeline_trace(
+        prompt="noo",
+        stage_metrics={"auth_ms": 1.0, "policy_ms": 1.0, "input_scan_ms": 1.0, "total_ms": 3.0},
+        final_action="block",
+        blocked_stage="firewall_keywords",
+        blocked_detail="Blocked keyword(s): noo",
+        zeroshield={"threat_type": "blocked_keyword", "detection_tier": "config"},
+    )
+    by_name = {s["name"]: s for s in trace["stages"]}
+    # Kill switch runs before input scan; do not mark it skipped.
+    assert by_name["kill_switch"]["action"] == "allow"
+    # Internal alias should canonicalize to input_scan block.
+    assert by_name["input_scan"]["action"] == "block"
+    # Everything after the terminal input block must be skipped.
+    assert by_name["model_routing"]["action"] == "skip"
+    assert by_name["model_input"]["action"] == "skip"
+    assert by_name["model_output"]["action"] == "skip"
+
+
 def test_output_guard_block_withholds_response():
     trace = build_pipeline_trace(
         prompt="hello",

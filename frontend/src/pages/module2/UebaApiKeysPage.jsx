@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Line, LineChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Loader2, Radio, RefreshCw, BookOpen } from "lucide-react";
+import { Loader2, Radio, BookOpen } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api } from "../../api/module2";
 import {
@@ -16,6 +16,7 @@ import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { TELEMETRY_ACTIVITY_EVENT, TELEMETRY_STORAGE_KEY } from "../../utils/telemetryEvents";
 import { CONTAINMENT_CHANGED_EVENT, CONTAINMENT_STORAGE_KEY } from "../../utils/containmentEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
+import { Module2RefreshButton } from "../../components/module2/Module2RefreshButton";
 import { KPIBar } from "../../components/module2/KPIBar";
 import { module2TooltipProps } from "../../components/module2/module2Chart";
 import { ChartCard } from "../../components/module2/ChartCard";
@@ -378,15 +379,13 @@ function UebaApiKeysPageInner() {
               <BookOpen className="h-3.5 w-3.5" />
               Score guide
             </button>
-            <button
-              type="button"
-              onClick={() => load()}
-              disabled={loading}
-              className="rounded-lg border border-slate-200 p-2 disabled:opacity-50 dark:border-slate-600"
-              aria-label="Refresh UEBA data"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            </button>
+            <Module2RefreshButton
+              label="Refresh"
+              onRefresh={async () => {
+                clearTimeout(refreshTimerRef.current);
+                await load({ silent: true });
+              }}
+            />
           </>
         }
       />
@@ -465,7 +464,7 @@ function UebaApiKeysPageInner() {
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Behavior Timeline"
-          titleHelpText="Hourly enforcement trend: total events plus per-lane chat, RAG, and MCP counts."
+          titleHelpText="Key-attributed gateway events in the selected window (same set as the KPI totals). Lines show total, Chat, RAG, MCP, Threat Intel, blocked, and redacted."
         >
           {hasTimeline ? (
             <ResponsiveContainer width="100%" height={260}>
@@ -478,12 +477,13 @@ function UebaApiKeysPageInner() {
                 <Line type="monotone" dataKey="chat" stroke="#14b8a6" strokeWidth={2} dot={false} name="Chat" />
                 <Line type="monotone" dataKey="rag" stroke="#8b5cf6" strokeWidth={1.5} dot={false} name="RAG" />
                 <Line type="monotone" dataKey="mcp" stroke="#f97316" strokeWidth={1.5} dot={false} name="MCP" />
-                <Line type="monotone" dataKey="blocked" stroke="#ef4444" strokeWidth={2} dot={false} name="Blocked" />
+                <Line type="monotone" dataKey="threat_intel" stroke="#ef4444" strokeWidth={1.5} dot={false} name="Threat Intel" />
+                <Line type="monotone" dataKey="blocked" stroke="#dc2626" strokeWidth={2} dot={false} name="Blocked" />
                 <Line type="monotone" dataKey="redacted" stroke="#f59e0b" strokeWidth={2} dot={false} name="Redacted" />
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <p className="py-16 text-center text-sm text-slate-400">No enforcement events in this period.</p>
+            <p className="py-16 text-center text-sm text-slate-400">No key-attributed enforcement events in this period.</p>
           )}
         </ChartCard>
 
@@ -527,6 +527,11 @@ function UebaApiKeysPageInner() {
       <div className="mt-6" id="ueba-key-fleet-registry">
         <ApiKeyFleetTable
           rows={registry?.results || []}
+          registeredKeyCount={
+            registry?.count
+            ?? s.total_keys
+            ?? null
+          }
           selectedKeyId={selectedKey}
           activeProfileKeyId={profileRow?.key_id}
           onSelectKey={selectKey}

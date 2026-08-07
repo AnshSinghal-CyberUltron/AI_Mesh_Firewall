@@ -21,6 +21,7 @@ import { KillSwitchActionDialog } from "./KillSwitchActionDialog";
 import { RiskBandBadge } from "./RiskBandBadge";
 import { InfoTooltip } from "./InfoTooltip";
 import { LlMObservationBadge } from "./LlMObservationStatus";
+import { formatFleetListingSummary } from "../../utils/fleetListingSummary";
 
 const FLASH_DISMISS_MS = 5000;
 const BEHAVIOR_RELOAD_DELAYS_POLLING_MS = [0, 2000, 4000];
@@ -29,13 +30,21 @@ const BEHAVIOR_TELEMETRY_DEBOUNCE_MS = 150;
 const BEHAVIOR_POLL_MS = 10_000;
 
 const FILTERS = [
-  { id: "all", label: "All keys" },
+  // Default scope = backend "window + containment" list (not the full registered fleet).
+  { id: "all", label: "In this window" },
   { id: "active", label: "Active" },
   { id: "disabled", label: "Disabled" },
   { id: "high", label: "High risk" },
   { id: "activity", label: "With activity" },
   { id: "kill-switch", label: "Kill switch" },
 ];
+
+const PERIOD_SHORT = {
+  "1h": "1 hour",
+  "24h": "24 hours",
+  "7d": "7 days",
+  "30d": "30 days",
+};
 
 function riskBandClass(band) {
   if (band === "high") return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
@@ -156,6 +165,7 @@ function FleetRowActions({
 
 export function ApiKeyFleetTable({
   rows = [],
+  registeredKeyCount = null,
   selectedKeyId,
   activeProfileKeyId,
   onSelectKey,
@@ -216,6 +226,18 @@ export function ApiKeyFleetTable({
       return 0;
     });
   }, [filteredRows, simulatorKeyId]);
+
+  const periodLabel = PERIOD_SHORT[period] || "selected window";
+  const listingSummary = useMemo(
+    () => formatFleetListingSummary({
+      shownCount: displayRows.length,
+      listedCount: rows.length,
+      registeredTotal: registeredKeyCount,
+      filterId: filter,
+      periodLabel,
+    }),
+    [displayRows.length, rows.length, registeredKeyCount, filter, periodLabel],
+  );
 
   const openProfile = useCallback((row) => {
     onSelectKey?.(row.key_id);
@@ -461,7 +483,9 @@ export function ApiKeyFleetTable({
             API Key Fleet Inspector
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Expand a row for last 5 prompts and safety rates · <strong>Profile</strong> opens the full sidebar.
+            Lists keys with traffic in this window, plus disabled or kill-switched keys.
+            {" "}Idle registered keys are omitted — <strong>Total Keys</strong> above is the full fleet count.
+            {" "}Expand a row for last 5 prompts · <strong>Profile</strong> opens the sidebar.
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -482,6 +506,15 @@ export function ApiKeyFleetTable({
         </div>
       </div>
 
+      {!loading && (
+        <p
+          className="border-b border-slate-100 px-4 py-2 text-xs text-slate-600 dark:border-slate-700/80 dark:text-slate-300"
+          data-testid="ueba-fleet-listing-summary"
+        >
+          {listingSummary}
+        </p>
+      )}
+
       {flash && (
         <p className={`mx-4 mt-3 rounded-lg border px-3 py-2 text-xs ${
           flash.tone === "error"
@@ -497,7 +530,11 @@ export function ApiKeyFleetTable({
           <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
         </div>
       ) : !displayRows.length ? (
-        <p className="py-12 text-center text-sm text-slate-400">No keys match this filter.</p>
+        <p className="px-4 py-12 text-center text-sm text-slate-400">
+          {filter === "all"
+            ? "No keys with activity or containment in this window. Idle registered keys stay hidden — check Total Keys for the full fleet count."
+            : "No keys match this filter."}
+        </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[960px] text-sm">

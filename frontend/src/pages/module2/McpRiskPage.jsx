@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { RefreshCw, ArrowDown, ArrowUp, HelpCircle, Radio } from "lucide-react";
+import { ArrowDown, ArrowUp, HelpCircle, Radio } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api } from "../../api/module2";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
+import { Module2RefreshButton } from "../../components/module2/Module2RefreshButton";
 import { KPIBar } from "../../components/module2/KPIBar";
 import { module2TooltipProps } from "../../components/module2/module2Chart";
 import { ChartCard } from "../../components/module2/ChartCard";
@@ -48,7 +49,7 @@ const DIRECTION_META = {
   unknown: {
     label: "Unknown",
     subtitle: "Direction missing",
-    help: "Events missing scan direction metadata. These are excluded from inbound/outbound hit-rate calculations until telemetry is normalized.",
+    help: "These events did not say whether the check was on the way in or out, so they are left out of the inbound/outbound rates.",
     Icon: HelpCircle,
     color: "text-slate-500",
     bg: "bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700",
@@ -69,7 +70,8 @@ function buildMcpKpiItems(summary = {}) {
       label: "MCP Events",
       value: totalEvents,
       dataSource: MCP_KPI_SOURCE,
-      helpText: "Every MCP tool-call the firewall evaluated in this time window (live calls and policy tests that emit telemetry).",
+      helpText:
+        "How many tool calls the firewall reviewed in this time window (from connected tools and agents).",
     },
     {
       key: "blocked-tools",
@@ -77,7 +79,8 @@ function buildMcpKpiItems(summary = {}) {
       value: blocked,
       color: blocked > 0 ? "text-red-600" : undefined,
       dataSource: MCP_KPI_SOURCE,
-      helpText: "Tool calls stopped completely — for example dangerous SQL, path traversal, or arguments that break your MCP policy.",
+      helpText:
+        "Tool calls that were stopped completely — for example unsafe commands or arguments that break your tool policies.",
     },
     {
       key: "redacted-args",
@@ -85,7 +88,8 @@ function buildMcpKpiItems(summary = {}) {
       value: redacted,
       color: redacted > 0 ? "text-amber-600" : undefined,
       dataSource: MCP_KPI_SOURCE,
-      helpText: "Calls that were allowed only after sensitive values in tool arguments or responses were masked.",
+      helpText:
+        "Tool calls that were allowed only after sensitive details (like secrets or personal data) were hidden.",
     },
     {
       key: "unique-tools",
@@ -93,7 +97,8 @@ function buildMcpKpiItems(summary = {}) {
       value: summary.unique_tools ?? 0,
       color: "text-violet-600",
       dataSource: MCP_KPI_SOURCE,
-      helpText: "How many different tool names appeared. A sudden jump can mean an agent is reaching for tools you have not reviewed.",
+      helpText:
+        "How many different tools were used. A sudden jump can mean an agent is trying tools you have not reviewed yet.",
     },
     {
       key: "violation-rate",
@@ -101,7 +106,7 @@ function buildMcpKpiItems(summary = {}) {
       value: `${violationRate}%`,
       color: violationRate >= 30 ? "text-red-600" : violationRate >= 10 ? "text-amber-600" : "text-emerald-600",
       dataSource: MCP_KPI_SOURCE,
-      helpText: "Share of MCP events that ended in a block or redaction (blocked + redacted ÷ total events).",
+      helpText: "Percentage of tool calls that were blocked or had sensitive data hidden.",
     },
   ];
 }
@@ -112,29 +117,25 @@ function directionViolationRate(stats) {
 }
 
 function McpRiskDashboard({ data }) {
-  const summary = data?.summary || {};
-  const toolLedger = data?.tool_ledger || [];
-  const dirSplit = data?.direction_split || {
+  const aligned = data?.module1_aligned || {};
+  const summary = aligned.summary || data?.summary || {};
+  const toolLedger = aligned.tool_ledger || data?.tool_ledger || [];
+  const dirSplit = aligned.direction_split || data?.direction_split || {
     inbound: { total: 0, blocked: 0 },
     outbound: { total: 0, blocked: 0 },
     unknown: { total: 0, blocked: 0 },
   };
+  const topServers = aligned.top_servers || data?.top_servers || [];
   const hasToolActivity = toolLedger.length > 0;
 
   return (
     <>
-      <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs leading-relaxed text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/20 dark:text-amber-100">
-        <strong>MCP risk</strong> summarizes tool-call enforcement from Context Assembly & MCP.
-        {" "}Use the <strong>violations</strong> chart to prioritize which tools to restrict, and the{" "}
-        <strong>inbound / outbound</strong> cards to see whether problems happen on arguments going in or results coming back.
-      </div>
-
       <KPIBar items={buildMcpKpiItems(summary)} />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Tool Activity vs Policy Hits"
-          titleHelpText="Compares total calls against policy-hit calls (block + redact) for each tool. Use this to spot noisy high-volume tools and high-risk tools."
+          titleHelpText="Compares total calls against policy-hit calls (block + redact) for each tool."
         >
           {hasToolActivity ? (
             <ResponsiveContainer width="100%" height={TOOL_CHART_HEIGHT}>
@@ -149,15 +150,14 @@ function McpRiskDashboard({ data }) {
             </ResponsiveContainer>
           ) : (
             <p className="py-8 text-center text-sm text-slate-400">
-              MCP events were recorded, but telemetry did not include tool names.
-              Ensure events set <span className="font-mono">tools_invoked</span>.
+              Tool calls were recorded, but tool names were missing from those events.
             </p>
           )}
         </ChartCard>
 
         <ChartCard
           title="Inbound vs Outbound Scans"
-          titleHelpText="Inbound counts argument scans on the way into the model. Outbound counts response scans on the way back. Violations include both hard blocks and redactions."
+          titleHelpText="Inbound = checks on what goes into a tool. Outbound = checks on what comes back before the model sees it. Hits include full blocks and hidden sensitive data."
         >
           <div className="mt-2 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {["inbound", "outbound", "unknown"].map((dir) => {
@@ -184,7 +184,7 @@ function McpRiskDashboard({ data }) {
             })}
           </div>
           <p className="mt-4 text-xs text-slate-400">
-            If inbound hit rate is high, review tool argument policies. If outbound is high, tighten what tool results may return to the model. Unknown should stay near zero after telemetry normalization.
+            A high inbound rate often means tighten what tools may accept. A high outbound rate means tighten what tools may return. Unknown should stay near zero once direction is recorded.
           </p>
         </ChartCard>
       </div>
@@ -192,23 +192,23 @@ function McpRiskDashboard({ data }) {
       <div className="mt-6">
         <ChartCard
           title="Busiest MCP Servers"
-          titleHelpText="Servers or connector slugs ranked by how many MCP events they generated in this period (all outcomes — allow, block, and redact)."
+          titleHelpText="Connected tool servers ranked by how much firewall activity they generated (allowed, blocked, or redacted)."
         >
           <DataTable
             columns={[
               {
                 key: "server",
                 label: "Server",
-                helpText: "The MCP server slug or connector name reported in event metadata.",
+                helpText: "Name of the connected tool server.",
               },
               {
                 key: "total",
                 label: "Events",
-                helpText: "Total MCP enforcement events tied to this server in the selected period.",
+                helpText: "How many tool-call checks involved this server in the selected period.",
               },
             ]}
-            rows={data?.top_servers || []}
-            emptyMessage="No MCP server metadata on events yet — connect a server in Module 1.4."
+            rows={topServers}
+            emptyMessage="No server names on events yet — connect a tool server from Context Assembly & MCP."
           />
         </ChartCard>
       </div>
@@ -336,14 +336,13 @@ function McpRiskPageInner() {
               {wsConnected ? "Live" : "On activity"}
             </span>
             <PeriodSelector value={period} onChange={handlePeriodChange} />
-            <button
-              type="button"
-              onClick={() => load()}
-              className="rounded-lg border border-slate-200 p-2 dark:border-slate-600"
-              aria-label="Refresh MCP risk data"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
+            <Module2RefreshButton
+              label="Refresh"
+              onRefresh={async () => {
+                clearTimeout(refreshTimerRef.current);
+                await load({ silent: true });
+              }}
+            />
           </>
         }
       />

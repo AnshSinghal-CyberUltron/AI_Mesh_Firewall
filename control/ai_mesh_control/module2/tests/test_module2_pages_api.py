@@ -188,11 +188,17 @@ class Module2PagesApiTests(TestCase):
         self.assertEqual(data["data_provenance"]["freshness"]["cache_status"], "live")
         self.assertEqual(data["data_provenance"]["filters_applied"]["severity"], "high")
         self.assertGreaterEqual(data["count"], 1)
+        # KPI strip is period/org-wide — not shrunk to the severity-filtered table page.
+        self.assertGreaterEqual(data["summary"]["total"], data["count"])
         self.assertTrue(all(row["severity"] == "high" for row in data["results"]))
 
         critical_high_resp = self.client.get("/api/module2/incidents/?severity=critical_high")
         self.assertEqual(critical_high_resp.status_code, 200)
         self.assertEqual(critical_high_resp.json()["count"], 2)
+        self.assertGreaterEqual(
+            critical_high_resp.json()["summary"]["total"],
+            critical_high_resp.json()["count"],
+        )
         self.assertTrue(
             all(row["severity"] in {"critical", "high"} for row in critical_high_resp.json()["results"])
         )
@@ -287,6 +293,133 @@ class Module2PagesApiTests(TestCase):
         self.assertIn("Recent incident", titles)
         self.assertNotIn("Old incident", titles)
         self.assertEqual(data["summary"]["total"], 1)
+
+    def test_incidents_summary_matches_status_filter(self):
+        self._incident(self.org, "Open A", status="open", severity="medium")
+        self._incident(self.org, "Open B", status="open", severity="high")
+        self._incident(self.org, "Resolved C", status="resolved", severity="low")
+
+        resp = self.client.get("/api/module2/incidents/?status=open")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["count"], 2)
+        # Table is filtered to open; KPI strip still reports the full period queue.
+        self.assertEqual(data["summary"]["total"], 3)
+        self.assertEqual(data["summary"]["open"], 2)
+        self.assertEqual(data["summary"]["resolved"], 1)
+        self.assertEqual(sum(data["summary"]["by_source"].values()), 2)
+
+    def test_resolve_incident_updates_resolved_kpi_while_open_filter_active(self):
+        open_case = self._incident(self.org, "Open to resolve", status="open", severity="high")
+        self._incident(self.org, "Already resolved", status="resolved", severity="low")
+
+        before = self.client.get("/api/module2/incidents/?status=open")
+        self.assertEqual(before.status_code, 200)
+        self.assertEqual(before.json()["summary"]["open"], 1)
+        self.assertEqual(before.json()["summary"]["resolved"], 1)
+
+        resolve = self.client.post(
+            f"/api/security/incidents/{open_case.id}/resolve-incident/",
+            {},
+            format="json",
+        )
+        self.assertEqual(resolve.status_code, 200, resolve.content)
+
+        after = self.client.get("/api/module2/incidents/?status=open")
+        self.assertEqual(after.status_code, 200)
+        summary = after.json()["summary"]
+        self.assertEqual(summary["open"], 0)
+        self.assertEqual(summary["resolved"], 2)
+        self.assertEqual(summary["active"], 0)
+        self.assertEqual(after.json()["count"], 0)
+
+    def test_incidents_chat_excludes_projected_ioc_keyword_blocks(self):
+        from module2.models import ThreatIntelEntry
+
+        ThreatIntelEntry.objects.create(
+            organization=self.org,
+            source="manual",
+            threat_type="keyword",
+            indicator="noo",
+            confidence=0.9,
+            auto_block=True,
+        )
+        ioc = self._incident(
+            self.org,
+            "IOC keyword case",
+            status="open",
+            threat_type="blocked_keyword",
+            code="content_blocked",
+            detail="Blocked keyword(s) detected: noo",
+            key_prefix="zs_ioc",
+        )
+        chat = self._incident(self.org, "Plain chat case", status="open", model="gpt-4o")
+
+        chat_resp = self.client.get("/api/module2/incidents/?source=chat")
+        self.assertEqual(chat_resp.status_code, 200)
+        chat_ids = {row["id"] for row in chat_resp.json()["results"]}
+        self.assertIn(chat.id, chat_ids)
+        self.assertNotIn(ioc.id, chat_ids)
+        self.assertGreaterEqual(
+            chat_resp.json()["summary"]["total"],
+            chat_resp.json()["count"],
+        )
+        self.assertEqual(
+            sum(chat_resp.json()["summary"]["by_source"].values()),
+            chat_resp.json()["count"],
+        )
+
+        ti_resp = self.client.get("/api/module2/incidents/?source=threat_intel")
+        self.assertEqual(ti_resp.status_code, 200)
+        ti_ids = {row["id"] for row in ti_resp.json()["results"]}
+        self.assertIn(ioc.id, ti_ids)
+
+    def test_ueba_bundle_timeline_matches_key_attributed_totals(self):
+        from core.models import GatewayAPIKey
+
+        key, _ = GatewayAPIKey.generate_key(name="ueba-parity", owner=self.user, project_id="proj-ueba")
+        key.organization = self.org
+        key.save(update_fields=["organization"])
+        self._event(
+            self.org,
+            ACTION_BLOCK,
+            key_prefix=key.prefix,
+            model="gpt-4o",
+            threat_type="prompt_injection",
+        )
+        # Unkeyed event must not inflate the Behavior Timeline.
+        self._event(self.org, ACTION_BLOCK, model="gpt-4o", threat_type="prompt_injection")
+
+        resp = self.client.get("/api/module2/ueba/api-keys/bundle/?period=24h")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        summary_total = data["summary"]["summary"].get("total_events")
+        timeline_total = sum(
+            int(row.get("total_events") or 0) for row in (data["timeline"].get("timeline") or [])
+        )
+        self.assertEqual(timeline_total, summary_total)
+        self.assertEqual(timeline_total, 1)
+
+    def test_dashboard_open_incidents_are_period_scoped(self):
+        recent = self._incident(self.org, "Recent open", status="open", severity="high")
+        old = self._incident(self.org, "Old open", status="open", severity="high")
+        SecurityIncident.objects.filter(pk=old.pk).update(
+            created_at=timezone.now() - timedelta(days=10)
+        )
+
+        resp = self.client.get("/api/module2/dashboard/?period=7d")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["kpis"]["open_incidents"], 1)
+        snap_ids = {row["id"] for row in data.get("incidents_snapshot") or []}
+        self.assertIn(recent.id, snap_ids)
+        self.assertNotIn(old.id, snap_ids)
+
+    def test_dashboard_threat_trend_30d_uses_daily_buckets(self):
+        resp = self.client.get("/api/module2/dashboard/?period=30d")
+        self.assertEqual(resp.status_code, 200)
+        trend = resp.json().get("threat_trend") or []
+        self.assertEqual(len(trend), 30)
 
     def test_incidents_bulk_resolve_selected_rows(self):
         open_a = self._incident(self.org, "Bulk A", status="open", severity="medium")

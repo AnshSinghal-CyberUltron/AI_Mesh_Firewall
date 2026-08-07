@@ -8,7 +8,6 @@ import {
   Cpu,
   ShieldOff,
   CheckCircle2,
-  RefreshCw,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -19,6 +18,7 @@ import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { copyToClipboard } from "../../lib/clipboard";
 import { formatRiskBandLabel } from "../../utils/riskLabels";
 import { PageHeader } from "../../components/module2/PageHeader";
+import { Module2RefreshButton } from "../../components/module2/Module2RefreshButton";
 import { ChartCard } from "../../components/module2/ChartCard";
 import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
 import {
@@ -29,6 +29,7 @@ import {
   extractIncidentPrompt,
   formatIncidentActionPhrase,
   formatIncidentTimeSpan,
+  formatLaneDisplayLabel,
   formatTickerAnalystSummary,
   humanizeThreatType,
   incidentActionBadgeClass,
@@ -206,7 +207,7 @@ function CaseBrief({ incident, selectedEvent, timeline, source, evidence }) {
           <span>
             Lane:{" "}
             <span className={`rounded px-1.5 py-0.5 font-medium ${sourceBadgeClass(lane)}`}>
-              {lane.replace(/_/g, " ")}
+              {formatLaneDisplayLabel(lane)}
             </span>
           </span>
           <span>
@@ -452,7 +453,7 @@ function IncidentDetailPageInner() {
           <>
             {formatRiskBandLabel("severity", incident.severity)} · Status: {incident.status} ·{" "}
             <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${sourceBadgeClass(data.source)}`}>
-              {data.source || "generic"}
+              {formatLaneDisplayLabel(data.source)}
             </span>
             {laneDrill && (
               <>
@@ -466,15 +467,14 @@ function IncidentDetailPageInner() {
         }
         actions={
           <>
-            <button
-              type="button"
-              onClick={() => load({ silent: !!data })}
-              disabled={loading || actionLoading}
-              className="rounded-lg border border-slate-200 p-2 dark:border-slate-600"
-              aria-label="Refresh incident"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            </button>
+            <Module2RefreshButton
+              label="Refresh"
+              disabled={actionLoading}
+              onRefresh={async () => {
+                clearTimeout(refreshTimerRef.current);
+                await load({ silent: true });
+              }}
+            />
             {incident.status !== "escalated" && incident.status !== "resolved" && (
               <button
                 type="button"
@@ -567,7 +567,7 @@ function IncidentDetailPageInner() {
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-800/40">
                   <p className="text-[11px] font-semibold uppercase text-slate-500">Source</p>
-                  <p className="mt-0.5">{selectedEvent.source || data.source || "generic"}</p>
+                  <p className="mt-0.5">{formatLaneDisplayLabel(selectedEvent.source || data.source)}</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-800/40">
                   <p className="text-[11px] font-semibold uppercase text-slate-500">Action</p>

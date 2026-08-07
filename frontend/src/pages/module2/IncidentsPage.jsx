@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Info,
   Radio,
-  RefreshCw,
   Search,
   Sparkles,
   X,
@@ -20,6 +19,7 @@ import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { formatRiskBandLabel } from "../../utils/riskLabels";
 import { PageHeader } from "../../components/module2/PageHeader";
+import { Module2RefreshButton } from "../../components/module2/Module2RefreshButton";
 import { KPIBar } from "../../components/module2/KPIBar";
 import { ChartCard } from "../../components/module2/ChartCard";
 import { DataTable } from "../../components/module2/DataTable";
@@ -39,6 +39,7 @@ import {
   formatIncidentsBySourceChart,
   INCIDENT_SOURCE_CHART_HELP,
   incidentLaneDrillDown,
+  formatLaneDisplayLabel,
   sourceBadgeClass,
 } from "./pageData";
 import { ANALYST_BRIEF_TITLE, INCIDENTS_GUIDE, PAGE_BRIEFS } from "./pageCopy";
@@ -50,8 +51,7 @@ const DEFAULT_PERIOD = "7d";
 const SOURCE_CHIPS = [
   { value: "", label: "All lanes" },
   { value: "chat", label: "Chat" },
-  { value: "rag", label: "RAG lane" },
-  { value: "vector", label: "Vector" },
+  { value: "rag", label: "RAG & retrieval" },
   { value: "mcp", label: "MCP" },
   { value: "threat_intel", label: "Threat Intel" },
   { value: "generic", label: "Generic" },
@@ -73,8 +73,8 @@ const STATUS_CLASS = {
 
 const SOURCE_LABELS = {
   chat: "Chat",
-  rag: "RAG lane",
-  vector: "Vector",
+  rag: "RAG & retrieval",
+  vector: "RAG & retrieval",
   mcp: "MCP",
   threat_intel: "Threat Intel",
   generic: "Generic",
@@ -286,7 +286,7 @@ function IncidentsPageInner() {
     [searchParams, setSearchParams],
   );
 
-  const load = useCallback(async ({ silent = false } = {}) => {
+  const load = useCallback(async ({ silent = false, manual = false } = {}) => {
     const seq = ++loadSeqRef.current;
     if (!silent) {
       setLoading(true);
@@ -307,16 +307,18 @@ function IncidentsPageInner() {
         },
         { useCache: false },
       );
-      if (seq !== loadSeqRef.current) return;
+      // Manual refresh always wins over a racing background poll started earlier.
+      if (!manual && seq !== loadSeqRef.current) return;
+      if (manual) loadSeqRef.current = Math.max(loadSeqRef.current, seq);
       setData(res);
       setSelectedIds(new Set());
       setError(null);
     } catch (e) {
-      if (seq !== loadSeqRef.current) return;
+      if (!manual && seq !== loadSeqRef.current) return;
       setError(e.message || "Failed to load incidents.");
       if (!silent) setData(null);
     } finally {
-      if (seq === loadSeqRef.current && !silent) setLoading(false);
+      if ((manual || seq === loadSeqRef.current) && !silent) setLoading(false);
     }
   }, [api, statusFilter, queueFilter, severityFilter, sourceFilter, search, period, page]);
 
@@ -373,9 +375,12 @@ function IncidentsPageInner() {
   const handleStatusFilter = useCallback(
     (value) => {
       const current = readIncidentFilters(searchParams);
+      // Status KPI/chip clears queue + severity so cards don't stack into
+      // e.g. status=resolved&severity=critical_high (Critical KPI stays 0).
       replaceFilters({
         status: value,
         queue: value ? "" : current.queue,
+        severity: value ? "" : current.severity,
       });
       if (value) scrollToTable();
     },
@@ -388,6 +393,7 @@ function IncidentsPageInner() {
       replaceFilters({
         queue: value,
         status: value ? "" : current.status,
+        severity: value ? "" : current.severity,
       });
       if (value) scrollToTable();
     },
@@ -396,7 +402,14 @@ function IncidentsPageInner() {
 
   const handleSeverityFilter = useCallback(
     (value) => {
-      replaceFilters({ severity: value });
+      if (value === "critical_high") {
+        // Match Critical/High KPI (active open work only) — don't stack on Resolved.
+        replaceFilters({ severity: "critical_high", status: "", queue: "active" });
+      } else if (value) {
+        replaceFilters({ severity: value });
+      } else {
+        replaceFilters({ severity: "", queue: "" });
+      }
       if (value) scrollToTable();
     },
     [replaceFilters, scrollToTable],
@@ -449,7 +462,7 @@ function IncidentsPageInner() {
         setRowActionId(null);
       }
     },
-    [api, load, statusFilter, queueFilter],
+    [api, load, statusFilter, queueFilter, severityFilter],
   );
 
   const handleSearchSubmit = (e) => {
@@ -586,15 +599,13 @@ function IncidentsPageInner() {
               <Radio className={`h-3 w-3 ${wsConnected ? "text-emerald-500" : ""}`} />
               {wsConnected ? "Live" : "On activity"}
             </span>
-            <button
-              type="button"
-              onClick={() => load()}
-              disabled={loading}
-              className="rounded-lg border border-slate-200 p-2 disabled:opacity-50 dark:border-slate-600"
-              aria-label="Refresh incident queue"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            </button>
+            <Module2RefreshButton
+              label="Refresh"
+              onRefresh={async () => {
+                clearTimeout(refreshTimerRef.current);
+                await load({ silent: true, manual: true });
+              }}
+            />
           </>
         }
       />
@@ -671,11 +682,11 @@ function IncidentsPageInner() {
             className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-[11px] leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-900/30 dark:text-slate-300"
             data-testid="incidents-rag-lane-legend"
           >
-            <span className="font-semibold text-slate-800 dark:text-slate-100">RAG lane</span> counts
-            incident cases linked to any <code className="text-[10px]">rag_*</code> enforcement event —
-            including pre-pipeline policy/access denies (<code className="text-[10px]">rag_query_blocked</code>
-            ). That is not the same number as Model &amp; RAG Health → Pipeline Stage Events. Health shows
-            those denials separately as <span className="font-medium">Policy / Access Denials</span>.
+            <span className="font-semibold text-slate-800 dark:text-slate-100">RAG &amp; retrieval</span>{" "}
+            counts cases from knowledge-base pipeline events and standalone document-library lookups.
+            That is not the same number as Model &amp; RAG Health → Pipeline Stage Events. Health shows
+            early access denials under <span className="font-medium">Policy / Access Denials</span> and
+            library risk under collections charts.
           </p>
         </div>
       )}
@@ -860,7 +871,7 @@ function IncidentsPageInner() {
                     return (
                       <div className="flex flex-col gap-1">
                         <span className={`inline-flex w-fit rounded px-2 py-0.5 text-xs font-medium ${sourceBadgeClass(r.source)}`}>
-                          {r.source || "generic"}
+                          {formatLaneDisplayLabel(r.source)}
                         </span>
                         {drill && (
                           <Link to={drill.to} className="text-xs text-teal-600 hover:underline">

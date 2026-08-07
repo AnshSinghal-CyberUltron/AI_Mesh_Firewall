@@ -1,3 +1,5 @@
+import { InfoTooltip } from "./InfoTooltip";
+
 export function KPIBar({ items, loading = false }) {
   return (
     <div className="relative isolate overflow-visible">
@@ -16,23 +18,24 @@ export function KPIBar({ items, loading = false }) {
       {items.map((item) => {
         const interactive = item.clickable && typeof item.onClick === "function";
         const className = [
-          "group relative z-0 rounded-xl border bg-white p-4 shadow-sm hover:z-20 focus-within:z-20 dark:bg-slate-800/60",
+          "relative z-0 rounded-xl border bg-white p-4 shadow-sm hover:z-20 focus-within:z-20 dark:bg-slate-800/60",
           item.active
             ? "border-teal-400 ring-2 ring-teal-400/30 dark:border-teal-500"
             : "border-slate-200 dark:border-slate-700",
           interactive
             ? "cursor-pointer transition hover:border-teal-300 hover:shadow-md dark:hover:border-teal-600"
-            : item.helpText
-              ? "cursor-help"
-              : "",
+            : "",
         ].join(" ");
 
         const content = (
           <>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-              {item.label}
+            <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <span>{item.label}</span>
+              {item.helpText && (
+                <InfoTooltip text={item.helpText} className="normal-case tracking-normal" />
+              )}
               {interactive && (
-                <span className="ml-1 normal-case font-normal text-teal-600 dark:text-teal-400">
+                <span className="ml-0.5 normal-case font-normal text-teal-600 dark:text-teal-400">
                   · view
                 </span>
               )}
@@ -47,14 +50,6 @@ export function KPIBar({ items, loading = false }) {
             )}
             {item.sub && (
               <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{item.sub}</p>
-            )}
-            {item.helpText && (
-              <span
-                role="tooltip"
-                className="pointer-events-none absolute bottom-full left-1/2 z-[70] mb-2 w-64 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-normal leading-relaxed text-slate-100 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100"
-              >
-                {item.helpText}
-              </span>
             )}
           </>
         );

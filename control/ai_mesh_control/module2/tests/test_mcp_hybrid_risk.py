@@ -47,9 +47,13 @@ class HybridMcpRiskTests(TestCase):
             EnforcementEvent.objects.filter(organization=self.org),
             MCPEvent.objects.filter(organization=self.org),
         )
-        self.assertEqual(payload["summary"]["total_events"], 1)
-        self.assertEqual(payload["summary"]["blocked_tool_calls"], 1)
-        self.assertEqual(payload["tool_ledger"][0]["tool"], "echo")
+        # Primary KPIs match Module 1 (EF only) — MCPEvent-only is labeled extra.
+        self.assertEqual(payload["summary"]["total_events"], 0)
+        self.assertEqual(payload["module1_aligned"]["summary"]["total_events"], 0)
+        self.assertEqual(payload["module2_extra"]["summary"]["total_events"], 1)
+        self.assertEqual(payload["module2_extra"]["summary"]["blocked"], 1)
+        self.assertEqual(payload["hybrid"]["summary"]["total_events"], 1)
+        self.assertEqual(payload["hybrid"]["tool_ledger"][0]["tool"], "echo")
 
     def test_no_double_count_when_ef_and_mcp_event_share_request_id(self):
         MCPEvent.objects.create(
@@ -78,6 +82,8 @@ class HybridMcpRiskTests(TestCase):
         )
         self.assertEqual(payload["summary"]["total_events"], 1)
         self.assertEqual(payload["summary"]["blocked_tool_calls"], 1)
+        self.assertEqual(payload["module2_extra"]["summary"]["total_events"], 0)
+        self.assertEqual(payload["module1_aligned"]["summary"]["total_events"], 1)
 
     def test_dashboard_lane_includes_mcp_event_only(self):
         MCPEvent.objects.create(

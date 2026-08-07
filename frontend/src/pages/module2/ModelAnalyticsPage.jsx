@@ -5,7 +5,7 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  BookOpen, CircleHelp, Cpu, Database, Filter, Info, RefreshCw, Search, Sparkles, X,
+  BookOpen, CircleHelp, Cpu, Database, Filter, Info, Search, Sparkles, X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { clearModule2Cache, createModule2Api } from "../../api/module2";
@@ -13,6 +13,7 @@ import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
 import { useContainmentPolling } from "../../hooks/useContainmentPolling";
 import { TELEMETRY_ACTIVITY_EVENT } from "../../utils/telemetryEvents";
 import { PageHeader } from "../../components/module2/PageHeader";
+import { Module2RefreshButton } from "../../components/module2/Module2RefreshButton";
 import { KPIBar } from "../../components/module2/KPIBar";
 import { module2TooltipPanelClass, module2TooltipProps } from "../../components/module2/module2Chart";
 import { ChartCard } from "../../components/module2/ChartCard";
@@ -24,6 +25,7 @@ import { ContextualAppBar } from "../../components/module2/ContextualAppBar";
 import {
   buildExposureKpis,
   buildRagKpis,
+  buildRagModule2Extras,
   formatExposureChartData,
   formatRagCollectionChartData,
   formatRagDenialTypeRows,
@@ -36,9 +38,9 @@ import { ANALYST_BRIEF_TITLE, PAGE_BRIEFS } from "./pageCopy";
 const PERIOD_LABELS = { "1h": "1 hour", "24h": "24 hours", "7d": "7 days", "30d": "30 days" };
 const REFRESH_DEBOUNCE_MS = 300;
 const RAG_STAGE_EMPTY_MSG =
-  "No pipeline-stage RAG events in this window (query/retriever/ranker/generator). Pre-pipeline policy denials are counted separately above — they do not fill these charts.";
+  "No RAG search-step activity in this window yet (ask → find docs → rank → answer).";
 const RAG_DENIAL_EMPTY_MSG =
-  "No pre-pipeline policy/access denials (rag_query_blocked / stage=policy) in this window.";
+  "No early access denials before search started in this window.";
 
 const TABS = [
   {
@@ -231,11 +233,23 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
   if (!ragData) return null;
 
   const kpis = ragData.rag_pipeline_kpis || {};
-  const denials = ragData.rag_pre_pipeline_denials || {};
-  const denialTotal = Number(denials.total) || 0;
-  const denialTypeRows = formatRagDenialTypeRows(denials);
-  const stageData = formatRagStageChartData(kpis.stages);
-  const funnelSteps = formatRagDocumentFunnel(kpis.document_funnel);
+  const alignedStages =
+    ragData.module1_aligned?.stages || kpis.module1_aligned?.stages || kpis.stages || {};
+  const extras = buildRagModule2Extras(ragData);
+  const denials = extras.denials;
+  const denialTotal = denials.total;
+  const denialTypeRows = formatRagDenialTypeRows({
+    by_event_type: denials.byEventType,
+  });
+  const stageData = formatRagStageChartData(alignedStages);
+  const funnelSteps = formatRagDocumentFunnel(
+    kpis.document_funnel || {
+      retrieved: alignedStages.retriever?.total || 0,
+      post_ranker: (alignedStages.ranker?.total || 0) - (alignedStages.ranker?.blocked || 0),
+      post_generator:
+        (alignedStages.generator?.total || 0) - (alignedStages.generator?.blocked || 0),
+    },
+  );
   const collections = ragData.vector_exposure?.collections || [];
   const collectionChart = formatRagCollectionChartData(collections);
   const escalationData = formatRagEscalationChartData(kpis.escalation_distribution);
@@ -244,15 +258,16 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
   const hasFunnelData = funnelSteps.some((step) => step.value > 0);
   const hasLatency = stageData.some((s) => s.avg_latency_ms > 0);
   const latencyData = stageData.filter((s) => s.avg_latency_ms > 0);
-  const hasAnyRagSignal = totalPipelineEvents > 0 || collections.length > 0 || denialTotal > 0;
+  const hasAnyRagSignal =
+    totalPipelineEvents > 0 || collections.length > 0 || extras.hasExtras;
 
   if (!hasAnyRagSignal) {
     return (
       <>
         <Module2EmptyState
           title="No RAG activity in this period"
-          message="No pipeline-stage events and no pre-pipeline policy/access denials. When RAG traffic is blocked before the pipeline (e.g. collection policy miss → rag_query_blocked), Policy / Access Denials will show here — matching the Incidents Rag lane event family."
-          hint="Pipeline charts need event_type=rag_pipeline (or rag_query) stage telemetry. Policy denials use the same EnforcementEvent window as Incidents."
+          message="No RAG searches or early access denials were recorded in this window."
+          hint="Charts appear after knowledge-base searches run through the gateway. Early access denials show in the card on the left when present."
         />
       </>
     );
@@ -260,32 +275,12 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
 
   return (
     <>
-      <div
-        className="mb-4 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200"
-        data-testid="rag-health-metric-legend"
-      >
-        <p className="font-semibold text-slate-900 dark:text-slate-50">Two different RAG metrics</p>
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-          <li>
-            <span className="font-medium text-slate-800 dark:text-slate-100">Policy / Access Denials</span> —
-            early collection/access policy blocks (<code className="text-[11px]">rag_query_blocked</code>,{" "}
-            <code className="text-[11px]">stage=policy</code>). Same <code className="text-[11px]">rag_*</code>{" "}
-            event family as the Incidents <strong>RAG lane</strong> — not pipeline-stage KPIs.
-          </li>
-          <li>
-            <span className="font-medium text-slate-800 dark:text-slate-100">Pipeline Stage Events</span> —
-            only query / retriever / ranker / generator checks. Empty here does <em>not</em> mean “no RAG
-            incidents” if denials are present.
-          </li>
-        </ul>
-      </div>
-
-      <KPIBar items={buildRagKpis(kpis, ragData.vector_exposure, denials)} />
+      <KPIBar items={buildRagKpis(kpis, ragData.vector_exposure)} />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Policy / Access Denials"
-          titleHelpText="Pre-pipeline RAG denials from EnforcementEvents (same window as pipeline KPIs). Feeds the Incidents Rag lane when cases are opened — does not fill stage charts below."
+          titleHelpText="Requests stopped before a RAG search even started (for example, no permission to use a document library). These are not counted in Pipeline Stage Events above."
         >
           {denialTotal > 0 ? (
             <div className="space-y-3" data-testid="rag-pre-pipeline-denials-card">
@@ -295,12 +290,9 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
                     {denialTotal}
                   </p>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    {denials.label || "Pre-pipeline RAG policy / access denials"}
+                    Pre-pipeline policy / access denials
                   </p>
                 </div>
-                <p className="max-w-[14rem] text-right text-[11px] leading-snug text-slate-500 dark:text-slate-400">
-                  Aligns with Incidents → RAG lane event types (not stage volume).
-                </p>
               </div>
               {denialTypeRows.length > 0 && (
                 <ul className="divide-y divide-slate-100 rounded-lg border border-slate-100 dark:divide-slate-700 dark:border-slate-700">
@@ -319,10 +311,10 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
                   ))}
                 </ul>
               )}
-              {denials.by_stage && Object.keys(denials.by_stage).length > 0 && (
+              {denials.byStage && Object.keys(denials.byStage).length > 0 && (
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   Stages:{" "}
-                  {Object.entries(denials.by_stage)
+                  {Object.entries(denials.byStage)
                     .map(([stage, count]) => `${stage}=${count}`)
                     .join(" · ")}
                 </p>
@@ -335,7 +327,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
 
         <ChartCard
           title="Pipeline Stage Volume"
-          titleHelpText="Stacked counts per pipeline stage only — red = blocked, green = allowed. Pre-pipeline policy denials are in the card to the left, not here."
+          titleHelpText="How many RAG checks ran at each step. Green = allowed, red = blocked. Early access denials are in the card on the left, not here."
         >
           {hasStageVolume ? (
             <ResponsiveContainer width="100%" height={260}>
@@ -359,7 +351,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Stage Block Rate"
-          titleHelpText="Percentage of checks blocked at each pipeline gate. High rates at Retriever often mean vector ACL or collection poisoning — not collection-policy miss before the pipeline."
+          titleHelpText="What share of checks were blocked at each search step. A high rate at document lookup often means overshared or risky content in that library."
         >
           {hasStageVolume ? (
             <ResponsiveContainer width="100%" height={260}>
@@ -378,7 +370,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
 
         <ChartCard
           title="Stage Throughput Snapshot"
-          titleHelpText="Per-stage event counts from pipeline telemetry — not a per-request funnel. Compare volume across Retriever, Ranker, and Generator together."
+          titleHelpText="How busy each search step was in this window. Use it to compare ask, find docs, rank, and answer — not as a single-request step-by-step funnel."
         >
           {hasFunnelData ? (
             <>
@@ -417,7 +409,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <ChartCard
           title="Policy Escalation Mix"
-          titleHelpText="How often RAG pipeline events triggered elevated or strict policy tiers — spikes may follow repeated violations. Pre-pipeline denials are counted in Policy / Access Denials above."
+          titleHelpText="How often RAG activity triggered stricter policy levels. Spikes can follow repeated violations. Early access denials are counted in Policy / Access Denials above."
         >
           {escalationData.some((d) => d.count > 0) ? (
             <ResponsiveContainer width="100%" height={240}>
@@ -448,7 +440,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
 
         <ChartCard
           title="Collection Block Rate"
-          titleHelpText="Vector collections ranked by block rate — investigate collections above 50% for poisoned embeddings or ACL misconfiguration."
+          titleHelpText="Document libraries ranked by how often searches were blocked. Libraries above 50% usually need a closer look for risky or overshared content. This is the deep dive for Hub RAG (including former Vector-only lookups)."
         >
           {collectionChart.length > 0 ? (
             <ResponsiveContainer width="100%" height={Math.max(180, collectionChart.length * 36)}>
@@ -466,14 +458,14 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
             </ResponsiveContainer>
           ) : (
             <p className="py-12 text-center text-sm text-slate-400">
-              No vector collection metadata on events — ensure retriever telemetry includes collection name.
+              No document-library names were recorded on these events yet.
             </p>
           )}
         </ChartCard>
 
         <ChartCard
           title="Stage Latency (avg ms)"
-          titleHelpText="Mean processing time per pipeline stage — latency spikes at Retriever may indicate vector DB or scanner load."
+          titleHelpText="Average time spent at each search step. Slow document lookup can mean the knowledge base or scanners are under load."
         >
           {hasLatency ? (
             <ResponsiveContainer width="100%" height={220}>
@@ -494,18 +486,18 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
       <div className="mt-6">
         <ChartCard
           title="Vector Collection Registry"
-          titleHelpText="Full breakdown by collection — total access attempts, blocks, and redactions from vector DB firewall telemetry."
+          titleHelpText="Document-library exposure for Hub RAG traffic — how often each library was searched, blocked, or had sensitive content hidden."
         >
           <DataTable
             columns={[
-              { key: "collection", label: "Collection", helpText: "Vector store collection or namespace queried during retrieval." },
-              { key: "total", label: "Total", helpText: "All enforcement events tied to this collection." },
-              { key: "blocked", label: "Blocked", helpText: "Retrieval or chunk access denied by policy." },
-              { key: "redacted", label: "Redacted", helpText: "Sensitive fields masked before the request continued." },
+              { key: "collection", label: "Collection", helpText: "The document library that was searched." },
+              { key: "total", label: "Total", helpText: "How many times this library was involved in a RAG check." },
+              { key: "blocked", label: "Blocked", helpText: "Searches stopped because of policy." },
+              { key: "redacted", label: "Redacted", helpText: "Searches that continued after sensitive details were hidden." },
               {
                 key: "block_rate_pct",
                 label: "Block %",
-                helpText: "blocked ÷ total — primary signal for collection health.",
+                helpText: "Share of searches for this library that were blocked — a quick health signal.",
                 render: (r) => (
                   <span className={r.block_rate_pct >= 50 ? "font-semibold text-red-600" : ""}>
                     {r.block_rate_pct}%
@@ -514,7 +506,7 @@ function RagHealthTab({ ragData, loading, error, onRetry }) {
               },
             ]}
             rows={collections}
-            emptyMessage="No vector access events in this period."
+            emptyMessage="No document-library access events in this period."
           />
         </ChartCard>
       </div>
@@ -663,14 +655,14 @@ function ModelExposurePageInner() {
               Guide
             </button>
             <PeriodSelector value={period} onChange={handlePeriodChange} />
-            <button
-              type="button"
-              onClick={activeTab === "model" ? loadModel : loadRag}
-              className="rounded-lg border border-slate-200 p-2 dark:border-slate-600"
-              aria-label="Refresh"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
+            <Module2RefreshButton
+              label="Refresh"
+              onRefresh={async () => {
+                clearTimeout(refreshTimerRef.current);
+                if (activeTab === "model") await loadModel();
+                else await loadRag();
+              }}
+            />
           </>
         }
       />

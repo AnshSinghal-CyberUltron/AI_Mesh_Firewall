@@ -35,6 +35,7 @@ from module2.analytics import (
     event_source,
     hours_from_period,
     key_prefix_from_meta,
+    trend_bucket_hours,
     paginate_queryset,
     prefixes_match,
     prompt_snippet_from_meta,
@@ -100,6 +101,25 @@ def _mcp_events_for_org(org, since):
     if org is not None:
         return qs.filter(organization=org)
     return qs.none()
+
+
+def _projected_threat_intel_keyword_keys(org) -> set[str]:
+    """IOC literals currently projected for gateway keyword blocking (synced_for_blocking).
+
+    Same set ThreatIntelTelemetryView uses for IOC Matches — Hub Threat Intel lane
+    must use it so live blocked_keyword events are not counted as Chat.
+    """
+    keys: set[str] = set()
+    if org is None:
+        return keys
+    from module2.models import ThreatIntelEntry
+    from module2.threat_intel_projection import keyword_key, resolve_projection_eligibility
+
+    for entry in ThreatIntelEntry.objects.filter(organization=org).iterator(chunk_size=200):
+        row = resolve_projection_eligibility(entry)
+        if row.effective_mode == "synced_for_blocking" and row.keyword:
+            keys.add(keyword_key(row.keyword))
+    return keys
 
 
 _TIMELINE_META_ALLOWLIST = {
@@ -181,7 +201,14 @@ def _sanitize_incident_metadata(meta):
     return sanitize_incident_value(out)
 
 
-def _build_event_trend(events_qs, since, hours, bucket_hours):
+def _build_event_trend(
+    events_qs,
+    since,
+    hours,
+    bucket_hours,
+    *,
+    threat_intel_keyword_keys=None,
+):
     bucket_count = max(hours // bucket_hours, 1)
     timeline = []
     for i in range(bucket_count):
@@ -202,7 +229,13 @@ def _build_event_trend(events_qs, since, hours, bucket_hours):
         )
     )
     collapsed_rows = _collapse_prepared_event_rows(rows)
-    return _build_event_trend_from_collapsed(collapsed_rows, since, hours, bucket_hours)
+    return _build_event_trend_from_collapsed(
+        collapsed_rows,
+        since,
+        hours,
+        bucket_hours,
+        threat_intel_keyword_keys=threat_intel_keyword_keys,
+    )
 
 
 _TIMELINE_LANES = ("chat", "rag", "mcp", "vector", "threat_intel")
@@ -212,7 +245,14 @@ def _empty_lane_counts() -> dict[str, int]:
     return {lane: 0 for lane in _TIMELINE_LANES}
 
 
-def _build_event_trend_from_collapsed(collapsed_rows, since, hours, bucket_hours):
+def _build_event_trend_from_collapsed(
+    collapsed_rows,
+    since,
+    hours,
+    bucket_hours,
+    *,
+    threat_intel_keyword_keys=None,
+):
     bucket_count = max(hours // bucket_hours, 1)
     timeline = []
     for i in range(bucket_count):
@@ -237,7 +277,7 @@ def _build_event_trend_from_collapsed(collapsed_rows, since, hours, bucket_hours
         target = timeline[idx]
         target["total"] += 1
         meta = item.metadata or {}
-        lane = event_source(meta)
+        lane = event_source(meta, threat_intel_keyword_keys=threat_intel_keyword_keys)
         if lane in target:
             target[lane] += 1
         if item.action == "block":
@@ -245,6 +285,54 @@ def _build_event_trend_from_collapsed(collapsed_rows, since, hours, bucket_hours
         if item.action == "redact":
             target["redacted"] += 1
     return timeline
+
+
+def _key_attributed_collapsed_rows(collapsed_rows, keys_qs):
+    """Keep only collapsed events whose key_prefix maps to an org gateway key."""
+    prefix_lookup = {k.prefix.lower(): k.prefix for k in keys_qs}
+    attributed = []
+    for item in collapsed_rows:
+        prefix = _key_prefix_from_meta(item.metadata or {})
+        if not prefix:
+            continue
+        if prefix.lower() not in prefix_lookup:
+            continue
+        attributed.append(item)
+    return attributed
+
+
+def _projected_ioc_keyword_block_q(ti_keys: set[str] | None) -> Q | None:
+    """SQL Q for live IOC keyword blocks (parity with is_threat_intel_meta keyword branch).
+
+    Returns None when there are no projected keys (caller should skip OR/exclude).
+    """
+    if not ti_keys:
+        return None
+    keyword_detail_q = Q()
+    any_kw = False
+    for kw in ti_keys:
+        lit = str(kw or "").strip()
+        if not lit:
+            continue
+        any_kw = True
+        keyword_detail_q |= Q(enforcement_event__metadata__detail__icontains=lit)
+        keyword_detail_q |= Q(enforcement_event__metadata__extra__detail__icontains=lit)
+    if not any_kw:
+        return None
+    blocked_kw = (
+        Q(enforcement_event__metadata__has_key="threat_type")
+        & Q(enforcement_event__metadata__threat_type__iexact="blocked_keyword")
+    ) | (
+        Q(enforcement_event__metadata__has_key="code")
+        & Q(enforcement_event__metadata__code__iexact="content_blocked")
+    ) | (
+        Q(enforcement_event__metadata__has_key="blocked_by")
+        & Q(enforcement_event__metadata__blocked_by__iexact="content_blocked")
+    ) | (
+        Q(enforcement_event__metadata__has_key="error_code")
+        & Q(enforcement_event__metadata__error_code__iexact="content_blocked")
+    )
+    return blocked_kw & keyword_detail_q
 
 
 def _collapse_prepared_event_rows(raw_rows):
@@ -610,8 +698,16 @@ def _ueba_period_bundle(request, period: str):
 
     risky_rows = list(rows)
     tracked_prefixes = {r["prefix"] for r in risky_rows[:5]}
-    bucket_size = 1 if hours <= 24 else 6
-    base_timeline = _build_event_trend_from_collapsed(collapsed_rows, since, hours, bucket_size)
+    ti_keys = _projected_threat_intel_keyword_keys(org) or None
+    bucket_size = trend_bucket_hours(hours)
+    key_attributed_rows = _key_attributed_collapsed_rows(collapsed_rows, keys_qs)
+    base_timeline = _build_event_trend_from_collapsed(
+        key_attributed_rows,
+        since,
+        hours,
+        bucket_size,
+        threat_intel_keyword_keys=ti_keys,
+    )
     timeline = []
     for row in base_timeline:
         timeline.append(
@@ -632,7 +728,7 @@ def _ueba_period_bundle(request, period: str):
         bucket_seconds = bucket_size * 3600
         bucket_count = len(timeline)
         window_end = since + timedelta(hours=bucket_count * bucket_size)
-        for item in collapsed_rows:
+        for item in key_attributed_rows:
             ts = item.created_at
             if not ts:
                 continue
@@ -790,8 +886,18 @@ class UebaApiKeyTimelineView(APIView):
         risky_rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
         tracked_prefixes = {r["prefix"] for r in risky_rows[:5]}
 
-        bucket_size = 1 if hours <= 24 else 6
-        base_timeline = _build_event_trend(events, since, hours, bucket_size)
+        ti_keys = _projected_threat_intel_keyword_keys(org) or None
+        bucket_size = trend_bucket_hours(hours)
+        event_rows = list(events.values("created_at", "action", "endpoint_id", "metadata"))
+        collapsed_rows = _collapse_prepared_event_rows(event_rows)
+        key_attributed_rows = _key_attributed_collapsed_rows(collapsed_rows, keys_qs)
+        base_timeline = _build_event_trend_from_collapsed(
+            key_attributed_rows,
+            since,
+            hours,
+            bucket_size,
+            threat_intel_keyword_keys=ti_keys,
+        )
         timeline = []
         for row in base_timeline:
             timeline.append(
@@ -800,6 +906,11 @@ class UebaApiKeyTimelineView(APIView):
                     "total_events": row["total"],
                     "blocked": row["blocked"],
                     "redacted": row["redacted"],
+                    "chat": row.get("chat", 0),
+                    "rag": row.get("rag", 0),
+                    "mcp": row.get("mcp", 0),
+                    "vector": row.get("vector", 0),
+                    "threat_intel": row.get("threat_intel", 0),
                     "keys": {prefix: 0 for prefix in tracked_prefixes},
                 }
             )
@@ -807,14 +918,11 @@ class UebaApiKeyTimelineView(APIView):
             bucket_seconds = bucket_size * 3600
             bucket_count = len(timeline)
             window_end = since + timedelta(hours=bucket_count * bucket_size)
-            timeline_rows = list(
-                events.filter(created_at__gte=since, created_at__lt=window_end).values(
-                    "created_at", "action", "metadata"
-                )
-            )
-            for item in collapse_events_by_request(timeline_rows):
+            for item in key_attributed_rows:
                 ts = item.created_at
                 if not ts:
+                    continue
+                if ts < since or ts >= window_end:
                     continue
                 idx = int((ts - since).total_seconds() // bucket_seconds)
                 if idx < 0 or idx >= bucket_count:
@@ -1030,8 +1138,18 @@ class ThreatIntelTelemetryView(APIView):
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
         events = list(events_qs.values("created_at", "action", "metadata"))
-        payload = build_threat_telemetry_payload(events, period, since)
-        payload["stage_hit_distribution"] = build_stage_hit_distribution(events_qs)
+        threat_intel_keyword_keys = _projected_threat_intel_keyword_keys(org)
+
+        payload = build_threat_telemetry_payload(
+            events,
+            period,
+            since,
+            threat_intel_keyword_keys=threat_intel_keyword_keys or None,
+        )
+        payload["stage_hit_distribution"] = build_stage_hit_distribution(
+            events_qs,
+            threat_intel_keyword_keys=threat_intel_keyword_keys or None,
+        )
         now = timezone.now()
         if org:
             from collections import Counter
@@ -1107,15 +1225,25 @@ class UnifiedDashboardView(APIView):
             for k in keys_qs
         ]
 
-        bucket_hours = 1 if hours <= 24 else 6
-        trend = _build_event_trend(events, since, hours, bucket_hours)
+        ti_keys = _projected_threat_intel_keyword_keys(org) or None
+        bucket_hours = trend_bucket_hours(hours)
+        trend = _build_event_trend(
+            events,
+            since,
+            hours,
+            bucket_hours,
+            threat_intel_keyword_keys=ti_keys,
+        )
 
         incidents = SecurityIncident.objects.all()
         if org:
             incidents = incidents.filter(organization=org)
         elif not request.user.is_superuser:
             incidents = incidents.none()
-        open_incidents = incidents.filter(status__in=["open", "investigating", "escalated"])
+        open_incidents = incidents.filter(
+            status__in=["open", "investigating", "escalated"],
+            created_at__gte=since,
+        )
 
         incidents_snapshot = [
             {
@@ -1124,7 +1252,12 @@ class UnifiedDashboardView(APIView):
                 "severity": i.severity,
                 "status": i.status,
                 "created_at": i.created_at.isoformat(),
-                "source": event_source(i.enforcement_event.metadata or {} if i.enforcement_event_id and i.enforcement_event else {}),
+                "source": event_source(
+                    i.enforcement_event.metadata or {}
+                    if i.enforcement_event_id and i.enforcement_event
+                    else {},
+                    threat_intel_keyword_keys=ti_keys,
+                ),
             }
             for i in open_incidents.select_related("enforcement_event").order_by("-created_at")[:10]
         ]
@@ -1169,7 +1302,11 @@ class UnifiedDashboardView(APIView):
                 "top_risky_keys": risky_rows[:8],
                 "key_risk_distribution": dict(Counter([r["risk_band"] for r in fleet_risk_rows])),
                 "incidents_snapshot": incidents_snapshot,
-                "lane_summary": build_lane_summary(events, mcp_events=mcp_events),
+                "lane_summary": build_lane_summary(
+                    events,
+                    mcp_events=mcp_events,
+                    threat_intel_keyword_keys=ti_keys,
+                ),
             }
         )
         elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
@@ -1339,7 +1476,9 @@ class IncidentListView(APIView):
             since = timezone.now() - timedelta(hours=_hours_from_period(period))
             qs = qs.filter(created_at__gte=since)
 
-        summary = build_incident_queue_summary(qs, org_id=org.id if org else None)
+        # KPI strip is org + period only — table filters must not zero out
+        # Resolved/Open after escalate/resolve while a status filter is active.
+        kpi_qs = qs
 
         status_filter = request.query_params.get("status", "").strip()
         queue_filter = request.query_params.get("queue", "").strip()
@@ -1384,7 +1523,8 @@ class IncidentListView(APIView):
             | Q(enforcement_event__metadata__has_key="mcp_direction")
             | Q(enforcement_event__metadata__has_key="scan_direction")
         )
-        _threat_intel_q = (
+        ti_keys = _projected_threat_intel_keyword_keys(org) or None
+        _threat_intel_structured_q = (
             (
                 Q(enforcement_event__metadata__has_key="source")
                 & Q(enforcement_event__metadata__source__icontains="threat_intel")
@@ -1402,7 +1542,19 @@ class IncidentListView(APIView):
                 Q(enforcement_event__metadata__has_key="threat_type")
                 & Q(enforcement_event__metadata__threat_type__istartswith="threat_intel")
             )
+            | (
+                Q(enforcement_event__metadata__has_key="code")
+                & Q(enforcement_event__metadata__code__iexact="threat_intel_blocked")
+            )
+            | (
+                Q(enforcement_event__metadata__has_key="detection_tier")
+                & Q(enforcement_event__metadata__detection_tier__iexact="threat_intel")
+            )
         )
+        _ioc_kw_q = _projected_ioc_keyword_block_q(ti_keys)
+        _threat_intel_q = _threat_intel_structured_q
+        if _ioc_kw_q is not None:
+            _threat_intel_q = _threat_intel_structured_q | _ioc_kw_q
 
         source_filter = request.query_params.get("source", "").strip()
         if source_filter and source_filter not in _VALID_INCIDENT_SOURCES:
@@ -1413,19 +1565,24 @@ class IncidentListView(APIView):
 
         if source_filter == "threat_intel":
             qs = qs.filter(_threat_intel_q)
-        elif source_filter == "rag":
-            qs = qs.filter(enforcement_event__metadata__event_type__startswith="rag_")
+        elif source_filter in ("rag", "vector"):
+            # Hub/UI couple RAG + Vector: pipeline rag_* events and standalone
+            # collection lookups share one retrieval filter (vector-only excludes
+            # mcp/rag event types so rag rows are not double-counted by OR).
+            _vector_only_q = (
+                Q(enforcement_event__metadata__has_key="collection")
+                | Q(enforcement_event__metadata__has_key="vector_collection")
+                | Q(enforcement_event__metadata__has_key="vector_namespace")
+            ) & ~_lane_event_type_q
+            qs = qs.filter(
+                Q(enforcement_event__metadata__event_type__startswith="rag_")
+                | _vector_only_q
+            )
         elif source_filter == "mcp":
             qs = qs.filter(
                 Q(enforcement_event__metadata__event_type__startswith="mcp_")
                 | _mcp_metadata_fallback_q
             )
-        elif source_filter == "vector":
-            qs = qs.filter(
-                Q(enforcement_event__metadata__has_key="collection")
-                | Q(enforcement_event__metadata__has_key="vector_collection")
-                | Q(enforcement_event__metadata__has_key="vector_namespace")
-            ).exclude(_lane_event_type_q)
         elif source_filter == "chat":
             qs = qs.exclude(
                 _lane_event_type_q
@@ -1445,6 +1602,14 @@ class IncidentListView(APIView):
         if search:
             qs = qs.filter(Q(title__icontains=search) | Q(notes__icontains=search))
 
+        # KPIs = period-scoped org queue; by_source follows table filters (lane chart).
+        summary = build_incident_queue_summary(
+            kpi_qs,
+            org_id=org.id if org else None,
+            threat_intel_keyword_keys=ti_keys,
+            by_source_qs=qs,
+        )
+
         try:
             page = int(request.query_params.get("page", 1))
         except ValueError:
@@ -1456,7 +1621,11 @@ class IncidentListView(APIView):
 
         total, page_qs, page, page_size = paginate_queryset(qs, page, page_size)
         out = [
-            serialize_incident_row(incident, SecurityIncidentSerializer(incident).data)
+            serialize_incident_row(
+                incident,
+                SecurityIncidentSerializer(incident).data,
+                threat_intel_keyword_keys=ti_keys,
+            )
             for incident in page_qs
         ]
         total_pages = (total + page_size - 1) // page_size if page_size else 1
@@ -1671,6 +1840,7 @@ class IncidentDetailView(APIView):
                 events.append(ev)
         events.sort(key=lambda e: e.created_at, reverse=True)
 
+        ti_keys = _projected_threat_intel_keyword_keys(org) or None
         timeline = []
         source = "generic"
         evidence = {"key_prefix": "", "model": "", "project_id": "", "threat_type": ""}
@@ -1680,7 +1850,8 @@ class IncidentDetailView(APIView):
             prompt_snippet = sanitize_incident_text(
                 event_prompt_from_meta(raw_meta if isinstance(raw_meta, dict) else {})
             )
-            source = source if source != "generic" else _event_source(meta)
+            lane = _event_source(meta, threat_intel_keyword_keys=ti_keys)
+            source = source if source != "generic" else lane
             evidence["key_prefix"] = evidence["key_prefix"] or _key_prefix_from_meta(meta)
             evidence["model"] = evidence["model"] or str(meta.get("model") or "")
             evidence["project_id"] = evidence["project_id"] or str(meta.get("project_id") or "")
@@ -1693,7 +1864,7 @@ class IncidentDetailView(APIView):
                     "metadata": meta,
                     "rule_id": ev.rule_id,
                     "policy_id": ev.policy_id,
-                    "source": _event_source(meta),
+                    "source": lane,
                     "key_prefix": _key_prefix_from_meta(meta),
                     "model": meta.get("model") or "",
                     "prompt_snippet": prompt_snippet,
@@ -1728,11 +1899,21 @@ class RagHealthView(APIView):
         events_qs = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
         )
+        rag_kpis = build_rag_pipeline_kpis(events_qs)
+        denials = build_rag_pre_pipeline_denials(events_qs)
+        module2_extra = dict(rag_kpis.get("module2_extra") or {})
+        module2_extra["pre_pipeline_denials"] = denials
         return Response(
             {
                 "period": period,
-                "rag_pipeline_kpis": build_rag_pipeline_kpis(events_qs),
-                "rag_pre_pipeline_denials": build_rag_pre_pipeline_denials(events_qs),
+                "module1_aligned": rag_kpis.get("module1_aligned")
+                or {
+                    "label": "Matches Module 1 RAG pipeline KPIs",
+                    "stages": rag_kpis.get("stages") or {},
+                },
+                "module2_extra": module2_extra,
+                "rag_pipeline_kpis": rag_kpis,
+                "rag_pre_pipeline_denials": denials,
                 "vector_exposure": build_vector_exposure_payload(events_qs),
             }
         )

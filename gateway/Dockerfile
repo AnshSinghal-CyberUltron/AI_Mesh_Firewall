@@ -37,6 +37,8 @@ EXPOSE 8300
 # worker per core, RAM-bounded) instead of a hardcoded number. WEB_CONCURRENCY
 # (env) still overrides. See gateway/entrypoint.sh + shared/.../resource_budget.py.
 COPY gateway/entrypoint.sh /app/gateway/entrypoint.sh
-RUN chmod +x /app/gateway/entrypoint.sh
+# Strip CRLF so Windows checkouts still exec under Linux (shebang "no such file").
+RUN sed -i 's/\r$//' /app/gateway/entrypoint.sh \
+    && chmod +x /app/gateway/entrypoint.sh
 
 CMD ["/app/gateway/entrypoint.sh"]

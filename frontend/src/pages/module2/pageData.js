@@ -72,7 +72,9 @@ const RAG_STAGE_LABELS = {
 };
 
 export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}, prePipelineDenials = {}) {
-  const stages = ragPipelineKpis?.stages || {};
+  // Prefer Module 1–aligned stages when present; fall back to stages on the payload root.
+  const stages =
+    ragPipelineKpis?.module1_aligned?.stages || ragPipelineKpis?.stages || {};
   const stageList = Object.values(stages);
   const query = stages.query || {};
   const retriever = stages.retriever || {};
@@ -86,26 +88,18 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}, prePipel
   const passRate = retrieverTotal
     ? Math.round(((retrieverTotal - retrieverBlocked) / retrieverTotal) * 100)
     : 100;
-  const denialTotal = Number(prePipelineDenials?.total) || 0;
 
   const ingestEvents = ragPipelineKpis?.ingest_events || 0;
+  // Primary KPI bar uses pipeline-stage rows only (event_type=rag_pipeline).
+  void prePipelineDenials;
   const cards = [
-    {
-      key: "pre-pipeline-denials",
-      label: "Policy / Access Denials",
-      value: denialTotal,
-      color: denialTotal > 0 ? "text-red-600" : undefined,
-      dataSource: RAG_KPI_SOURCE,
-      helpText:
-        "Pre-pipeline RAG denies (rag_query_blocked / stage=policy) — same event family that fills the Incidents Rag lane. Not pipeline-stage KPIs.",
-    },
     {
       key: "pipeline-events",
       label: "Pipeline Stage Events",
       value: pipelineIngress || totalStageChecks,
       dataSource: RAG_KPI_SOURCE,
       helpText:
-        "Only query/retriever/ranker/generator traffic (event_type=rag_pipeline or rag_query). Does not include early policy/access denials.",
+        "How many times a RAG search moved through the safety checks (ask → find docs → rank → answer). Early access denials before those steps are not counted here.",
     },
     {
       key: "blocked-at-gate",
@@ -113,14 +107,15 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}, prePipel
       value: totalBlocked,
       color: totalBlocked > 0 ? "text-red-600" : undefined,
       dataSource: RAG_KPI_SOURCE,
-      helpText: "Hard blocks at a pipeline stage only — not collection-policy denials before the pipeline.",
+      helpText:
+        "How many of those RAG checks were stopped by the firewall during the search steps. This does not include requests blocked before search even started.",
     },
     {
       key: "collections",
       label: "Collections",
       value: collections.length,
       dataSource: RAG_KPI_SOURCE,
-      helpText: "Distinct vector DB collections/namespaces touched during retrieval in this window.",
+      helpText: "How many different document libraries were searched in this time window.",
     },
     {
       key: "hot-collections",
@@ -128,7 +123,8 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}, prePipel
       value: hotCollections,
       color: hotCollections > 0 ? "text-amber-600" : undefined,
       dataSource: RAG_KPI_SOURCE,
-      helpText: "Collections with block rate ≥ 50% — may indicate poisoned chunks or ACL issues.",
+      helpText:
+        "Document libraries where half or more of searches were blocked. Worth a closer look for bad or overshared content.",
     },
     {
       key: "pass-rate",
@@ -136,7 +132,7 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}, prePipel
       value: `${passRate}%`,
       color: passRate >= 80 ? "text-emerald-600" : passRate >= 50 ? "text-amber-600" : "text-red-600",
       dataSource: RAG_KPI_SOURCE,
-      helpText: "Share of Retriever stage checks that were not hard-blocked.",
+      helpText: "Of searches that reached document lookup, how many were allowed to continue (not blocked).",
     },
   ];
   if (ingestEvents > 0) {
@@ -145,10 +141,65 @@ export function buildRagKpis(ragPipelineKpis = {}, vectorExposure = {}, prePipel
       label: "Ingest Events",
       value: ingestEvents,
       dataSource: RAG_KPI_SOURCE,
-      helpText: "Document ingest operations in this window (not counted in Query stage).",
+      helpText: "Times documents were added or updated in the knowledge base during this window.",
     });
   }
   return cards;
+}
+
+/** Module 2–only RAG extras (never mixed into primary Module 1–aligned KPIs). */
+export function buildRagModule2Extras(ragData = {}) {
+  const extra = ragData.module2_extra || ragData.rag_pipeline_kpis?.module2_extra || {};
+  const denials =
+    extra.pre_pipeline_denials || ragData.rag_pre_pipeline_denials || {};
+  const ragQuery = extra.rag_query_in_query_stage || {};
+  const denialTotal = Number(denials.total) || 0;
+  const ragQueryTotal = Number(ragQuery.total) || 0;
+  const hasExtras = denialTotal > 0 || ragQueryTotal > 0;
+  return {
+    label: extra.label || "Module 2 also includes (not in Module 1 stage KPIs)",
+    hasExtras,
+    matchMessage: "0 extras — totals match Module 1 for this window.",
+    ragQuery: {
+      total: ragQueryTotal,
+      blocked: Number(ragQuery.blocked) || 0,
+      allowed: Number(ragQuery.allowed) || 0,
+      byAttributedStage: ragQuery.by_attributed_stage || {},
+      reason:
+        ragQuery.reason ||
+        "Legacy rag_query events without rag_pipeline stage telemetry. Module 1 stage KPIs ignore these.",
+    },
+    denials: {
+      total: denialTotal,
+      label:
+        denials.label ||
+        "Pre-pipeline policy / access denials (extra vs Module 1 stage KPIs; aligns with Incidents Rag lane)",
+      byEventType: denials.by_event_type || {},
+      byStage: denials.by_stage || {},
+    },
+  };
+}
+
+/** Module 2–only MCP extras (MCPEvent not yet mirrored to EnforcementEvent). */
+export function buildMcpModule2Extras(data = {}) {
+  const extra = data.module2_extra || {};
+  const summary = extra.summary || {};
+  const total = Number(summary.total_events) || 0;
+  const blocked = Number(summary.blocked) || 0;
+  const redacted = Number(summary.redacted) || 0;
+  return {
+    label: extra.label || "Module 2 also includes (MCPEvent-only / pending mirror)",
+    hasExtras: total > 0,
+    matchMessage: "0 extras — MCP Risk matches Module 1 for this window.",
+    summary: {
+      total_events: total,
+      blocked,
+      redacted,
+      reason:
+        summary.reason ||
+        "These tool calls are in the MCP audit log but not yet in the Module 1 EnforcementEvent feed.",
+    },
+  };
 }
 
 /** Top event types for the Health pre-pipeline denial card. */
@@ -233,9 +284,10 @@ export function buildUebaKpiItems({
       key: "total-keys",
       label: "Total Keys",
       value: s.total_keys ?? 0,
-      sub: "Registered fleet",
+      sub: "All registered (full fleet)",
       dataSource: UEBA_KPI_SOURCE,
-      helpText: "All API keys provisioned for this organization (not filtered by time window).",
+      helpText:
+        "Every API key provisioned for this organization (not filtered by time). The fleet table below only lists keys with traffic in the selected window, or disabled / kill-switched keys — idle keys are omitted on purpose.",
     },
     {
       key: "active-keys",
@@ -431,7 +483,7 @@ export function buildTelemetryKpis(summary = {}, iocLibrary = {}) {
       color: "text-violet-600",
       sub: libSub,
       dataSource: TELEMETRY_KPI_SOURCE,
-      helpText: "Traffic that matched a synced IOC from your library. These blocks use the Threat Intelligence policy path (code: threat_intel_blocked), not generic scanner or Policy Management rules. Library size is shown below — matches rise only after live gateway enforcement.",
+      helpText: "Traffic that matched an indicator from your Threat Intel library (synced keyword or threat-intel policy path). Library size is shown below — matches rise only after live gateway enforcement.",
     },
   ];
 }
@@ -461,6 +513,31 @@ export function formatRiskDistributionChart(distribution = {}) {
   })).filter((row) => row.value > 0);
 }
 
+/** True when enforcement metadata reflects an IOC / threat-intel policy block (not generic scanner policy). */
+export function isThreatIntelEnforcementMeta(meta = {}) {
+  if (!meta || typeof meta !== "object") return false;
+  const source = String(meta.source || "").toLowerCase();
+  const extraDetail =
+    meta.extra && typeof meta.extra === "object" ? String(meta.extra.detail || "") : "";
+  const detail = String(meta.detail || extraDetail || "").toLowerCase();
+  const tier = String(meta.detection_tier || "").toLowerCase();
+  const code = String(meta.code || meta.blocked_by || meta.error_code || "").toLowerCase();
+  const threatType = String(meta.threat_type || "").toLowerCase();
+  if (
+    source.includes("threat_intel")
+    || tier === "threat_intel"
+    || code === "threat_intel_blocked"
+    || threatType.startsWith("threat_intel")
+  ) {
+    return true;
+  }
+  return (
+    detail.includes("ioc match")
+    || detail.includes("threat intelligence")
+    || detail.includes("threat intel")
+  );
+}
+
 /** Derive enforcement lane (chat/rag/vector/mcp/threat_intel) from WS or incident payloads. */
 export function resolveEventLane(item = {}) {
   const topSource = String(item.source || "").toLowerCase();
@@ -468,14 +545,7 @@ export function resolveEventLane(item = {}) {
     return topSource;
   }
   const meta = item.metadata || {};
-  const detail = String(
-    meta.detail
-    || (meta.extra && typeof meta.extra === "object" ? meta.extra.detail : "")
-    || ""
-  ).toLowerCase();
-  const src = String(meta.source || item.source || "").toLowerCase();
-  const threatType = String(meta.threat_type || "").toLowerCase();
-  if (detail.includes("threat intel") || src.includes("threat_intel") || threatType.startsWith("threat_intel")) {
+  if (isThreatIntelEnforcementMeta(meta) || isThreatIntelEnforcementMeta(item)) {
     return "threat_intel";
   }
   const eventType = String(meta.event_type || "").toLowerCase();
@@ -522,19 +592,6 @@ const TICKER_ACTION_PHRASES = {
   flag: "was flagged for review",
   allow: "was allowed",
 };
-
-/** True when enforcement metadata reflects an IOC / threat-intel policy block (not generic scanner policy). */
-export function isThreatIntelEnforcementMeta(meta = {}) {
-  if (!meta || typeof meta !== "object") return false;
-  const source = String(meta.source || "").toLowerCase();
-  const detail = String(meta.detail || "").toLowerCase();
-  const tier = String(meta.detection_tier || meta.pipeline_stage || "").toLowerCase();
-  const code = String(meta.code || meta.error_code || "").toLowerCase();
-  if (source === "threat_intel" || tier === "threat_intel" || code === "threat_intel_blocked") {
-    return true;
-  }
-  return detail.includes("ioc match") || detail.includes("threat intelligence");
-}
 
 /** Analyst-facing block label distinguishing IOC policy blocks from generic policy/scanner blocks. */
 export function formatEnforcementBlockLabel(meta = {}, action = "block") {
@@ -663,9 +720,9 @@ export function mergeTickerFeed(liveFeed = [], incidents = [], limit = 12) {
 
 export function sourceBadgeClass(source) {
   if (source === "threat_intel") return "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
-  if (source === "rag") return "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300";
+  // Vector aggregates under RAG & retrieval — same badge family.
+  if (source === "rag" || source === "vector") return "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300";
   if (source === "mcp") return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
-  if (source === "vector") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
   if (source === "chat") return "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300";
   return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
 }
@@ -690,7 +747,7 @@ export function metadataDetail(meta = {}) {
 const INCIDENT_LANE_DRILL_DOWN = {
   chat: { to: "/models/exposure", label: "Model exposure" },
   rag: { to: "/models/exposure?tab=rag", label: "RAG health" },
-  vector: { to: "/models/exposure?tab=rag", label: "Vectors" },
+  vector: { to: "/models/exposure?tab=rag", label: "RAG health" },
   mcp: { to: "/mcp/risk", label: "MCP risk" },
   threat_intel: { to: "/threat-intel", label: "Threat intel" },
 };
@@ -699,23 +756,48 @@ export function incidentLaneDrillDown(source) {
   return INCIDENT_LANE_DRILL_DOWN[source] || null;
 }
 
-const INCIDENT_SOURCE_ORDER = ["chat", "rag", "vector", "mcp", "threat_intel", "generic"];
+/** Hub display order — Vector is folded into RAG (not a sibling card). */
+const INCIDENT_SOURCE_ORDER = ["chat", "rag", "mcp", "threat_intel", "generic"];
 
-/** Chart / chip labels — Rag lane ≠ Model & RAG Health pipeline KPIs alone. */
+/** Chart / chip labels — RAG aggregates pipeline + standalone collection lookups. */
 export const INCIDENT_SOURCE_LABELS = {
   chat: "Chat",
-  rag: "RAG lane",
-  vector: "Vector",
+  rag: "RAG & retrieval",
+  vector: "RAG & retrieval",
   mcp: "MCP",
   threat_intel: "Threat Intel",
   generic: "Generic",
 };
 
+/** User-facing lane label — Vector aggregates under RAG & retrieval. */
+export function formatLaneDisplayLabel(source) {
+  const key = String(source || "generic").toLowerCase();
+  return INCIDENT_SOURCE_LABELS[key] || key.replace(/_/g, " ");
+}
+
 export const INCIDENT_SOURCE_CHART_HELP =
-  "Lane of the linked enforcement event. RAG lane = any rag_* event (pipeline-stage blocks and pre-pipeline policy/access denies like rag_query_blocked). Pipeline-stage KPIs live on Model & RAG Health; policy denies appear there as Policy / Access Denials.";
+  "Cases in the current filters and selected time window, grouped by enforcement lane. RAG & retrieval includes pipeline searches and document-library lookups.";
+
+/**
+ * Combine Hub lane_summary.rag + lane_summary.vector for one retrieval card.
+ * Backend keeps both keys; UI aggregates so users see one retrieval total.
+ */
+export function mergeRagVectorLaneStats(laneSummary = {}) {
+  const rag = laneSummary?.rag || {};
+  const vector = laneSummary?.vector || {};
+  const total = (Number(rag.total) || 0) + (Number(vector.total) || 0);
+  const blocked = (Number(rag.blocked) || 0) + (Number(vector.blocked) || 0);
+  const block_rate_pct = total > 0 ? Math.round((blocked / total) * 1000) / 10 : 0;
+  return { total, blocked, block_rate_pct };
+}
 
 export function formatIncidentsBySourceChart(bySource = {}) {
-  const map = bySource && typeof bySource === "object" ? bySource : {};
+  const map = bySource && typeof bySource === "object" ? { ...bySource } : {};
+  const vectorCount = Number(map.vector) || 0;
+  if (vectorCount > 0) {
+    map.rag = (Number(map.rag) || 0) + vectorCount;
+  }
+  delete map.vector;
   return INCIDENT_SOURCE_ORDER.map((lane) => ({
     lane,
     label: INCIDENT_SOURCE_LABELS[lane] || lane.charAt(0).toUpperCase() + lane.slice(1),
@@ -1015,7 +1097,7 @@ export function buildIncidentKpiItems(summary = {}, handlers = {}, dataProvenanc
           onSeverityFilter?.("critical_high");
         }
       },
-      helpText: "Active incidents at high or critical severity among open work. Click to filter to both severities.",
+      helpText: "Active incidents at high or critical severity (open work only). Click to show the active queue filtered to those severities.",
     },
     {
       key: "resolved",
@@ -1026,7 +1108,7 @@ export function buildIncidentKpiItems(summary = {}, handlers = {}, dataProvenanc
       clickable: !!onStatusFilter,
       active: statusFilter === "resolved",
       onClick: () => onStatusFilter?.(statusFilter === "resolved" ? "" : "resolved"),
-      helpText: "Closed incidents in the org queue (all time).",
+      helpText: "Closed incidents in the org queue for the selected time window. Stays accurate when you filter the table.",
     },
   ];
 }
