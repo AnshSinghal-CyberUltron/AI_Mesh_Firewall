@@ -12,8 +12,8 @@ What it deliberately does NOT do
 --------------------------------
 ``key_purpose`` is NOT altered here (and must not be re-added). Simulator /
 scanner identity uses ``project_id`` / name (``simulator-{org-slug}``), not a
-purpose label. Older branches that created ``key_purpose`` are cleaned by
-``core.0040`` (DROP COLUMN IF EXISTS) on shared DBs.
+purpose label. Older branches that created ``key_purpose`` are cleaned in
+``core.0038`` (DROP COLUMN IF EXISTS) — no extra migration files.
 """
 
 import django.core.validators

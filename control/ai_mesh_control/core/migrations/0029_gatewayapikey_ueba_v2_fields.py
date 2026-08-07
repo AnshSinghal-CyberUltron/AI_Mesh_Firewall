@@ -53,7 +53,7 @@ class Migration(migrations.Migration):
 
         # ueba_graduation_days intentionally omitted: days were never in the UI
         # and must not graduate a key without enough requests.
-        # Shared DBs that already have that column: core.0039 drops it.
+        # Shared DBs that already have that column: cleaned in core.0038 (IF EXISTS).
 
         # --- Lifetime counter: how many requests this key has ever made ---
         # Incremented when telemetry is ingested; compared against

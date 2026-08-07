@@ -2,17 +2,14 @@
 
 What this migration does
 ------------------------
-Empty merge only (``operations = []``). No columns are added or altered.
-
-It joins two ``0037_*`` leaves that diverged on this branch:
+Joins two ``0037_*`` leaves that diverged on this branch:
 
   * ``0037_merge_20260630_0645`` — main ↔ Module 2 graph merge
-    (UEBA risk_score path; no ``key_purpose`` schema change)
-  * ``0037_firewallconfig_mcp_policy_only_enforcement`` — MCP
-    policy-only enforcement flag on FirewallConfig
+  * ``0037_firewallconfig_mcp_policy_only_enforcement`` — MCP flag
 
-Without this node Django again has two ``core`` heads after both 0037
-migrations apply.
+Also (no new migration files): idempotent DROP of orphan UEBA columns that
+older Module 2 drafts may have left on ``core_gatewayapikey``. Fresh installs
+from fixed ``0029``/``0036`` never create them — ``IF EXISTS`` is a no-op then.
 """
 
 from django.db import migrations
@@ -25,4 +22,15 @@ class Migration(migrations.Migration):
         ("core", "0037_firewallconfig_mcp_policy_only_enforcement"),
     ]
 
-    operations = []
+    operations = [
+        # Module 2 product: no key_purpose / no ueba_graduation_days on GatewayAPIKey.
+        # Keep this on the existing merge leaf — do NOT add 0039/0040 files.
+        migrations.RunSQL(
+            sql=[
+                "ALTER TABLE core_gatewayapikey DROP COLUMN IF EXISTS ueba_graduation_days;",
+                "ALTER TABLE core_gatewayapikey DROP COLUMN IF EXISTS key_purpose;",
+            ],
+            reverse_sql=migrations.RunSQL.noop,
+            state_operations=[],
+        ),
+    ]
