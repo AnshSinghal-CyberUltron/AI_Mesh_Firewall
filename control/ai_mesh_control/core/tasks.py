@@ -547,6 +547,33 @@ def _safe_bulk_create_enforcement_events(events_to_create: list) -> list:
     return persisted
 
 
+def _post_drain_ueba_hooks(events: list) -> None:
+    """Module 2: after drain, sample prompts / bump lifetime / queue UEBA reassess."""
+    if not events:
+        return
+
+    from collections import defaultdict
+
+    from module2.analytics import key_prefix_from_meta
+    from module2.tasks import reassess_ueba_keys_for_prefixes
+    from module2.ueba_behavior_profile import append_prompt_samples_for_events
+    from module2.ueba_metrics import increment_lifetime_request_counts
+
+    append_prompt_samples_for_events(events)
+    increment_lifetime_request_counts(events)
+
+    prefixes_by_org: dict[int, set[str]] = defaultdict(set)
+    for ev in events:
+        org_id = getattr(ev, "organization_id", None)
+        meta = getattr(ev, "metadata", None) or {}
+        prefix = key_prefix_from_meta(meta)
+        if org_id and prefix:
+            prefixes_by_org[int(org_id)].add(prefix)
+
+    for org_id, prefixes in prefixes_by_org.items():
+        reassess_ueba_keys_for_prefixes.delay(org_id, list(prefixes))
+
+
 def drain_telemetry_from_redis(batch_size: int = 50) -> int:
     """
     Drain telemetry events from Redis list and batch-insert
@@ -827,6 +854,15 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
             except Exception:
                 logger.warning(
                     "drain_telemetry_from_redis: review/incident creation failed for drained batch",
+                    exc_info=True,
+                )
+
+            # Module 2 UEBA hooks (best-effort; never block drain ack)
+            try:
+                _post_drain_ueba_hooks(events_to_create)
+            except Exception:
+                logger.warning(
+                    "drain_telemetry_from_redis: UEBA post-drain hooks failed",
                     exc_info=True,
                 )
 

@@ -7,7 +7,6 @@ import { copyToClipboard } from "../lib/clipboard";
 import { InfoTooltip } from "./InfoTooltip";
 import { useSimulatorEngine } from "../hooks/useSimulatorEngine";
 import { useSimulatorGatewayModels } from "../hooks/useSimulatorGatewayModels";
-import { useFirewallConfig } from "../hooks/useFirewallConfig";
 import { SimulatorModelSelector } from "./simulator/SimulatorModelSelector";
 import { StageTimeline } from "./simulator/StageTimeline";
 import {
@@ -17,6 +16,8 @@ import {
   normalizeStreamChatPipelineResult,
 } from "../utils/liveGateway";
 import { formatZeroshieldScanSummary, formatRoutingReason, ZEROSHIELD_GUARD_MODEL_LABEL } from "../constants/zeroshieldBrand";
+// Firewall 1.1 hosts Attack Simulator OUTSIDE FirewallConfigProvider (provider is only
+// on 1.5). Calling useFirewallConfig here throws and trips the module error boundary.
 
 // Upstream provider/model literals that must never reach the operator UI.
 // The gateway tier-2 'detail'/'guard_reason' strings can embed the raw Bedrock
@@ -214,8 +215,8 @@ export function AttackSimulatorPanel() {
     gatewayFetch, gatewayFetchStream, executing: engineExecuting,
   } = useSimulatorEngine();
   const gatewayModels = useSimulatorGatewayModels();
-  const { config: firewallConfig } = useFirewallConfig();
-  const orgRoutingEnabled = firewallConfig?.routing_enabled ?? true;
+  // Default on — matches prior `?? true` when config was unavailable; avoids provider throw on 1.1.
+  const orgRoutingEnabled = true;
 
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [promptText, setPromptText] = useState("");

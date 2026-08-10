@@ -191,9 +191,39 @@ export function normalizeStreamChatPipelineResult(
     terminalErr
     && (terminalErr.type === "output_blocked" || terminalErr.code === "output_blocked"),
   );
+  // Prefer the raw HTTP JSON body for Module 1 containment outcomes (disabled key /
+  // kill_switch_active). Streaming wrappers used to drop `code` and reclassify them
+  // as model_output errors.
+  const bodyData = sseResult?.data || {};
+  if (
+    isAuthCredentialRejection(bodyData, httpStatus)
+    || isKillSwitchRejection(bodyData, httpStatus)
+    || httpStatus === 403
+    || httpStatus === 401
+    || (httpStatus >= 400 && !sseResult?.isStream)
+  ) {
+    const payload = Object.keys(bodyData).length
+      ? bodyData
+      : (terminalErr && typeof terminalErr === "object"
+        ? {
+          error: terminalErr.type || terminalErr,
+          message: terminalErr.message,
+          code: terminalErr.code,
+        }
+        : {});
+    return normalizeChatPipelineResult(payload, httpStatus, ctx);
+  }
 
-  if (httpStatus === 403 || (httpStatus >= 400 && !sseResult?.isStream)) {
-    return normalizeChatPipelineResult(sseResult?.data || {}, httpStatus, ctx);
+  // Stream frame carrying kill_switch / auth rejection without a useful body envelope.
+  if (terminalErr && typeof terminalErr === "object") {
+    const frame = {
+      error: terminalErr,
+      message: terminalErr.message,
+      code: terminalErr.code,
+    };
+    if (isAuthCredentialRejection(frame, httpStatus) || isKillSwitchRejection(frame, httpStatus)) {
+      return normalizeChatPipelineResult(frame, httpStatus || 503, ctx);
+    }
   }
 
   const terminal = sseResult?.terminalTracePayload;
@@ -234,18 +264,25 @@ export function normalizeStreamChatPipelineResult(
   };
 }
 
-/** Stage order aligned with gateway/simulator_routes.py pipeline visualization. */
+/**
+ * Stage order must match gateway proxy_chat enforcement order:
+ * Auth (middleware) → rate_limit → policy → kill_switch → input_scan → routing → model → output_guard.
+ * (Kill switch runs before input scan; mis-ordering made KS look skipped after a fake input_scan block.)
+ */
 const PIPELINE_STAGE_ORDER = [
   "auth",
   "rate_limit",
   "policy",
-  "input_scan",
   "kill_switch",
+  "input_scan",
   "model_routing",
   "model_input",
   "model_output",
   "output_guardrail",
 ];
+
+const DISABLED_KEY_MESSAGE_RE = /api key is disabled|api key has expired|authentication (failed|required)|invalid api key|unauthorized/i;
+const KILL_SWITCH_DISABLED_MODEL_RE = /is currently disabled|disabled by an operator kill-switch|no compliant fallback/i;
 
 export function estimateRequestTokens(prompt, maxTokens = 512) {
   const promptTokens = Math.max(1, Math.floor(String(prompt || "").length / 4));
@@ -267,6 +304,39 @@ function extractErrorPayload(data) {
     type: "",
     code: String(data?.code ?? ""),
   };
+}
+
+/** Module 1 middleware rejects inactive/expired keys before proxy_chat (HTTP 403). */
+export function isAuthCredentialRejection(data, httpStatus) {
+  if (httpStatus !== 401 && httpStatus !== 403) return false;
+  const err = extractErrorPayload(data);
+  const code = String(err.code || data?.code || "").toLowerCase();
+  const message = String(err.message || data?.message || "");
+  if (code === "unauthorized" || code === "authentication_required") return true;
+  if (DISABLED_KEY_MESSAGE_RE.test(message)) return true;
+  // Middleware disabled-key body: { error: "forbidden", message: "API key is disabled." }
+  // Do not treat structured firewall 403s (zeroshield / blocked_by) as auth.
+  if (
+    httpStatus === 403
+    && String(data?.error || "").toLowerCase() === "forbidden"
+    && !data?.zeroshield
+    && !data?.blocked_by
+    && DISABLED_KEY_MESSAGE_RE.test(message)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Module 1 kill-switch disable returns 503 with code kill_switch_active (before input scan). */
+export function isKillSwitchRejection(data, httpStatus) {
+  const err = extractErrorPayload(data);
+  const code = String(err.code || data?.code || "").toLowerCase();
+  if (code === "kill_switch_active") return true;
+  if (httpStatus === 503 && KILL_SWITCH_DISABLED_MODEL_RE.test(String(err.message || data?.message || ""))) {
+    return true;
+  }
+  return false;
 }
 
 function isUpstreamProviderError(data, httpStatus) {
@@ -342,8 +412,11 @@ function isContentPolicyBlock(data, httpStatus) {
 
 function inferFinalAction(data, httpStatus, zs) {
   if (data?.final_action) return data.final_action;
-  const code = String(data?.code || "").toLowerCase();
+  const code = String(data?.code || extractErrorPayload(data).code || "").toLowerCase();
   if (httpStatus === 422 && INFERENCE_SETUP_CODES.has(code)) return "needs_model";
+  // Containment outcomes are blocks, not generic system errors.
+  if (isAuthCredentialRejection(data, httpStatus)) return "block";
+  if (isKillSwitchRejection(data, httpStatus)) return "block";
   if (isUpstreamProviderError(data, httpStatus)) return "error";
   if (zs?.action) return zs.action;
   if (httpStatus === 403) return "block";
@@ -384,9 +457,13 @@ export function inferDetectionCheckpoint(data, zs) {
 
 /** Map gateway response to the pipeline stage where processing stopped. */
 function inferBlockedStage(data, httpStatus, zs) {
-  const code = String(data?.code || "").toLowerCase();
+  const err = extractErrorPayload(data);
+  const code = String(data?.code || err.code || "").toLowerCase();
   const category = String(data?.category || zs?.threat_type || "").toLowerCase();
   const tier = String(data?.detection_tier || data?.pipeline_stage || zs?.detection_tier || "").toLowerCase();
+
+  if (isAuthCredentialRejection(data, httpStatus)) return "auth";
+  if (isKillSwitchRejection(data, httpStatus)) return "kill_switch";
 
   if (isUpstreamProviderRateLimit(data, httpStatus)) return "model_output";
 
@@ -423,6 +500,7 @@ function inferBlockedStage(data, httpStatus, zs) {
 
   if (data?.blocked_by) {
     const bb = String(data.blocked_by).toLowerCase();
+    if (bb === "auth" || bb === "authentication") return "auth";
     if (bb === "rate_limit" || bb === "rate_limit_tpm") return "rate_limit";
     if (bb === "firewall_keywords" || bb === "blocked_keyword") return "policy";
     if (bb === "input_scan" || bb.startsWith("tier")) return "input_scan";
@@ -445,6 +523,7 @@ function inferBlockedStage(data, httpStatus, zs) {
   if (code === "content_blocked" && category === "blocked_keyword") return "policy";
   if (code === "content_blocked" && tier) return tier.startsWith("tier") ? "input_scan" : "policy";
 
+  // Bare 403 without firewall markers is ambiguous; prefer auth only for credential bodies.
   if (httpStatus === 403) return "input_scan";
   if (httpStatus === 429) return "rate_limit";
   if (httpStatus >= 500 || (httpStatus >= 400 && data?.error)) return "model_output";
@@ -616,64 +695,71 @@ function enrichStages(stages, data, zs, context) {
   const promptPreview = truncateText(
     context.prompt || data?.pipeline_trace?.prompt_preview || "",
   );
-  return (stages || []).map((stage) => {
-    const enriched = ensureStageLatency({ ...stage }, stageMetrics, zs, context);
-    if (stage.name === "input_scan" && !enriched.prompt_submitted) {
-      enriched.prompt_submitted = promptPreview;
+  const enriched = (stages || []).map((stage) => {
+    const next = ensureStageLatency({ ...stage }, stageMetrics, zs, context);
+    if (stage.name === "input_scan" && !next.prompt_submitted) {
+      next.prompt_submitted = promptPreview;
     }
     if (stage.name === "model_input") {
-      if (!enriched.content && enriched.action !== "skip" && promptPreview) {
-        enriched.content = promptPreview;
+      if (!next.content && next.action !== "skip" && promptPreview) {
+        next.content = promptPreview;
       }
-      if (!enriched.prompt_submitted) enriched.prompt_submitted = promptPreview;
+      if (!next.prompt_submitted) next.prompt_submitted = promptPreview;
     }
     if (stage.name === "model_routing") {
       const routing = zs.routing || {};
-      enriched.requested_model = enriched.requested_model
+      next.requested_model = next.requested_model
         || routing.original_model
         || routing.requested_model
         || context.requestedModel
         || "";
-      enriched.selected_model = enriched.selected_model
+      next.selected_model = next.selected_model
         || routing.selected_model
         || routing.routed_model
         || zs.selected_model
         || "";
-      const rawReason = enriched.routing_reason
+      const rawReason = next.routing_reason
         || routing.routing_reason
         || zs.routing_reason
         || context.routingHeaders?.routing_reason
         || "";
-      const rawSource = enriched.decision_source
+      const rawSource = next.decision_source
         || routing.decision_source
         || zs.decision_source
         || context.routingHeaders?.decision_source
         || "";
-      enriched.decision_source = rawSource;
-      enriched.decision_source_label = enriched.decision_source_label
+      next.decision_source = rawSource;
+      next.decision_source_label = next.decision_source_label
         || formatDecisionSource(rawSource);
-      enriched.routing_reason = formatRoutingReason(rawReason, { decisionSource: rawSource });
-      enriched.policy_summary = enriched.policy_summary
+      next.routing_reason = formatRoutingReason(rawReason, { decisionSource: rawSource });
+      next.policy_summary = next.policy_summary
         || routing.policy_summary
         || zs.policy_summary
         || context.routingHeaders?.policy_summary
         || "";
-      enriched.decision_factors = enriched.decision_factors
+      next.decision_factors = next.decision_factors
         || routing.decision_factors
         || zs.decision_factors
         || [];
-      enriched.weights = enriched.weights || routing.weights || zs.weights || {};
-      if (!enriched.detail && enriched.routing_reason) {
-        enriched.detail = enriched.routing_reason;
+      next.weights = next.weights || routing.weights || zs.weights || {};
+      if (!next.detail && next.routing_reason) {
+        next.detail = next.routing_reason;
       }
     }
-    if (stage.name === "kill_switch" && enriched.action === "reroute" && enriched.routing_reason) {
-      enriched.detail = formatRoutingReason(enriched.routing_reason, {
-        decisionSource: enriched.decision_source,
+    if (stage.name === "kill_switch" && next.action === "reroute" && next.routing_reason) {
+      next.detail = formatRoutingReason(next.routing_reason, {
+        decisionSource: next.decision_source,
       });
     }
-    return enriched;
+    return next;
   });
+  // Display order matches runtime (kill_switch before input_scan). Gateway
+  // pipeline_trace historically listed input_scan first — FE-only reorder.
+  const rank = (name) => {
+    const idx = PIPELINE_STAGE_ORDER.indexOf(name);
+    return idx < 0 ? 999 : idx;
+  };
+  return enriched.sort((a, b) => rank(a.name) - rank(b.name));
 }
 
 function skipDetail(stageName, blockedStage) {
@@ -719,14 +805,18 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
 
   const stages = [];
 
-  // 1 — Auth
+  // 1 — Auth (Module 1 middleware; disabled API key stops here)
   {
     const at = stageAt("auth");
+    const authBlocked = blockedStage === "auth" || at === "blocked";
+    const authMsg = String(data?.message || extractErrorPayload(data).message || "");
     stages.push({
       name: "auth",
-      action: at === "blocked" ? "block" : "allow",
+      action: authBlocked ? "block" : "allow",
       latency_ms: latencyForStage("auth", stageMetrics, zs, context),
-      detail: at === "blocked" ? "Gateway API key invalid or missing" : "Gateway API key accepted",
+      detail: authBlocked
+        ? (DISABLED_KEY_MESSAGE_RE.test(authMsg) ? authMsg : "Gateway API key invalid, disabled, or missing")
+        : "Gateway API key accepted",
     });
   }
 
@@ -792,7 +882,30 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
     });
   }
 
-  // 4 — Input scan
+  // 4 — Kill switch (Module 1: after policy, BEFORE input scan)
+  {
+    const at = stageAt("kill_switch");
+    const ksBlocked = blockedStage === "kill_switch";
+    const ksRerouted = Boolean(
+      routing.rerouted && String(routing.trigger_source || routing.decision_source || "").toLowerCase() === "kill_switch",
+    );
+    stages.push({
+      name: "kill_switch",
+      action: ksBlocked ? "block" : ksRerouted ? "reroute" : at === "after" ? "skip" : "allow",
+      latency_ms: latencyForStage("kill_switch", stageMetrics, zs, context),
+      detail: ksBlocked
+        ? (data?.message || extractErrorPayload(data).message || "Model kill-switch is active")
+        : ksRerouted
+          ? formatRoutingReason(routing.routing_reason || routing.reason || "", {
+            decisionSource: routing.decision_source,
+          })
+          : at === "after"
+            ? skipDetail("kill_switch", blockedStage)
+            : "No active kill-switch for this model",
+    });
+  }
+
+  // 5 — Input scan
   {
     const at = stageAt("input_scan");
     const scanBlocked = blockedStage === "input_scan" && (finalAction === "block" || httpStatus === 403);
@@ -842,29 +955,6 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
         prompt_submitted: promptPreview,
       });
     }
-  }
-
-  // 5 — Kill switch
-  {
-    const at = stageAt("kill_switch");
-    const ksBlocked = blockedStage === "kill_switch";
-    const ksRerouted = Boolean(
-      routing.rerouted && String(routing.trigger_source || routing.decision_source || "").toLowerCase() === "kill_switch",
-    );
-    stages.push({
-      name: "kill_switch",
-      action: ksBlocked ? "block" : ksRerouted ? "reroute" : at === "after" ? "skip" : "allow",
-      latency_ms: latencyForStage("kill_switch", stageMetrics, zs, context),
-      detail: ksBlocked
-        ? (data?.message || "Model kill-switch is active")
-        : ksRerouted
-          ? formatRoutingReason(routing.routing_reason || routing.reason || "", {
-            decisionSource: routing.decision_source,
-          })
-          : at === "after"
-            ? skipDetail("kill_switch", blockedStage)
-            : "No active kill-switch for this model",
-    });
   }
 
   // 6 — Model routing
@@ -1060,6 +1150,35 @@ export function normalizeChatPipelineResult(data, httpStatus, context = {}) {
     ...context,
     routingHeaders,
   };
+
+  // Module 1 middleware rejects disabled/expired keys BEFORE proxy_chat — there is
+  // never a gateway pipeline_trace. Prefer synthetic Auth stages over any stale
+  // / mis-attributed trace envelope.
+  if (isAuthCredentialRejection(data, httpStatus) || isKillSwitchRejection(data, httpStatus)) {
+    const zs = { ...(data?.zeroshield || {}) };
+    const payload = { ...(data || {}), zeroshield: zs };
+    const finalAction = inferFinalAction(payload, httpStatus, zs);
+    const blockedStage = inferTerminalBlockedStage(payload, httpStatus, zs, finalAction);
+    const stages = enrichStages(
+      buildSimulatorStages(payload, httpStatus, zs, finalAction, blockedStage, mergedContext),
+      payload,
+      zs,
+      mergedContext,
+    );
+    return {
+      ...payload,
+      final_action: finalAction,
+      blocked_by: blockedStage || "",
+      detection_checkpoint: "",
+      stages,
+      zeroshield: zs,
+      request_id: payload.request_id || zs.request_id || "",
+      total_latency_ms: context.totalLatencyMs,
+      estimated_tokens: context.estimatedTokens ?? estimateRequestTokens(context.prompt, context.maxTokens),
+      pipeline_live: true,
+      message: payload.message || extractErrorPayload(payload).message || "",
+    };
+  }
 
   const mergeScanFieldsFromTrace = (zs, trace) => {
     const inputStage = (trace?.stages || []).find((s) => s.name === "input_scan");

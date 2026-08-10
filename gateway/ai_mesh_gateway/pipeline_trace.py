@@ -945,6 +945,10 @@ def build_pipeline_trace(
     policy stage Before panel must not be read as the literal pre-policy bytes —
     raw PII was present and was display-masked for the operator UI.
     """
+    # Canonicalize internal block-stage aliases so skip-after-block invariants
+    # apply consistently across trace builders and frontend renderers.
+    if blocked_stage == "firewall_keywords":
+        blocked_stage = "input_scan"
     zs = zeroshield if isinstance(zeroshield, dict) else {}
     routing = route_metadata if isinstance(route_metadata, dict) else (zs.get("routing") or {})
     if not isinstance(routing, dict):
@@ -1065,7 +1069,7 @@ def build_pipeline_trace(
             return "block"
         if is_blocked and blocked_stage and stage != blocked_stage:
             idx_order = [
-                "auth", "rate_limit", "policy", "input_scan", "kill_switch",
+                "auth", "rate_limit", "policy", "kill_switch", "input_scan",
                 "model_routing", "model_input", "model_output", "output_guardrail",
             ]
             try:
@@ -1420,7 +1424,7 @@ def build_pipeline_trace(
     # own action branch. No-op when not blocked → redact/flag/allow are unaffected.
     if is_blocked and blocked_stage:
         _stage_order = [
-            "auth", "rate_limit", "policy", "input_scan", "kill_switch",
+            "auth", "rate_limit", "policy", "kill_switch", "input_scan",
             "model_routing", "model_input", "model_output", "output_guardrail",
         ]
         _b_idx = _stage_order.index(blocked_stage) if blocked_stage in _stage_order else -1

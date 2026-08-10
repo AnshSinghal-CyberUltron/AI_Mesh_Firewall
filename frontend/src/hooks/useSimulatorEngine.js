@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useGatewayConfig } from "./useGatewayConfig";
 import { useAuth } from "../context/AuthContext";
 import { resolveGatewayHealthUrl } from "../utils/environmentUrls";
+import { isSimulatorKeyReprovisionSuppressed } from "../utils/containmentEvents";
 
 const HEALTH_POLL_INTERVAL = 15000;
 const GATEWAY_KEY_STORAGE_LEGACY = "zeroshield_gateway_key";
@@ -159,12 +160,15 @@ export function useSimulatorEngine() {
   useEffect(() => {
     if (authLoading || !orgId) return;
     if (gatewayKey) return;
+    // After Disable Key, do not mint a replacement into localStorage.
+    if (isSimulatorKeyReprovisionSuppressed("")) return;
     const attemptKey = String(orgId);
     if (bootstrapAttemptedRef.current === attemptKey) return;
     bootstrapAttemptedRef.current = attemptKey;
 
     (async () => {
       try {
+        if (isSimulatorKeyReprovisionSuppressed("")) return;
         const res = await fetchWithAuth("/api/gateways/simulator-default/", {
           method: "POST",
         });

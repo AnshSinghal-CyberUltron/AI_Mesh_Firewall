@@ -331,6 +331,11 @@ class GatewayAPIKey(models.Model):
     rate_limit_tokens_per_minute = models.PositiveIntegerField(
         default=DEFAULT_RATE_LIMIT_TPM, help_text="Rate limit in Tokens Per Minute (TPM)."
     )
+    # Module 2 UEBA fields on shared GatewayAPIKey (schema: core.0029; no key_purpose / days)
+    UEBA_MODE_CHOICES = [
+        ("learning", "Learning"),
+        ("active", "Active"),
+    ]
     # UNIT (M-25a): FRACTION in [0.0, 1.0]. This is NOT the same scale as
     # ModelState.risk_score, which is a PERCENTAGE in [0.0, 100.0]. Never
     # compare or assign one to the other without an explicit conversion:
@@ -340,10 +345,42 @@ class GatewayAPIKey(models.Model):
     # (fraction -> 0-100 int security_risk_score) and the gateway service
     # (ai_mesh_gateway/main.py divides ModelState verdict scores by 100.0
     # before mixing them with fraction-scale telemetry risk).
+    # Module 2: help_text documents unified UEBA final score (engine writes it).
     risk_score = models.FloatField(
         default=0.0,
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
-        help_text="Baseline risk score (0.0 = trusted, 1.0 = highest risk).",
+        help_text=(
+            "Unified UEBA final risk score (0.0 = trusted, 1.0 = highest risk). "
+            "Written by scoring engine."
+        ),
+    )
+    # Must stay on the ORM: DB columns are NOT NULL without a server DEFAULT;
+    # creates that omit them insert NULL → IntegrityError on
+    # POST /api/gateways/keys/.
+    ueba_mode = models.CharField(
+        max_length=16,
+        choices=UEBA_MODE_CHOICES,
+        default="learning",
+        db_index=True,
+        help_text="learning = observe + soft score; active = full UEBA posture.",
+    )
+    # Optional per-key override. NULL → org behavior_profile_prompt_target
+    # (UI default 50). Same knob drives behavior-profile baseline building.
+    ueba_graduation_requests = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Override org prompt-target before active mode.",
+    )
+    # Incremented on telemetry ingest; compared to prompt-target / override.
+    ueba_lifetime_request_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Lifetime requests ever seen for this key (UEBA).",
+    )
+    # Set when learning baseline is locked / key enters active; NULL while learning.
+    ueba_baseline_locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the UEBA learning baseline was locked (active).",
     )
     max_context_tokens = models.PositiveIntegerField(
         default=0,

@@ -1,0 +1,1941 @@
+"""Module 2 API views — UEBA + Threat Intelligence focus."""
+
+from collections import Counter, defaultdict
+from datetime import timedelta
+import logging
+import os
+from uuid import UUID
+
+from django.conf import settings
+from django.db.models import Q
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.permissions import SAFE_METHODS, BasePermission, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.viewsets import ModelViewSet
+
+from auth.utils import get_request_organization
+from core.admin_views import IsAdminOrSuperuser
+from core.models import FirewallConfig, GatewayAPIKey, KillSwitch, LLMModelConfig
+from module2.analytics import (
+    build_hybrid_mcp_activity_payload,
+    build_incident_queue_summary,
+    build_lane_summary,
+    build_model_exposure_payload,
+    build_rag_pipeline_kpis,
+    build_rag_pre_pipeline_denials,
+    build_recent_request_json,
+    build_stage_hit_distribution,
+    build_threat_telemetry_payload,
+    build_vector_exposure_payload,
+    count_monitored_events,
+    count_rerouted_events,
+    event_prompt_from_meta,
+    event_source,
+    hours_from_period,
+    key_prefix_from_meta,
+    trend_bucket_hours,
+    paginate_queryset,
+    prefixes_match,
+    prompt_snippet_from_meta,
+    serialize_incident_row,
+)
+from module2.models import ThreatIntelEntry
+from module2.display_sanitization import sanitize_incident_text, sanitize_incident_value
+from module2.serializers import ThreatIntelEntrySerializer
+from module2.tasks import safe_sync_threat_intel_to_redis, build_threat_intel_sync_meta
+from module2.ueba_metrics import POLICY_ESCALATION_THREATS
+from module2.ueba_service import (
+    assessment_to_risk_payload,
+    assessments_map_for_keys,
+    apply_org_ueba_settings_update,
+    build_risk_rows,
+    get_or_create_org_settings,
+    latest_assessment_for_key,
+    RECENT_BEHAVIOR_EVENTS,
+    risk_calc_settings_payload,
+    risk_calc_formula_reference,
+)
+from policy.constants import ACTION_BLOCK, ACTION_REDACT
+from policy.models import EnforcementEvent, SecurityIncident
+from module2.request_scoped_metrics import (
+    collapse_events_by_request,
+    iter_rows_from_queryset,
+    summarize_request_scoped_events,
+)
+from policy.review_views import SecurityIncidentSerializer
+from policy.security_views import _enforcement_events_for_request
+
+logger = logging.getLogger(__name__)
+
+
+def _org_or_403(request):
+    org = get_request_organization(request)
+    if org is None and not getattr(request.user, "is_superuser", False):
+        return None
+    return org
+
+
+class _ReadOnlyOrAdminPermission(BasePermission):
+    """Allow authenticated reads; restrict writes to admin/superuser."""
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.method in SAFE_METHODS:
+            return True
+        return IsAdminOrSuperuser().has_permission(request, view)
+
+
+_hours_from_period = hours_from_period
+_key_prefix_from_meta = key_prefix_from_meta
+_event_source = event_source
+
+
+def _mcp_events_for_org(org, since):
+    """Org-scoped MCPEvent queryset for hybrid Module 2 MCP reads."""
+    from mcp_connector.models import MCPEvent
+
+    qs = MCPEvent.objects.filter(timestamp__gte=since)
+    if org is not None:
+        return qs.filter(organization=org)
+    return qs.none()
+
+
+def _projected_threat_intel_keyword_keys(org) -> set[str]:
+    """IOC literals currently projected for gateway keyword blocking (synced_for_blocking).
+
+    Same set ThreatIntelTelemetryView uses for IOC Matches — Hub Threat Intel lane
+    must use it so live blocked_keyword events are not counted as Chat.
+    """
+    keys: set[str] = set()
+    if org is None:
+        return keys
+    from module2.models import ThreatIntelEntry
+    from module2.threat_intel_projection import keyword_key, resolve_projection_eligibility
+
+    for entry in ThreatIntelEntry.objects.filter(organization=org).iterator(chunk_size=200):
+        row = resolve_projection_eligibility(entry)
+        if row.effective_mode == "synced_for_blocking" and row.keyword:
+            keys.add(keyword_key(row.keyword))
+    return keys
+
+
+_TIMELINE_META_ALLOWLIST = {
+    "event_type",
+    "pipeline_stage",
+    "source",
+    "detail",
+    "reason",
+    "threat_type",
+    "request_id",
+    "pipeline_request_id",
+    "model",
+    "project_id",
+    "key_prefix",
+    "api_key_prefix",
+    "collection",
+    "vector_collection",
+    "vector_namespace",
+    "tools_invoked",
+    "mcp_server",
+    "server_slug",
+    "mcp_direction",
+    "scan_direction",
+    "rerouted",
+    "original_model",
+    "selected_model",
+    "prompt_snippet",
+    "prompt_submitted",
+    "input_text",
+    "response_snippet",
+    "prompt_lineage",
+    "intent",
+    "owasp_code",
+    "extra",
+}
+
+_TIMELINE_EXTRA_ALLOWLIST = {
+    "detail",
+    "reason",
+    "source",
+    "prompt",
+    "prompt_snippet",
+    "prompt_submitted",
+    "input_text",
+    "user_message",
+    "query",
+    "rerouted",
+    "original_model",
+    "selected_model",
+    "trigger_source",
+    "isolation_scope",
+    "is_isolation_event",
+    "kill_switch_truth_mode",
+}
+
+_VALID_INCIDENT_STATUSES = {"open", "investigating", "escalated", "resolved"}
+_VALID_INCIDENT_SEVERITIES = {"low", "medium", "high", "critical", "critical_high"}
+_VALID_INCIDENT_SOURCES = {"threat_intel", "rag", "mcp", "vector", "chat", "generic"}
+_VALID_INCIDENT_QUEUES = {"active"}
+
+
+def _client_ip(request):
+    forwarded = (request.META.get("HTTP_X_FORWARDED_FOR", "") or "").split(",")[0].strip()
+    return forwarded or request.META.get("REMOTE_ADDR") or None
+
+
+def _sanitize_incident_metadata(meta):
+    src = meta if isinstance(meta, dict) else {}
+    out = {}
+    for key in _TIMELINE_META_ALLOWLIST:
+        if key not in src:
+            continue
+        value = src.get(key)
+        if key == "extra":
+            extra = value if isinstance(value, dict) else {}
+            out["extra"] = {k: extra[k] for k in _TIMELINE_EXTRA_ALLOWLIST if k in extra}
+            continue
+        out[key] = value
+    return sanitize_incident_value(out)
+
+
+def _build_event_trend(
+    events_qs,
+    since,
+    hours,
+    bucket_hours,
+    *,
+    threat_intel_keyword_keys=None,
+):
+    bucket_count = max(hours // bucket_hours, 1)
+    timeline = []
+    for i in range(bucket_count):
+        start = since + timedelta(hours=i * bucket_hours)
+        timeline.append(
+            {
+                "timestamp": start.isoformat(),
+                "total": 0,
+                "blocked": 0,
+                "redacted": 0,
+            }
+        )
+
+    window_end = since + timedelta(hours=bucket_count * bucket_hours)
+    rows = list(
+        events_qs.filter(created_at__gte=since, created_at__lt=window_end).values(
+            "created_at", "action", "endpoint_id", "metadata"
+        )
+    )
+    collapsed_rows = _collapse_prepared_event_rows(rows)
+    return _build_event_trend_from_collapsed(
+        collapsed_rows,
+        since,
+        hours,
+        bucket_hours,
+        threat_intel_keyword_keys=threat_intel_keyword_keys,
+    )
+
+
+_TIMELINE_LANES = ("chat", "rag", "mcp", "vector", "threat_intel")
+
+
+def _empty_lane_counts() -> dict[str, int]:
+    return {lane: 0 for lane in _TIMELINE_LANES}
+
+
+def _build_event_trend_from_collapsed(
+    collapsed_rows,
+    since,
+    hours,
+    bucket_hours,
+    *,
+    threat_intel_keyword_keys=None,
+):
+    bucket_count = max(hours // bucket_hours, 1)
+    timeline = []
+    for i in range(bucket_count):
+        start = since + timedelta(hours=i * bucket_hours)
+        timeline.append(
+            {
+                "timestamp": start.isoformat(),
+                "total": 0,
+                "blocked": 0,
+                "redacted": 0,
+                **_empty_lane_counts(),
+            }
+        )
+    bucket_seconds = bucket_hours * 3600
+    for item in collapsed_rows:
+        ts = item.created_at
+        if not ts:
+            continue
+        idx = int((ts - since).total_seconds() // bucket_seconds)
+        if idx < 0 or idx >= bucket_count:
+            continue
+        target = timeline[idx]
+        target["total"] += 1
+        meta = item.metadata or {}
+        lane = event_source(meta, threat_intel_keyword_keys=threat_intel_keyword_keys)
+        if lane in target:
+            target[lane] += 1
+        if item.action == "block":
+            target["blocked"] += 1
+        if item.action == "redact":
+            target["redacted"] += 1
+    return timeline
+
+
+def _key_attributed_collapsed_rows(collapsed_rows, keys_qs):
+    """Keep only collapsed events whose key_prefix maps to an org gateway key."""
+    prefix_lookup = {k.prefix.lower(): k.prefix for k in keys_qs}
+    attributed = []
+    for item in collapsed_rows:
+        prefix = _key_prefix_from_meta(item.metadata or {})
+        if not prefix:
+            continue
+        if prefix.lower() not in prefix_lookup:
+            continue
+        attributed.append(item)
+    return attributed
+
+
+def _projected_ioc_keyword_block_q(ti_keys: set[str] | None) -> Q | None:
+    """SQL Q for live IOC keyword blocks (parity with is_threat_intel_meta keyword branch).
+
+    Returns None when there are no projected keys (caller should skip OR/exclude).
+    """
+    if not ti_keys:
+        return None
+    keyword_detail_q = Q()
+    any_kw = False
+    for kw in ti_keys:
+        lit = str(kw or "").strip()
+        if not lit:
+            continue
+        any_kw = True
+        keyword_detail_q |= Q(enforcement_event__metadata__detail__icontains=lit)
+        keyword_detail_q |= Q(enforcement_event__metadata__extra__detail__icontains=lit)
+    if not any_kw:
+        return None
+    blocked_kw = (
+        Q(enforcement_event__metadata__has_key="threat_type")
+        & Q(enforcement_event__metadata__threat_type__iexact="blocked_keyword")
+    ) | (
+        Q(enforcement_event__metadata__has_key="code")
+        & Q(enforcement_event__metadata__code__iexact="content_blocked")
+    ) | (
+        Q(enforcement_event__metadata__has_key="blocked_by")
+        & Q(enforcement_event__metadata__blocked_by__iexact="content_blocked")
+    ) | (
+        Q(enforcement_event__metadata__has_key="error_code")
+        & Q(enforcement_event__metadata__error_code__iexact="content_blocked")
+    )
+    return blocked_kw & keyword_detail_q
+
+
+def _collapse_prepared_event_rows(raw_rows):
+    prepared = []
+    for ev in raw_rows:
+        meta = dict(ev.get("metadata") or {})
+        if ev.get("endpoint_id"):
+            meta.setdefault("endpoint_id", ev["endpoint_id"])
+        prepared.append(
+            {
+                "id": ev.get("id"),
+                "created_at": ev.get("created_at"),
+                "action": ev.get("action"),
+                "metadata": meta,
+            }
+        )
+    return list(collapse_events_by_request(prepared))
+
+
+def _collect_key_metrics(keys_qs, events_qs):
+    raw_rows = list(
+        events_qs.values("created_at", "action", "endpoint_id", "metadata")
+    )
+    collapsed_rows = _collapse_prepared_event_rows(raw_rows)
+    return _collect_key_metrics_from_collapsed(keys_qs, collapsed_rows)
+
+
+def _collect_key_metrics_from_collapsed(keys_qs, collapsed_rows):
+    keys = list(keys_qs)
+    key_by_prefix = {k.prefix: k for k in keys}
+    prefix_lookup = {k.prefix.lower(): k.prefix for k in keys}
+    metrics = defaultdict(
+        lambda: {
+            "total": 0,
+            "blocked": 0,
+            "redacted": 0,
+            "policy_escalations": 0,
+            "endpoint_ids": set(),
+            "models": set(),
+            "model_counts": defaultdict(int),
+            "threat_types": defaultdict(int),
+            "hourly": defaultdict(int),
+        }
+    )
+
+    for item in collapsed_rows:
+        meta = item.metadata or {}
+        prefix = _key_prefix_from_meta(meta)
+        if not prefix:
+            continue
+        canonical = prefix_lookup.get(prefix.lower())
+        if not canonical:
+            continue
+        created_at = item.created_at
+        hour_bucket = (
+            created_at.replace(minute=0, second=0, microsecond=0).isoformat()
+            if created_at is not None
+            else ""
+        )
+        m = metrics[canonical]
+        m["total"] += 1
+        if item.action == "block":
+            m["blocked"] += 1
+        if item.action == "redact":
+            m["redacted"] += 1
+        if meta.get("endpoint_id"):
+            m["endpoint_ids"].add(meta["endpoint_id"])
+        if meta.get("model"):
+            model_name = str(meta["model"])
+            m["models"].add(model_name)
+            m["model_counts"][model_name] += 1
+        threat = str(meta.get("threat_type") or "unknown")
+        m["threat_types"][threat] += 1
+        if threat in POLICY_ESCALATION_THREATS:
+            m["policy_escalations"] += 1
+        if hour_bucket:
+            m["hourly"][hour_bucket] += 1
+
+    return key_by_prefix, metrics
+
+
+def _gateway_keys_for_org(org, *, select_owner=False, order_by=None):
+    """Org-scoped GatewayAPIKey queryset. Missing org => empty (never all-tenants)."""
+    qs = GatewayAPIKey.objects.all()
+    if select_owner:
+        qs = qs.select_related("owner")
+    if org is None:
+        return qs.none()
+    qs = qs.filter(organization=org)
+    if order_by:
+        qs = qs.order_by(order_by)
+    return qs
+
+
+def _build_key_containment_payload(org, keys_qs=None):
+    """Counts and detail rows for disabled API keys and active kill switches."""
+    if org is None:
+        return {
+            "disabled_keys": 0,
+            "active_kill_switches": 0,
+            "active_kill_switches_total": 0,
+            "disabled_keys_detail": [],
+            "active_kill_switches_detail": [],
+        }
+
+    if keys_qs is None:
+        keys_qs = GatewayAPIKey.objects.select_related("owner").filter(organization=org)
+
+    disabled_qs = keys_qs.filter(is_active=False).order_by("-updated_at")
+    ks_qs = KillSwitch.objects.filter(organization=org, is_active=True).order_by(
+        "-activated_at", "-updated_at"
+    )
+
+    disabled_keys_detail = [
+        {
+            "key_id": str(k.id),
+            "prefix": k.prefix,
+            "name": k.name,
+            "project_id": k.project_id,
+            "owner_email": getattr(k.owner, "email", ""),
+            "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+            "updated_at": k.updated_at.isoformat() if k.updated_at else None,
+        }
+        for k in disabled_qs[:50]
+    ]
+    active_kill_switches_detail = [
+        {
+            "id": ks.id,
+            "model_name": ks.model_name,
+            "api_key_prefix": ks.api_key_prefix or "",
+            "action": ks.action,
+            "reason": ks.reason,
+            "activated_at": ks.activated_at.isoformat() if ks.activated_at else None,
+            "gateway_enforced": _is_gateway_enforced_kill_model(ks.model_name),
+        }
+        for ks in ks_qs[:50]
+    ]
+    # Only gateway-enforceable switches count as containment (legacy __credential__ does not).
+    enforced_detail = [row for row in active_kill_switches_detail if row["gateway_enforced"]]
+
+    return {
+        "disabled_keys": disabled_qs.count(),
+        "active_kill_switches": len(enforced_detail),
+        "active_kill_switches_total": ks_qs.count(),
+        "disabled_keys_detail": disabled_keys_detail,
+        "active_kill_switches_detail": active_kill_switches_detail,
+    }
+
+
+def _is_gateway_enforced_kill_model(model_name: str) -> bool:
+    """Gateway matches …:model:{client_requested_model}; legacy __credential__ never matches chat."""
+    name = str(model_name or "").strip()
+    if not name:
+        return False
+    if name == "__credential__":
+        return False
+    return True
+
+
+def _kill_switches_by_prefix(org):
+    """Active kill switches grouped by api_key_prefix. Missing org => empty."""
+    if org is None:
+        return {}
+    ks_qs = KillSwitch.objects.filter(organization=org, is_active=True).order_by("-activated_at")
+    grouped = defaultdict(list)
+    for ks in ks_qs:
+        prefix = str(ks.api_key_prefix or "").strip()
+        if prefix:
+            grouped[prefix].append(
+                {
+                    "id": ks.id,
+                    "model_name": ks.model_name,
+                    "action": ks.action,
+                    "is_active": ks.is_active,
+                    "reason": ks.reason,
+                    "activated_at": ks.activated_at.isoformat() if ks.activated_at else None,
+                    "gateway_enforced": _is_gateway_enforced_kill_model(ks.model_name),
+                }
+            )
+    return grouped
+
+
+def _empty_key_metric():
+    return {
+        "total": 0,
+        "blocked": 0,
+        "redacted": 0,
+        "policy_escalations": 0,
+        "endpoint_ids": set(),
+        "models": set(),
+        "model_counts": defaultdict(int),
+        "threat_types": defaultdict(int),
+        "hourly": defaultdict(int),
+    }
+
+
+def _risk_rows_for_metrics(keys_qs, key_by_prefix, metrics, org):
+    keys = list(keys_qs)
+    org_settings = get_or_create_org_settings(org) if org else None
+    return build_risk_rows(keys, key_by_prefix, metrics, org_settings)
+
+
+def _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix, org=None):
+    """Merge gateway key registry rows with UEBA behavior metrics and kill-switch scope.
+
+    Hide historical keys with zero enforcement activity in the selected window, but keep
+    actionable rows (disabled keys or keys with an active kill switch) so operators can
+    still manage containment.
+    """
+    org_settings = get_or_create_org_settings(org) if org else None
+    assessments = assessments_map_for_keys(list(keys_qs[:200]))
+    results = []
+    for k in keys_qs[:200]:
+        prefix = k.prefix
+        metric = metrics.get(prefix) or _empty_key_metric()
+        active_ks = kill_by_prefix.get(prefix, [])
+        enforced_ks = [ks for ks in active_ks if ks.get("gateway_enforced")]
+        has_period_activity = int(metric.get("total") or 0) > 0
+        # Keep disabled / kill-switched keys even with zero window activity.
+        if not has_period_activity and k.is_active and not active_ks:
+            continue
+        risk = assessment_to_risk_payload(k, metric, assessments.get(k.pk), org_settings)
+        top_threats = sorted(metric["threat_types"].items(), key=lambda x: -x[1])[:3]
+        top_models = sorted(metric["model_counts"].items(), key=lambda x: -x[1])[:3]
+
+        results.append(
+            {
+                "key_id": str(k.id),
+                "prefix": prefix,
+                "name": k.name,
+                "project_id": k.project_id,
+                "owner_email": getattr(k.owner, "email", ""),
+                "is_active": k.is_active,
+                "rate_limit_tpm": k.rate_limit_tokens_per_minute,
+                "risk_score_baseline": round(float(k.risk_score or 0), 3),
+                "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+                "expires_at": k.expires_at.isoformat() if k.expires_at else None,
+                "risk_band": risk["risk_band"],
+                "risk_score": risk["risk_score"],
+                "final_score": risk.get("final_score", risk["risk_score"]),
+                "traditional_score": risk.get("traditional_score", risk["risk_score"]),
+                "llm_verdict": risk.get("llm_verdict"),
+                "llm_reasoning": risk.get("llm_reasoning", ""),
+                "behavior_profile": risk.get("behavior_profile"),
+                "score_breakdown": risk.get("score_breakdown", {}),
+                "velocity_spike": risk["velocity_spike"],
+                "anomaly_flags": risk["anomaly_flags"],
+                "request_count": risk["request_count"],
+                "blocked_count": risk["blocked_count"],
+                "redacted_count": risk["redacted_count"],
+                "block_rate_pct": risk["block_rate_pct"],
+                "redact_rate_pct": risk["redact_rate_pct"],
+                "unique_models": risk["unique_models"],
+                "top_threat_type": risk["top_threat_type"],
+                "top_threat_types": top_threats,
+                "top_models": top_models,
+                "active_kill_switches": active_ks,
+                "active_kill_switch_count": len(enforced_ks),
+                "enforced_kill_switch_count": len(enforced_ks),
+            }
+        )
+
+    results.sort(
+        key=lambda r: (
+            -int(r["is_active"]),
+            -r["risk_score"],
+            -r["request_count"],
+            r["prefix"],
+        )
+    )
+    return results
+
+
+class UebaApiKeySummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        period = request.query_params.get("period", "24h")
+        since = timezone.now() - timedelta(hours=_hours_from_period(period))
+        org = _org_or_403(request)
+
+        keys_qs = _gateway_keys_for_org(org)
+
+        events = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
+        key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
+        rows = _risk_rows_for_metrics(keys_qs, key_by_prefix, metrics, org)
+        rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
+        total_events = sum(m["total"] for m in metrics.values())
+        blocked_events = sum(m["blocked"] for m in metrics.values())
+
+        containment = _build_key_containment_payload(org, keys_qs)
+
+        return Response(
+            {
+                "period": period,
+                "summary": {
+                    "total_keys": keys_qs.count(),
+                    "active_keys": keys_qs.filter(is_active=True).count(),
+                    "keys_with_activity": len(rows),
+                    "high_risk_keys": sum(1 for r in rows if r["risk_band"] == "high"),
+                    "total_events": total_events,
+                    "blocked_events": blocked_events,
+                    "disabled_keys": containment["disabled_keys"],
+                    "active_kill_switches": containment["active_kill_switches"],
+                },
+                "containment": containment,
+                "top_risky_keys": rows[:10],
+            }
+        )
+
+
+class UebaApiKeyRegistryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        period = request.query_params.get("period", "24h")
+        since = timezone.now() - timedelta(hours=_hours_from_period(period))
+        org = _org_or_403(request)
+        qs = _gateway_keys_for_org(org, select_owner=True, order_by="-created_at")
+
+        events = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
+        key_by_prefix, metrics = _collect_key_metrics(qs, events)
+        kill_by_prefix = _kill_switches_by_prefix(org)
+        results = _build_fleet_registry_payload(qs, key_by_prefix, metrics, kill_by_prefix, org)
+
+        return Response(
+            {
+                "period": period,
+                "count": qs.count(),
+                "results": results,
+            }
+        )
+
+
+def _ueba_period_bundle(request, period: str):
+    """Shared UEBA context: one keys query + one events query for summary/timeline/registry."""
+    started_at = timezone.now()
+    since = timezone.now() - timedelta(hours=_hours_from_period(period))
+    hours = _hours_from_period(period)
+    org = _org_or_403(request)
+
+    keys_qs = _gateway_keys_for_org(org, select_owner=True, order_by="-created_at")
+
+    events = _enforcement_events_for_request(
+        request, EnforcementEvent.objects.filter(created_at__gte=since)
+    )
+    event_rows = list(events.values("created_at", "action", "endpoint_id", "metadata"))
+    collapsed_rows = _collapse_prepared_event_rows(event_rows)
+    key_by_prefix, metrics = _collect_key_metrics_from_collapsed(keys_qs, collapsed_rows)
+    kill_by_prefix = _kill_switches_by_prefix(org)
+    rows = _risk_rows_for_metrics(keys_qs, key_by_prefix, metrics, org)
+    rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
+    total_events = sum(m["total"] for m in metrics.values())
+    blocked_events = sum(m["blocked"] for m in metrics.values())
+    key_count = keys_qs.count()
+    active_key_count = keys_qs.filter(is_active=True).count()
+    containment = _build_key_containment_payload(org, keys_qs)
+    registry_results = _build_fleet_registry_payload(keys_qs, key_by_prefix, metrics, kill_by_prefix, org)
+
+    risky_rows = list(rows)
+    tracked_prefixes = {r["prefix"] for r in risky_rows[:5]}
+    ti_keys = _projected_threat_intel_keyword_keys(org) or None
+    bucket_size = trend_bucket_hours(hours)
+    key_attributed_rows = _key_attributed_collapsed_rows(collapsed_rows, keys_qs)
+    base_timeline = _build_event_trend_from_collapsed(
+        key_attributed_rows,
+        since,
+        hours,
+        bucket_size,
+        threat_intel_keyword_keys=ti_keys,
+    )
+    timeline = []
+    for row in base_timeline:
+        timeline.append(
+            {
+                "timestamp": row["timestamp"],
+                "total_events": row["total"],
+                "blocked": row["blocked"],
+                "redacted": row["redacted"],
+                "chat": row.get("chat", 0),
+                "rag": row.get("rag", 0),
+                "mcp": row.get("mcp", 0),
+                "vector": row.get("vector", 0),
+                "threat_intel": row.get("threat_intel", 0),
+                "keys": {prefix: 0 for prefix in tracked_prefixes},
+            }
+        )
+    if tracked_prefixes:
+        bucket_seconds = bucket_size * 3600
+        bucket_count = len(timeline)
+        window_end = since + timedelta(hours=bucket_count * bucket_size)
+        for item in key_attributed_rows:
+            ts = item.created_at
+            if not ts:
+                continue
+            if ts < since or ts >= window_end:
+                continue
+            idx = int((ts - since).total_seconds() // bucket_seconds)
+            if idx < 0 or idx >= bucket_count:
+                continue
+            prefix = _key_prefix_from_meta(item.metadata or {})
+            canonical = prefix.lower()
+            matched = next((p for p in tracked_prefixes if p.lower() == canonical), None)
+            if matched:
+                timeline[idx]["keys"][matched] += 1
+
+    elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
+    logger.info(
+        "module2_ueba_bundle_ready org=%s period=%s keys=%s events=%s elapsed_ms=%s",
+        getattr(org, "id", None),
+        period,
+        key_count,
+        total_events,
+        elapsed_ms,
+    )
+    return {
+        "period": period,
+        "summary": {
+            "period": period,
+            "summary": {
+                "total_keys": key_count,
+                "active_keys": active_key_count,
+                "keys_with_activity": len(rows),
+                "high_risk_keys": sum(1 for r in rows if r["risk_band"] == "high"),
+                "total_events": total_events,
+                "blocked_events": blocked_events,
+                "disabled_keys": containment["disabled_keys"],
+                "active_kill_switches": containment["active_kill_switches"],
+            },
+            "containment": containment,
+            "top_risky_keys": rows[:10],
+        },
+        "timeline": {
+            "period": period,
+            "tracked_prefixes": sorted(tracked_prefixes),
+            "timeline": timeline,
+        },
+        "registry": {
+            "period": period,
+            "count": key_count,
+            "results": registry_results,
+        },
+        "elapsed_ms": elapsed_ms,
+    }
+
+
+class UebaApiKeyBundleView(APIView):
+    """GET /api/module2/ueba/api-keys/bundle/ — summary + timeline + registry in one round trip."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        period = request.query_params.get("period", "24h")
+        return Response(_ueba_period_bundle(request, period))
+
+
+class UebaRiskCalculationView(APIView):
+    """GET/PATCH /api/module2/ueba/risk-calculation/ — org-level risk formula and knobs."""
+
+    permission_classes = [IsAuthenticated, _ReadOnlyOrAdminPermission]
+
+    def get(self, request):
+        org = _org_or_403(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_400_BAD_REQUEST)
+        org_settings = get_or_create_org_settings(org)
+
+        period = request.query_params.get("period", "24h")
+        since = timezone.now() - timedelta(hours=_hours_from_period(period))
+        keys_qs = GatewayAPIKey.objects.filter(organization=org).select_related("owner").order_by("-created_at")
+        events = EnforcementEvent.objects.filter(organization=org, created_at__gte=since)
+        key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
+        rows = build_risk_rows(list(keys_qs), key_by_prefix, metrics, org_settings)
+        rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
+        rows = rows[:25]
+
+        metric_rows = []
+        for row in rows:
+            breakdown = row.get("score_breakdown") or {}
+            metric_rows.append(
+                {
+                    "key_id": row.get("key_id"),
+                    "prefix": row.get("prefix"),
+                    "risk_score": row.get("risk_score"),
+                    "traditional_score": row.get("traditional_score"),
+                    "final_score": row.get("final_score"),
+                    "llm_verdict": row.get("llm_verdict"),
+                    "request_count": row.get("request_count", 0),
+                    "block_rate_pct": row.get("block_rate_pct", 0),
+                    "redact_rate_pct": row.get("redact_rate_pct", 0),
+                    "velocity_spike": row.get("velocity_spike"),
+                    "top_threat_type": row.get("top_threat_type"),
+                    "behavior_profile": row.get("behavior_profile", {}),
+                    "score_breakdown": breakdown,
+                }
+            )
+
+        return Response(
+            {
+                "period": period,
+                "settings": risk_calc_settings_payload(org_settings),
+                "formula_reference": risk_calc_formula_reference(org_settings),
+                "api_key_metrics": metric_rows,
+            }
+        )
+
+    def patch(self, request):
+        org = _org_or_403(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_400_BAD_REQUEST)
+        org_settings = get_or_create_org_settings(org)
+        try:
+            org_settings, changes = apply_org_ueba_settings_update(
+                org_settings,
+                request.data or {},
+                user=request.user,
+                org=org,
+                ip=_client_ip(request),
+            )
+        except (TypeError, ValueError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "settings": risk_calc_settings_payload(org_settings),
+                "changes": changes,
+            }
+        )
+
+
+class UebaApiKeyTimelineView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        started_at = timezone.now()
+        period = request.query_params.get("period", "24h")
+        hours = _hours_from_period(period)
+        since = timezone.now() - timedelta(hours=hours)
+        org = _org_or_403(request)
+
+        keys_qs = _gateway_keys_for_org(org)
+
+        events = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
+        key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
+        risky_rows = _risk_rows_for_metrics(keys_qs, key_by_prefix, metrics, org)
+        risky_rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
+        tracked_prefixes = {r["prefix"] for r in risky_rows[:5]}
+
+        ti_keys = _projected_threat_intel_keyword_keys(org) or None
+        bucket_size = trend_bucket_hours(hours)
+        event_rows = list(events.values("created_at", "action", "endpoint_id", "metadata"))
+        collapsed_rows = _collapse_prepared_event_rows(event_rows)
+        key_attributed_rows = _key_attributed_collapsed_rows(collapsed_rows, keys_qs)
+        base_timeline = _build_event_trend_from_collapsed(
+            key_attributed_rows,
+            since,
+            hours,
+            bucket_size,
+            threat_intel_keyword_keys=ti_keys,
+        )
+        timeline = []
+        for row in base_timeline:
+            timeline.append(
+                {
+                    "timestamp": row["timestamp"],
+                    "total_events": row["total"],
+                    "blocked": row["blocked"],
+                    "redacted": row["redacted"],
+                    "chat": row.get("chat", 0),
+                    "rag": row.get("rag", 0),
+                    "mcp": row.get("mcp", 0),
+                    "vector": row.get("vector", 0),
+                    "threat_intel": row.get("threat_intel", 0),
+                    "keys": {prefix: 0 for prefix in tracked_prefixes},
+                }
+            )
+        if tracked_prefixes:
+            bucket_seconds = bucket_size * 3600
+            bucket_count = len(timeline)
+            window_end = since + timedelta(hours=bucket_count * bucket_size)
+            for item in key_attributed_rows:
+                ts = item.created_at
+                if not ts:
+                    continue
+                if ts < since or ts >= window_end:
+                    continue
+                idx = int((ts - since).total_seconds() // bucket_seconds)
+                if idx < 0 or idx >= bucket_count:
+                    continue
+                prefix = _key_prefix_from_meta(item.metadata or {})
+                canonical = prefix.lower()
+                matched = next((p for p in tracked_prefixes if p.lower() == canonical), None)
+                if matched:
+                    timeline[idx]["keys"][matched] += 1
+
+        elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
+        logger.info(
+            "module2_ueba_timeline_ready org=%s period=%s buckets=%s tracked=%s elapsed_ms=%s",
+            getattr(org, "id", None),
+            period,
+            len(timeline),
+            len(tracked_prefixes),
+            elapsed_ms,
+        )
+        return Response({"period": period, "tracked_prefixes": sorted(tracked_prefixes), "timeline": timeline})
+
+
+class UebaApiKeyBehaviorView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, key_id):
+        org = _org_or_403(request)
+        try:
+            UUID(str(key_id))
+        except ValueError:
+            return Response({"detail": "Invalid key id."}, status=status.HTTP_400_BAD_REQUEST)
+
+        key_qs = _gateway_keys_for_org(org, select_owner=True)
+        key = key_qs.filter(pk=key_id).first()
+        if not key:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        period = request.query_params.get("period", "24h")
+        since = timezone.now() - timedelta(hours=_hours_from_period(period))
+        events_qs = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
+        from module2.telemetry_health import normalize_enforcement_metadata
+
+        prepared = []
+        for raw in events_qs.values("id", "created_at", "action", "endpoint_id", "metadata"):
+            meta, _ = normalize_enforcement_metadata(raw.get("metadata") or {})
+            if raw.get("endpoint_id"):
+                meta.setdefault("endpoint_id", raw["endpoint_id"])
+            prepared.append({**raw, "metadata": meta})
+
+        events = []
+        for item in collapse_events_by_request(prepared):
+            meta = item.metadata or {}
+            if not prefixes_match(key.prefix, key_prefix_from_meta(meta)):
+                continue
+            request_id = str(
+                item.request_id
+                or meta.get("request_id")
+                or meta.get("pipeline_request_id")
+                or ""
+            ).strip()
+            display_event_id = str(
+                item.display_event_id
+                or meta.get("event_id")
+                or request_id
+                or ""
+            ).strip()
+            events.append(
+                {
+                    # Backward-compatible "event_id" for existing UI chips.
+                    "id": display_event_id,
+                    "event_id": display_event_id,
+                    # Canonical request-scoped identity.
+                    "request_id": request_id,
+                    # Explicit DB row id for deep-link/debug parity.
+                    "enforcement_event_id": item.enforcement_event_id,
+                    "display_event_id": display_event_id,
+                    "created_at": item.created_at,
+                    "action": item.action,
+                    "endpoint_id": meta.get("endpoint_id"),
+                    "metadata": meta,
+                }
+            )
+
+        endpoint_counts = defaultdict(int)
+        model_counts = defaultdict(int)
+        threat_counts = defaultdict(int)
+        for ev in events:
+            if ev.get("endpoint_id"):
+                endpoint_counts[str(ev["endpoint_id"])] += 1
+            meta = ev.get("metadata") or {}
+            model_counts[str(meta.get("model") or "unknown")] += 1
+            threat_counts[str(meta.get("threat_type") or "unknown")] += 1
+
+        metric = {
+            "total": len(events),
+            "blocked": sum(1 for e in events if e["action"] in (ACTION_BLOCK, "block")),
+            "redacted": sum(1 for e in events if e["action"] in (ACTION_REDACT, "redact")),
+            "policy_escalations": sum(
+                1
+                for e in events
+                if str((e.get("metadata") or {}).get("threat_type") or "") in POLICY_ESCALATION_THREATS
+            ),
+            "endpoint_ids": set(endpoint_counts.keys()),
+            "models": set(model_counts.keys()),
+            "threat_types": threat_counts,
+            "hourly": defaultdict(int),
+        }
+        for ev in events:
+            bucket = ev["created_at"].replace(minute=0, second=0, microsecond=0).isoformat()
+            metric["hourly"][bucket] += 1
+
+        org_settings = get_or_create_org_settings(org) if org else None
+        assessment = latest_assessment_for_key(key)
+        payload = assessment_to_risk_payload(key, metric, assessment, org_settings)
+        payload["top_endpoints"] = sorted(endpoint_counts.items(), key=lambda x: -x[1])[:10]
+        payload["top_models"] = sorted(model_counts.items(), key=lambda x: -x[1])[:10]
+        payload["top_threat_types"] = sorted(threat_counts.items(), key=lambda x: -x[1])[:10]
+        payload["owner_email"] = getattr(key.owner, "email", "")
+
+        collection_counts: dict = defaultdict(int)
+        mcp_tool_counts: dict = defaultdict(int)
+        for ev in events:
+            meta = ev.get("metadata") or {}
+            coll = str(meta.get("collection") or meta.get("vector_collection") or "").strip()
+            if coll:
+                collection_counts[coll] += 1
+            tools = meta.get("tools_invoked") or []
+            if isinstance(tools, str):
+                tools = [tools]
+            for tool in tools:
+                if tool:
+                    mcp_tool_counts[str(tool)] += 1
+        payload["top_collections"] = sorted(collection_counts.items(), key=lambda x: -x[1])[:10]
+        payload["top_mcp_tools"] = sorted(mcp_tool_counts.items(), key=lambda x: -x[1])[:10]
+        recent = sorted(
+            events,
+            key=lambda e: (e["created_at"], e.get("id") or 0),
+            reverse=True,
+        )[:RECENT_BEHAVIOR_EVENTS]
+        payload["recent_requests"] = [build_recent_request_json(ev) for ev in recent]
+        payload["recent_requests_json"] = payload["recent_requests"]
+        payload["risk_calculation"] = {
+            "settings": risk_calc_settings_payload(org_settings),
+            "formula_reference": risk_calc_formula_reference(org_settings),
+        }
+        return Response(payload)
+
+
+class ModelExposureView(APIView):
+    """GET /api/module2/models/exposure/ — model health, exposure scores, and vulnerability chart data."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        period = request.query_params.get("period", "24h")
+        since = timezone.now() - timedelta(hours=_hours_from_period(period))
+        org = _org_or_403(request)
+        events = list(
+            _enforcement_events_for_request(
+                request, EnforcementEvent.objects.filter(created_at__gte=since)
+            ).values("metadata", "action")
+        )
+
+        llm_map = {}
+        model_aliases = {}
+        active_model_count = 0
+        if org:
+            # M2.3 should mirror Module 1 "connected user models", not internal
+            # guard/runtime entries. Keep only active non-internal models.
+            active_cfgs = LLMModelConfig.objects.filter(
+                organization=org,
+                is_active=True,
+            ).exclude(provider="internal")
+            active_model_count = active_cfgs.count()
+            for cfg in active_cfgs:
+                llm_map[cfg.model_name] = cfg.provider
+                model_aliases[str(cfg.model_name).strip().lower()] = cfg.model_name
+                if cfg.model_id:
+                    model_aliases[str(cfg.model_id).strip().lower()] = cfg.model_name
+
+        normalized_events = []
+        if model_aliases:
+            for ev in events:
+                meta = dict(ev.get("metadata") or {})
+                raw_model = str(meta.get("model") or "").strip().lower()
+                canonical_model = model_aliases.get(raw_model)
+                # Preserve totals by explicitly bucketing uncatalogued model traffic
+                # instead of silently dropping those events from the model tab.
+                meta["model"] = canonical_model or "unknown"
+                normalized_events.append({"metadata": meta, "action": ev.get("action")})
+        else:
+            normalized_events = events
+
+        payload = build_model_exposure_payload(normalized_events, llm_map, period)
+        if org:
+            payload.setdefault("summary", {})
+            payload["summary"]["active_models"] = active_model_count
+        return Response(payload)
+
+
+class ThreatIntelTelemetryView(APIView):
+    """GET /api/module2/threat-intel/telemetry/ — time-series threat telemetry and attack vectors."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        period = request.query_params.get("period", "7d")
+        since = timezone.now() - timedelta(hours=_hours_from_period(period))
+        org = _org_or_403(request)
+        events_qs = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
+        events = list(events_qs.values("created_at", "action", "metadata"))
+        threat_intel_keyword_keys = _projected_threat_intel_keyword_keys(org)
+
+        payload = build_threat_telemetry_payload(
+            events,
+            period,
+            since,
+            threat_intel_keyword_keys=threat_intel_keyword_keys or None,
+        )
+        payload["stage_hit_distribution"] = build_stage_hit_distribution(
+            events_qs,
+            threat_intel_keyword_keys=threat_intel_keyword_keys or None,
+        )
+        now = timezone.now()
+        if org:
+            from collections import Counter
+
+            from django.db.models import Q
+
+            ioc_qs = ThreatIntelEntry.objects.filter(organization=org)
+            active_qs = ioc_qs.filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+            week_ahead = now + timedelta(days=7)
+            by_threat_type = dict(Counter(active_qs.values_list("threat_type", flat=True)))
+            payload["ioc_library"] = {
+                "total": ioc_qs.count(),
+                "auto_block_enabled": ioc_qs.filter(auto_block=True).count(),
+                "expired": ioc_qs.filter(expires_at__lt=now).count(),
+                "expiring_soon": active_qs.filter(
+                    expires_at__isnull=False,
+                    expires_at__lte=week_ahead,
+                ).count(),
+                "by_threat_type": by_threat_type,
+            }
+        else:
+            payload["ioc_library"] = {
+                "total": 0,
+                "auto_block_enabled": 0,
+                "expired": 0,
+                "expiring_soon": 0,
+                "by_threat_type": {},
+            }
+        return Response(payload)
+
+
+class UnifiedDashboardView(APIView):
+    """GET /api/module2/dashboard/ — gateway intelligence command center."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        started_at = timezone.now()
+        period = request.query_params.get("period", "24h")
+        hours = _hours_from_period(period)
+        since = timezone.now() - timedelta(hours=hours)
+        org = _org_or_403(request)
+
+        events = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
+        req_rows = list(events.values("action", "metadata", "created_at"))
+        req_summary = summarize_request_scoped_events(req_rows)
+        total = req_summary["requests_inspected"]
+        blocked = req_summary["requests_blocked"]
+        redacted = req_summary["requests_redacted"]
+        monitored = count_monitored_events(events)
+        rerouted = count_rerouted_events(events)
+
+        keys_qs = GatewayAPIKey.objects.all()
+        if org:
+            keys_qs = keys_qs.filter(organization=org)
+        elif not request.user.is_superuser:
+            keys_qs = keys_qs.none()
+
+        key_by_prefix, metrics = _collect_key_metrics(keys_qs, events)
+        risky_rows = _risk_rows_for_metrics(keys_qs, key_by_prefix, metrics, org)
+        risky_rows.sort(key=lambda r: (-r["risk_score"], -r["request_count"]))
+        org_settings = get_or_create_org_settings(org) if org else None
+        assessments = assessments_map_for_keys(list(keys_qs))
+        fleet_risk_rows = [
+            assessment_to_risk_payload(
+                k,
+                metrics.get(k.prefix) or _empty_key_metric(),
+                assessments.get(k.pk),
+                org_settings,
+            )
+            for k in keys_qs
+        ]
+
+        ti_keys = _projected_threat_intel_keyword_keys(org) or None
+        bucket_hours = trend_bucket_hours(hours)
+        trend = _build_event_trend(
+            events,
+            since,
+            hours,
+            bucket_hours,
+            threat_intel_keyword_keys=ti_keys,
+        )
+
+        incidents = SecurityIncident.objects.all()
+        if org:
+            incidents = incidents.filter(organization=org)
+        elif not request.user.is_superuser:
+            incidents = incidents.none()
+        open_incidents = incidents.filter(
+            status__in=["open", "investigating", "escalated"],
+            created_at__gte=since,
+        )
+
+        incidents_snapshot = [
+            {
+                "id": i.id,
+                "title": sanitize_incident_text(i.title),
+                "severity": i.severity,
+                "status": i.status,
+                "created_at": i.created_at.isoformat(),
+                "source": event_source(
+                    i.enforcement_event.metadata or {}
+                    if i.enforcement_event_id and i.enforcement_event
+                    else {},
+                    threat_intel_keyword_keys=ti_keys,
+                ),
+            }
+            for i in open_incidents.select_related("enforcement_event").order_by("-created_at")[:10]
+        ]
+        containment = _build_key_containment_payload(org, keys_qs)
+        telemetry_enabled = True
+        if org:
+            cfg = FirewallConfig.objects.filter(organization=org).order_by("-updated_at").first()
+            if cfg is not None:
+                telemetry_enabled = bool(cfg.audit_logging_enabled)
+
+        mcp_events = _mcp_events_for_org(org, since)
+        # Backfill EF for other M2 consumers when async MCP audit left MCPEvent-only rows.
+        if org is not None:
+            from module2.ondemand_refresh import maybe_ondemand_mcp_projection
+
+            maybe_ondemand_mcp_projection(org.id)
+
+        response = Response(
+            {
+                "period": period,
+                "data_health": {
+                    "telemetry_enabled": telemetry_enabled,
+                },
+                "kpis": {
+                    "total_events": total,
+                    "requests_inspected": total,
+                    "requests_blocked": blocked,
+                    "requests_redacted": redacted,
+                    "requests_allowed": req_summary["requests_allowed"],
+                    "blocked": blocked,
+                    "redacted": redacted,
+                    "monitored": monitored,
+                    "rerouted": rerouted,
+                    "open_incidents": open_incidents.count(),
+                    "risky_keys": sum(1 for r in fleet_risk_rows if r["risk_band"] == "high"),
+                    "block_rate": round((blocked / total) * 100, 1) if total else 0.0,
+                    "disabled_keys": containment["disabled_keys"],
+                    "active_kill_switches": containment["active_kill_switches"],
+                },
+                "containment": containment,
+                "threat_trend": trend,
+                "top_risky_keys": risky_rows[:8],
+                "key_risk_distribution": dict(Counter([r["risk_band"] for r in fleet_risk_rows])),
+                "incidents_snapshot": incidents_snapshot,
+                "lane_summary": build_lane_summary(
+                    events,
+                    mcp_events=mcp_events,
+                    threat_intel_keyword_keys=ti_keys,
+                ),
+            }
+        )
+        elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
+        logger.info(
+            "module2_dashboard_ready org=%s period=%s total=%s incidents_open=%s elapsed_ms=%s",
+            getattr(org, "id", None),
+            period,
+            total,
+            open_incidents.count(),
+            elapsed_ms,
+        )
+        return response
+
+
+class OrgScopedViewSet(ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    org_scoped_model = None
+
+    def get_queryset(self):
+        model = self.org_scoped_model or self.queryset.model
+        org = _org_or_403(self.request)
+        if org is None:
+            if self.request.user.is_superuser:
+                return model.objects.all()
+            return model.objects.none()
+        return model.objects.filter(organization=org)
+
+    def perform_create(self, serializer):
+        org = _org_or_403(self.request)
+        if org is None:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError("Organization required.")
+        serializer.save(organization=org)
+
+
+class ThreatIntelViewSet(OrgScopedViewSet):
+    org_scoped_model = ThreatIntelEntry
+    queryset = ThreatIntelEntry.objects.all()
+    serializer_class = ThreatIntelEntrySerializer
+    permission_classes = [IsAuthenticated, _ReadOnlyOrAdminPermission]
+
+    def list(self, request, *args, **kwargs):
+        # Heal wiped FirewallConfig.blocked_keywords / Redis drift on page load
+        # (simulator bootstrap can clear keywords; beat alone is too slow).
+        org = _org_or_403(request)
+        if org is not None:
+            try:
+                from module2.threat_intel_projection import apply_threat_intel_projection
+
+                apply_threat_intel_projection(org)
+            except Exception:
+                logger.warning(
+                    "ThreatIntelViewSet.list projection heal failed org=%s",
+                    getattr(org, "id", None),
+                    exc_info=True,
+                )
+        return super().list(request, *args, **kwargs)
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        org = _org_or_403(self.request)
+        if org is not None:
+            from core.models import FirewallConfig
+            from module2.threat_intel_projection import live_blocked_keyword_keys_from_csv
+
+            cfg = FirewallConfig.load(org)
+            ctx["live_blocked_keyword_keys"] = live_blocked_keyword_keys_from_csv(
+                cfg.blocked_keywords
+            )
+        return ctx
+
+
+class ThreatIntelSyncView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
+
+    def post(self, request):
+        org = _org_or_403(request)
+        if org is None:
+            return Response({"detail": "Organization required."}, status=status.HTTP_400_BAD_REQUEST)
+        now = timezone.now()
+        entry_count = ThreatIntelEntry.objects.filter(organization=org).count()
+        redis_key = f"firewall:threat_intel:{org.slug or org.id}"
+        ok, err = safe_sync_threat_intel_to_redis(org.id)
+        sync_meta = build_threat_intel_sync_meta(org)
+        if not ok:
+            return Response(
+                {
+                    "status": "sync_failed",
+                    "organization_id": org.id,
+                    "org_slug": org.slug or str(org.id),
+                    "entry_count": entry_count,
+                    "redis_key": redis_key,
+                    "last_sync_at": now.isoformat(),
+                    "error": err or "Redis sync failed",
+                    **sync_meta,
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(
+            {
+                "status": "synced",
+                "organization_id": org.id,
+                "org_slug": org.slug or str(org.id),
+                "entry_count": entry_count,
+                "redis_key": redis_key,
+                "last_sync_at": now.isoformat(),
+                **sync_meta,
+            }
+        )
+
+
+_VALID_INCIDENT_PERIODS = frozenset({"", "1h", "24h", "7d", "30d"})
+
+
+def _incident_data_provenance(
+    *,
+    generated_at,
+    period,
+    status_filter,
+    queue_filter,
+    severity_filter,
+    source_filter,
+    search,
+):
+    return {
+        "kpi_source": "policy.SecurityIncident",
+        "label": "From security cases raised by the gateway",
+        "event_join_source": "policy.EnforcementEvent",
+        "aggregation_service": "module2.analytics.build_incident_queue_summary",
+        "freshness": {
+            "generated_at": generated_at.isoformat(),
+            "cache_status": "live",
+        },
+        "filters_applied": {
+            "period": period or None,
+            "status": status_filter or None,
+            "queue": queue_filter or None,
+            "severity": severity_filter or None,
+            "source": source_filter or None,
+            "search": search or None,
+        },
+    }
+
+
+class IncidentListView(APIView):
+    """GET /api/module2/incidents/ — paginated, filterable security incident queue."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        started_at = timezone.now()
+        org = _org_or_403(request)
+        qs = SecurityIncident.objects.select_related("enforcement_event").order_by("-created_at")
+        if org:
+            qs = qs.filter(organization=org)
+        elif not request.user.is_superuser:
+            qs = qs.none()
+
+        period = request.query_params.get("period", "").strip()
+        if period and period not in _VALID_INCIDENT_PERIODS - {""}:
+            return Response(
+                {"detail": "Invalid period filter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if period:
+            since = timezone.now() - timedelta(hours=_hours_from_period(period))
+            qs = qs.filter(created_at__gte=since)
+
+        # KPI strip is org + period only — table filters must not zero out
+        # Resolved/Open after escalate/resolve while a status filter is active.
+        kpi_qs = qs
+
+        status_filter = request.query_params.get("status", "").strip()
+        queue_filter = request.query_params.get("queue", "").strip()
+        if status_filter and status_filter not in _VALID_INCIDENT_STATUSES:
+            return Response(
+                {"detail": "Invalid status filter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if queue_filter and queue_filter not in _VALID_INCIDENT_QUEUES:
+            return Response(
+                {"detail": "Invalid queue filter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        elif queue_filter == "active":
+            qs = qs.filter(status__in=("open", "investigating", "escalated"))
+
+        severity_filter = request.query_params.get("severity", "").strip()
+        if severity_filter and severity_filter not in _VALID_INCIDENT_SEVERITIES:
+            return Response(
+                {"detail": "Invalid severity filter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if severity_filter:
+            if severity_filter == "critical_high":
+                qs = qs.filter(severity__in=("critical", "high"))
+            else:
+                qs = qs.filter(severity=severity_filter)
+
+        # NULL-safety: ``NOT (metadata->'key' = ...)`` evaluates to NULL (and
+        # drops the row) in Postgres when the JSON key is missing, so every
+        # exclusion on a JSON value must be guarded with has_key.
+        _lane_event_type_q = Q(enforcement_event__metadata__has_key="event_type") & (
+            Q(enforcement_event__metadata__event_type__startswith="rag_")
+            | Q(enforcement_event__metadata__event_type__startswith="mcp_")
+        )
+        _mcp_metadata_fallback_q = (
+            Q(enforcement_event__metadata__has_key="tools_invoked")
+            | Q(enforcement_event__metadata__has_key="mcp_server")
+            | Q(enforcement_event__metadata__has_key="server_slug")
+            | Q(enforcement_event__metadata__has_key="mcp_direction")
+            | Q(enforcement_event__metadata__has_key="scan_direction")
+        )
+        ti_keys = _projected_threat_intel_keyword_keys(org) or None
+        _threat_intel_structured_q = (
+            (
+                Q(enforcement_event__metadata__has_key="source")
+                & Q(enforcement_event__metadata__source__icontains="threat_intel")
+            )
+            | (
+                Q(enforcement_event__metadata__has_key="detail")
+                & Q(enforcement_event__metadata__detail__icontains="threat intel")
+            )
+            | (
+                Q(enforcement_event__metadata__has_key="extra")
+                & Q(enforcement_event__metadata__extra__has_key="detail")
+                & Q(enforcement_event__metadata__extra__detail__icontains="threat intel")
+            )
+            | (
+                Q(enforcement_event__metadata__has_key="threat_type")
+                & Q(enforcement_event__metadata__threat_type__istartswith="threat_intel")
+            )
+            | (
+                Q(enforcement_event__metadata__has_key="code")
+                & Q(enforcement_event__metadata__code__iexact="threat_intel_blocked")
+            )
+            | (
+                Q(enforcement_event__metadata__has_key="detection_tier")
+                & Q(enforcement_event__metadata__detection_tier__iexact="threat_intel")
+            )
+        )
+        _ioc_kw_q = _projected_ioc_keyword_block_q(ti_keys)
+        _threat_intel_q = _threat_intel_structured_q
+        if _ioc_kw_q is not None:
+            _threat_intel_q = _threat_intel_structured_q | _ioc_kw_q
+
+        source_filter = request.query_params.get("source", "").strip()
+        if source_filter and source_filter not in _VALID_INCIDENT_SOURCES:
+            return Response(
+                {"detail": "Invalid source filter."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if source_filter == "threat_intel":
+            qs = qs.filter(_threat_intel_q)
+        elif source_filter in ("rag", "vector"):
+            # Hub/UI couple RAG + Vector: pipeline rag_* events and standalone
+            # collection lookups share one retrieval filter (vector-only excludes
+            # mcp/rag event types so rag rows are not double-counted by OR).
+            _vector_only_q = (
+                Q(enforcement_event__metadata__has_key="collection")
+                | Q(enforcement_event__metadata__has_key="vector_collection")
+                | Q(enforcement_event__metadata__has_key="vector_namespace")
+            ) & ~_lane_event_type_q
+            qs = qs.filter(
+                Q(enforcement_event__metadata__event_type__startswith="rag_")
+                | _vector_only_q
+            )
+        elif source_filter == "mcp":
+            qs = qs.filter(
+                Q(enforcement_event__metadata__event_type__startswith="mcp_")
+                | _mcp_metadata_fallback_q
+            )
+        elif source_filter == "chat":
+            qs = qs.exclude(
+                _lane_event_type_q
+                | _mcp_metadata_fallback_q
+                | _threat_intel_q
+                | Q(enforcement_event__metadata__has_key="collection")
+                | Q(enforcement_event__metadata__has_key="vector_collection")
+                | Q(enforcement_event__metadata__has_key="vector_namespace")
+            )
+        elif source_filter == "generic":
+            qs = qs.filter(
+                ~Q(enforcement_event__metadata__has_key="key_prefix"),
+                ~Q(enforcement_event__metadata__has_key="api_key_prefix"),
+            ).exclude(_threat_intel_q)
+
+        search = request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(Q(title__icontains=search) | Q(notes__icontains=search))
+
+        # KPIs = period-scoped org queue; by_source follows table filters (lane chart).
+        summary = build_incident_queue_summary(
+            kpi_qs,
+            org_id=org.id if org else None,
+            threat_intel_keyword_keys=ti_keys,
+            by_source_qs=qs,
+        )
+
+        try:
+            page = int(request.query_params.get("page", 1))
+        except ValueError:
+            page = 1
+        try:
+            page_size = int(request.query_params.get("page_size", 25))
+        except ValueError:
+            page_size = 25
+
+        total, page_qs, page, page_size = paginate_queryset(qs, page, page_size)
+        out = [
+            serialize_incident_row(
+                incident,
+                SecurityIncidentSerializer(incident).data,
+                threat_intel_keyword_keys=ti_keys,
+            )
+            for incident in page_qs
+        ]
+        total_pages = (total + page_size - 1) // page_size if page_size else 1
+
+        response = Response(
+            {
+                "count": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+                "period": period or None,
+                "summary": summary,
+                "data_provenance": _incident_data_provenance(
+                    generated_at=timezone.now(),
+                    period=period,
+                    status_filter=status_filter,
+                    queue_filter=queue_filter,
+                    severity_filter=severity_filter,
+                    source_filter=source_filter,
+                    search=search,
+                ),
+                "results": out,
+            }
+        )
+        elapsed_ms = int((timezone.now() - started_at).total_seconds() * 1000)
+        logger.info(
+            "module2_incident_list_ready org=%s period=%s status=%s queue=%s severity=%s source=%s search=%s count=%s elapsed_ms=%s",
+            getattr(org, "id", None),
+            period or "-",
+            status_filter or "-",
+            queue_filter or "-",
+            severity_filter or "-",
+            source_filter or "-",
+            "yes" if search else "no",
+            total,
+            elapsed_ms,
+        )
+        return response
+
+
+def _module2_e2e_seed_enabled() -> bool:
+    """Gate dev-only incident seeding used by Playwright Docker gates."""
+    if settings.DEBUG:
+        return True
+    return os.environ.get("MODULE2_E2E_SEED", "").strip().lower() in {"1", "true", "yes"}
+
+
+class IncidentE2eSeedView(APIView):
+    """POST /api/module2/incidents/e2e-seed/ — create probe incidents without host docker."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not _module2_e2e_seed_enabled():
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        org = _org_or_403(request)
+        if org is None and not request.user.is_superuser:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+
+        probe_title = sanitize_incident_text(str(request.data.get("probe_title") or "").strip())
+        bulk_titles = request.data.get("bulk_titles") or []
+        if not probe_title:
+            return Response({"detail": "probe_title is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(bulk_titles, list):
+            return Response({"detail": "bulk_titles must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+        bulk_titles = [
+            sanitize_incident_text(str(t).strip())
+            for t in bulk_titles
+            if str(t).strip()
+        ]
+        if len(bulk_titles) < 2:
+            return Response(
+                {"detail": "bulk_titles must include at least two titles."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        def _seed_one(title: str, *, severity: str) -> SecurityIncident:
+            ev = EnforcementEvent.objects.create(
+                organization=org,
+                action=ACTION_BLOCK,
+                metadata={
+                    "source": "threat_intel",
+                    "threat_type": "prompt_injection",
+                    "detail": title,
+                    "model": "gpt-4o",
+                    "key_prefix": "zs_incidents",
+                },
+            )
+            return SecurityIncident.objects.create(
+                organization=org,
+                enforcement_event=ev,
+                title=title,
+                severity=severity,
+                status="open",
+            )
+
+        probe = _seed_one(probe_title, severity="high")
+        bulk = [_seed_one(bulk_titles[0], severity="high"), _seed_one(bulk_titles[1], severity="medium")]
+        from module2.analytics import invalidate_incident_summary_cache
+
+        invalidate_incident_summary_cache(org.id if org else None)
+        return Response(
+            {
+                "probe_id": probe.id,
+                "bulk_ids": [bulk[0].id, bulk[1].id],
+                "probe_title": probe_title,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class IncidentBulkResolveView(APIView):
+    """POST /api/module2/incidents/bulk-resolve/ — resolve multiple selected incidents."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        org = _org_or_403(request)
+        if org is None and not request.user.is_superuser:
+            return Response({"detail": "Organization required."}, status=status.HTTP_403_FORBIDDEN)
+
+        raw_ids = request.data.get("incident_ids")
+        if not isinstance(raw_ids, list) or not raw_ids:
+            return Response(
+                {"detail": "incident_ids must be a non-empty list."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            incident_ids = [int(x) for x in raw_ids]
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "incident_ids must contain integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        qs = SecurityIncident.objects.filter(organization=org) if org else SecurityIncident.objects.all()
+        resolvable = qs.filter(
+            pk__in=incident_ids,
+            status__in=("open", "investigating", "escalated"),
+        )
+        notes = str(request.data.get("notes") or "").strip()
+        now = timezone.now()
+        resolved_ids: list[int] = []
+        for incident in resolvable:
+            incident.status = "resolved"
+            incident.resolved_at = now
+            if notes:
+                incident.notes = notes
+            incident.save(update_fields=["status", "resolved_at", "notes"])
+            resolved_ids.append(incident.id)
+
+        from module2.analytics import invalidate_incident_summary_cache
+        from ws.notify import send_enforcement_notification
+
+        invalidate_incident_summary_cache(org.id if org else None)
+        for incident_id in resolved_ids:
+            try:
+                send_enforcement_notification(
+                    {
+                        "type": "resolution_event",
+                        "security_incident_id": str(incident_id),
+                        "incident_id": str(incident_id),
+                        "incident_status": "resolved",
+                        "resolved_by_id": request.user.id,
+                        "resolved_at": now.isoformat(),
+                        "organization_id": org.id if org else None,
+                    },
+                    organization_id=org.id if org else None,
+                )
+            except Exception:
+                logger.warning("Failed to broadcast bulk resolution for incident %s", incident_id)
+
+        return Response(
+            {
+                "resolved_count": len(resolved_ids),
+                "resolved_ids": resolved_ids,
+                "skipped_count": len(incident_ids) - len(resolved_ids),
+            }
+        )
+
+
+class IncidentDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        org = _org_or_403(request)
+        if org is None and not request.user.is_superuser:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            incident = (
+                SecurityIncident.objects.get(pk=pk, organization=org)
+                if org
+                else SecurityIncident.objects.get(pk=pk)
+            )
+        except SecurityIncident.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        events = []
+        seen_ids = set()
+        candidates = []
+        if incident.enforcement_event_id:
+            candidates.append(incident.enforcement_event)
+        related = EnforcementEvent.objects.filter(
+            organization=incident.organization,
+            metadata__incident_id=incident.id,
+        ).order_by("-created_at")[:50]
+        candidates.extend(related)
+        for ev in candidates:
+            if ev and ev.id not in seen_ids:
+                seen_ids.add(ev.id)
+                events.append(ev)
+        events.sort(key=lambda e: e.created_at, reverse=True)
+
+        ti_keys = _projected_threat_intel_keyword_keys(org) or None
+        timeline = []
+        source = "generic"
+        evidence = {"key_prefix": "", "model": "", "project_id": "", "threat_type": ""}
+        for ev in events:
+            raw_meta = ev.metadata or {}
+            meta = _sanitize_incident_metadata(raw_meta)
+            prompt_snippet = sanitize_incident_text(
+                event_prompt_from_meta(raw_meta if isinstance(raw_meta, dict) else {})
+            )
+            lane = _event_source(meta, threat_intel_keyword_keys=ti_keys)
+            source = source if source != "generic" else lane
+            evidence["key_prefix"] = evidence["key_prefix"] or _key_prefix_from_meta(meta)
+            evidence["model"] = evidence["model"] or str(meta.get("model") or "")
+            evidence["project_id"] = evidence["project_id"] or str(meta.get("project_id") or "")
+            evidence["threat_type"] = evidence["threat_type"] or str(meta.get("threat_type") or "")
+            timeline.append(
+                {
+                    "id": ev.id,
+                    "action": ev.action,
+                    "created_at": ev.created_at.isoformat(),
+                    "metadata": meta,
+                    "rule_id": ev.rule_id,
+                    "policy_id": ev.policy_id,
+                    "source": lane,
+                    "key_prefix": _key_prefix_from_meta(meta),
+                    "model": meta.get("model") or "",
+                    "prompt_snippet": prompt_snippet,
+                    "threat_type": str(meta.get("threat_type") or ""),
+                }
+            )
+
+        incident_data = sanitize_incident_value(SecurityIncidentSerializer(incident).data)
+        return Response(
+            {
+                "incident": incident_data,
+                "source": source,
+                "evidence": evidence,
+                "timeline": timeline,
+            }
+        )
+
+
+class RagHealthView(APIView):
+    """GET /api/module2/rag/health/ — RAG pipeline KPIs, pre-pipeline denials, vector exposure."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        period = request.query_params.get("period", "24h")
+        since = timezone.now() - timedelta(hours=_hours_from_period(period))
+        org = _org_or_403(request)
+        if org is not None:
+            from module2.ondemand_refresh import maybe_ondemand_telemetry_heal
+
+            maybe_ondemand_telemetry_heal(org.id)
+        events_qs = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
+        rag_kpis = build_rag_pipeline_kpis(events_qs)
+        denials = build_rag_pre_pipeline_denials(events_qs)
+        module2_extra = dict(rag_kpis.get("module2_extra") or {})
+        module2_extra["pre_pipeline_denials"] = denials
+        return Response(
+            {
+                "period": period,
+                "module1_aligned": rag_kpis.get("module1_aligned")
+                or {
+                    "label": "Matches Module 1 RAG pipeline KPIs",
+                    "stages": rag_kpis.get("stages") or {},
+                },
+                "module2_extra": module2_extra,
+                "rag_pipeline_kpis": rag_kpis,
+                "rag_pre_pipeline_denials": denials,
+                "vector_exposure": build_vector_exposure_payload(events_qs),
+            }
+        )
+
+
+class McpRiskView(APIView):
+    """GET /api/module2/mcp/risk/ — MCP tool call activity, ledger, direction split, and top servers."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        period = request.query_params.get("period", "24h")
+        since = timezone.now() - timedelta(hours=_hours_from_period(period))
+        org = _org_or_403(request)
+        if org is not None:
+            from module2.ondemand_refresh import maybe_ondemand_mcp_projection
+
+            maybe_ondemand_mcp_projection(org.id)
+        events_qs = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
+        mcp_events = _mcp_events_for_org(org, since)
+        payload = build_hybrid_mcp_activity_payload(events_qs, mcp_events)
+        payload["period"] = period
+        return Response(payload)

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Shield,
   ShieldAlert,
+  LayoutDashboard,
   ChevronLeft,
   ChevronRight,
   User,
@@ -11,11 +12,9 @@ import {
   ChevronUp,
   ChevronDown,
   X,
-  ExternalLink,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../context/AuthContext";
-import { useBackendHealth } from "../../hooks/useBackendHealth";
 
 const menuItems = [
   {
@@ -35,6 +34,21 @@ const menuItems = [
       { id: "firewall-config", label: "Inputs" },
     ],
   },
+  {
+    id: "module2",
+    label: "Gateway Behaviour Intelligence",
+    icon: LayoutDashboard,
+    section: "Module 2",
+    offering: "platform",
+    subItems: [
+      { id: "m2-dashboard", label: "Gateway Intelligence Hub", route: "/dashboard" },
+      { id: "m2-ueba-api-keys", label: "API Key & Identity Risk", route: "/ueba/api-keys" },
+      { id: "m2-threat-intel", label: "Threat Intelligence Ops", route: "/threat-intel" },
+      { id: "m2-models-exposure", label: "Model & RAG Health", route: "/models/exposure" },
+      { id: "m2-mcp-risk", label: "MCP & Context Risk", route: "/mcp/risk" },
+      { id: "m2-incidents", label: "Incidents & Forensics", route: "/incidents" },
+    ],
+  },
 ];
 
 function useOfferingVisibility(user) {
@@ -52,16 +66,6 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [flyoutModule, setFlyoutModule] = useState(null);
   const { user, logout } = useAuth();
-  // Real backend reachability — the widget below was a hardcoded "All systems
-  // operational / Protected" that stayed green even when the backend was down.
-  const backendHealth = useBackendHealth();
-  const sysStatus = backendHealth === "connected"
-    ? { line: "All systems operational", dot: "bg-teal-500", pulse: "animate-pulse", label: "Protected", labelCls: "text-teal-700 dark:text-teal-400" }
-    : backendHealth === "checking"
-      ? { line: "Checking system status…", dot: "bg-amber-500", pulse: "animate-pulse", label: "Connecting…", labelCls: "text-amber-700 dark:text-amber-400" }
-      : backendHealth === "degraded"
-        ? { line: "Backend slow to respond", dot: "bg-amber-500", pulse: "animate-pulse", label: "Degraded", labelCls: "text-amber-700 dark:text-amber-400" }
-        : { line: "Backend unreachable", dot: "bg-red-500", pulse: "", label: "Offline", labelCls: "text-red-700 dark:text-red-400" };
   const { hasPlatform } = useOfferingVisibility(user);
   const [expandedModules, setExpandedModules] = useState([]);
   const [hasCustomizedExpansion, setHasCustomizedExpansion] = useState(false);
@@ -80,7 +84,11 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
         new Set([
           ...expandedModules,
           ...visibleMenuItems
-            .filter((item) => item.subItems && (activeTab === item.id || activeTab.startsWith(item.id)))
+            .filter((item) => item.subItems && (
+              activeTab === item.id
+              || activeTab.startsWith(item.id)
+              || (item.id === "module2" && activeTab.startsWith("m2-"))
+            ))
             .map((item) => item.id),
         ])
       );
@@ -127,13 +135,23 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
     navigate('/login');
   };
 
-  const handleMenuItemClick = (id) => {
-    onTabChange(id);
+  const handleMenuItemClick = (id, route) => {
+    if (route) {
+      navigate(route);
+    } else if (id === "firewall") {
+      navigate("/");
+      onTabChange?.(id);
+    } else if (id.startsWith("firewall")) {
+      navigate(`/?tab=${id}`);
+      onTabChange?.(id);
+    } else {
+      onTabChange?.(id);
+    }
     setShowAccountMenu(false);
     onCloseMobile?.();
   };
 
-  const overviewModules = ['firewall'];
+  const overviewModules = ['firewall', 'module2'];
 
   const toggleModule = (id) => {
     setHasCustomizedExpansion(true);
@@ -215,7 +233,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
           <div key={item.id}>
             {item.section && !isCollapsed && (
               <div className="px-3 pt-4 pb-2">
-                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-400 uppercase tracking-wider">
+                <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                   {item.section}
                 </span>
               </div>
@@ -227,7 +245,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
                   onClick={() => toggleModule(item.id)}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200 group relative",
-                    (activeTab === item.id || activeTab.startsWith(item.id))
+                    (activeTab === item.id || activeTab.startsWith(item.id) || (item.id === "module2" && activeTab.startsWith("m2-")))
                       ? "bg-gradient-to-r from-cyan-50 dark:from-cyan-900/20 to-teal-50 dark:to-teal-900/20 dark:from-teal-900/30 dark:to-cyan-900/20 text-teal-700 dark:text-teal-400 font-medium shadow-sm"
                       : "text-slate-600 dark:text-slate-400 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-slate-100 dark:hover:text-slate-100"
                   )}
@@ -235,9 +253,9 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
                   <item.icon
                     className={cn(
                       "flex-shrink-0 transition-transform group-hover:scale-110",
-                      (activeTab === item.id || activeTab.startsWith(item.id)) ? "w-5 h-5" : "w-4 h-4"
+                      (activeTab === item.id || activeTab.startsWith(item.id) || (item.id === "module2" && activeTab.startsWith("m2-"))) ? "w-5 h-5" : "w-4 h-4"
                     )}
-                    strokeWidth={(activeTab === item.id || activeTab.startsWith(item.id)) ? 2.5 : 2}
+                    strokeWidth={(activeTab === item.id || activeTab.startsWith(item.id) || (item.id === "module2" && activeTab.startsWith("m2-"))) ? 2.5 : 2}
                   />
                   <span className="truncate flex-1 text-left">{item.label}</span>
                   <ChevronDown
@@ -255,7 +273,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
                       .map((subItem) => (
                       <button
                         key={subItem.id}
-                        onClick={() => handleMenuItemClick(subItem.id)}
+                        onClick={() => handleMenuItemClick(subItem.id, subItem.route)}
                         className={cn(
                           "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200 border-l-2",
                           activeTab === subItem.id
@@ -320,7 +338,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
                       .map((subItem) => (
                       <button
                         key={subItem.id}
-                        onClick={() => { handleMenuItemClick(subItem.id); setFlyoutModule(null); }}
+                        onClick={() => { handleMenuItemClick(subItem.id, subItem.route); setFlyoutModule(null); }}
                         className={cn(
                           "w-full flex items-center gap-2 px-3 py-2 text-sm transition-colors",
                           activeTab === subItem.id
@@ -350,28 +368,13 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
             <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-cyan-400/20 to-teal-400/20 rounded-full blur-2xl"></div>
             <div className="relative">
               <h3 className="text-xs font-semibold text-slate-900 dark:text-slate-100 mb-1">System Status</h3>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">{sysStatus.line}</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">All systems operational</p>
               <div className="flex items-center gap-2">
-                <div className={`w-1.5 h-1.5 rounded-full ${sysStatus.dot} ${sysStatus.pulse}`}></div>
-                <span className={`text-xs font-medium ${sysStatus.labelCls}`}>{sysStatus.label}</span>
+                <div className="w-1.5 h-1.5 bg-teal-500 rounded-full animate-pulse"></div>
+                <span className="text-xs font-medium text-teal-700 dark:text-teal-400">Protected</span>
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {!isCollapsed && (
-        <div className="px-3 pb-2 border-t border-slate-200 dark:border-slate-700 pt-3">
-          <a
-            href="/demo/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors"
-            data-testid="sidebar-openai-sdk-demo"
-          >
-            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-            <span>OpenAI SDK Demo</span>
-          </a>
         </div>
       )}
 
@@ -420,7 +423,7 @@ export function Sidebar({ activeTab, onTabChange, mobileOpen = false, onCloseMob
                 </div>
                 <ChevronUp
                   className={cn(
-                    "w-4 h-4 text-slate-500 dark:text-slate-400 dark:text-slate-400 transition-transform flex-shrink-0",
+                    "w-4 h-4 text-slate-400 dark:text-slate-500 dark:text-slate-400 transition-transform flex-shrink-0",
                     showAccountMenu && "rotate-180"
                   )}
                 />

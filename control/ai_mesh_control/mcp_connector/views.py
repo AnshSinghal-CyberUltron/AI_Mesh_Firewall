@@ -2151,10 +2151,7 @@ def _record_event(
             scan_findings=safe_scan_findings,
         )
 
-        # ── Mirror to EnforcementEvent so AI Mesh Firewall dashboard
-        #    (graphs, OWASP stats, "Recent MCP and context evidence") shows
-        #    MCP traffic. The Module 1.4 page filters EnforcementEvent by
-        #    metadata.source == "mcp_scan", so we always tag it that way.
+        # Module 2 + §1.4: mirror MCP → EnforcementEvent (source=mcp_scan); async path = tasks.py
         if org is not None:
             try:
                 from policy.models import EnforcementEvent as _EnforcementEvent
@@ -2305,7 +2302,7 @@ def _record_event(
                 # operator dashboard.
                 _ef_metadata = _sanitize_event_structure(_ef_metadata)
 
-                _EnforcementEvent.objects.create(
+                _ef_ev = _EnforcementEvent.objects.create(
                     organization=org,
                     policy=_policy_obj,
                     rule=_rule_obj,
@@ -2313,6 +2310,30 @@ def _record_event(
                     user_id=actor_user_id,
                     metadata=_ef_metadata,
                 )
+                # Module 2: live WS notify after mirror (must not undo MCPEvent/EF)
+                try:
+                    from ws.notify import send_enforcement_notification
+
+                    send_enforcement_notification(
+                        {
+                            "type": "enforcement_event",
+                            "id": str(_ef_ev.id),
+                            "action": _ef_ev.action,
+                            "timestamp": _ef_ev.created_at.isoformat() if _ef_ev.created_at else None,
+                            "severity": _ef_metadata.get("security_risk_score") or "medium",
+                            "category": _ef_metadata.get("threat_category") or "Policy",
+                            "subcategory": _ef_metadata.get("owasp_code") or "",
+                            "source": _ef_metadata.get("source", "mcp_scan"),
+                            "user_id": _ef_ev.user_id,
+                            "endpoint_id": _ef_ev.endpoint_id,
+                            "agent_id": str(_ef_ev.agent_id) if _ef_ev.agent_id else None,
+                            "organization_id": _ef_ev.organization_id,
+                            "metadata": _ef_metadata,
+                        },
+                        organization_id=_ef_ev.organization_id,
+                    )
+                except Exception as _notify_exc:
+                    logger.warning("Failed to notify MCP mirrored enforcement event: %s", _notify_exc)
             except Exception as _ef_exc:
                 logger.warning(
                     "Failed to mirror MCP event to EnforcementEvent: %s",

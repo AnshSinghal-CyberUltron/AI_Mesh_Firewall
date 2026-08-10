@@ -516,6 +516,23 @@ code, kbd, samp, pre, .font-mono {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* Intentional Module 2 refresh affordance — keep rotation even when OS reduces motion. */
+  .module2-refresh-spin.is-spinning {
+    animation: module2-refresh-rotate 0.75s linear infinite !important;
+    animation-duration: 0.75s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
+@keyframes module2-refresh-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.module2-refresh-spin.is-spinning {
+  animation: module2-refresh-rotate 0.75s linear infinite;
 }
 
 /* Custom scrollbar */

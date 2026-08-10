@@ -33,7 +33,17 @@ export function Login() {
     if (isAuthenticated) navigate(from, { replace: true });
   }, [isAuthenticated, from, navigate]);
 
-  if (isAuthenticated) return null;
+  // Never return null while authenticated — that paints a blank body gradient
+  // (URL may still show the destination) until navigate completes or if the
+  // destination route throws and unmounts the tree.
+  if (isAuthenticated) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-slate-50 dark:bg-slate-950">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" />
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Opening ZeroShield…</p>
+      </div>
+    );
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -183,7 +193,7 @@ export function Login() {
                 */}
                 <div className="flex items-center gap-3">
                   <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">operator login</span>
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">operator login</span>
                   <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
                 </div>
               </div>

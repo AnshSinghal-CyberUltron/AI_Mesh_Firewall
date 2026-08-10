@@ -431,13 +431,17 @@ services:
   frontend:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "npm install && npm run dev"
+    # Skip full npm install when the anonymous node_modules volume already has Vite —
+    # otherwise every restart blanks :8180 for ~3 minutes while install runs.
+    command: sh -c "if [ ! -x node_modules/.bin/vite ]; then npm install; fi && npm run dev"
     volumes: ["./frontend:/app", "/app/node_modules"]
     ports: ["8180:5173"]
     environment:
       VITE_CONTROL_PROXY: http://control:8000
       VITE_GATEWAY_PROXY: http://gateway:8300
       VITE_DEMO_PROXY: http://demo:8770
+      # Module 2 DEV banner + useRealtimeNotifications: enable WS without a local .env edit.
+      VITE_ENABLE_REALTIME_NOTIFICATIONS: "true"
       VITE_GATEWAY_BASE_URL: ${VITE_GATEWAY_BASE_URL:-http://127.0.0.1:8180}
       VITE_BACKEND_BASE_URL: ${VITE_BACKEND_BASE_URL:-http://127.0.0.1:8180}
     depends_on:

@@ -1,0 +1,5 @@
+# Shell scripts must use LF so Linux container entrypoints can exec
+# (CRLF shebangs fail with: exec ...: no such file or directory).
+*.sh text eol=lf
+**/Dockerfile text eol=lf
+**/Dockerfile.* text eol=lf

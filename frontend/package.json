@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test:acceptance:create-policy": "node --test src/utils/policyCreateBehavior.test.js",
     "test:unit:live-gateway": "node --test src/utils/liveGateway.test.js",
-    "test:unit": "node --test \"src/utils/*.test.js\" \"src/components/*.test.js\" \"src/constants/*.test.js\"",
+    "test:unit": "node --test \"src/utils/*.test.js\" \"src/components/*.test.js\" \"src/constants/*.test.js\" \"src/hooks/*.test.js\"",
     "test:visual": "bash tests/visual/run.sh"
   },
   "dependencies": {
@@ -25,6 +25,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.6.1",
+    "recharts": "^2.15.0",
     "tailwind-merge": "^3.4.0",
     "uplot": "^1.6.32"
   },

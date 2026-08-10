@@ -33,6 +33,8 @@ EXPOSE 8000
 # single Daphne. CONTROL_WEB_CONCURRENCY env overrides. See control/server-entrypoint.sh
 # + shared/ai_mesh_shared/resource_budget.py.
 COPY control/server-entrypoint.sh /app/control/server-entrypoint.sh
-RUN chmod +x /app/control/server-entrypoint.sh
+# Strip CRLF so Windows checkouts still exec under Linux (shebang "no such file").
+RUN sed -i 's/\r$//' /app/control/server-entrypoint.sh \
+    && chmod +x /app/control/server-entrypoint.sh
 
 CMD ["/app/control/server-entrypoint.sh"]

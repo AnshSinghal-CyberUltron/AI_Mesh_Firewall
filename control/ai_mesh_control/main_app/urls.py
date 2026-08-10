@@ -36,6 +36,7 @@ urlpatterns = [
     path("api/models/", include("core.model_state_urls")),
     path("api/mcp-connector/", include("mcp_connector.urls")),
     path("api/admin/", include("core.admin_urls")),
+    path("api/module2/", include("module2.urls")),  # Module 2 API (routes in module2.urls)
     path("ai-mesh-poc", poc_questionnaire_page, name="poc-questionnaire-page"),
     path("api/poc-questionnaire", poc_questionnaire_submit, name="poc-questionnaire-submit"),
     path("api/schema/", ProtectedSpectacularAPIView.as_view(), name="schema"),

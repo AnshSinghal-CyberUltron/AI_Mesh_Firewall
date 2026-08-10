@@ -134,6 +134,12 @@ class SecurityIncidentEscalateView(APIView):
         incident.status = "escalated"
         incident.notes = request.data.get("notes", incident.notes)
         incident.save()
+        try:
+            from module2.analytics import invalidate_incident_summary_cache
+
+            invalidate_incident_summary_cache(org.id if org else None)
+        except Exception:
+            pass
         return Response(SecurityIncidentSerializer(incident).data)
 
 
@@ -153,4 +159,10 @@ class SecurityIncidentResolveView(APIView):
         incident.resolved_at = timezone.now()
         incident.notes = request.data.get("notes", incident.notes)
         incident.save()
+        try:
+            from module2.analytics import invalidate_incident_summary_cache
+
+            invalidate_incident_summary_cache(org.id if org else None)
+        except Exception:
+            pass
         return Response(SecurityIncidentSerializer(incident).data)

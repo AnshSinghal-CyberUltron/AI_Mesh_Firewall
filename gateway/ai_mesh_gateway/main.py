@@ -2727,13 +2727,31 @@ def _estimate_request_tokens(prompt: str, max_tokens: int = 0) -> int:
 
 
 def _blocked_keyword_matches(prompt_lower: str, keyword: str) -> bool:
-    """Match firewall blocked keywords on word boundaries (avoids substring false positives)."""
+    """Match blocked keywords on raw + unicode-normalized prompt variants.
+
+    The blocked-keyword gate runs before input_scan. If the prompt includes
+    confusable/zero-width unicode, a raw boundary check can miss an IOC keyword
+    that scanner Tier-1 later deobfuscates. Keep boundary semantics (no substring
+    false positives), but test both the raw and normalized prompt views.
+    """
     kw = (keyword or "").strip().lower()
     if not kw or not prompt_lower:
         return False
+    variants = [prompt_lower]
+    if not prompt_lower.isascii():
+        try:
+            from scanner import _normalize_unicode  # local import avoids import cycle
+
+            normalized = _normalize_unicode(prompt_lower).lower()
+            if normalized and normalized not in variants:
+                variants.append(normalized)
+        except Exception:
+            # Fail-open for the normalization branch; keep raw matching behavior.
+            pass
+
     if re.search(r"\s", kw):
-        return kw in prompt_lower
-    return bool(re.search(rf"\b{re.escape(kw)}\b", prompt_lower))
+        return any(kw in candidate for candidate in variants)
+    return any(bool(re.search(rf"\b{re.escape(kw)}\b", candidate)) for candidate in variants)
 
 
 def _coerce_string_list(*values) -> list[str]:

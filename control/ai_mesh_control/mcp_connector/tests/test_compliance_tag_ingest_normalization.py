@@ -9,10 +9,12 @@ consistent with control-plane enforcement events.
 """
 
 from django.test import TestCase
+from unittest.mock import patch
 
 from auth.models import Organization
 from mcp_connector.models import MCPEvent
 from mcp_connector.tasks import record_mcp_event_task
+from policy.models import EnforcementEvent
 
 
 class ComplianceTagIngestNormalizationTests(TestCase):
@@ -53,3 +55,26 @@ class ComplianceTagIngestNormalizationTests(TestCase):
     def test_unknown_tag_is_preserved_never_dropped(self):
         ev = self._ingest(["OWASP-MCP", "PII"])
         self.assertEqual(ev.compliance_tags, ["GDPR-PII", "OWASP-MCP"])
+
+    @patch("mcp_connector.tasks.send_enforcement_notification")
+    def test_async_ingest_mirrors_to_enforcement_and_notifies(self, notify_mock):
+        payload = {
+            "organization_id": self.org.id,
+            "user_id": 42,
+            "tool_name": "echo",
+            "server_slug": "everything",
+            "decision": "block",
+            "request_id": "mcp-req-1",
+            "metadata": {"source": "mcp_scan", "event_type": "mcp_tool_call"},
+        }
+        event_id = record_mcp_event_task(payload)
+        self.assertTrue(MCPEvent.objects.filter(id=event_id).exists())
+        mirrored = EnforcementEvent.objects.filter(
+            organization=self.org,
+            metadata__request_id="mcp-req-1",
+            metadata__source="mcp_scan",
+            metadata__tool_name="echo",
+        ).first()
+        self.assertIsNotNone(mirrored)
+        self.assertEqual(mirrored.action, "block")
+        notify_mock.assert_called_once()

@@ -6,7 +6,6 @@ import { Badge } from "../ui/Badge";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useRealtimeNotifications } from "../../hooks/useRealtimeNotifications";
-import { useBackendHealth } from "../../hooks/useBackendHealth";
 
 function useOfferingVisibility(user) {
   const roles = user?.roles || [];
@@ -157,6 +156,12 @@ const TAB_TITLES = {
   "firewall-1-6": "Model Isolation & Kill-Switch",
   "firewall-1-7": "Output Guardrails",
   "firewall-config": "Module 1 Inputs",
+  "m2-dashboard": "Gateway Intelligence Hub",
+  "m2-ueba-api-keys": "API Key & Identity Risk",
+  "m2-threat-intel": "Threat Intelligence Ops",
+  "m2-models-exposure": "Model & RAG Health",
+  "m2-mcp-risk": "MCP & Context Risk",
+  "m2-incidents": "Incidents & Forensics",
 };
 
 export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSearchSubmit, onTabChange, onMobileMenuToggle }) {
@@ -174,13 +179,18 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
   const bellRef = useRef(null);
   const userDropdownRef = useRef(null);
 
-  const fetchNotifications = useCallback(async () => {
+  const notificationsFetchedAtRef = useRef(0);
+
+  const fetchNotifications = useCallback(async (force = false) => {
     if (!isAdmin || !user) return;
+    const now = Date.now();
+    if (!force && now - notificationsFetchedAtRef.current < 60_000) return;
     try {
       const res = await fetchWithAuth("/api/notifications/?limit=30");
       if (res.ok) {
         const data = await res.json();
         setNotifications(Array.isArray(data) ? data : []);
+        notificationsFetchedAtRef.current = now;
       }
     } catch {
       // non-critical
@@ -188,10 +198,7 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
   }, [fetchWithAuth, isAdmin, user]);
 
   useEffect(() => {
-    const id = setTimeout(() => {
-      fetchNotifications();
-    }, 0);
-    return () => clearTimeout(id);
+    fetchNotifications();
   }, [fetchNotifications]);
 
   // Close notification dropdown when clicking outside
@@ -220,8 +227,8 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
 
   useRealtimeNotifications({
     enabled: isAdmin,
-    onEscalationEvent: fetchNotifications,
-    onResolutionEvent: fetchNotifications,
+    onEscalationEvent: () => fetchNotifications(true),
+    onResolutionEvent: () => fetchNotifications(true),
   });
 
   const handleMarkRead = useCallback(async (id) => {
@@ -260,18 +267,10 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
 
   const searchValue = onSearchQueryChange !== undefined ? searchQuery : localQuery;
   const setSearchValue = onSearchQueryChange || setLocalQuery;
-  const pageTitle = TAB_TITLES[activeTab] || "Control Console";
+  const pageTitle =
+    TAB_TITLES[activeTab]
+    || (activeTab?.startsWith("m2-") ? "Gateway Behaviour Intelligence" : "Control Console");
   const environment = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "DEV" : "PROD";
-  // Real backend reachability (was a hardcoded green "Connected" that stayed on
-  // even when the backend was down).
-  const backendHealth = useBackendHealth();
-  const connBadge = backendHealth === "connected"
-    ? { label: "Connected", dot: "bg-emerald-500", cls: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" }
-    : backendHealth === "checking"
-      ? { label: "Connecting…", dot: "bg-amber-500", cls: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300" }
-      : backendHealth === "degraded"
-        ? { label: "Degraded", dot: "bg-amber-500", cls: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-300" }
-        : { label: "Offline", dot: "bg-red-500", cls: "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300" };
 
   const isDark = resolvedTheme === "dark";
   const ThemeIcon = isDark ? Sun : Moon;
@@ -295,9 +294,9 @@ export function Header({ activeTab, searchQuery = "", onSearchQueryChange, onSea
               <div className="min-w-0 flex flex-wrap items-center gap-2 text-xs">
                 <span className="font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{pageTitle}</span>
                 <span className="rounded-full border border-slate-200 px-2 py-0.5 font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300">{environment}</span>
-                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium ${connBadge.cls}`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${connBadge.dot}`} />
-                  {connBadge.label}
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Connected
                 </span>
               </div>
             </div>

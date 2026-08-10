@@ -130,6 +130,16 @@ export function useGatewayCredential() {
   // Used by gatewayFetch's bounded self-heal (the caller retries at most once).
   const reprovision = useCallback(async () => {
     if (!orgId) return null;
+    // Honor Module 2 Disable Key: do not POST simulator-default (would mint a
+    // new active key and defeat Auth-stage containment in Attack Simulator).
+    try {
+      const { isSimulatorKeyReprovisionSuppressed } = await import("../utils/containmentEvents.js");
+      if (isSimulatorKeyReprovisionSuppressed(readStoredGatewayKey(orgId))) {
+        return null;
+      }
+    } catch {
+      /* ignore */
+    }
     try {
       const key = await provisionOrgKey(orgId, fetchWithAuth);
       if (key) {

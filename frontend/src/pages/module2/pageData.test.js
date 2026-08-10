@@ -1,0 +1,607 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  buildUebaKpiItems,
+  buildContainmentKpiItems,
+  buildExposureKpis,
+  buildIncidentKpiItems,
+  buildRagKpis,
+  buildRagModule2Extras,
+  buildMcpModule2Extras,
+  buildTelemetryKpis,
+  formatIncidentAge,
+  formatIncidentsBySourceChart,
+  formatRagDenialTypeRows,
+  formatRagDocumentFunnel,
+  formatRagStageChartData,
+  exposureBandClass,
+  formatAttackVectors,
+  formatExposureChartData,
+  formatTelemetryTimeline,
+  buildTickerAnalystFields,
+  formatTickerAnalystSummary,
+  formatEnforcementBlockLabel,
+  isThreatIntelEnforcementMeta,
+  mergeTickerFeed,
+  mergeRagVectorLaneStats,
+  patchIncidentSummaryForMutation,
+  resolveEventLane,
+  sourceBadgeClass,
+  formatLaneDisplayLabel,
+  extractIncidentPrompt,
+  formatIncidentTimeSpan,
+  humanizeThreatType,
+  incidentActionBadgeClass,
+  formatIncidentActionPhrase,
+  metadataDetail,
+} from "./pageData.js";
+import {
+  EXPOSURE_KPI_SOURCE,
+  RAG_KPI_SOURCE,
+  TELEMETRY_KPI_SOURCE,
+  UEBA_KPI_SOURCE,
+} from "../../utils/kpiDataSourceCopy.js";
+
+const EXPOSURE_FIXTURE = {
+  summary: {
+    active_models: 3,
+    high_exposure_models: 1,
+    total_requests: 500,
+    avg_block_rate_pct: 12.5,
+    avg_exposure_score: 0.42,
+  },
+  exposure_by_model: [
+    { model: "gpt-4o", exposure_score: 0.8, exposure_band: "high", block_rate_pct: 25, requests: 200 },
+    { model: "claude-3", exposure_score: 0.2, exposure_band: "low", block_rate_pct: 5, requests: 100 },
+  ],
+};
+
+const TELEMETRY_FIXTURE = {
+  summary: {
+    total_events: 120,
+    injection_attempts: 40,
+    pii_leaks: 15,
+    behavior_scoring_events: 50,
+    threat_intel_matches: 5,
+  },
+  timeline: [
+    {
+      timestamp: "2026-06-08T10:00:00+00:00",
+      injection_attempts: 4,
+      pii_leaks: 1,
+      behavior_scoring: 3,
+      threat_intel_matches: 0,
+      total: 8,
+    },
+  ],
+  top_attack_vectors: [
+    { vector: "LLM01", count: 22 },
+    { vector: "LLM06", count: 11 },
+  ],
+};
+
+test("formatExposureChartData maps models to chart rows with fill colors", () => {
+  const rows = formatExposureChartData(EXPOSURE_FIXTURE.exposure_by_model);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].name, "gpt-4o");
+  assert.equal(rows[0].score, 0.8);
+  assert.equal(rows[0].fill, "#ef4444");
+});
+
+test("buildExposureKpis renders summary cards", () => {
+  const kpis = buildExposureKpis(EXPOSURE_FIXTURE.summary);
+  assert.equal(kpis[0].value, 3);
+  assert.equal(kpis[3].value, "12.5%");
+});
+
+test("formatTelemetryTimeline adds readable labels", () => {
+  const timeline = formatTelemetryTimeline(TELEMETRY_FIXTURE.timeline);
+  assert.ok(timeline[0].label.includes("06-08"));
+});
+
+test("formatAttackVectors maps vector counts for bar chart", () => {
+  const vectors = formatAttackVectors(TELEMETRY_FIXTURE.top_attack_vectors);
+  assert.deepEqual(vectors[0], { name: "LLM01", count: 22 });
+});
+
+test("buildTelemetryKpis renders telemetry summary cards", () => {
+  const kpis = buildTelemetryKpis(TELEMETRY_FIXTURE.summary);
+  assert.equal(kpis[0].label, "Gateway Requests");
+  assert.ok(!kpis[0].label.toLowerCase().includes("deduped"));
+  assert.equal(kpis[1].value, 40);
+  assert.equal(kpis[4].value, 5);
+});
+
+test("badge helpers return expected class fragments", () => {
+  assert.ok(exposureBandClass("high").includes("red"));
+  assert.ok(sourceBadgeClass("chat").includes("sky"));
+});
+
+test("sourceBadgeClass covers all four enforcement lanes", () => {
+  assert.ok(sourceBadgeClass("rag").includes("purple"));
+  assert.ok(sourceBadgeClass("mcp").includes("amber"));
+  assert.equal(sourceBadgeClass("vector"), sourceBadgeClass("rag"));
+  assert.ok(sourceBadgeClass("chat").includes("sky"));
+  assert.ok(sourceBadgeClass("unknown-lane").includes("slate"));
+});
+
+test("formatLaneDisplayLabel folds vector under RAG & retrieval", () => {
+  assert.equal(formatLaneDisplayLabel("vector"), "RAG & retrieval");
+  assert.equal(formatLaneDisplayLabel("rag"), "RAG & retrieval");
+  assert.equal(formatLaneDisplayLabel("threat_intel"), "Threat Intel");
+});
+
+test("buildRagKpis aggregates stage and collection metrics", () => {
+  const kpis = buildRagKpis(
+    {
+      stages: {
+        query: { total: 10, blocked: 5 },
+        retriever: { total: 8, blocked: 4 },
+        ranker: { total: 0, blocked: 0 },
+        generator: { total: 0, blocked: 0 },
+      },
+    },
+    { collections: [{ block_rate_pct: 60 }, { block_rate_pct: 10 }] },
+    { total: 7, by_event_type: { rag_query_blocked: 7 } },
+  );
+  // Primary KPIs are pipeline-stage only — denials are not mixed in.
+  assert.equal(kpis[0].key, "pipeline-events");
+  assert.equal(kpis[0].value, 10);
+  assert.ok(String(kpis[0].helpText).toLowerCase().includes("rag"));
+  assert.ok(!String(kpis[0].helpText).toLowerCase().includes("module 1"));
+  assert.ok(!String(kpis[0].helpText).toLowerCase().includes("telemetry"));
+  assert.equal(kpis[1].key, "blocked-at-gate");
+  assert.equal(kpis[1].value, 9);
+  assert.equal(kpis[3].value, 1);
+  assert.equal(kpis[4].value, "50%");
+});
+
+test("buildRagModule2Extras labels denials and rag_query separately", () => {
+  const extras = buildRagModule2Extras({
+    module2_extra: {
+      label: "Module 2 also includes (not in Module 1 stage KPIs)",
+      rag_query_in_query_stage: { total: 3, blocked: 1, allowed: 2 },
+      pre_pipeline_denials: { total: 7, by_event_type: { rag_query_blocked: 7 } },
+    },
+  });
+  assert.equal(extras.hasExtras, true);
+  assert.equal(extras.ragQuery.total, 3);
+  assert.equal(extras.denials.total, 7);
+  assert.ok(String(extras.label).includes("Module 2"));
+});
+
+test("buildRagModule2Extras reports match when extras are zero", () => {
+  const extras = buildRagModule2Extras({
+    module2_extra: {
+      rag_query_in_query_stage: { total: 0 },
+      pre_pipeline_denials: { total: 0 },
+    },
+  });
+  assert.equal(extras.hasExtras, false);
+  assert.ok(String(extras.matchMessage).includes("match Module 1"));
+});
+
+test("buildRagKpis prefers module1_aligned stages when present", () => {
+  const kpis = buildRagKpis({
+    stages: { query: { total: 99, blocked: 0 }, retriever: { total: 0, blocked: 0 } },
+    module1_aligned: {
+      stages: {
+        query: { total: 2, blocked: 1 },
+        retriever: { total: 1, blocked: 0 },
+        ranker: { total: 0, blocked: 0 },
+        generator: { total: 0, blocked: 0 },
+      },
+    },
+  });
+  assert.equal(kpis[0].value, 2);
+  assert.equal(kpis[1].value, 1);
+});
+
+test("buildMcpModule2Extras keeps primary KPIs free of pending-mirror counts", () => {
+  const extras = buildMcpModule2Extras({
+    summary: { total_events: 5, blocked_tool_calls: 1 },
+    module2_extra: {
+      summary: {
+        total_events: 2,
+        blocked: 1,
+        redacted: 1,
+        reason: "async audit lag",
+      },
+    },
+  });
+  assert.equal(extras.hasExtras, true);
+  assert.equal(extras.summary.total_events, 2);
+  assert.ok(String(extras.summary.reason).includes("async"));
+  const none = buildMcpModule2Extras({ module2_extra: { summary: { total_events: 0 } } });
+  assert.equal(none.hasExtras, false);
+  assert.ok(String(none.matchMessage).includes("matches Module 1"));
+});
+
+test("formatRagDenialTypeRows sorts by count", () => {
+  const rows = formatRagDenialTypeRows({
+    by_event_type: { rag_ingest_blocked: 2, rag_query_blocked: 7 },
+  });
+  assert.equal(rows[0].eventType, "rag_query_blocked");
+  assert.equal(rows[0].count, 7);
+  assert.equal(rows[1].count, 2);
+});
+
+test("formatIncidentsBySourceChart folds vector into RAG & retrieval", () => {
+  const rows = formatIncidentsBySourceChart({ rag: 8, chat: 2, vector: 3 });
+  assert.equal(rows.find((r) => r.lane === "rag")?.label, "RAG & retrieval");
+  assert.equal(rows.find((r) => r.lane === "rag")?.count, 11);
+  assert.equal(rows.find((r) => r.lane === "vector"), undefined);
+  assert.equal(rows.find((r) => r.lane === "chat")?.count, 2);
+});
+
+test("formatIncidentsBySourceChart with rag only keeps count", () => {
+  const rows = formatIncidentsBySourceChart({ rag: 8, chat: 2 });
+  assert.equal(rows.find((r) => r.lane === "rag")?.count, 8);
+  assert.equal(rows.find((r) => r.lane === "rag")?.label, "RAG & retrieval");
+});
+
+test("mergeRagVectorLaneStats sums rag and vector for Hub card", () => {
+  const merged = mergeRagVectorLaneStats({
+    rag: { total: 2, blocked: 2, block_rate_pct: 100 },
+    vector: { total: 1, blocked: 0, block_rate_pct: 0 },
+  });
+  assert.equal(merged.total, 3);
+  assert.equal(merged.blocked, 2);
+  assert.equal(merged.block_rate_pct, 66.7);
+  const ragOnly = mergeRagVectorLaneStats({
+    rag: { total: 2, blocked: 2, block_rate_pct: 100 },
+    vector: { total: 0, blocked: 0, block_rate_pct: 0 },
+  });
+  assert.equal(ragOnly.total, 2);
+  assert.equal(ragOnly.blocked, 2);
+  assert.equal(ragOnly.block_rate_pct, 100);
+});
+
+test("formatRagStageChartData computes allowed and block rate", () => {
+  const rows = formatRagStageChartData({
+    query: { total: 4, blocked: 4, flagged: 0, allowed: 0 },
+    retriever: { total: 2, blocked: 1, flagged: 0, allowed: 1 },
+  });
+  assert.equal(rows[0].block_rate, 100);
+  assert.equal(rows[1].allowed, 1);
+});
+
+test("formatRagDocumentFunnel shows survival percentages", () => {
+  const steps = formatRagDocumentFunnel({ retrieved: 10, post_ranker: 6, post_generator: 3 });
+  assert.equal(steps[1].pct, 60);
+  assert.equal(steps[2].value, 3);
+});
+
+test("buildUebaKpiItems labels fleet vs period-scoped metrics", () => {
+  const items = buildUebaKpiItems({
+    summary: {
+      total_keys: 5,
+      active_keys: 4,
+      total_events: 12,
+      blocked_events: 3,
+      keys_with_activity: 2,
+      high_risk_keys: 1,
+      disabled_keys: 0,
+      active_kill_switches: 0,
+    },
+    periodLabel: "24 hours",
+  });
+  const byKey = Object.fromEntries(items.map((item) => [item.key, item]));
+  assert.equal(byKey["total-keys"].sub, "All registered (full fleet)");
+  assert.equal(byKey["total-events"].sub, "Last 24 hours");
+  assert.equal(byKey["high-risk-keys"].sub, "Active in 24 hours");
+  assert.equal(byKey["total-events"].value, 12);
+});
+
+test("buildContainmentKpiItems marks clickable cards only when requested", () => {
+  const readOnly = buildContainmentKpiItems({ disabledKeys: 2, activeKillSwitches: 1, clickable: false });
+  assert.equal(readOnly[0].clickable, false);
+  assert.equal(readOnly[1].value, 1);
+
+  let panel = null;
+  const interactive = buildContainmentKpiItems({
+    disabledKeys: 1,
+    activeKillSwitches: 3,
+    clickable: true,
+    activePanel: panel,
+    onDisabledClick: () => { panel = "disabled"; },
+    onKillSwitchClick: () => { panel = "kill-switch"; },
+  });
+  assert.equal(interactive[0].clickable, true);
+  assert.equal(typeof interactive[0].onClick, "function");
+  interactive[0].onClick();
+  assert.equal(panel, "disabled");
+});
+
+test("mergeTickerFeed dedupes live events and merges incidents", () => {
+  const merged = mergeTickerFeed(
+    [
+      { id: "1", action: "block", metadata: { event_type: "rag_pipeline" } },
+      { id: "1", action: "block", metadata: { event_type: "rag_pipeline" } },
+    ],
+    [{ id: 9, title: "Open case", source: "mcp", severity: "high" }],
+    5,
+  );
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0]._fromFeed, true);
+  assert.equal(merged[1].title, "Open case");
+});
+
+test("formatTickerAnalystSummary explains enforcement events in plain language", () => {
+  const summary = formatTickerAnalystSummary({
+    action: "block",
+    metadata: {
+      event_type: "rag_pipeline",
+      threat_type: "prompt_injection",
+      model: "gpt-4o",
+      key_prefix: "zs-abcd",
+      detail: "Policy violation in query stage",
+    },
+  });
+  assert.match(summary, /rag/i);
+  assert.match(summary, /blocked/i);
+  assert.match(summary, /prompt injection/i);
+  assert.match(summary, /gpt-4o/i);
+});
+
+test("formatTickerAnalystSummary labels threat intel IOC blocks distinctly", () => {
+  const summary = formatTickerAnalystSummary({
+    action: "block",
+    metadata: {
+      event_type: "chat_pipeline",
+      code: "threat_intel_blocked",
+      detail: "Blocked by threat intelligence (IOC match: jailbreak_probe)",
+    },
+  });
+  assert.match(summary, /Threat Intelligence policy/i);
+  assert.equal(formatEnforcementBlockLabel({ code: "threat_intel_blocked" }, "block"), "Threat Intel policy block");
+  assert.ok(isThreatIntelEnforcementMeta({ code: "threat_intel_blocked" }));
+});
+
+test("buildTickerAnalystFields includes routing and request metadata", () => {
+  const fields = buildTickerAnalystFields({
+    id: "42",
+    action: "allow",
+    timestamp: "2026-07-07T10:00:00+00:00",
+    metadata: {
+      event_type: "model_routed",
+      original_model: "gpt-4o",
+      routed_model: "gpt-4o-mini",
+      rerouted: true,
+      request_id: "zs-req-1",
+    },
+  });
+  const labels = fields.map((f) => f.label);
+  assert.ok(labels.includes("Model routing"));
+  assert.ok(labels.includes("Request ID"));
+  assert.match(fields.find((f) => f.label === "Model routing").value, /gpt-4o-mini/);
+});
+
+test("resolveEventLane prefers pipeline metadata over policy source", () => {
+  assert.equal(resolveEventLane({ source: "policy", metadata: { event_type: "mcp_tool_call" } }), "mcp");
+  assert.equal(resolveEventLane({ source: "rag", title: "Case" }), "rag");
+});
+
+test("resolveEventLane mirrors backend priority for threat intel", () => {
+  assert.equal(
+    resolveEventLane({
+      metadata: {
+        event_type: "mcp_tool_call",
+        source: "security_scan",
+        threat_type: "threat_intel_match",
+      },
+    }),
+    "threat_intel",
+  );
+  assert.equal(
+    resolveEventLane({
+      metadata: {
+        event_type: "rag_pipeline",
+        extra: { detail: "Threat intel hit during retrieval" },
+      },
+    }),
+    "threat_intel",
+  );
+  assert.equal(
+    resolveEventLane({
+      metadata: {
+        code: "threat_intel_blocked",
+        threat_type: "high_risk_actor",
+        source: "security_scan",
+      },
+    }),
+    "threat_intel",
+  );
+  assert.ok(isThreatIntelEnforcementMeta({ blocked_by: "threat_intel_blocked" }));
+});
+
+test("KPI builders attach analyst helpText to every card", () => {
+  for (const kpi of buildExposureKpis(EXPOSURE_FIXTURE.summary)) {
+    assert.ok(kpi.helpText && kpi.helpText.length > 10, `missing helpText: ${kpi.key}`);
+  }
+  for (const kpi of buildTelemetryKpis(TELEMETRY_FIXTURE.summary)) {
+    assert.ok(kpi.helpText && kpi.helpText.length > 10, `missing helpText: ${kpi.key}`);
+  }
+  for (const kpi of buildContainmentKpiItems({ disabledKeys: 0, activeKillSwitches: 0 })) {
+    assert.ok(kpi.helpText && kpi.helpText.length > 10, `missing helpText: ${kpi.key}`);
+  }
+});
+
+test("KPI builders use request-type dataSource labels", () => {
+  for (const kpi of buildRagKpis({ stages: { query: { total: 1 } } }, { collections: [] })) {
+    assert.equal(kpi.dataSource, RAG_KPI_SOURCE, kpi.key);
+  }
+  for (const kpi of buildExposureKpis(EXPOSURE_FIXTURE.summary)) {
+    assert.equal(kpi.dataSource, EXPOSURE_KPI_SOURCE, kpi.key);
+  }
+  for (const kpi of buildTelemetryKpis(TELEMETRY_FIXTURE.summary)) {
+    assert.equal(kpi.dataSource, TELEMETRY_KPI_SOURCE, kpi.key);
+  }
+  for (const kpi of buildContainmentKpiItems({ disabledKeys: 0, activeKillSwitches: 0 })) {
+    assert.equal(kpi.dataSource, UEBA_KPI_SOURCE, kpi.key);
+  }
+});
+
+test("formatIncidentAge renders compact durations", () => {
+  const hourAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  assert.equal(formatIncidentAge(hourAgo), "2h");
+  assert.equal(formatIncidentAge(""), "—");
+});
+
+test("humanizeThreatType spaces snake_case and capitalizes", () => {
+  assert.equal(humanizeThreatType("kill_switch"), "Kill switch");
+  assert.equal(humanizeThreatType("PROMPT_INJECTION"), "Prompt injection");
+  assert.equal(humanizeThreatType(""), "");
+});
+
+test("extractIncidentPrompt prefers top-level then metadata then extra then lineage", () => {
+  assert.equal(
+    extractIncidentPrompt({ prompt_snippet: "top level prompt" }),
+    "top level prompt",
+  );
+  assert.equal(
+    extractIncidentPrompt({
+      metadata: { prompt_submitted: "from submitted" },
+    }),
+    "from submitted",
+  );
+  assert.equal(
+    extractIncidentPrompt({
+      metadata: { extra: { user_message: "from extra" } },
+    }),
+    "from extra",
+  );
+  assert.equal(
+    extractIncidentPrompt({
+      metadata: { prompt_lineage: [{ prompt: "from lineage" }] },
+    }),
+    "from lineage",
+  );
+  assert.equal(extractIncidentPrompt({}), "");
+});
+
+test("formatIncidentTimeSpan builds case span and event window", () => {
+  const opened = "2026-07-27T10:00:00.000Z";
+  const later = "2026-07-27T11:00:00.000Z";
+  const span = formatIncidentTimeSpan(
+    { created_at: opened, status: "open" },
+    [{ created_at: opened }, { created_at: later }],
+  );
+  assert.equal(span.isOpen, true);
+  assert.match(span.caseSpan, /Still open/);
+  assert.ok(span.eventWindow);
+  assert.match(span.eventWindow, /→/);
+
+  const closed = formatIncidentTimeSpan(
+    { created_at: opened, resolved_at: later, status: "resolved" },
+    [{ created_at: opened }],
+  );
+  assert.equal(closed.isOpen, false);
+  assert.ok(closed.caseSpan.includes("→"));
+});
+
+test("incidentActionBadgeClass and formatIncidentActionPhrase map outcomes", () => {
+  assert.match(incidentActionBadgeClass("block"), /red/);
+  assert.match(incidentActionBadgeClass("allow"), /emerald/);
+  assert.equal(formatIncidentActionPhrase("block"), "Blocked by policy");
+  assert.equal(
+    formatIncidentActionPhrase("block", { source: "threat_intel" }),
+    "Blocked by Threat Intelligence",
+  );
+});
+
+test("metadataDetail falls back to reason when detail is absent", () => {
+  assert.equal(
+    metadataDetail({ reason: "Analyst containment — medium risk" }),
+    "Analyst containment — medium risk",
+  );
+  assert.equal(
+    metadataDetail({ extra: { reason: "nested kill switch reason" } }),
+    "nested kill switch reason",
+  );
+  assert.equal(metadataDetail({ detail: "prefer detail", reason: "later" }), "prefer detail");
+});
+
+test("patchIncidentSummaryForMutation updates open and resolved counts on resolve", () => {
+  const summary = {
+    total: 10,
+    active: 4,
+    open: 3,
+    investigating: 1,
+    escalated: 0,
+    resolved: 6,
+    critical_high: 2,
+    by_source: {},
+  };
+  const next = patchIncidentSummaryForMutation(summary, {
+    action: "resolve",
+    previousStatus: "open",
+    severity: "high",
+  });
+  assert.equal(next.open, 2);
+  assert.equal(next.resolved, 7);
+  assert.equal(next.active, 3);
+  assert.equal(next.critical_high, 1);
+});
+
+test("patchIncidentSummaryForMutation moves escalated counts on escalate", () => {
+  const summary = {
+    total: 5,
+    active: 2,
+    open: 2,
+    investigating: 0,
+    escalated: 0,
+    resolved: 3,
+    critical_high: 0,
+    by_source: {},
+  };
+  const next = patchIncidentSummaryForMutation(summary, {
+    action: "escalate",
+    previousStatus: "open",
+    severity: "medium",
+  });
+  assert.equal(next.open, 1);
+  assert.equal(next.escalated, 1);
+  assert.equal(next.active, 2);
+});
+
+test("buildIncidentKpiItems wires critical/high severity toggle", () => {
+  const calls = [];
+  const items = buildIncidentKpiItems(
+    { active: 3, open: 2, escalated: 1, resolved: 0, critical_high: 2 },
+    {
+      severityFilter: "critical_high",
+      onSeverityFilter: (v) => calls.push(v),
+    },
+  );
+  const criticalHigh = items.find((k) => k.key === "critical-high");
+  assert.equal(criticalHigh.active, true);
+  criticalHigh.onClick();
+  assert.deepEqual(calls, [""]);
+});
+
+test("buildIncidentKpiItems does not include Investigating card", () => {
+  const items = buildIncidentKpiItems(
+    { active: 4, open: 2, investigating: 1, escalated: 1, resolved: 0, critical_high: 0 },
+  );
+  assert.equal(items.some((k) => k.key === "investigating"), false);
+  assert.deepEqual(
+    items.map((k) => k.key),
+    ["active", "open", "escalated", "critical-high", "resolved"],
+  );
+});
+
+test("buildIncidentKpiItems sets composite severity filter when inactive", () => {
+  const calls = [];
+  const items = buildIncidentKpiItems(
+    { active: 1, open: 1, escalated: 0, resolved: 0, critical_high: 1 },
+    {
+      severityFilter: "",
+      onSeverityFilter: (v) => calls.push(v),
+    },
+  );
+  const criticalHigh = items.find((k) => k.key === "critical-high");
+  assert.equal(criticalHigh.active, false);
+  criticalHigh.onClick();
+  assert.deepEqual(calls, ["critical_high"]);
+});
