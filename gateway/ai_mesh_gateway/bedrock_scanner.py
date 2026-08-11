@@ -88,32 +88,325 @@ def _strip_reasoning_tags(text: str) -> str:
     return text
 
 
+_FINDINGS_SEVERITY_SCORE = {"critical": 80, "high": 60, "medium": 40, "low": 20}
+
+# Whitespace-tolerant threat cues in truncated Tier-2 JSON (prod: mid-string cut
+# after LLM01/LLM02 findings still contains these substrings).
+_THREAT_INDICATOR_RES = (
+    re.compile(r'"severity"\s*:\s*"(?:critical|high)"', re.IGNORECASE),
+    re.compile(r'"risk_score"\s*:\s*\d+'),
+    # Prefix match so mid-string cuts like "LLM01_pro…" still count.
+    re.compile(r'"rule_id"\s*:\s*"(?:LLM0[1268]|HC0[12]|AG01)', re.IGNORECASE),
+    re.compile(r'"recommended_action"\s*:\s*"block"', re.IGNORECASE),
+    re.compile(
+        r'"category"\s*:\s*"(?:prompt_injection|jailbreak|data_leakage|goal_hijacking)',
+        re.IGNORECASE,
+    ),
+)
+
+
+def _extract_balanced_object(text: str, start: int) -> str:
+    """Return one complete `{...}` starting at ``start``, or "" if truncated."""
+    if start >= len(text) or text[start] != "{":
+        return ""
+    depth = 0
+    in_string = False
+    escape = False
+    for idx in range(start, len(text)):
+        ch = text[idx]
+        if escape:
+            escape = False
+            continue
+        if in_string:
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == "{":
+            depth += 1
+            continue
+        if ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : idx + 1]
+    return ""
+
+
+def _salvage_findings_list(content_str: str) -> list[Any]:
+    """
+    Recover complete finding objects from a findings array that may be truncated
+    mid-object (the live Bedrock max_tokens=256 failure mode).
+    """
+    findings_match = re.search(r'"findings"\s*:\s*\[', content_str)
+    if not findings_match:
+        return []
+    start = findings_match.end()  # first char after '['
+    # Prefer a fully closed array when present.
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start - 1, len(content_str)):
+        c = content_str[i]
+        if escape:
+            escape = False
+            continue
+        if in_string:
+            if c == "\\":
+                escape = True
+                continue
+            if c == '"':
+                in_string = False
+            continue
+        if c == '"':
+            in_string = True
+            continue
+        if c == "[":
+            depth += 1
+            continue
+        if c == "]":
+            depth -= 1
+            if depth == 0:
+                try:
+                    parsed = json.loads(content_str[start - 1 : i + 1])
+                    if isinstance(parsed, list):
+                        return [f for f in parsed if isinstance(f, dict)]
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                break
+
+    # Truncated array: keep every complete {...} object before the cut.
+    objects: list[Any] = []
+    i = start
+    while i < len(content_str):
+        while i < len(content_str) and content_str[i] in " \t\n\r,":
+            i += 1
+        if i >= len(content_str) or content_str[i] == "]":
+            break
+        if content_str[i] != "{":
+            break
+        obj_str = _extract_balanced_object(content_str, i)
+        if not obj_str:
+            break
+        try:
+            obj = json.loads(obj_str)
+        except (json.JSONDecodeError, TypeError):
+            break
+        if isinstance(obj, dict):
+            objects.append(obj)
+        i += len(obj_str)
+    return objects
+
+
+_THREAT_CATEGORIES = frozenset(
+    {
+        "prompt_injection",
+        "jailbreak",
+        "data_leakage",
+        "goal_hijacking",
+        "sensitive_disclosure",
+        "exfiltration",
+        "social_engineering",
+    }
+)
+
+
+def _finding_is_threat(finding: dict[str, Any]) -> bool:
+    """True for salvaged findings that are attacks even if severity was truncated off."""
+    cat = str(finding.get("category") or "").strip().lower()
+    if cat in _THREAT_CATEGORIES:
+        return True
+    rid = str(finding.get("rule_id") or finding.get("owasp_code") or "").strip().upper()
+    if rid.startswith(("LLM01", "LLM02", "LLM06", "LLM08", "HC01", "HC02", "AG01")):
+        return True
+    return False
+
+
+def _action_from_findings(findings: list[Any]) -> str:
+    """Infer recommended_action when salvage recovered findings but not action."""
+    max_sev = ""
+    rank = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+    saw_threat = False
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        if _finding_is_threat(finding):
+            saw_threat = True
+        sev = str(finding.get("severity") or "").lower()
+        if rank.get(sev, 0) > rank.get(max_sev, 0):
+            max_sev = sev
+    if max_sev in ("critical", "high") or saw_threat:
+        return "block"
+    if max_sev == "medium":
+        return "monitor"
+    return "allow"
+
+
+def _score_from_findings(findings: list[Any]) -> float:
+    if not findings:
+        return 0.0
+    max_severity_score = 0
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        sev = str(finding.get("severity") or "").lower()
+        max_severity_score = max(
+            max_severity_score,
+            _FINDINGS_SEVERITY_SCORE.get(sev, 0),
+        )
+        # Truncation often drops severity while leaving rule_id/category —
+        # still contribute a high floor so llm_guard score isn't 0.
+        if _finding_is_threat(finding):
+            max_severity_score = max(max_severity_score, 80)
+    return max_severity_score / 100.0
+
+
+def _has_threat_indicators(text: str) -> bool:
+    """True when truncated Tier-2 JSON still shows a real threat finding."""
+    if not text:
+        return False
+    return any(pat.search(text) for pat in _THREAT_INDICATOR_RES)
+
+
 def _parse_partial_json(text: str) -> Optional[Dict[str, Any]]:
-    """Attempt to salvage truncated JSON from Bedrock responses."""
-    text = text.strip()
+    """
+    Salvage findings / risk_score / recommended_action from truncated JSON.
+
+    Naïve append-`}` salvage fails when Bedrock cuts mid-string inside a findings
+    object (prod zs-b108b10ebd35). Prefer regex fields + complete finding objects.
+    """
+    text = (text or "").strip()
     if not text:
         return None
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            return parsed
     except json.JSONDecodeError:
         pass
-    for end_char in ["}", "]"]:
-        attempt = text + end_char
+
+    result: Dict[str, Any] = {}
+    risk_match = re.search(r'"risk_score"\s*:\s*(\d+(?:\.\d+)?)', text)
+    if risk_match:
         try:
-            return json.loads(attempt)
-        except json.JSONDecodeError:
-            attempt = text + end_char + "}"
-            try:
-                return json.loads(attempt)
-            except json.JSONDecodeError:
-                pass
-    brace_match = re.search(r'\{.*\}', text, re.DOTALL)
-    if brace_match:
-        try:
-            return json.loads(brace_match.group())
-        except json.JSONDecodeError:
+            result["risk_score"] = float(risk_match.group(1))
+        except ValueError:
             pass
-    return None
+    action_match = re.search(r'"recommended_action"\s*:\s*"(\w+)"', text)
+    if action_match:
+        result["recommended_action"] = action_match.group(1)
+
+    findings = _salvage_findings_list(text)
+    if findings:
+        result["findings"] = findings
+        if "recommended_action" not in result:
+            result["recommended_action"] = _action_from_findings(findings)
+        if "risk_score" not in result:
+            result["risk_score"] = int(_score_from_findings(findings) * 100)
+
+    # Last-resort: close open string then braces/brackets (benign truncate shapes).
+    if not result:
+        repaired = text
+        # If an odd number of unescaped quotes, close the open string.
+        odd_quote = False
+        esc = False
+        for ch in repaired:
+            if esc:
+                esc = False
+                continue
+            if ch == "\\":
+                esc = True
+                continue
+            if ch == '"':
+                odd_quote = not odd_quote
+        if odd_quote:
+            repaired += '"'
+        open_squares = repaired.count("[") - repaired.count("]")
+        open_braces = repaired.count("{") - repaired.count("}")
+        repaired += "]" * max(0, open_squares) + "}" * max(0, open_braces)
+        try:
+            parsed = json.loads(repaired)
+            if isinstance(parsed, dict):
+                result = parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    if not result:
+        return None
+
+    # Brace-repair of '{"findings":[' → '{"findings":[]}' is NOT a successful
+    # parse — treat as unparseable so degraded/threat-indicator paths can run.
+    findings = result.get("findings")
+    if (
+        isinstance(findings, list)
+        and not findings
+        and "risk_score" not in result
+        and "recommended_action" not in result
+        and "action" not in result
+    ):
+        return None
+
+    return result
+
+
+def _parse_failure_threat_block_result(
+    resp: Dict[str, Any],
+    content_str: str,
+    request_id: str,
+) -> Dict[str, Any]:
+    """
+    Fail-CLOSED when parse fails but raw output still shows threat indicators.
+
+    Control-plane parity: truncated LLM01/LLM02 JSON must not become
+    ``parse_failure_conservative`` → monitor/flag fail-open.
+    """
+    score_float = 0.7
+    severity = "high"
+    lower = content_str.lower()
+    if (
+        re.search(r'"severity"\s*:\s*"critical"', lower)
+        or re.search(r'"risk_score"\s*:\s*9\d', lower)
+        or "llm01" in lower
+        or "llm02" in lower
+        or "prompt_injection" in lower
+        or "jailbreak" in lower
+    ):
+        score_float = 0.9
+        severity = "critical"
+    conservative_owasp = {
+        "scan_results": {},
+        "summary": {
+            "total_threats": 1,
+            "overall_severity": severity,
+            "recommended_action": "block",
+        },
+    }
+    return {
+        "owasp_llm": conservative_owasp,
+        "owasp_mcp": {**SAFE_OWASP_SUMMARY},
+        "owasp_agentic": {**SAFE_OWASP_SUMMARY},
+        "pii": {**SAFE_PII},
+        "llm_guard": {
+            "score": score_float,
+            "is_valid": True,
+            "degraded": False,
+        },
+        "meta": {
+            "request_id": request_id,
+            "tokens_in": resp.get("tokens_in"),
+            "tokens_out": resp.get("tokens_out"),
+            "recommended_action": "block",
+            "suggested_redactions": [],
+            "raw_findings_count": 0,
+            "raw_findings": [],
+            "decision_reason": "parse_failure_threat_indicators",
+            "parse_failure_conservative": True,
+        },
+    }
 
 
 def _normalize_score(raw_score: Any) -> float:
@@ -398,8 +691,9 @@ class BedrockScanner:
         else:
             user_content = f"TEXT TO ANALYZE:\n---\n{truncated_prompt}\n---"
 
-        # M-09: _env_int so a typo'd value can't raise ValueError on every scan.
-        max_tokens = _env_int("BEDROCK_MAX_TOKENS", 256, min_value=1, max_value=65536)
+        # Default 1024 matches control-plane BedrockScanner — 256 truncates
+        # multi-finding JSON mid-string (prod zs-b108b10ebd35 tokens_out=256).
+        max_tokens = _env_int("BEDROCK_MAX_TOKENS", 1024, min_value=1, max_value=65536)
 
         # ── Dedicated Bedrock log: SCAN START ──
         log_scan_start(
@@ -489,6 +783,16 @@ class BedrockScanner:
                     content_snippet=content_str or "(empty)",
                     reason="empty_or_unparseable",
                 )
+                # Control-plane parity: truncated JSON that still shows LLM01/
+                # jailbreak/critical severity must BLOCK, not fail-open monitor.
+                if content_str and _has_threat_indicators(content_str):
+                    LOG.warning(
+                        "Bedrock parse failed with threat indicators; "
+                        "fail-closed block (reqid=%s, content_len=%d)",
+                        reqid,
+                        len(content_str),
+                    )
+                    return _parse_failure_threat_block_result(resp, content_str, reqid)
                 return {
                     **DEGRADED_RESULT,
                     "meta": {
@@ -506,7 +810,18 @@ class BedrockScanner:
 
         findings = parsed.get("findings") or []
         risk_score = parsed.get("risk_score") or parsed.get("score") or 0
-        recommended_action = parsed.get("recommended_action") or parsed.get("action") or "allow"
+        recommended_action = parsed.get("recommended_action") or parsed.get("action")
+        if not recommended_action:
+            recommended_action = (
+                _action_from_findings(findings) if findings else "allow"
+            )
+        # Truncation can salvage LLM01/jailbreak findings while dropping severity
+        # (or even emitting recommended_action=allow). Never fail-open on those.
+        if findings and recommended_action in ("allow", "monitor", "flag"):
+            if _action_from_findings(findings) == "block":
+                recommended_action = "block"
+        if (not risk_score) and findings:
+            risk_score = int(_score_from_findings(findings) * 100)
         suggested_redactions = parsed.get("suggested_redactions") or parsed.get("suggested_redaction") or []
 
         owasp_llm = parsed.get("owasp_llm") or {**SAFE_OWASP_SUMMARY}
@@ -540,7 +855,10 @@ class BedrockScanner:
         )
 
         # Log individual rule hits to the dedicated bedrock log
-        from bedrock_logger import log_rule_hit
+        try:
+            from .bedrock_logger import log_rule_hit
+        except ImportError:
+            from bedrock_logger import log_rule_hit  # type: ignore[no-redef]
         for finding in findings:
             if isinstance(finding, dict) and finding.get("rule_id"):
                 log_rule_hit(

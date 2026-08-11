@@ -325,7 +325,7 @@ class BedrockClient:
             max_tokens = int(
                 prompt_payload.get("max_tokens")
                 or prompt_payload.get("maxTokens")
-                or os.getenv("BEDROCK_MAX_TOKENS", "256")
+                or os.getenv("BEDROCK_MAX_TOKENS", "1024")
             )
             return self.converse(
                 model=effective_model,

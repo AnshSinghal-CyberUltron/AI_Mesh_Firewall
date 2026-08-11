@@ -413,7 +413,7 @@ def _scan_payload_with_max_tokens_env(monkeypatch, raw):
 
 def test_bedrock_scan_bad_max_tokens_falls_back(monkeypatch):
     payload = _scan_payload_with_max_tokens_env(monkeypatch, "lots")
-    assert payload["max_tokens"] == 256
+    assert payload["max_tokens"] == 1024
 
 
 def test_bedrock_scan_valid_max_tokens_passes_through(monkeypatch):
