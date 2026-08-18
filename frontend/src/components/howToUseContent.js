@@ -72,7 +72,7 @@ const HOW_TO_USE_RAW = {
       {
         id: "how-routing-decisions",
         label: "How Routing Decisions Occur",
-        text: "Every `/v1/chat/completions` request is evaluated by the AI Mesh Router. The gateway first applies your weights and policy filters, then an internal policy adjudicator confirms or overrides the preferred model based on sensitivity, compliance, budget, latency, and model risk. The final route and reason are returned in ZeroShield metadata and the routing audit trail.",
+        text: "Every `/v1/chat/completions` request is evaluated by the AI Mesh Router. The gateway first applies your weights and policy filters, then an deterministic routing engine confirms or overrides the preferred model based on sensitivity, compliance, budget, latency, and model risk. The final route and reason are returned in ZeroShield metadata and the routing audit trail.",
       },
       {
         id: "how-rag-security",
@@ -638,7 +638,7 @@ curl -X POST http://127.0.0.1:8300/api/mcp/servers/<server_id>/connect/ \\
     title: "Configure Multi-Model Routing & Governance",
     audience: "For teams running multiple AI providers or models",
     intro:
-      "The AI Mesh Router automatically evaluates every `/v1/chat/completions` request. Your configured weights and sensitivity rules create the candidate pool, then an internal policy adjudicator analyzes the input and governance settings to decide whether to keep the requested model or reroute to a safer, cheaper, faster, or more compliant target. The full routing decision — including score, reason, policy summary, and decision factors — is returned in the API response and visible in the Routing Audit panel.",
+      "The AI Mesh Router automatically evaluates every `/v1/chat/completions` request. Your configured weights and sensitivity rules create the candidate pool, then an deterministic routing engine analyzes the input and governance settings to decide whether to keep the requested model or reroute to a safer, cheaper, faster, or more compliant target. The full routing decision — including score, reason, policy summary, and decision factors — is returned in the API response and visible in the Routing Audit panel.",
     steps: [
       {
         id: "step-keys",
@@ -648,12 +648,12 @@ curl -X POST http://127.0.0.1:8300/api/mcp/servers/<server_id>/connect/ \\
       {
         id: "step-rules",
         label: "Configure routing governance weights",
-        text: 'Open the Routing Governance panel to set weights for Risk, Cost, Latency, and Priority (they auto-normalize to 100%). Choose a data sensitivity level (Public, Internal, Confidential, Restricted) and optionally select a strategy preset like "Balanced", "Cost Optimized", "Low Latency", "Maximum Security", or "Quality First". These settings flow directly into the policy adjudicator for every chat-completion request.',
+        text: 'Open the Routing Governance panel to set weights for Risk, Cost, Latency, and Priority (they are normalized to 100% by the gateway (the panel shows the raw sum)). Choose a data sensitivity level (Public, Internal, Confidential, Restricted) and optionally select a strategy preset like "Balanced", "Cost Optimized", "Low Latency", "Maximum Security", or "Quality First". These settings flow directly into the deterministic routing engine for every chat-completion request.',
       },
       {
         id: "step-toggle",
         label: "Enable or disable dynamic routing",
-        text: 'Use the Dynamic Routing toggle in Module 1.5 to globally enable or disable adjudication for `/v1/chat/completions`. When disabled, requests keep the preferred model unless blocked by allowlist or policy constraints.',
+        text: 'Use the Dynamic Routing toggle in Module 1.5 to globally enable or disable deterministic routing for `/v1/chat/completions`. When disabled, requests keep the preferred model unless blocked by allowlist or policy constraints.',
       },
       {
         id: "step-point",
@@ -663,12 +663,12 @@ curl -X POST http://127.0.0.1:8300/api/mcp/servers/<server_id>/connect/ \\
       {
         id: "step-response",
         label: "Read the routing metadata in the response",
-        text: 'Every API response includes a `zeroshield.routing` object with: `routed_model` (the model actually used), `decision_source` ("policy_adjudicator" or "weighted_fallback"), `routing_score`, `routing_reason`, `policy_summary`, `decision_factors` (scoring breakdown), `fallback_chain`, `data_sensitivity`, `compliance_requirements`, and `weights`. Use this to understand exactly why a model was chosen.',
+        text: 'Every API response includes a `zeroshield.routing` object with: `routed_model` (the model actually used), `decision_source` ("deterministic_weighted"), `routing_score`, `routing_reason`, `policy_summary`, `decision_factors` (scoring breakdown), `fallback_chain`, `data_sensitivity`, `compliance_requirements`, and `weights`. Use this to understand exactly why a model was chosen.',
       },
       {
         id: "step-audit",
         label: "Monitor routing decisions in the Audit panel",
-        text: 'Open the Routing Audit panel to see a live stream of routing events. Each event shows the original→routed model flow, the decision source badge (Policy Adjudicator / Weighted / Fallback), score, sensitivity level, and expandable details with the full reason and weight breakdown.',
+        text: 'Open the Routing Audit panel to see a live stream of routing events. Each event shows the original→routed model flow, the decision source badge (Deterministic weighted routing), score, sensitivity level, and expandable details with the full reason and weight breakdown.',
       },
       {
         id: "step-failover",
@@ -689,7 +689,7 @@ client = OpenAI(
     api_key="<your_gateway_api_key>",
 )
 
-# The internal policy adjudicator evaluates every request
+# The deterministic routing engine evaluates every request
 # and selects the optimal model based on content analysis + governance settings
 response = client.chat.completions.create(
     model="gpt-4",  # preferred model — treated as a routing hint
@@ -726,8 +726,8 @@ print(f"Fallback: {routing['fallback_chain']}")`,
       "routing_score": 0.9802,
       "routing_enabled": true,
       "routing_override": null,
-      "decision_source": "policy_adjudicator",
-      "routing_reason": "Policy adjudicator selected 'claude-opus-4.6' (score=0.9802) from 14 candidates. Weights: risk=20%, cost=10%, latency=10%, priority=60%.",
+      "decision_source": "deterministic_weighted",
+      "routing_reason": "Routing policy selected 'claude-opus-4.6' (score=0.9802) from 14 candidates. Weights: risk=20%, cost=10%, latency=10%, priority=60%.",
       "policy_summary": "Model meets sensitivity=restricted, compliance=['SOC2', 'ISO27001', 'HIPAA', 'GDPR']. Risk=0.07, latency_sla=6000ms.",
       "decision_factors": [
         "model_score=0.9802",
@@ -759,7 +759,7 @@ client = OpenAI(
 )
 
 # Request a specific model — gateway may still reroute it if
-# ZeroShield adjudication finds a better candidate for your constraints
+# ZeroShield deterministic routing finds a better candidate for your constraints
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "Hello!"}],
@@ -794,7 +794,7 @@ print(response.choices[0].message.content)`,
     notes: [
       {
         icon: "info",
-        text: "When Dynamic Routing is enabled, `/v1/chat/completions` requests go through the policy adjudicator. The model analyzes input content and governance settings (weights, sensitivity, compliance) to select the optimal model in real-time.",
+        text: "When Dynamic Routing is enabled, `/v1/chat/completions` requests go through the deterministic routing engine. The routing engine evaluates governance settings and request attributes (weights, sensitivity, compliance) to select the optimal model in real-time.",
       },
       {
         icon: "shield",

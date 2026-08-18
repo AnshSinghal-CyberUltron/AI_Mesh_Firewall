@@ -1,0 +1,16 @@
+{
+  "ok": false,
+  "status": 503,
+  "body": {
+    "error": {
+      "message": "Model 'llama-3.2-3b-free' is currently isolated (risk score: 0.0).",
+      "type": "service_unavailable_error",
+      "param": null,
+      "code": "model_isolated"
+    },
+    "reason": "m16-phase0",
+    "risk_score": 0.0,
+    "threshold": 80.0,
+    "request_id": "zs-1e527a957bab"
+  }
+}

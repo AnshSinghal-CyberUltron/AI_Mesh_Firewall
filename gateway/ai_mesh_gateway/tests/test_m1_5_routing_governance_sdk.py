@@ -143,7 +143,7 @@ async def _build(monkeypatch, *, org_slug=ORG, allowed_models=None, config=None,
         [{"id": n, "object": "model", "created": 1704067200, "owned_by": "openai"}
          for n in ALL_NAMES] + [dict(FOREIGN_MODEL)]))
     lr.estimate_prompt_tokens = MagicMock(return_value=500)
-    lr.adjudicate_model_selection = real.adjudicate_model_selection
+    lr.select_model = real.select_model
     lr.resolve_runtime_selection = real.resolve_runtime_selection
 
     # _policy_check_cached: the policy engine is a separate capability (and would

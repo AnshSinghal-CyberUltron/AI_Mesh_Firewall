@@ -235,17 +235,24 @@ def test_compute_sizing_zero_rss_guard():
 # --------------------------------------------------------------------------
 
 def test_gateway_pools_scale_and_clamp():
-    # scanner=clamp(round(cpu),4,16); bedrock==asgi_threads; vault=clamp(round(cpu/2),2,8)
-    b6 = rb.compute_sizing(6.0, 16 * GIB)
-    assert (b6.scanner_pool, b6.bedrock_pool, b6.vault_pool) == (6, 12, 3)
-    b12 = rb.compute_sizing(12.0, 60 * GIB)
-    assert (b12.scanner_pool, b12.bedrock_pool, b12.vault_pool) == (12, 24, 6)
-    b16 = rb.compute_sizing(16.0, 60 * GIB)         # clamps bite: scanner 16, bedrock 32, vault 8
-    assert (b16.scanner_pool, b16.bedrock_pool, b16.vault_pool) == (16, 32, 8)
+    # scanner=clamp(round(cpu),4,16); vault=clamp(round(cpu/2),2,8) stay CPU-clamped.
+    # bedrock = max(asgi_threads, nofile // workers) — network I/O, not capped at 32.
+    b6 = rb.compute_sizing(6.0, 16 * GIB, nofile=1024)
+    assert (b6.scanner_pool, b6.vault_pool) == (6, 3)
+    assert b6.asgi_threads == 12
+    assert b6.bedrock_pool == max(12, 1024 // 6)  # 170
+    b12 = rb.compute_sizing(12.0, 60 * GIB, nofile=1024)
+    assert (b12.scanner_pool, b12.vault_pool) == (12, 6)
+    assert b12.bedrock_pool == max(24, 1024 // 12)  # 85
+    b16 = rb.compute_sizing(16.0, 60 * GIB, nofile=65536)
+    assert (b16.scanner_pool, b16.vault_pool) == (16, 8)
+    assert b16.asgi_threads == 32
+    assert b16.bedrock_pool == 4096  # 65536 // 16, not 32
 
 
 def test_gateway_pools_floor_on_tiny_box():
-    b1 = rb.compute_sizing(1.0, 2 * GIB)            # floors: scanner 4, bedrock 8, vault 2
+    b1 = rb.compute_sizing(1.0, 2 * GIB, nofile=16)
+    # floors: scanner 4, vault 2; asgi 8; nofile/workers = 16//2 = 8 → bedrock 8
     assert (b1.scanner_pool, b1.bedrock_pool, b1.vault_pool) == (4, 8, 2)
 
 
@@ -257,10 +264,46 @@ def test_redis_pool_scales_and_clamps():
     assert rb.compute_sizing(1.0, 2 * GIB).redis_pool == 64     # clamp(8*4=32,64,256)=64 floor
 
 
-def test_gateway_pools_via_detect_and_cli(tmp_path):
+def test_gateway_pools_via_detect_and_cli(tmp_path, monkeypatch):
+    import resource as std_resource
+
+    monkeypatch.setattr(std_resource, "getrlimit", lambda _lim: (65536, 65536))
     kw = _make_v2_mount(tmp_path, cpu_max="1200000 100000", memory_max=str(60 * GIB))
     b = rb.detect(affinity=lambda: 64, **kw)
-    assert b.scanner_pool == 12 and b.bedrock_pool == 24 and b.vault_pool == 6
+    assert b.scanner_pool == 12 and b.vault_pool == 6
+    assert b.workers == 12
+    assert b.bedrock_pool == 65536 // 12  # 5461, not asgi_threads=24
+    assert b.bedrock_pool > 32
     # CLI --value surfaces them for the entrypoint export.
     assert rb._VALUE_FIELDS["scanner_pool"](b) == 12
     assert rb._VALUE_FIELDS["vault_pool"](b) == 6
+    assert rb._VALUE_FIELDS["bedrock_pool"](b) == b.bedrock_pool
+
+
+def test_detector_bedrock_pool_tracks_inflight_not_asgi_threads(monkeypatch):
+    """Bedrock is network-I/O: pool follows FD budget / workers, not cpu*2 (8–32).
+
+    16 CPU / 32 GiB → 16 workers, asgi_threads still 32 (CPU-clamped). With a
+    65536 nofile, nofile_per_worker = 4096 → bedrock_pool must be 4096, not 32.
+    """
+    import resource as std_resource
+
+    monkeypatch.setattr(std_resource, "getrlimit", lambda _lim: (65536, 65536))
+    b = rb.compute_sizing(16.0, 32 * GIB)
+    assert b.workers == 16
+    assert b.asgi_threads == 32
+    assert b.scanner_pool == 16  # Tier-1 stays CPU-clamped
+    assert b.bedrock_pool > 32
+    assert b.bedrock_pool == 4096  # 65536 // 16
+
+
+def test_detector_bedrock_pool_fd_ceiling_not_thirty_two(monkeypatch):
+    """Unlimited/huge nofile is bounded by a high FD ceiling (~10000), not 32."""
+    import resource as std_resource
+
+    monkeypatch.setattr(std_resource, "getrlimit", lambda _lim: (10_000_000, 10_000_000))
+    b = rb.compute_sizing(16.0, 60 * GIB)
+    assert b.asgi_threads == 32
+    assert b.scanner_pool == 16
+    assert b.bedrock_pool > 32
+    assert b.bedrock_pool == 10000

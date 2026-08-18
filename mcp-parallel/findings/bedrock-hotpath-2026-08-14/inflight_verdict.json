@@ -1,0 +1,541 @@
+{
+  "captured_at_utc": "2026-08-14T11:33:19.469215+00:00",
+  "official_sources": {
+    "sla": "https://aimeshgateway.zeroshield.ai",
+    "saturation": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300"
+  },
+  "honesty": {
+    "host": "8 vCPU, 15Gi RAM (ip-172-31-9-177 ap-south-1)",
+    "gateway_cgroup": "4 CPU / 7Gi (NanoCpus=4000000000, Memory=7516192768)",
+    "unique_prompt": true,
+    "model": "auto",
+    "max_tokens": 16,
+    "timeout_s": 180,
+    "duration_s_sat": 20,
+    "note": "Official numbers from PROD unique-prompt only. This box is 8 vCPU 15Gi host / 4 CPU 7Gi gateway cgroup \u2014 20k in-flight may OOM; we did not reach that. Escalation stopped at 512 inflight because error_rate=1.0 (all HTTP 403 threat_intel_blocked), not because of OOM or unhealthy. Did not attempt 1024\u201316384.",
+    "publish_quoting": "Initial redis-cli PUBLISH via unquoted SSH list-args failed (brace expansion). SET of lifted/restored JSON succeeded. A properly quoted PUBLISH after restore returned 6 subscribers. Redis GET after restore matches snapshot.",
+    "rate_limits_snapshot": {
+      "rate_limit_enabled": true,
+      "burst_limit": 150,
+      "requests_per_minute": 1000,
+      "org_tpm_limit": 0,
+      "auth_rate_limit_tpm": 100000
+    },
+    "rate_limits_restored": {
+      "redis_cfg": {
+        "rate_limit_enabled": true,
+        "burst_limit": 150,
+        "requests_per_minute": 1000,
+        "org_tpm_limit": 0
+      },
+      "auth_rate_limit_tpm": 100000,
+      "auth_rpm_limit": null,
+      "publish_subscribers": 6,
+      "gateway_health": "healthy"
+    },
+    "ceiling_interpretation": {
+      "stop_inflight": 512,
+      "stop_reason": "error_rate=1.0, codes={403:18071}, signature=threat_intel_blocked; gateway stayed healthy; conn_error_frac=0",
+      "last_inflight_error_rate_le_0.25": 256,
+      "last_zero_error_inflight": 128,
+      "usable_ok_rps_peak": 24.6,
+      "not_an_http_connection_ceiling": true,
+      "not_an_oom_ceiling": true
+    }
+  },
+  "sla_https_if1": {
+    "inflight": 1,
+    "workers": 1,
+    "conn": 1,
+    "gateway": "https://aimeshgateway.zeroshield.ai",
+    "duration_s": 20.011,
+    "requests": 5,
+    "ok": 4,
+    "errors": 1,
+    "rps": 0.25,
+    "ok_rps": 0.2,
+    "error_rate": 0.2,
+    "codes": {
+      "200": 4,
+      "503": 1
+    },
+    "errors_by_signature": {
+      "HTTP 503 503 The inference provider is temporarily unavailable. Please try again.": 1
+    },
+    "p50_wall_ms": 4448.241,
+    "p99_wall_ms": 5245.788,
+    "p50_input_scan_ms": 1916.3,
+    "p50_routing_ms": 3.8,
+    "p50_model_output_ms": 2149.0,
+    "p50_output_guardrail_ms": 1054.0,
+    "p50_addon_ms": 2936.4,
+    "scan_only": 0,
+    "honesty": {
+      "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+      "stub_llm": "",
+      "full_nine_stages": true,
+      "unique_prompt": true
+    },
+    "docker": {
+      "gateway": {
+        "cpu_pct_max": 8.18,
+        "cpu_pct_mean": 2.94,
+        "mem_at_cpu_peak": "1.301GiB / 7GiB",
+        "mem_mib_max": 1332.2,
+        "pids_max": 45,
+        "n_samples": 4
+      },
+      "control": {
+        "cpu_pct_max": 0.74,
+        "cpu_pct_mean": 0.54,
+        "mem_at_cpu_peak": "1.087GiB / 2.5GiB",
+        "mem_mib_max": 1114.1,
+        "pids_max": 34,
+        "n_samples": 4
+      },
+      "redis": {
+        "cpu_pct_max": 0.71,
+        "cpu_pct_mean": 0.54,
+        "mem_at_cpu_peak": "18.44MiB / 1GiB",
+        "mem_mib_max": 19.0,
+        "pids_max": 7,
+        "n_samples": 4
+      },
+      "postgres": {
+        "cpu_pct_max": 0.06,
+        "cpu_pct_mean": 0.02,
+        "mem_at_cpu_peak": "132MiB / 2.5GiB",
+        "mem_mib_max": 132.0,
+        "pids_max": 11,
+        "n_samples": 4
+      },
+      "window_utc": [
+        "2026-08-14T11:28:32Z",
+        "2026-08-14T11:28:52Z"
+      ]
+    },
+    "health_after": "healthy"
+  },
+  "saturation": [
+    {
+      "inflight": 8,
+      "workers": 8,
+      "conn": 1,
+      "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+      "duration_s": 23.32,
+      "requests": 43,
+      "ok": 33,
+      "errors": 10,
+      "rps": 1.84,
+      "ok_rps": 1.42,
+      "error_rate": 0.2326,
+      "codes": {
+        "200": 33,
+        "503": 10
+      },
+      "errors_by_signature": {
+        "HTTP 503 503 The inference provider is temporarily unavailable. Please try again.": 10
+      },
+      "p50_wall_ms": 4049.353,
+      "p99_wall_ms": 7531.869,
+      "p50_input_scan_ms": 1686.6,
+      "p50_routing_ms": 4.1,
+      "p50_model_output_ms": 1070.7,
+      "p50_output_guardrail_ms": 1209.9,
+      "p50_addon_ms": 3042.8,
+      "scan_only": 0,
+      "honesty": {
+        "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+        "stub_llm": "",
+        "full_nine_stages": true,
+        "unique_prompt": true
+      },
+      "docker": {
+        "gateway": {
+          "cpu_pct_max": 30.91,
+          "cpu_pct_mean": 17.23,
+          "mem_at_cpu_peak": "1.405GiB / 7GiB",
+          "mem_mib_max": 1438.7,
+          "pids_max": 51,
+          "n_samples": 5
+        },
+        "control": {
+          "cpu_pct_max": 3.2,
+          "cpu_pct_mean": 1.42,
+          "mem_at_cpu_peak": "1.088GiB / 2.5GiB",
+          "mem_mib_max": 1115.1,
+          "pids_max": 34,
+          "n_samples": 5
+        },
+        "redis": {
+          "cpu_pct_max": 2.37,
+          "cpu_pct_mean": 1.52,
+          "mem_at_cpu_peak": "19.7MiB / 1GiB",
+          "mem_mib_max": 20.3,
+          "pids_max": 7,
+          "n_samples": 5
+        },
+        "postgres": {
+          "cpu_pct_max": 2.98,
+          "cpu_pct_mean": 0.88,
+          "mem_at_cpu_peak": "133.2MiB / 2.5GiB",
+          "mem_mib_max": 133.4,
+          "pids_max": 11,
+          "n_samples": 5
+        },
+        "window_utc": [
+          "2026-08-14T11:28:52Z",
+          "2026-08-14T11:29:16Z"
+        ]
+      },
+      "gateway_cpu_pct_max": 30.91,
+      "gateway_mem_at_cpu_peak": "1.405GiB / 7GiB",
+      "health_after": "healthy"
+    },
+    {
+      "inflight": 32,
+      "workers": 32,
+      "conn": 1,
+      "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+      "duration_s": 24.459,
+      "requests": 162,
+      "ok": 162,
+      "errors": 0,
+      "rps": 6.62,
+      "ok_rps": 6.62,
+      "error_rate": 0.0,
+      "codes": {
+        "200": 162
+      },
+      "errors_by_signature": {},
+      "p50_wall_ms": 4411.754,
+      "p99_wall_ms": 7433.767,
+      "p50_input_scan_ms": 1692.7,
+      "p50_routing_ms": 4.2,
+      "p50_model_output_ms": 1568.1,
+      "p50_output_guardrail_ms": 1123.4,
+      "p50_addon_ms": 2853.2,
+      "scan_only": 0,
+      "honesty": {
+        "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+        "stub_llm": "",
+        "full_nine_stages": true,
+        "unique_prompt": true
+      },
+      "docker": {
+        "gateway": {
+          "cpu_pct_max": 86.18,
+          "cpu_pct_mean": 47.85,
+          "mem_at_cpu_peak": "1.419GiB / 7GiB",
+          "mem_mib_max": 1455.1,
+          "pids_max": 66,
+          "n_samples": 6
+        },
+        "control": {
+          "cpu_pct_max": 14.46,
+          "cpu_pct_mean": 6.26,
+          "mem_at_cpu_peak": "1.086GiB / 2.5GiB",
+          "mem_mib_max": 1115.1,
+          "pids_max": 36,
+          "n_samples": 6
+        },
+        "redis": {
+          "cpu_pct_max": 5.37,
+          "cpu_pct_mean": 3.84,
+          "mem_at_cpu_peak": "21.91MiB / 1GiB",
+          "mem_mib_max": 24.6,
+          "pids_max": 7,
+          "n_samples": 6
+        },
+        "postgres": {
+          "cpu_pct_max": 4.01,
+          "cpu_pct_mean": 0.98,
+          "mem_at_cpu_peak": "137.2MiB / 2.5GiB",
+          "mem_mib_max": 138.4,
+          "pids_max": 11,
+          "n_samples": 6
+        },
+        "window_utc": [
+          "2026-08-14T11:29:16Z",
+          "2026-08-14T11:29:41Z"
+        ]
+      },
+      "gateway_cpu_pct_max": 86.18,
+      "gateway_mem_at_cpu_peak": "1.419GiB / 7GiB",
+      "health_after": "healthy"
+    },
+    {
+      "inflight": 128,
+      "workers": 32,
+      "conn": 4,
+      "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+      "duration_s": 25.7,
+      "requests": 628,
+      "ok": 628,
+      "errors": 0,
+      "rps": 24.44,
+      "ok_rps": 24.44,
+      "error_rate": 0.0,
+      "codes": {
+        "200": 628
+      },
+      "errors_by_signature": {},
+      "p50_wall_ms": 4237.413,
+      "p99_wall_ms": 8953.824,
+      "p50_input_scan_ms": 1569.6,
+      "p50_routing_ms": 8.2,
+      "p50_model_output_ms": 1407.5,
+      "p50_output_guardrail_ms": 1044.5,
+      "p50_addon_ms": 2732.7,
+      "scan_only": 0,
+      "honesty": {
+        "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+        "stub_llm": "",
+        "full_nine_stages": true,
+        "unique_prompt": true
+      },
+      "docker": {
+        "gateway": {
+          "cpu_pct_max": 361.75,
+          "cpu_pct_mean": 265.7,
+          "mem_at_cpu_peak": "1.474GiB / 7GiB",
+          "mem_mib_max": 1517.6,
+          "pids_max": 108,
+          "n_samples": 6
+        },
+        "control": {
+          "cpu_pct_max": 20.33,
+          "cpu_pct_mean": 12.11,
+          "mem_at_cpu_peak": "1.088GiB / 2.5GiB",
+          "mem_mib_max": 1115.1,
+          "pids_max": 37,
+          "n_samples": 6
+        },
+        "redis": {
+          "cpu_pct_max": 14.19,
+          "cpu_pct_mean": 10.8,
+          "mem_at_cpu_peak": "34.71MiB / 1GiB",
+          "mem_mib_max": 35.1,
+          "pids_max": 7,
+          "n_samples": 6
+        },
+        "postgres": {
+          "cpu_pct_max": 4.57,
+          "cpu_pct_mean": 1.62,
+          "mem_at_cpu_peak": "148.7MiB / 2.5GiB",
+          "mem_mib_max": 156.5,
+          "pids_max": 11,
+          "n_samples": 6
+        },
+        "window_utc": [
+          "2026-08-14T11:29:41Z",
+          "2026-08-14T11:30:07Z"
+        ]
+      },
+      "gateway_cpu_pct_max": 361.75,
+      "gateway_mem_at_cpu_peak": "1.474GiB / 7GiB",
+      "health_after": "healthy"
+    },
+    {
+      "inflight": 256,
+      "workers": 32,
+      "conn": 8,
+      "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+      "duration_s": 31.505,
+      "requests": 867,
+      "ok": 775,
+      "errors": 92,
+      "rps": 27.52,
+      "ok_rps": 24.6,
+      "error_rate": 0.1061,
+      "codes": {
+        "200": 775,
+        "422": 87,
+        "500": 3,
+        "503": 2
+      },
+      "errors_by_signature": {
+        "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 87,
+        "HTTP 500 gateway_internal_error An internal gateway error occurred.": 3,
+        "HTTP 503 503 The inference provider is temporarily unavailable. Please try again.": 2
+      },
+      "p50_wall_ms": 6700.916,
+      "p99_wall_ms": 12407.649,
+      "p50_input_scan_ms": 2615.7,
+      "p50_routing_ms": 121.6,
+      "p50_model_output_ms": 1551.6,
+      "p50_output_guardrail_ms": 1242.1,
+      "p50_addon_ms": 5138.2,
+      "scan_only": 0,
+      "honesty": {
+        "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+        "stub_llm": "",
+        "full_nine_stages": true,
+        "unique_prompt": true
+      },
+      "docker": {
+        "gateway": {
+          "cpu_pct_max": 390.5,
+          "cpu_pct_mean": 256.34,
+          "mem_at_cpu_peak": "1.56GiB / 7GiB",
+          "mem_mib_max": 1625.1,
+          "pids_max": 129,
+          "n_samples": 8
+        },
+        "control": {
+          "cpu_pct_max": 33.25,
+          "cpu_pct_mean": 13.7,
+          "mem_at_cpu_peak": "1.099GiB / 2.5GiB",
+          "mem_mib_max": 1125.4,
+          "pids_max": 42,
+          "n_samples": 8
+        },
+        "redis": {
+          "cpu_pct_max": 18.04,
+          "cpu_pct_mean": 10.83,
+          "mem_at_cpu_peak": "33.74MiB / 1GiB",
+          "mem_mib_max": 39.5,
+          "pids_max": 7,
+          "n_samples": 8
+        },
+        "postgres": {
+          "cpu_pct_max": 7.11,
+          "cpu_pct_mean": 2.85,
+          "mem_at_cpu_peak": "165.5MiB / 2.5GiB",
+          "mem_mib_max": 167.7,
+          "pids_max": 11,
+          "n_samples": 8
+        },
+        "window_utc": [
+          "2026-08-14T11:30:07Z",
+          "2026-08-14T11:30:39Z"
+        ]
+      },
+      "gateway_cpu_pct_max": 390.5,
+      "gateway_mem_at_cpu_peak": "1.56GiB / 7GiB",
+      "health_after": "healthy"
+    },
+    {
+      "inflight": 512,
+      "workers": 32,
+      "conn": 16,
+      "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+      "duration_s": 20.357,
+      "requests": 18071,
+      "ok": 0,
+      "errors": 18071,
+      "rps": 887.72,
+      "ok_rps": 0.0,
+      "error_rate": 1.0,
+      "codes": {
+        "403": 18071
+      },
+      "errors_by_signature": {
+        "HTTP 403 threat_intel_blocked Request blocked due to security policy": 18071
+      },
+      "p50_wall_ms": 506.495,
+      "p99_wall_ms": 806.695,
+      "p50_input_scan_ms": 0.0,
+      "p50_routing_ms": 0.0,
+      "p50_model_output_ms": 0.0,
+      "p50_output_guardrail_ms": 0.0,
+      "p50_addon_ms": 157.7,
+      "scan_only": 0,
+      "honesty": {
+        "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+        "stub_llm": "",
+        "full_nine_stages": true,
+        "unique_prompt": true
+      },
+      "docker": {
+        "gateway": {
+          "cpu_pct_max": 385.35,
+          "cpu_pct_mean": 307.2,
+          "mem_at_cpu_peak": "1.621GiB / 7GiB",
+          "mem_mib_max": 1670.1,
+          "pids_max": 129,
+          "n_samples": 5
+        },
+        "control": {
+          "cpu_pct_max": 73.36,
+          "cpu_pct_mean": 53.62,
+          "mem_at_cpu_peak": "1.139GiB / 2.5GiB",
+          "mem_mib_max": 1168.4,
+          "pids_max": 43,
+          "n_samples": 5
+        },
+        "redis": {
+          "cpu_pct_max": 16.59,
+          "cpu_pct_mean": 13.09,
+          "mem_at_cpu_peak": "45.95MiB / 1GiB",
+          "mem_mib_max": 47.9,
+          "pids_max": 7,
+          "n_samples": 5
+        },
+        "postgres": {
+          "cpu_pct_max": 22.58,
+          "cpu_pct_mean": 21.57,
+          "mem_at_cpu_peak": "202.4MiB / 2.5GiB",
+          "mem_mib_max": 262.6,
+          "pids_max": 11,
+          "n_samples": 5
+        },
+        "window_utc": [
+          "2026-08-14T11:30:39Z",
+          "2026-08-14T11:31:00Z"
+        ]
+      },
+      "gateway_cpu_pct_max": 385.35,
+      "gateway_mem_at_cpu_peak": "1.621GiB / 7GiB",
+      "health_after": "healthy"
+    }
+  ],
+  "ceiling_inflight": 512,
+  "last_good_inflight_error_rate_le_0.25": 256,
+  "docker_stats_peaks_overall": {
+    "gateway": {
+      "cpu_pct_max": 390.5,
+      "cpu_pct_mean": 99.52,
+      "mem_at_cpu_peak": "1.56GiB / 7GiB",
+      "mem_mib_max": 1670.1,
+      "pids_max": 129,
+      "n_samples": 53
+    },
+    "control": {
+      "cpu_pct_max": 73.36,
+      "cpu_pct_mean": 9.86,
+      "mem_at_cpu_peak": "1.139GiB / 2.5GiB",
+      "mem_mib_max": 1168.4,
+      "pids_max": 43,
+      "n_samples": 53
+    },
+    "redis": {
+      "cpu_pct_max": 18.04,
+      "cpu_pct_mean": 4.95,
+      "mem_at_cpu_peak": "33.74MiB / 1GiB",
+      "mem_mib_max": 47.9,
+      "pids_max": 7,
+      "n_samples": 53
+    },
+    "postgres": {
+      "cpu_pct_max": 22.58,
+      "cpu_pct_mean": 3.0,
+      "mem_at_cpu_peak": "202.4MiB / 2.5GiB",
+      "mem_mib_max": 262.6,
+      "pids_max": 11,
+      "n_samples": 53
+    },
+    "first_ts": "2026-08-14T11:28:09Z",
+    "last_ts": "2026-08-14T11:32:03Z",
+    "n_samples": 53
+  },
+  "gateway_cpu_pct_max": 390.5,
+  "gateway_mem_at_cpu_peak": "1.56GiB / 7GiB",
+  "levels_not_run": [
+    1024,
+    2048,
+    4096,
+    8192,
+    16384
+  ]
+}

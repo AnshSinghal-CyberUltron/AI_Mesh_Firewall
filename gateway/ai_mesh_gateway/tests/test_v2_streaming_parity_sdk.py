@@ -383,7 +383,7 @@ async def _build(monkeypatch, *, config=None, policy=None, allowed_models=None,
         real._config = {"litellm_default_model": ""}
         real._active_model_names = [m["model_name"] for m in models]
         real._qualified_model_names = set(real._active_model_names)
-        lr.adjudicate_model_selection = real.adjudicate_model_selection
+        lr.select_model = real.select_model
         lr.resolve_runtime_selection = real.resolve_runtime_selection
 
     # ── the two transports, sharing one capture + one output text ──

@@ -1,0 +1,17 @@
+RECREATE mode=stub_aws WEB=16 STUB=1 T2=true SAMPLE=1.0 ADJ=true OG=true CB=false
+Nano=0 Mem=12884901888
+ENABLE_TIER2=true
+GATEWAY_CIRCUIT_BREAKER_ENABLED=false
+GATEWAY_LOADTEST_STUB_LLM=1
+GATEWAY_OUTPUT_GUARD_ENABLED=true
+GATEWAY_TIER2_SAMPLE_RATE=1.0
+ROUTING_ADJUDICATOR_ALWAYS=true
+WEB_CONCURRENCY=16
+---stderr---
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+ Container ai_mesh_firewall-gateway-1  Recreate
+ Container ai_mesh_firewall-gateway-1  Recreated
+ Container ai_mesh_firewall-gateway-1  Starting
+ Container ai_mesh_firewall-gateway-1  Started

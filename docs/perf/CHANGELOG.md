@@ -7,6 +7,20 @@ Infra Changes), `.cursor/rules/shared-infra-changelog.mdc`, and Ruflo memory
 
 ---
 
+## PERF-0014 — Full-VM parallel local + ECR builds (Makefile / buildx)
+- **Date:** 2026-08-12
+- **Files:** `Makefile`, `infra/scripts/vm-capacity.sh` (new), `infra/scripts/build-push-images.sh`
+  (parallel buildx), `scripts/build-prod-images-local.sh` (parallel), `infra/scripts/build-frontend-prod.sh`.
+- **Why:** ECR/local image builds were sequential `docker build` and under-used the 16-core /
+  ~60GiB / high-IOPS build VM. Mirror DevSecShield parallel ECR pattern for AI Mesh.
+- **What:** Export `NPROC`/`BUILDKIT_MAX_PARALLELISM`/`COMPOSE_PARALLEL_LIMIT`/`GOMAXPROCS` from
+  Makefile; `aim-fast` buildx builder (docker-container + network=host); 7 images build+push in
+  parallel (gateway/control/workers/nginx/demo/mcp-broker/mcp-sandbox); local prod image script
+  same pattern; frontend npm uses `npm_config_jobs` + larger Node heap. Platform remains
+  `linux/arm64` (prod EC2 c8g). `make capacity` / `make build` / `make ecr-push TAG=…`.
+- **AFFECTS:** build tooling only (no runtime image behavior change). ACTION: `make ecr-push
+  TAG=latest && make sync-ec2-deploy` (or `make deploy-full-ec2 TAG=latest`).
+
 ## PERF-0013 — ModuleKpisView (module-kpis) type-safe metadata extraction + deploy
 - **Date:** 2026-07-03
 - **Files:** `control/ai_mesh_control/policy/security_views.py` (ModuleKpisView).

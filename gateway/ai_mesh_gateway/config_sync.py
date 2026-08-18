@@ -14,6 +14,7 @@ Lifecycle:
 import asyncio
 import json
 import logging
+import sys
 from typing import Any, Optional
 
 import redis.asyncio as aioredis
@@ -221,6 +222,9 @@ class ConfigSync:
         self._fallback_chains_by_org: dict[str, dict[str, Any]] = {}
         self._subscriber_task: Optional[asyncio.Task] = None
         self._running: bool = False
+        # Long-lived Redis for hot-path reload_models_now (no from_url per chat).
+        self._redis: Optional[aioredis.Redis] = None
+        self._reload_locks: dict[str, asyncio.Lock] = {}
 
     def get_config(self, org_slug: str = "") -> dict[str, Any]:
         """Return org-specific config, falling back to default then global CONFIG."""
@@ -245,11 +249,18 @@ class ConfigSync:
             return self._config_by_org[org_slug]
         return None
 
+    @staticmethod
+    def _copy_routing_entries(entries: list) -> list[dict]:
+        """Shallow-copy the routing list (and dict items) so callers cannot mutate store."""
+        return [dict(x) if isinstance(x, dict) else x for x in entries]
+
     def get_model_routing(self, org_slug: str = "") -> list[dict]:
-        """Return org-specific model routing metadata."""
+        """Return org-specific model routing metadata (a copy; store is last-good)."""
         if org_slug and org_slug in self._model_routing_by_org:
-            return self._model_routing_by_org[org_slug]
-        return self._model_routing_by_org.get("default", [])
+            src = self._model_routing_by_org[org_slug]
+        else:
+            src = self._model_routing_by_org.get("default", [])
+        return self._copy_routing_entries(src)
 
     def get_fallback_chains(self, org_slug: str = "") -> dict[str, Any]:
         """Return precomputed compliant fallback chains for an org."""
@@ -326,21 +337,66 @@ class ConfigSync:
         if org_slug is not _UNSET and not org_slug:
             return
         effective_org = "" if org_slug is _UNSET else org_slug
-        client = None
-        try:
-            client = aioredis.Redis.from_url(
-                self._redis_url,
-                decode_responses=True,
-                socket_timeout=3.0,
-                socket_connect_timeout=2.0,
-            )
-            await self._reload_llm_models(client, org_slug=effective_org)
-        finally:
-            if client is not None:
-                try:
-                    await client.aclose()
-                except Exception:
-                    pass
+        lock = self._reload_lock_for(str(effective_org or ""))
+        async with lock:
+            try:
+                client = self._get_redis_client()
+                await self._reload_llm_models(client, org_slug=effective_org)
+            except Exception:
+                # GET / connect timeout must keep last-good catalog (do not write []).
+                LOG.warning(
+                    "reload_models_now failed for org=%s; keeping last-good catalog",
+                    effective_org or "*",
+                    exc_info=True,
+                )
+
+    def _reload_lock_for(self, org_key: str) -> asyncio.Lock:
+        lock = self._reload_locks.get(org_key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._reload_locks[org_key] = lock
+        return lock
+
+    def _get_redis_client(self) -> aioredis.Redis:
+        """Reuse a long-lived client. Never from_url per chat."""
+        if self._redis is not None:
+            return self._redis
+        shared = self._shared_gateway_redis()
+        if shared is not None:
+            self._redis = shared
+            return self._redis
+        self._redis = aioredis.Redis.from_url(
+            self._redis_url,
+            decode_responses=True,
+            socket_timeout=3.0,
+            socket_connect_timeout=2.0,
+        )
+        return self._redis
+
+    @staticmethod
+    def _shared_gateway_redis() -> Optional[aioredis.Redis]:
+        # Reuse the process client only when main is already imported (no cycle).
+        gateway_main = sys.modules.get("ai_mesh_gateway.main")
+        if gateway_main is None:
+            return None
+        return getattr(gateway_main, "REDIS_CLIENT", None) or None
+
+    @staticmethod
+    def _merge_org_into_router(llm_router: Any, slug: str, org_models: list) -> list:
+        """Keep other orgs' LiteLLM deployments; replace this org's.
+
+        Per-org ``reload_models_now(org_slug=…)`` must not rebuild the router
+        from only that tenant's models (that dropped every other org → 422
+        ``no_provider_configured`` under concurrent chat).
+        """
+        existing: list = []
+        inner = getattr(llm_router, "_router", None)
+        model_list = getattr(inner, "model_list", None) if inner is not None else None
+        if isinstance(model_list, list):
+            for entry in model_list:
+                if isinstance(entry, dict) and entry.get("_zs_org") != slug:
+                    existing.append(dict(entry))
+        return existing + list(org_models)
 
     async def _load_initial(self) -> None:
         """
@@ -614,7 +670,17 @@ class ConfigSync:
                         # Malformed routing section — keep last-good routing.
                         pass
                     else:
-                        self._model_routing_by_org[slug] = normalized.get("routing", [])
+                        incoming_routing = normalized.get("routing") or []
+                        last_good = self._model_routing_by_org.get(slug)
+                        if not incoming_routing and last_good:
+                            # Models-only / empty routing must not clobber last-good.
+                            LOG.warning(
+                                "Empty routing in '%s'; keeping last-good catalog (%d entries)",
+                                key,
+                                len(last_good),
+                            )
+                        else:
+                            self._model_routing_by_org[slug] = incoming_routing
                     if "fallback_chains" in normalized:
                         self._fallback_chains_by_org[slug] = normalized["fallback_chains"]
                 # H7: tag each deployment with its OWNING org so the router can
@@ -634,8 +700,13 @@ class ConfigSync:
             from ai_mesh_gateway import main as gateway_main
 
             if gateway_main.LLM_ROUTER is not None:
-                gateway_main.LLM_ROUTER.reload_models(all_models)
-                LOG.info("LLM model configs reloaded from Redis (%d models)", len(all_models))
+                to_load = all_models
+                if org_slug:
+                    to_load = self._merge_org_into_router(
+                        gateway_main.LLM_ROUTER, str(org_slug), all_models
+                    )
+                gateway_main.LLM_ROUTER.reload_models(to_load)
+                LOG.info("LLM model configs reloaded from Redis (%d models)", len(to_load))
             else:
                 LOG.warning("LLM_ROUTER not initialized; skipping model reload")
         except Exception:

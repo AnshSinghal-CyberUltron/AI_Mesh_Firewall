@@ -1,0 +1,145 @@
+===== HOST BASELINE 2026-08-14T12:46:53+00:00 =====
+8
+cpu  73626951 763 21435158 4944245343 1542338 0 1838315 0 0 0
+cpu0 8646036 81 2690828 618441546 108090 0 216189 0 0 0
+cpu1 8934734 83 2681185 618209123 157497 0 243698 0 0 0
+ai_mesh_firewall-gateway-1 1.89% 4.226GiB / 12GiB 402
+ai_mesh_firewall-nginx-1 0.04% 227MiB / 256MiB 9
+ai_mesh_firewall-control-1 0.46% 589.6MiB / 2.5GiB 43
+ai_mesh_firewall-postgres-1 0.05% 459MiB / 2.5GiB 11
+ai_mesh_firewall-redis-1 0.62% 54.7MiB / 1GiB 7
+
+===== START ab -k -n 200000 -c 400 2026-08-14T12:46:56+00:00 =====
+during_start ai_mesh_firewall-gateway-1 cpu=1.81% mem=4.226GiB / 12GiB
+ab_exit=0
+This is ApacheBench, Version 2.3 <$Revision: 1923142 $>
+Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+Licensed to The Apache Software Foundation, http://www.apache.org/
+
+Benchmarking 127.0.0.1 (be patient)
+Completed 20000 requests
+Completed 40000 requests
+Completed 60000 requests
+Completed 80000 requests
+Completed 100000 requests
+Completed 120000 requests
+Completed 140000 requests
+Completed 160000 requests
+Completed 180000 requests
+Completed 200000 requests
+Finished 200000 requests
+
+
+Server Software:        uvicorn
+Server Hostname:        127.0.0.1
+Server Port:            8300
+
+Document Path:          /health
+Document Length:        355 bytes
+
+Concurrency Level:      400
+Time taken for tests:   46.388 seconds
+Complete requests:      200000
+Failed requests:        0
+Keep-Alive requests:    0
+Total transferred:      102400000 bytes
+HTML transferred:       71000000 bytes
+Requests per second:    4311.50 [#/sec] (mean)
+Time per request:       92.775 [ms] (mean)
+Time per request:       0.232 [ms] (mean, across all concurrent requests)
+Transfer rate:          2155.75 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0    0   0.8      0      15
+Processing:     3   92  66.4     83     885
+Waiting:        1   70  54.9     62     832
+Total:          3   93  66.5     84     885
+
+Percentage of the requests served within a certain time (ms)
+  50%     84
+  66%     99
+  75%    109
+  80%    115
+  90%    135
+  95%    165
+  98%    250
+  99%    459
+ 100%    885 (longest request)
+===== END ab c400 2026-08-14T12:47:44+00:00 =====
+after ai_mesh_firewall-gateway-1 cpu=148.47% mem=4.226GiB / 12GiB
+
+===== START ab -k -n 400000 -c 1000 2026-08-14T12:47:46+00:00 =====
+during_start ai_mesh_firewall-gateway-1 cpu=1.92% mem=4.227GiB / 12GiB
+ab_exit=124
+This is ApacheBench, Version 2.3 <$Revision: 1923142 $>
+Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+Licensed to The Apache Software Foundation, http://www.apache.org/
+
+Benchmarking 127.0.0.1 (be patient)
+Completed 40000 requests
+Completed 80000 requests
+Completed 120000 requests
+Completed 160000 requests
+Completed 200000 requests
+Completed 240000 requests
+===== END ab c1000 2026-08-14T12:48:48+00:00 =====
+after ai_mesh_firewall-gateway-1 cpu=87.12% mem=4.226GiB / 12GiB
+
+===== START ab -k -n 500000 -c 2000 2026-08-14T12:48:49+00:00 =====
+during_start ai_mesh_firewall-gateway-1 cpu=5.91% mem=4.237GiB / 12GiB
+ab_exit=124
+This is ApacheBench, Version 2.3 <$Revision: 1923142 $>
+Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+Licensed to The Apache Software Foundation, http://www.apache.org/
+
+Benchmarking 127.0.0.1 (be patient)
+Completed 50000 requests
+Completed 100000 requests
+Completed 150000 requests
+Completed 200000 requests
+Completed 250000 requests
+===== END ab c2000 2026-08-14T12:49:51+00:00 =====
+after ai_mesh_firewall-gateway-1 cpu=297.09% mem=4.226GiB / 12GiB
+
+DONE localhost health 2026-08-14T12:49:53+00:00
+
+===== asyncio keepalive host client =====
+[
+  {
+    "nconn": 200,
+    "duration_s": 12.092,
+    "ok": 81175,
+    "err": 0,
+    "exc": 0,
+    "eof": 0,
+    "connect_err": 0,
+    "ok_rps": 6713.23,
+    "error_rate": 0.0,
+    "other": {}
+  },
+  {
+    "nconn": 400,
+    "duration_s": 12.167,
+    "ok": 76867,
+    "err": 0,
+    "exc": 0,
+    "eof": 0,
+    "connect_err": 0,
+    "ok_rps": 6317.49,
+    "error_rate": 0.0,
+    "other": {}
+  },
+  {
+    "nconn": 800,
+    "duration_s": 12.244,
+    "ok": 70481,
+    "err": 0,
+    "exc": 0,
+    "eof": 0,
+    "connect_err": 0,
+    "ok_rps": 5756.58,
+    "error_rate": 0.0,
+    "other": {}
+  }
+]

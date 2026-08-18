@@ -70,7 +70,9 @@ bash scripts/publish-stack-ready-metric.sh 0 || true
 # control signs compiled policy bundles with POLICY_SIGNING_KEY and the gateway
 # verifies them (docker-compose.yml passes it to control/gateway/workers).
 [[ -n "${POLICY_SIGNING_KEY:-}" ]] || die "set POLICY_SIGNING_KEY in .env (required by control + gateway for policy bundle signing)"
-
+# gateway ↔ mcp-broker shared secret (prod compose defaults empty — unset breaks all sandbox MCP)
+[[ -n "${MCP_BROKER_INTERNAL_KEY:-}" ]] || die "set MCP_BROKER_INTERNAL_KEY in .env (required by gateway + mcp-broker for sandbox MCP)"
+[[ "${MCP_BROKER_INTERNAL_KEY}" != "CHANGE_ME_HEX_32" ]] || die "replace MCP_BROKER_INTERNAL_KEY placeholder in .env with a real secret (openssl rand -hex 32)"
 export FRONTEND_HOST="${FRONTEND_HOST:-aimeshfirewall.zeroshield.ai}"
 export BACKEND_HOST="${BACKEND_HOST:-aimeshbackend.zeroshield.ai}"
 export GATEWAY_HOST="${GATEWAY_HOST:-aimeshgateway.zeroshield.ai}"
@@ -179,7 +181,7 @@ done
 
 CONTROL_MANAGE_PY="/app/control/manage.py"
 
-echo "==> Control + migrations (via DATABASE_URL_DIRECT — not PgBouncer)"
+echo "==> Control + migrations (via PgBouncer only — DATABASE_URL)"
 "${COMPOSE[@]}" up -d --no-build control
 for _ in $(seq 1 45); do
   curl -sf "http://127.0.0.1:8100/api/health/" >/dev/null 2>&1 && break
@@ -187,9 +189,9 @@ for _ in $(seq 1 45); do
 done
 curl -sf "http://127.0.0.1:8100/api/health/" >/dev/null 2>&1 \
   || die "control not healthy on :8100 — check: ${COMPOSE[*]} logs control --tail=80"
-# Transaction-mode PgBouncer cannot run migrations; prefer the direct DSN.
+# Strict: never dial postgres:5432 from apps/migrations — only pgbouncer:6432.
 "${COMPOSE[@]}" exec -T control sh -c \
-  'DATABASE_URL="${DATABASE_URL_DIRECT:-$DATABASE_URL}" python "'"${CONTROL_MANAGE_PY}"'" migrate --noinput'
+  'unset DATABASE_URL_DIRECT; python "'"${CONTROL_MANAGE_PY}"'" migrate --noinput'
 
 if [[ "${SKIP_ADMIN:-}" != "1" ]]; then
   "${COMPOSE[@]}" exec -T control python "${CONTROL_MANAGE_PY}" ensure_zeroshield_admin \
@@ -239,16 +241,25 @@ _check_v1_proxy() {
     -H "Host: ${FH}" \
     -H "Content-Type: application/json" \
     -d '{"model":"auto","messages":[{"role":"user","content":"ping"}]}' || echo "000")"
-  [[ "${code}" != "405" && "${code}" != "000" ]] || die "nginx ${scheme} /v1/ still serves SPA (POST returned ${code})"
+  [[ "${code}" != "405" && "${code}" != "000" && "${code}" != "403" && "${code}" != "301" ]] \
+    || die "nginx ${scheme} /v1/ still serves SPA or blocked cleartext (POST returned ${code})"
 }
 
-curl -sf -H "Host: ${FH}" "http://127.0.0.1/" -o /dev/null || die "nginx UI vhost failed (is port 80 published?)"
-curl -sf -H "Host: ${FH}" "http://127.0.0.1/gw-health" || die "nginx UI → gateway health proxy failed"
-_check_v1_proxy http 80
-curl -sf -H "Host: ${BH}" "http://127.0.0.1/api/health/" || die "nginx backend vhost failed"
-curl -sf -H "Host: ${GH}" "http://127.0.0.1/health" || die "nginx gateway vhost failed"
+# Origin :80 named vhosts reject internet cleartext (CWE-319). Loopback is a
+# trusted hop but still needs X-Forwarded-Proto: https to match ALB TLS
+# termination. Without it GET 301s and POST 403s.
+PROTO_HDR="X-Forwarded-Proto: https"
+curl -sf -H "Host: ${FH}" -H "${PROTO_HDR}" "http://127.0.0.1/" -o /dev/null \
+  || die "nginx UI vhost failed (is port 80 published?)"
+curl -sf -H "Host: ${FH}" -H "${PROTO_HDR}" "http://127.0.0.1/gw-health" \
+  || die "nginx UI → gateway health proxy failed"
+_check_v1_proxy http 80 -H "${PROTO_HDR}"
+curl -sf -H "Host: ${BH}" -H "${PROTO_HDR}" "http://127.0.0.1/api/health/" \
+  || die "nginx backend vhost failed"
+curl -sf -H "Host: ${GH}" -H "${PROTO_HDR}" "http://127.0.0.1/health" \
+  || die "nginx gateway vhost failed"
 
-if curl -sfk -o /dev/null "https://127.0.0.1/gw-health" 2>/dev/null; then
+if curl -sfk -o /dev/null -H "Host: ${FH}" "https://127.0.0.1/gw-health" 2>/dev/null; then
   curl -sfk -H "Host: ${FH}" "https://127.0.0.1/gw-health" || die "nginx HTTPS UI → gateway health proxy failed"
   _check_v1_proxy https 443 -k
 fi

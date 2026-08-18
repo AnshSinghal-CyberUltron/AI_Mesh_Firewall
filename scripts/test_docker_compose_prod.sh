@@ -173,6 +173,7 @@ for host in aimeshfirewall.zeroshield.ai aimeshbackend.zeroshield.ai aimeshgatew
 done
 grep -q 'location /demo/' deploy/nginx.conf || die "deploy/nginx.conf missing /demo/"
 grep -q 'location /demo/' deploy/nginx-ssl.conf || die "deploy/nginx-ssl.conf missing /demo/"
+SKIP_NGINX_DOCKER=1 bash "${ROOT}/scripts/test_nginx_security.sh" || die "test_nginx_security.sh"
 pass "deploy/nginx.conf + nginx-ssl.conf have hosts and /demo/"
 
 echo "==> Base service inventory covered by prod overlay or explicit profile"

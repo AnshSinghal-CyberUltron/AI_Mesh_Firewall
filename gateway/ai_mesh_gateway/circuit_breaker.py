@@ -93,12 +93,15 @@ class CircuitBreaker:
         min_requests: int = DEFAULT_MIN_REQUESTS,
         cooldown_seconds: int = DEFAULT_COOLDOWN_SECONDS,
         probe_success_count: int = DEFAULT_PROBE_SUCCESS_COUNT,
+        fallback_resolver=None,
     ):
         self._redis = redis_client
         self._error_threshold = error_threshold
         self._min_requests = min_requests
         self._cooldown_seconds = cooldown_seconds
         self._probe_success_count = probe_success_count
+        # Optional ``(org_slug, model) -> str`` (sync or async) for org fallback chains.
+        self._fallback_resolver = fallback_resolver
 
     # ── Key helpers ───────────────────────────────────────────────────
 
@@ -138,14 +141,60 @@ class CircuitBreaker:
 
     # ── Kill-switch mirroring ─────────────────────────────────────────
 
+    async def _resolve_trip_fallback(self, org_slug: str, model: str) -> str:
+        """Pick a silent-reroute target for CB OPEN, or "" to fail-closed disable.
+
+        Order: ModelState.fallback_model in Redis → optional fallback_resolver.
+        """
+        slug = (org_slug or "default").strip() or "default"
+        state_key = f"model_state:{slug}:{model}"
+        try:
+            raw = await self._redis.get(state_key)
+            if raw:
+                payload = json.loads(raw if isinstance(raw, str) else raw.decode())
+                fb = str(payload.get("fallback_model") or "").strip()
+                if fb and fb != model:
+                    return fb
+        except Exception as exc:  # noqa: BLE001 — never break trip path
+            LOG.debug("CB fallback model_state read failed: %s", exc)
+
+        resolver = self._fallback_resolver
+        if resolver is not None:
+            try:
+                result = resolver(slug, model)
+                if hasattr(result, "__await__"):
+                    result = await result
+                fb = str(result or "").strip()
+                if fb and fb != model:
+                    return fb
+            except Exception as exc:  # noqa: BLE001
+                LOG.debug("CB fallback_resolver failed: %s", exc)
+        return ""
+
     async def _activate_kill_switch_trip(self, org_slug: str, model: str) -> None:
-        """Mirror circuit OPEN to org-scoped kill_switch Redis key with TTL."""
+        """Mirror circuit OPEN to org-scoped kill_switch Redis key with TTL.
+
+        When a validated fallback exists, write ``action=reroute`` so the
+        request-path kill-switch gate silently shifts traffic (no client 503).
+        Otherwise write ``action=disable`` (fail-closed interrupt).
+        """
         key = self._kill_switch_key(org_slug, model)
+        fallback = await self._resolve_trip_fallback(org_slug, model)
+        if fallback:
+            action = "reroute"
+            LOG.warning(
+                "Circuit breaker OPEN for '%s' → silent reroute to '%s'",
+                model,
+                fallback,
+            )
+        else:
+            action = "disable"
+            fallback = ""
         payload = json.dumps(
             {
                 "is_active": True,
-                "action": "disable",
-                "fallback_model": "",
+                "action": action,
+                "fallback_model": fallback,
                 "reason": "circuit_breaker_open",
                 "org_slug": (org_slug or "default").strip() or "default",
                 "trigger_source": "circuit_breaker",
@@ -161,8 +210,10 @@ class CircuitBreaker:
         ttl = self._ttl()
         await self._redis.set(key, payload, ex=ttl)
         LOG.warning(
-            "Circuit breaker tripped kill-switch key %s (ttl=%ds)",
+            "Circuit breaker tripped kill-switch key %s action=%s fallback=%r (ttl=%ds)",
             key,
+            action,
+            fallback,
             ttl,
         )
 

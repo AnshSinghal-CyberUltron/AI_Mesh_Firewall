@@ -1,0 +1,161 @@
+{
+  "mode": "chat",
+  "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+  "workers": 32,
+  "conn": 128,
+  "inflight": 4096,
+  "duration_s": 71.901,
+  "requests": 4284,
+  "ok": 1007,
+  "errors": 3277,
+  "error_rate": 0.7649,
+  "rps": 59.58,
+  "ok_rps": 14.01,
+  "scan_only": 0,
+  "codes": {
+    "503": 2347,
+    "422": 703,
+    "200": 1007,
+    "400": 16,
+    "0": 211
+  },
+  "errors_by_signature": {
+    "HTTP 503 tier2_unavailable Security scanner is temporarily unavailable; please retry shortly.": 2305,
+    "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 703,
+    "EXC:ConnectTimeout": 140,
+    "EXC:RemoteProtocolError": 68,
+    "HTTP 503 kill_switch_active Model 'Haiku' is currently disabled.": 42,
+    "HTTP 400 content_filter Request blocked due to security policy": 16,
+    "EXC:ReadError": 3
+  },
+  "client_latency_ms": {
+    "n": 4284,
+    "mean": 38017.052,
+    "p50": 39554.658,
+    "p90": 56983.643,
+    "p95": 58225.718,
+    "p99": 58620.402,
+    "max": 71596.118
+  },
+  "addon_latency_ms": {
+    "n": 1023,
+    "mean": 16803.252,
+    "p50": 16766.8,
+    "p90": 21743.3,
+    "p95": 23536.5,
+    "p99": 26056.1,
+    "max": 33732.3
+  },
+  "stage_latency_ms": {
+    "auth": {
+      "n": 1023,
+      "mean": 2576.3,
+      "p50": 2895.0,
+      "p90": 4063.9,
+      "p95": 5068.6,
+      "p99": 6494.6,
+      "max": 7925.8
+    },
+    "rate_limit": {
+      "n": 1023,
+      "mean": 646.95,
+      "p50": 486.7,
+      "p90": 1032.3,
+      "p95": 1510.6,
+      "p99": 3927.0,
+      "max": 8080.2
+    },
+    "policy": {
+      "n": 1023,
+      "mean": 780.623,
+      "p50": 698.3,
+      "p90": 1387.7,
+      "p95": 1655.4,
+      "p99": 2212.1,
+      "max": 2511.1
+    },
+    "input_scan": {
+      "n": 1023,
+      "mean": 6037.931,
+      "p50": 4953.0,
+      "p90": 10074.5,
+      "p95": 12278.4,
+      "p99": 15933.0,
+      "max": 23028.5
+    },
+    "kill_switch": {
+      "n": 1023,
+      "mean": 730.257,
+      "p50": 703.0,
+      "p90": 1239.6,
+      "p95": 1579.0,
+      "p99": 2149.3,
+      "max": 2660.1
+    },
+    "model_routing": {
+      "n": 1023,
+      "mean": 2594.029,
+      "p50": 2394.4,
+      "p90": 4129.6,
+      "p95": 4840.9,
+      "p99": 6851.7,
+      "max": 8312.2
+    },
+    "model_input": {
+      "n": 1023,
+      "mean": 0.002,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 2.1
+    },
+    "model_output": {
+      "n": 1023,
+      "mean": 2222.749,
+      "p50": 1984.6,
+      "p90": 2656.6,
+      "p95": 3022.8,
+      "p99": 11009.2,
+      "max": 21927.9
+    },
+    "output_guardrail": {
+      "n": 1023,
+      "mean": 1790.145,
+      "p50": 1879.0,
+      "p90": 3303.4,
+      "p95": 3712.7,
+      "p99": 4710.9,
+      "max": 6877.1
+    },
+    "total": {
+      "n": 1023,
+      "mean": 19026.001,
+      "p50": 19029.2,
+      "p90": 24544.2,
+      "p95": 26140.6,
+      "p99": 28661.1,
+      "max": 37311.4
+    },
+    "addon": {
+      "n": 1023,
+      "mean": 16803.252,
+      "p50": 16766.8,
+      "p90": 21743.3,
+      "p95": 23536.5,
+      "p99": 26056.1,
+      "max": 33732.3
+    }
+  },
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": "",
+    "full_nine_stages": true,
+    "unique_prompt": true
+  },
+  "_label": "chat_if4096",
+  "_inflight": 4096,
+  "_wall_orchestrated": 72.07,
+  "_docker_before": "2026-08-14T12:39:23Z\nai_mesh_firewall-gateway-1|1.76%|4.155GiB / 12GiB|402\nai_mesh_firewall-nginx-1|0.01%|226.9MiB / 256MiB|9\nai_mesh_firewall-control-1|0.49%|604.9MiB / 2.5GiB|43\nai_mesh_firewall-postgres-1|0.01%|303.4MiB / 2.5GiB|11\nai_mesh_firewall-redis-1|0.65%|289.1MiB / 1GiB|7",
+  "_docker_after": "2026-08-14T12:40:37Z\nai_mesh_firewall-gateway-1|2.76%|4.188GiB / 12GiB|402\nai_mesh_firewall-nginx-1|0.04%|226.4MiB / 256MiB|9\nai_mesh_firewall-control-1|8.24%|605.4MiB / 2.5GiB|43\nai_mesh_firewall-postgres-1|6.66%|318.9MiB / 2.5GiB|11\nai_mesh_firewall-redis-1|1.71%|402.4MiB / 1GiB|7"
+}

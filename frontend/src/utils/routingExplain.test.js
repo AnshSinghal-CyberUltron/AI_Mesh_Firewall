@@ -60,7 +60,7 @@ test("summarizeRoutingDecision routing_disabled", () => {
     decision_source: "routing_disabled",
   });
   assert.match(summary, /routing is off/i);
-  assert.match(summary, /without running the adjudicator/i);
+  assert.match(summary, /without running routing policy/i);
 });
 
 test("summarizeRoutingDecision inactive model remap hint", () => {
@@ -76,14 +76,26 @@ test("summarizeRoutingDecision inactive model remap hint", () => {
   assert.match(summary, /not in the active router pool/i);
 });
 
-test("summarizeRoutingDecision weighted_fallback", () => {
+test("summarizeRoutingDecision deterministic_weighted", () => {
+  const { summary } = summarizeRoutingDecision({
+    selected_model: "Haiku",
+    decision_source: "deterministic_weighted",
+    candidate_count: 3,
+  });
+  assert.match(summary, /routing policy selected Haiku/i);
+  assert.match(summary, /3 eligible models/i);
+});
+
+test("legacy weighted_fallback rows still explain themselves", () => {
+  // The adjudicator is gone, so nothing emits weighted_fallback any more — but
+  // historical audit rows carry it and must not fall through to the bare catch-all
+  // (which drops the computed "because" clause entirely).
   const { summary } = summarizeRoutingDecision({
     selected_model: "Haiku",
     decision_source: "weighted_fallback",
     candidate_count: 3,
   });
-  assert.match(summary, /unavailable/i);
-  assert.match(summary, /weighted scoring/i);
+  assert.match(summary, /Haiku/);
   assert.match(summary, /3 eligible models/i);
 });
 

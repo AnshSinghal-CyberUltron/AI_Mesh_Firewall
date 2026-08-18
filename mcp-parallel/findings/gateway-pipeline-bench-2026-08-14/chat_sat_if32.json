@@ -1,0 +1,210 @@
+{
+  "mode": "chat",
+  "gateway": "http://127.0.0.1:8300",
+  "workers": 16,
+  "conn": 2,
+  "inflight": 32,
+  "duration_s": 22.798,
+  "requests": 145,
+  "ok": 145,
+  "errors": 0,
+  "error_rate": 0.0,
+  "rps": 6.36,
+  "ok_rps": 6.36,
+  "scan_only": 0,
+  "codes": {
+    "200": 145
+  },
+  "errors_by_signature": {},
+  "client_latency_ms": {
+    "n": 145,
+    "mean": 3757.445,
+    "p50": 3387.391,
+    "p90": 4745.023,
+    "p95": 5918.898,
+    "p99": 8441.371,
+    "max": 9433.487
+  },
+  "addon_latency_ms": {
+    "n": 145,
+    "mean": 3751.034,
+    "p50": 3378.9,
+    "p90": 4741.2,
+    "p95": 5869.0,
+    "p99": 8426.8,
+    "max": 9429.3
+  },
+  "stage_latency_ms": {
+    "auth": {
+      "n": 145,
+      "mean": 0.723,
+      "p50": 0.3,
+      "p90": 1.6,
+      "p95": 2.9,
+      "p99": 7.0,
+      "max": 7.1
+    },
+    "rate_limit": {
+      "n": 145,
+      "mean": 0.904,
+      "p50": 0.5,
+      "p90": 1.9,
+      "p95": 3.0,
+      "p99": 6.8,
+      "max": 6.9
+    },
+    "policy": {
+      "n": 145,
+      "mean": 13.205,
+      "p50": 5.2,
+      "p90": 41.7,
+      "p95": 59.5,
+      "p99": 76.3,
+      "max": 90.2
+    },
+    "input_scan": {
+      "n": 145,
+      "mean": 27.44,
+      "p50": 3.0,
+      "p90": 7.6,
+      "p95": 10.5,
+      "p99": 1138.5,
+      "max": 1243.7
+    },
+    "kill_switch": {
+      "n": 145,
+      "mean": 0.382,
+      "p50": 0.2,
+      "p90": 0.7,
+      "p95": 1.1,
+      "p99": 2.4,
+      "max": 2.5
+    },
+    "model_routing": {
+      "n": 145,
+      "mean": 3670.983,
+      "p50": 3345.3,
+      "p90": 4603.7,
+      "p95": 5112.9,
+      "p99": 8340.8,
+      "max": 9408.4
+    },
+    "model_input": {
+      "n": 145,
+      "mean": 0.506,
+      "p50": 0.4,
+      "p90": 0.9,
+      "p95": 1.0,
+      "p99": 1.1,
+      "max": 1.2
+    },
+    "model_output": {
+      "n": 145,
+      "mean": 0.005,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.7
+    },
+    "output_guardrail": {
+      "n": 145,
+      "mean": 25.977,
+      "p50": 0.5,
+      "p90": 0.6,
+      "p95": 0.7,
+      "p99": 1371.3,
+      "max": 1372.8
+    },
+    "total": {
+      "n": 145,
+      "mean": 3751.039,
+      "p50": 3378.9,
+      "p90": 4741.2,
+      "p95": 5869.7,
+      "p99": 8426.8,
+      "max": 9429.3
+    },
+    "addon": {
+      "n": 145,
+      "mean": 3751.034,
+      "p50": 3378.9,
+      "p90": 4741.2,
+      "p95": 5869.0,
+      "p99": 8426.8,
+      "max": 9429.3
+    }
+  },
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": "",
+    "full_nine_stages": true
+  },
+  "_label": "chat_sat_if32",
+  "_inflight": 32,
+  "_wall_orchestrated": 27.07,
+  "_docker_before": {
+    "ai_mesh_firewall-gateway-1": {
+      "cpu_pct": 8.81,
+      "cores": 0.09,
+      "mem": "3.384GiB / 58.85GiB",
+      "pids": "178"
+    },
+    "ai_mesh_firewall-control-1": {
+      "cpu_pct": 3.17,
+      "cores": 0.03,
+      "mem": "2.226GiB / 58.85GiB",
+      "pids": "310"
+    },
+    "ai_mesh_firewall-pgbouncer-1": {
+      "cpu_pct": 0.01,
+      "cores": 0.0,
+      "mem": "5.363MiB / 58.85GiB",
+      "pids": "1"
+    },
+    "ai_mesh_firewall-redis-1": {
+      "cpu_pct": 0.66,
+      "cores": 0.01,
+      "mem": "31.79MiB / 58.85GiB",
+      "pids": "7"
+    },
+    "ai_mesh_firewall-postgres-1": {
+      "cpu_pct": 0.04,
+      "cores": 0.0,
+      "mem": "222.2MiB / 58.85GiB",
+      "pids": "11"
+    }
+  },
+  "_docker_after": {
+    "ai_mesh_firewall-gateway-1": {
+      "cpu_pct": 1.44,
+      "cores": 0.01,
+      "mem": "3.393GiB / 58.85GiB",
+      "pids": "189"
+    },
+    "ai_mesh_firewall-control-1": {
+      "cpu_pct": 3.94,
+      "cores": 0.04,
+      "mem": "2.236GiB / 58.85GiB",
+      "pids": "310"
+    },
+    "ai_mesh_firewall-pgbouncer-1": {
+      "cpu_pct": 0.01,
+      "cores": 0.0,
+      "mem": "5.375MiB / 58.85GiB",
+      "pids": "1"
+    },
+    "ai_mesh_firewall-redis-1": {
+      "cpu_pct": 0.73,
+      "cores": 0.01,
+      "mem": "34.61MiB / 58.85GiB",
+      "pids": "7"
+    },
+    "ai_mesh_firewall-postgres-1": {
+      "cpu_pct": 0.19,
+      "cores": 0.0,
+      "mem": "224.5MiB / 58.85GiB",
+      "pids": "11"
+    }
+  }
+}

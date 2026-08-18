@@ -33,9 +33,8 @@ fi
 export WEB_CONCURRENCY="$WORKERS"
 
 # Size the per-worker offload pools from the detector unless the operator pinned
-# them (scanner=CPU Tier-1, bedrock=network Tier-2, vault=Postgres conn pool).
-# These default to fixed 8/16/8 in code; derive from cores instead. Each is
-# clamped in the detector to keep workers*pool bounded (item 11).
+# them (scanner=CPU Tier-1, bedrock=network Tier-2 from nofile/workers, vault=
+# Postgres conn pool). Scanner stays CPU-clamped; bedrock is FD-budget sized.
 _set_default() {  # _set_default VAR field
     eval "_cur=\${$1:-}"
     if [ -z "$_cur" ]; then
@@ -58,7 +57,7 @@ set -- gunicorn ai_mesh_gateway.main:app \
     -k uvicorn.workers.UvicornWorker \
     --bind 0.0.0.0:8300 \
     --workers "$WORKERS" \
-    --worker-connections "${GUNICORN_WORKER_CONNECTIONS:-1000}" \
+    --worker-connections "${GUNICORN_WORKER_CONNECTIONS:-20000}" \
     --timeout "${GUNICORN_TIMEOUT:-120}" \
     --graceful-timeout "${GUNICORN_GRACEFUL_TIMEOUT:-60}" \
     --keep-alive "${GUNICORN_KEEPALIVE:-65}"

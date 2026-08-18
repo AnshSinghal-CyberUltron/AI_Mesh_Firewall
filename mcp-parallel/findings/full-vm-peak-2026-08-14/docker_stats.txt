@@ -1,0 +1,299 @@
+# health_if256 before
+2026-08-14T12:33:05Z
+ai_mesh_firewall-gateway-1|1.94%|3.232GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.01%|226.4MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.49%|630.1MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.00%|227.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.67%|28.73MiB / 1GiB|7
+# health_if256 after
+2026-08-14T12:33:16Z
+ai_mesh_firewall-gateway-1|1.84%|3.308GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.03%|226.4MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.46%|630.1MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.01%|227.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|1.39%|31.06MiB / 1GiB|7
+
+# health_if1024 before
+2026-08-14T12:33:19Z
+ai_mesh_firewall-gateway-1|1.71%|3.307GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.01%|226.6MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.43%|630.8MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.01%|227.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.58%|31.12MiB / 1GiB|7
+# health_if1024 after
+2026-08-14T12:33:29Z
+ai_mesh_firewall-gateway-1|2.11%|3.398GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.03%|226.9MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.45%|630.1MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.00%|227.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.59%|33.93MiB / 1GiB|7
+
+# health_if4096 before
+2026-08-14T12:33:32Z
+ai_mesh_firewall-gateway-1|1.75%|3.398GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.06%|226.4MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.44%|630.8MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.00%|227.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.58%|34.5MiB / 1GiB|7
+# health_if4096 after
+2026-08-14T12:33:44Z
+ai_mesh_firewall-gateway-1|1.74%|3.533GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.01%|226.9MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.46%|631.1MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.00%|227.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.64%|35.22MiB / 1GiB|7
+
+# health_if8192 before
+2026-08-14T12:33:47Z
+ai_mesh_firewall-gateway-1|1.69%|3.533GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.01%|226.9MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.41%|630.8MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.01%|227.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.57%|35.43MiB / 1GiB|7
+# health_if8192 after
+2026-08-14T12:34:05Z
+ai_mesh_firewall-gateway-1|1.96%|3.534GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.00%|226.4MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.46%|630.5MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.01%|227.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.93%|33.41MiB / 1GiB|7
+
+# health_if16384 before
+2026-08-14T12:34:08Z
+ai_mesh_firewall-gateway-1|2.06%|3.534GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.06%|227.1MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.46%|630.8MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.01%|227.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.59%|33.37MiB / 1GiB|7
+# health_if16384 after
+2026-08-14T12:34:26Z
+ai_mesh_firewall-gateway-1|1.91%|3.6GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.01%|226.4MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.45%|631.1MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.00%|227.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.58%|37.52MiB / 1GiB|7
+
+# health_if32768 before
+2026-08-14T12:34:28Z
+ai_mesh_firewall-gateway-1|9.57%|3.6GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.00%|226.4MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.49%|630.6MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.00%|227.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.59%|37.53MiB / 1GiB|7
+# health_if32768 after
+2026-08-14T12:34:52Z
+ai_mesh_firewall-gateway-1|2.16%|3.7GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.02%|226.9MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.48%|630.3MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|3.22%|228.1MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.60%|39.38MiB / 1GiB|7
+
+# chat_if32 before
+2026-08-14T12:34:55Z
+ai_mesh_firewall-gateway-1|1.91%|3.699GiB / 12GiB|106
+ai_mesh_firewall-nginx-1|0.01%|227.1MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.46%|630.6MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.00%|227.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.61%|38.42MiB / 1GiB|7
+# chat_if32 after
+2026-08-14T12:35:23Z
+ai_mesh_firewall-gateway-1|2.40%|3.846GiB / 12GiB|182
+ai_mesh_firewall-nginx-1|0.01%|226.6MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.61%|634.5MiB / 2.5GiB|36
+ai_mesh_firewall-postgres-1|2.87%|233.2MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.67%|62.61MiB / 1GiB|7
+
+# chat_if64 before
+2026-08-14T12:35:25Z
+ai_mesh_firewall-gateway-1|2.02%|3.846GiB / 12GiB|182
+ai_mesh_firewall-nginx-1|0.01%|226.6MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.43%|632.8MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.00%|232.7MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.58%|61.51MiB / 1GiB|7
+# chat_if64 after
+2026-08-14T12:35:55Z
+ai_mesh_firewall-gateway-1|2.09%|3.885GiB / 12GiB|271
+ai_mesh_firewall-nginx-1|0.00%|226.4MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.51%|640.6MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.05%|235.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.61%|186.6MiB / 1GiB|7
+
+# chat_if128 before
+2026-08-14T12:35:58Z
+ai_mesh_firewall-gateway-1|1.92%|3.885GiB / 12GiB|271
+ai_mesh_firewall-nginx-1|0.02%|226.9MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.50%|640.5MiB / 2.5GiB|30
+ai_mesh_firewall-postgres-1|0.05%|235.6MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.61%|186MiB / 1GiB|7
+# chat_if128 after
+2026-08-14T12:36:30Z
+ai_mesh_firewall-gateway-1|9.73%|3.903GiB / 12GiB|340
+ai_mesh_firewall-nginx-1|0.02%|226.6MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.51%|576.6MiB / 2.5GiB|31
+ai_mesh_firewall-postgres-1|2.26%|260.5MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|1.08%|268.2MiB / 1GiB|7
+
+# chat_if256 before
+2026-08-14T12:36:33Z
+ai_mesh_firewall-gateway-1|1.81%|3.902GiB / 12GiB|340
+ai_mesh_firewall-nginx-1|0.03%|226.6MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.50%|576.4MiB / 2.5GiB|31
+ai_mesh_firewall-postgres-1|0.03%|260.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.62%|268.3MiB / 1GiB|7
+# chat_if256 after
+2026-08-14T12:37:07Z
+ai_mesh_firewall-gateway-1|2.50%|3.941GiB / 12GiB|387
+ai_mesh_firewall-nginx-1|0.05%|226.6MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.49%|584.3MiB / 2.5GiB|35
+ai_mesh_firewall-postgres-1|0.16%|271.1MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|1.54%|317.5MiB / 1GiB|7
+
+# chat_if512 before
+2026-08-14T12:37:09Z
+ai_mesh_firewall-gateway-1|2.20%|3.941GiB / 12GiB|387
+ai_mesh_firewall-nginx-1|0.01%|226.6MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.49%|584.5MiB / 2.5GiB|35
+ai_mesh_firewall-postgres-1|0.04%|270.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.63%|317.8MiB / 1GiB|7
+# chat_if512 after
+2026-08-14T12:37:44Z
+ai_mesh_firewall-gateway-1|2.22%|4.006GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.00%|226.4MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.52%|598MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|2.95%|274.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.73%|396.2MiB / 1GiB|7
+
+# chat_if1024 before
+2026-08-14T12:37:47Z
+ai_mesh_firewall-gateway-1|2.22%|4.006GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.02%|226.6MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.44%|598.2MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.01%|273.9MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.68%|395.7MiB / 1GiB|7
+# chat_if1024 after
+2026-08-14T12:38:25Z
+ai_mesh_firewall-gateway-1|1.82%|4.063GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.01%|226.6MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.46%|598.2MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.01%|289.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.60%|324.4MiB / 1GiB|7
+
+# chat_if2048 before
+2026-08-14T12:38:28Z
+ai_mesh_firewall-gateway-1|1.88%|4.063GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.01%|226.4MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.50%|598.6MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.01%|289.3MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|1.52%|325.3MiB / 1GiB|7
+# chat_if2048 after
+2026-08-14T12:39:20Z
+ai_mesh_firewall-gateway-1|2.82%|4.155GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.01%|226.6MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.50%|605.1MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.13%|303.6MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.65%|291.7MiB / 1GiB|7
+
+# chat_if4096 before
+2026-08-14T12:39:23Z
+ai_mesh_firewall-gateway-1|1.76%|4.155GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.01%|226.9MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.49%|604.9MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.01%|303.4MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.65%|289.1MiB / 1GiB|7
+# chat_if4096 after
+2026-08-14T12:40:37Z
+ai_mesh_firewall-gateway-1|2.76%|4.188GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.04%|226.4MiB / 256MiB|9
+ai_mesh_firewall-control-1|8.24%|605.4MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|6.66%|318.9MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|1.71%|402.4MiB / 1GiB|7
+
+# chat_if8192 before
+2026-08-14T12:40:40Z
+ai_mesh_firewall-gateway-1|2.13%|4.188GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.01%|226.4MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.49%|605.2MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.01%|318.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.67%|402.1MiB / 1GiB|7
+# chat_if8192 after
+2026-08-14T12:42:16Z
+ai_mesh_firewall-gateway-1|1.93%|4.229GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.00%|226.6MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.54%|591.4MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|2.94%|459.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.66%|474.6MiB / 1GiB|7
+
+# nlb_health_if256 before
+2026-08-14T12:44:12Z
+ai_mesh_firewall-gateway-1|2.02%|4.228GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.02%|226.6MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.51%|590.5MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.06%|458.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.64%|54.72MiB / 1GiB|7
+# nlb_health_if256 after
+2026-08-14T12:44:23Z
+ai_mesh_firewall-gateway-1|1.80%|4.227GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.01%|231MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.47%|591MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.05%|458.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.68%|55.23MiB / 1GiB|7
+
+# nlb_health_if1024 before
+2026-08-14T12:44:26Z
+ai_mesh_firewall-gateway-1|1.79%|4.227GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.00%|230.7MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.45%|590.5MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.05%|458.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.67%|55.53MiB / 1GiB|7
+# nlb_health_if1024 after
+2026-08-14T12:44:43Z
+ai_mesh_firewall-gateway-1|1.73%|4.227GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.03%|231.5MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.51%|590MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.05%|458.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.65%|56.48MiB / 1GiB|7
+
+# nlb_health_if4096 before
+2026-08-14T12:44:46Z
+ai_mesh_firewall-gateway-1|1.71%|4.227GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.02%|231.3MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.46%|589.7MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.06%|458.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.66%|55.95MiB / 1GiB|7
+# nlb_health_if4096 after
+2026-08-14T12:45:03Z
+ai_mesh_firewall-gateway-1|1.99%|4.226GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.04%|230.2MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.53%|589.5MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.05%|458.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.62%|58.34MiB / 1GiB|7
+
+# nlb_health_if8192 before
+2026-08-14T12:45:06Z
+ai_mesh_firewall-gateway-1|1.95%|4.226GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.04%|230.8MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.47%|588.7MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.05%|458.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.62%|55.96MiB / 1GiB|7
+# nlb_health_if8192 after
+2026-08-14T12:45:24Z
+ai_mesh_firewall-gateway-1|2.17%|4.226GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.02%|228.2MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.51%|589.7MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.01%|458.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.64%|58.44MiB / 1GiB|7
+
+# nlb_health_if16384 before
+2026-08-14T12:45:27Z
+ai_mesh_firewall-gateway-1|1.82%|4.226GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.02%|228.4MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.46%|589.2MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.01%|458.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.63%|56.49MiB / 1GiB|7
+# nlb_health_if16384 after
+2026-08-14T12:45:49Z
+ai_mesh_firewall-gateway-1|2.17%|4.226GiB / 12GiB|402
+ai_mesh_firewall-nginx-1|0.01%|232MiB / 256MiB|9
+ai_mesh_firewall-control-1|0.56%|589MiB / 2.5GiB|43
+ai_mesh_firewall-postgres-1|0.02%|458.8MiB / 2.5GiB|11
+ai_mesh_firewall-redis-1|0.65%|55.79MiB / 1GiB|7

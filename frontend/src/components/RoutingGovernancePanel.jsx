@@ -255,7 +255,7 @@ export function RoutingGovernancePanel() {
               <div>
                 <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Dynamic Routing</p>
                 <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                  Controls whether ZeroShield policy adjudication runs for <span className="font-mono">/v1/chat/completions</span> requests.
+                  Controls whether ZeroShield deterministic routing runs for <span className="font-mono">/v1/chat/completions</span> requests.
                 </p>
               </div>
             </div>
@@ -393,7 +393,7 @@ export function RoutingGovernancePanel() {
                 score = w_risk × (1 − model_risk)(1 − request_risk) + w_cost × 1/(1 + cost×tokens/1000) + w_latency × min(1, budget/latency) + w_priority × priority/max_priority
               </code>
             </li>
-            <li><b className="text-slate-800 dark:text-slate-300">ZeroShield adjudication</b> — when Dynamic Routing is enabled, the ZeroShield Policy Adjudicator analyzes candidate scores plus request context (data sensitivity, compliance requirements, token budget/cost pressure, latency SLA, and risk) and decides whether to keep the preferred model or reroute.</li>
+            <li><b className="text-slate-800 dark:text-slate-300">ZeroShield adjudication</b> — when Dynamic Routing is enabled, the ZeroShield routing policy analyzes candidate scores plus request context (data sensitivity, compliance requirements, token budget/cost pressure, latency SLA, and risk) and decides whether to keep the preferred model or reroute.</li>
             <li><b className="text-slate-800 dark:text-slate-300">API output + audit</b> — every chat-completion response includes routing metadata and headers (`selected_model`, `original_model`, `rerouted`, `routing_reason`, `decision_source`, `policy_summary`, `decision_factors`) and emits the same decision as telemetry.</li>
           </ol>
         </div>

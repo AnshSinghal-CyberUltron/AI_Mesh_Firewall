@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Activity, Shield, ShieldOff, ShieldAlert, RotateCcw,
   Loader2, AlertTriangle, CheckCircle, Zap, Settings,
@@ -7,6 +7,22 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { InfoTooltip } from "./InfoTooltip";
 import { filterUserManagedModels } from "../constants/zeroshieldBrand";
+
+/** Encode model id for /api/models/status/<path>/ — keep `/` so Django <path:> matches provider/model ids. */
+function encodeModelPathSegment(modelName) {
+  return String(modelName || "")
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+}
+
+function modelStatusUrl(modelName) {
+  return `/api/models/status/${encodeModelPathSegment(modelName)}/`;
+}
+
+function modelRecoverUrl(modelName) {
+  return `/api/models/recover/${encodeModelPathSegment(modelName)}/`;
+}
 
 const STATUS_COLORS = {
   active: { bg: "bg-emerald-500/10", border: "border-emerald-500/30", text: "text-emerald-600 dark:text-emerald-400", icon: CheckCircle },
@@ -49,6 +65,9 @@ export function ModelStatePanel() {
   const [expandedModel, setExpandedModel] = useState(null);
   const [showAudit, setShowAudit] = useState(false);
   const [polling, setPolling] = useState(true);
+  // Soft guide when operator picks Reroute without a fallback yet (no dead-end error).
+  const [fallbackHintModel, setFallbackHintModel] = useState(null);
+  const fallbackSelectRefs = useRef({});
 
   const fetchModelStates = useCallback(async () => {
     setLoadError(null);
@@ -118,22 +137,38 @@ export function ModelStatePanel() {
   }, [polling, fetchModelStates, fetchAuditLogs]);
 
   const handleIsolate = async (modelName) => {
-    // Destructive: cuts live traffic to the model (blocked → 503) until recovered.
-    if (!window.confirm(`Isolate "${modelName}"? All requests to this model will be blocked (503) until you recover it.`)) return;
+    const row = models.find((x) => x.model_name === modelName);
+    const action = row?.action || "block";
+    const fallback = (row?.fallback_model || "").trim();
+    if (action === "reroute" && !fallback) {
+      setLoadError(`Select a Fallback Model for "${modelName}" before isolating with silent reroute.`);
+      setFallbackHintModel(modelName);
+      setExpandedModel(modelName);
+      requestAnimationFrame(() => {
+        const el = fallbackSelectRefs.current[modelName];
+        if (el && typeof el.focus === "function") el.focus();
+      });
+      return;
+    }
+    const msg =
+      action === "reroute"
+        ? `Isolate "${modelName}" with silent reroute to "${fallback}"? Clients should keep working on the fallback.`
+        : `Isolate "${modelName}"? Requests to this model will be blocked (503) until you recover it.`;
+    if (!window.confirm(msg)) return;
     setActionLoading(modelName);
     setLoadError(null);
     try {
+      const body = {
+        model_name: modelName,
+        action,
+        reason: "Manual isolation from dashboard",
+      };
+      if (action === "reroute") body.fallback_model = fallback;
       const res = await fetchWithAuth("/api/models/isolate/", {
         method: "POST",
-        body: JSON.stringify({
-          model_name: modelName,
-          action: "block",
-          reason: "Manual isolation from dashboard",
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
-        // A safety-critical action must never fail silently — surface it so the
-        // operator doesn't believe the model was isolated when it wasn't.
         setLoadError(`Could not isolate "${modelName}" — the model was not changed.`);
         return;
       }
@@ -151,7 +186,7 @@ export function ModelStatePanel() {
     setActionLoading(modelName);
     setLoadError(null);
     try {
-      const res = await fetchWithAuth(`/api/models/recover/${encodeURIComponent(modelName)}/`, { method: "POST" });
+      const res = await fetchWithAuth(modelRecoverUrl(modelName), { method: "POST" });
       if (!res.ok) {
         setLoadError(`Could not recover "${modelName}" — the model was not changed.`);
         return;
@@ -165,18 +200,35 @@ export function ModelStatePanel() {
     }
   };
 
+  const _apiErrorMessage = async (res, fallback) => {
+    try {
+      const data = await res.json();
+      if (!data || typeof data !== "object") return fallback;
+      for (const key of ["fallback_model", "action", "threshold", "detail", "error"]) {
+        const v = data[key];
+        if (Array.isArray(v) && v[0]) return String(v[0]);
+        if (typeof v === "string" && v.trim()) return v;
+      }
+      const first = Object.values(data).flat?.() ?? Object.values(data);
+      if (Array.isArray(first) && first[0]) return String(first[0]);
+    } catch {
+      /* ignore parse errors */
+    }
+    return fallback;
+  };
+
   const handleThresholdChange = async (modelName, newThreshold) => {
     try {
       const row = models.find((x) => x.model_name === modelName);
       if (row && row.id == null) {
         await handleSyncStates();
       }
-      const res = await fetchWithAuth(`/api/models/status/${encodeURIComponent(modelName)}/`, {
+      const res = await fetchWithAuth(modelStatusUrl(modelName), {
         method: "PATCH",
         body: JSON.stringify({ threshold: newThreshold }),
       });
       if (!res.ok) {
-        setLoadError("Could not update threshold. Try Sync states first.");
+        setLoadError(await _apiErrorMessage(res, "Could not update threshold. Try Sync states first."));
         return;
       }
       await fetchModelStates();
@@ -191,17 +243,64 @@ export function ModelStatePanel() {
       if (row && row.id == null) {
         await handleSyncStates();
       }
-      const res = await fetchWithAuth(`/api/models/status/${encodeURIComponent(modelName)}/`, {
-        method: "PATCH",
-        body: JSON.stringify({ action: newAction }),
-      });
-      if (!res.ok) {
-        setLoadError("Could not update action. Try Sync states first.");
+      const fallback = (row?.fallback_model || "").trim();
+      // Kill-Switch parity: Reroute without a fallback → guide to Fallback select (do not dead-end).
+      if (newAction === "reroute" && !fallback) {
+        setLoadError(null);
+        setFallbackHintModel(modelName);
+        setExpandedModel(modelName);
+        requestAnimationFrame(() => {
+          const el = fallbackSelectRefs.current[modelName];
+          if (el && typeof el.focus === "function") el.focus();
+        });
         return;
       }
+      const body = { action: newAction };
+      if (newAction === "reroute") body.fallback_model = fallback;
+      if (newAction === "block" || newAction === "alert") body.fallback_model = "";
+      const res = await fetchWithAuth(modelStatusUrl(modelName), {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        setLoadError(await _apiErrorMessage(res, "Could not update action. Try Sync states first."));
+        return;
+      }
+      setLoadError(null);
+      setFallbackHintModel(null);
       await fetchModelStates();
     } catch {
       setLoadError("Network error updating action.");
+    }
+  };
+
+  const handleFallbackChange = async (modelName, fallbackModel) => {
+    try {
+      const row = models.find((x) => x.model_name === modelName);
+      if (row && row.id == null) {
+        await handleSyncStates();
+      }
+      const body = { fallback_model: fallbackModel || "" };
+      if (fallbackModel) {
+        // Picking a fallback implies silent continuity — persist as reroute.
+        body.action = "reroute";
+      } else if ((row?.action || "block") === "reroute") {
+        // Cleared fallback while on reroute → fall back to hard-stop default.
+        body.action = "block";
+      }
+      const res = await fetchWithAuth(modelStatusUrl(modelName), {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        setLoadError(await _apiErrorMessage(res, "Could not update fallback model. Try Sync states first."));
+        return;
+      }
+      setLoadError(null);
+      setFallbackHintModel(null);
+      await fetchModelStates();
+    } catch {
+      setLoadError("Network error updating fallback model.");
     }
   };
 
@@ -224,7 +323,7 @@ export function ModelStatePanel() {
             </InfoTooltip>
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Real-time org-scoped model health with rolling risk scores
+            Org-scoped model health. Status cards refresh every 5s; risk scores update on traffic and a ~60s auto-scan.
             {orgSlug ? (
               <span className="ml-1 font-mono text-teal-700 dark:text-teal-300">({orgSlug})</span>
             ) : null}
@@ -284,7 +383,12 @@ export function ModelStatePanel() {
             <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">{degradedCount} Degraded</span>
           </div>
         )}
-        <div className="ml-auto text-[10px] text-slate-500 dark:text-slate-400">{polling ? "Auto-refresh: 5s" : "Paused"}</div>
+        <div className="ml-auto text-[10px] text-slate-500 dark:text-slate-400 text-right">
+          <div>{polling ? "Status refresh: 5s" : "Paused"}</div>
+          <div className="opacity-80" title="Risk scores update when traffic is scored and via a periodic scan — not recomputed every 5 seconds.">
+            Risk scores: on traffic + ~60s scan
+          </div>
+        </div>
       </div>
 
       {loadError && (
@@ -440,12 +544,59 @@ export function ModelStatePanel() {
                             <option value="reroute">Reroute to Fallback</option>
                             <option value="alert">Alert Only</option>
                           </select>
+                          <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                            Block = hard stop. Reroute = no client interrupt if fallback is healthy.
+                            Select a Fallback Model to enable silent reroute.
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-500 dark:text-slate-400 font-medium mb-1 uppercase tracking-wider">
+                            Fallback Model
+                          </label>
+                          <select
+                            ref={(el) => {
+                              if (el) fallbackSelectRefs.current[m.model_name] = el;
+                              else delete fallbackSelectRefs.current[m.model_name];
+                            }}
+                            value={m.fallback_model || ""}
+                            onChange={(e) => handleFallbackChange(m.model_name, e.target.value)}
+                            className={`w-full px-2 py-1.5 rounded-lg border bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-200 ${
+                              fallbackHintModel === m.model_name
+                                ? "border-amber-400 ring-2 ring-amber-400/40 dark:border-amber-500"
+                                : "border-slate-200 dark:border-slate-700"
+                            }`}
+                            aria-label={`Fallback model for ${m.model_name}`}
+                            data-testid={`fallback-model-${m.model_name}`}
+                          >
+                            <option value="">— none —</option>
+                            {models
+                              .filter((x) => x.model_name !== m.model_name)
+                              .map((x) => (
+                                <option key={x.model_name} value={x.model_name}>
+                                  {x.model_name}
+                                </option>
+                              ))}
+                          </select>
+                          {fallbackHintModel === m.model_name && !(m.fallback_model || "").trim() && (
+                            <p
+                              className="mt-1 text-[10px] text-amber-700 dark:text-amber-300"
+                              role="status"
+                              data-testid="fallback-hint"
+                            >
+                              Select a fallback to enable silent reroute.
+                            </p>
+                          )}
                         </div>
                         <div>
                           <label className="block text-[10px] text-slate-500 dark:text-slate-400 font-medium mb-1 uppercase tracking-wider">
                             Cooldown (seconds)
                           </label>
                           <span className="text-xs font-mono text-slate-700 dark:text-slate-300">{m.cooldown_seconds || 300}s</span>
+                          {m.last_updated && (
+                            <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
+                              Updated {new Date(m.last_updated).toLocaleString()}
+                            </div>
+                          )}
                         </div>
                       </div>
                       {m.isolation_reason && (

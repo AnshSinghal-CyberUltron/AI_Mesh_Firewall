@@ -1,0 +1,399 @@
+{
+  "captured_at_utc": "2026-08-14T10:14:13Z",
+  "captured_from": {
+    "gcp_hostname": "ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal",
+    "method": "ssh -o BatchMode=yes -o ConnectTimeout=10 AIMeshFirewall (read-only)",
+    "prod_changed": false,
+    "docker_restart": false
+  },
+  "ssh": {
+    "host_alias": "AIMeshFirewall",
+    "hostname": "ec2-35-154-124-71.ap-south-1.compute.amazonaws.com",
+    "user": "ec2-user",
+    "ok": true,
+    "note": "OpenSSH warned: connection not using a post-quantum KEX"
+  },
+  "host": {
+    "hostname": "ip-172-31-9-177.ap-south-1.compute.internal",
+    "instance_type": "c8g.2xlarge",
+    "instance_id": "i-07a9d65b103ac1a87",
+    "availability_zone": "ap-south-1b",
+    "nproc": 8,
+    "uname_r": "6.18.30-61.116.amzn2023.aarch64",
+    "ip_forward": "1",
+    "ulimit_n": 65535,
+    "memory": {
+      "total": "15Gi",
+      "used": "5.3Gi",
+      "free": "958Mi",
+      "shared": "132Mi",
+      "buff_cache": "9.0Gi",
+      "available": "9.6Gi",
+      "swap": "0B"
+    },
+    "free_h_raw": [
+      "               total        used        free      shared  buff/cache   available",
+      "Mem:            15Gi       5.3Gi       958Mi       132Mi       9.0Gi       9.6Gi",
+      "Swap:             0B          0B          0B"
+    ]
+  },
+  "docker_ps": [
+    {
+      "names": "ai_mesh_firewall-gateway-1",
+      "status": "Up 2 days (healthy)",
+      "image": "935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-gateway:latest"
+    },
+    {
+      "names": "ai_mesh_mcp_broker",
+      "status": "Up 2 days (healthy)",
+      "image": "935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-mcp-broker:latest"
+    },
+    {
+      "names": "ai_mesh_firewall-nginx-1",
+      "status": "Up 6 hours",
+      "image": "935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-nginx:latest"
+    },
+    {
+      "names": "ai_mesh_firewall-workers-beat-1",
+      "status": "Up 2 days",
+      "image": "935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-workers:latest"
+    },
+    {
+      "names": "ai_mesh_firewall-workers-1",
+      "status": "Up 2 days",
+      "image": "935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-workers:latest"
+    },
+    {
+      "names": "ai_mesh_firewall-control-1",
+      "status": "Up 2 days (healthy)",
+      "image": "935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-control:latest"
+    },
+    {
+      "names": "ai_mesh_firewall-demo-1",
+      "status": "Up 2 days (healthy)",
+      "image": "935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-demo:latest"
+    },
+    {
+      "names": "ai_mesh_firewall-pgbouncer-1",
+      "status": "Up 2 weeks (healthy)",
+      "image": "edoburu/pgbouncer:v1.23.1-p1"
+    },
+    {
+      "names": "ai_mesh_firewall-vector-retrieval-1",
+      "status": "Up 2 weeks",
+      "image": "python:3.12-slim"
+    },
+    {
+      "names": "ai_mesh_firewall-guardrails-1",
+      "status": "Up 2 weeks",
+      "image": "python:3.12-slim"
+    },
+    {
+      "names": "ai_mesh_firewall-rabbitmq-1",
+      "status": "Up 3 weeks (healthy)",
+      "image": "rabbitmq:3-management"
+    },
+    {
+      "names": "ai_mesh_firewall-postgres-1",
+      "status": "Up 3 weeks (healthy)",
+      "image": "pgvector/pgvector:pg16"
+    },
+    {
+      "names": "root-cadvisor-1",
+      "status": "Up 2 months (healthy)",
+      "image": "gcr.io/cadvisor/cadvisor:v0.49.1"
+    },
+    {
+      "names": "root-node-exporter-1",
+      "status": "Up 2 months",
+      "image": "prom/node-exporter:v1.9.1"
+    },
+    {
+      "names": "ai_mesh_firewall-redis-1",
+      "status": "Up 2 months (healthy)",
+      "image": "redis:7.4-alpine"
+    }
+  ],
+  "docker_ps_table": "NAMES                                 STATUS                  IMAGE\nai_mesh_firewall-gateway-1            Up 2 days (healthy)     935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-gateway:latest\nai_mesh_mcp_broker                    Up 2 days (healthy)     935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-mcp-broker:latest\nai_mesh_firewall-nginx-1              Up 6 hours              935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-nginx:latest\nai_mesh_firewall-workers-beat-1       Up 2 days               935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-workers:latest\nai_mesh_firewall-workers-1            Up 2 days               935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-workers:latest\nai_mesh_firewall-control-1            Up 2 days (healthy)     935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-control:latest\nai_mesh_firewall-demo-1               Up 2 days (healthy)     935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-demo:latest\nai_mesh_firewall-pgbouncer-1          Up 2 weeks (healthy)    edoburu/pgbouncer:v1.23.1-p1\nai_mesh_firewall-vector-retrieval-1   Up 2 weeks              python:3.12-slim\nai_mesh_firewall-guardrails-1         Up 2 weeks              python:3.12-slim\nai_mesh_firewall-rabbitmq-1           Up 3 weeks (healthy)    rabbitmq:3-management\nai_mesh_firewall-postgres-1           Up 3 weeks (healthy)    pgvector/pgvector:pg16\nroot-cadvisor-1                       Up 2 months (healthy)   gcr.io/cadvisor/cadvisor:v0.49.1\nroot-node-exporter-1                  Up 2 months             prom/node-exporter:v1.9.1\nai_mesh_firewall-redis-1              Up 2 months (healthy)   redis:7.4-alpine",
+  "gateway": {
+    "container_name": "ai_mesh_firewall-gateway-1",
+    "image": "935951870001.dkr.ecr.ap-south-1.amazonaws.com/ai-mesh-gateway:latest",
+    "id_prefix": "a0dc2aa604af",
+    "started_at": "2026-08-12T09:55:57.922956072Z",
+    "status": "running",
+    "health": "healthy",
+    "inspect": {
+      "NanoCpus": 4000000000,
+      "Memory": 7516192768,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpusetCpus": "",
+      "CpuShares": 0,
+      "MemoryReservation": 0,
+      "MemorySwap": 15032385536,
+      "PidsLimit": null,
+      "RestartPolicy": {
+        "Name": "unless-stopped",
+        "MaximumRetryCount": 0
+      },
+      "note": "NanoCpus=4.0 CPU; Memory=7GiB. CpuQuota/CpuPeriod=0 because limit is via NanoCpus (cgroup v2 cpu.max=400000 100000)."
+    },
+    "cgroup_v2": {
+      "cpu.max": "400000 100000",
+      "cpu_quota_cpus": 4.0,
+      "memory.max": 7516192768,
+      "cpu.weight": "100"
+    },
+    "env": {
+      "WEB_CONCURRENCY": "6",
+      "GATEWAY_BEDROCK_THREAD_POOL_SIZE": "8",
+      "GUNICORN_WORKER_CONNECTIONS": "1000",
+      "GATEWAY_TIER2_CACHE_TTL_SECONDS": "300",
+      "GATEWAY_LOADTEST_STUB_LLM": "",
+      "BEDROCK_REGION": "ap-south-1",
+      "BEDROCK_ADJUDICATOR_MODEL": "",
+      "ENABLE_TIER2": "true"
+    },
+    "nproc_inside": 8,
+    "nproc_note": "nproc inside container reports 8 (host vCPU) and does not reflect NanoCpus/cgroup cpu.max=4. Detector resource_budget reads cgroup-v2 and reports cpu_budget=4.0 workers=4. Live gunicorn is pinned by WEB_CONCURRENCY=6.",
+    "resource_budget_json": {
+      "cpu_budget": 4.0,
+      "ram_bytes": 7516192768,
+      "cpu_source": "cgroup-v2",
+      "mem_source": "cgroup-v2",
+      "per_worker_rss": 536870912,
+      "workers": 4,
+      "asgi_threads": 8,
+      "db_threads": 8,
+      "pg_max_conns": 100,
+      "scanner_pool": 4,
+      "bedrock_pool": 8,
+      "vault_pool": 2,
+      "redis_pool": 64,
+      "headroom": 0.75,
+      "ram_gib": 7.0,
+      "ram_workers": 10,
+      "cpu_bound": true
+    },
+    "health_inside": {
+      "method": "docker exec python3 urllib.request http://127.0.0.1:8300/health",
+      "curl_in_container": false,
+      "body": {
+        "status": "ok",
+        "agent_id": "7ce4c6e2-31bf-4934-b735-ea206d4f1a78",
+        "policy_cache_loaded": true,
+        "policy_cache_version": 539,
+        "policy_count": 246,
+        "config_sync_loaded": false,
+        "firewall_enabled": true,
+        "enforcement_mode": "block",
+        "vector_policy_cache_loaded": true,
+        "vector_policy_cache_version": 449,
+        "vector_policy_count": 14,
+        "vector_clients": [],
+        "telemetry_queue_depth": 0
+      }
+    },
+    "health_host_8300": {
+      "status": "ok",
+      "agent_id": "7ce4c6e2-31bf-4934-b735-ea206d4f1a78",
+      "policy_cache_loaded": true,
+      "policy_cache_version": 539,
+      "policy_count": 246,
+      "config_sync_loaded": false,
+      "firewall_enabled": true,
+      "enforcement_mode": "block",
+      "vector_policy_cache_loaded": true,
+      "vector_policy_cache_version": 449,
+      "vector_policy_count": 14,
+      "vector_clients": [],
+      "telemetry_queue_depth": 0
+    }
+  },
+  "docker_stats": [
+    {
+      "name": "ai_mesh_firewall-gateway-1",
+      "cpu_perc": "0.60%",
+      "mem_usage": "1.35GiB / 7GiB",
+      "mem_perc": "19.29%",
+      "net_io": "2.43GB / 624MB",
+      "block_io": "197kB / 10.7MB",
+      "pids": 103
+    },
+    {
+      "name": "ai_mesh_mcp_broker",
+      "cpu_perc": "0.06%",
+      "mem_usage": "54.39MiB / 768MiB",
+      "mem_perc": "7.08%",
+      "net_io": "613kB / 348kB",
+      "block_io": "152kB / 4.87MB",
+      "pids": 8
+    },
+    {
+      "name": "ai_mesh_firewall-nginx-1",
+      "cpu_perc": "0.02%",
+      "mem_usage": "10.06MiB / 256MiB",
+      "mem_perc": "3.93%",
+      "net_io": "533MB / 38.8MB",
+      "block_io": "840kB / 0B",
+      "pids": 9
+    },
+    {
+      "name": "ai_mesh_firewall-workers-beat-1",
+      "cpu_perc": "1.21%",
+      "mem_usage": "150.6MiB / 384MiB",
+      "mem_perc": "39.21%",
+      "net_io": "110MB / 452MB",
+      "block_io": "0B / 17MB",
+      "pids": 9
+    },
+    {
+      "name": "ai_mesh_firewall-workers-1",
+      "cpu_perc": "0.77%",
+      "mem_usage": "361.9MiB / 1.25GiB",
+      "mem_perc": "28.27%",
+      "net_io": "1.1GB / 1.47GB",
+      "block_io": "0B / 32.8MB",
+      "pids": 5
+    },
+    {
+      "name": "ai_mesh_firewall-control-1",
+      "cpu_perc": "0.42%",
+      "mem_usage": "1.086GiB / 2.5GiB",
+      "mem_perc": "43.42%",
+      "net_io": "5.77GB / 1.76GB",
+      "block_io": "8.19kB / 9.13MB",
+      "pids": 34
+    },
+    {
+      "name": "ai_mesh_firewall-demo-1",
+      "cpu_perc": "0.06%",
+      "mem_usage": "58.82MiB / 256MiB",
+      "mem_perc": "22.98%",
+      "net_io": "285kB / 168kB",
+      "block_io": "0B / 897kB",
+      "pids": 2
+    },
+    {
+      "name": "ai_mesh_firewall-pgbouncer-1",
+      "cpu_perc": "0.01%",
+      "mem_usage": "2.188MiB / 256MiB",
+      "mem_perc": "0.85%",
+      "net_io": "37.3GB / 37.4GB",
+      "block_io": "672kB / 8.19kB",
+      "pids": 1
+    },
+    {
+      "name": "ai_mesh_firewall-vector-retrieval-1",
+      "cpu_perc": "0.06%",
+      "mem_usage": "32.15MiB / 256MiB",
+      "mem_perc": "12.56%",
+      "net_io": "2MB / 576B",
+      "block_io": "0B / 28.7kB",
+      "pids": 2
+    },
+    {
+      "name": "ai_mesh_firewall-guardrails-1",
+      "cpu_perc": "0.06%",
+      "mem_usage": "32.17MiB / 256MiB",
+      "mem_perc": "12.57%",
+      "net_io": "2MB / 576B",
+      "block_io": "0B / 28.7kB",
+      "pids": 2
+    },
+    {
+      "name": "ai_mesh_firewall-rabbitmq-1",
+      "cpu_perc": "0.29%",
+      "mem_usage": "151MiB / 512MiB",
+      "mem_perc": "29.50%",
+      "net_io": "3.55GB / 3.66GB",
+      "block_io": "29.8MB / 41.9GB",
+      "pids": 40
+    },
+    {
+      "name": "ai_mesh_firewall-postgres-1",
+      "cpu_perc": "0.00%",
+      "mem_usage": "128.9MiB / 2.5GiB",
+      "mem_perc": "5.03%",
+      "net_io": "3.35GB / 100GB",
+      "block_io": "32.6MB / 2.65GB",
+      "pids": 11
+    },
+    {
+      "name": "root-cadvisor-1",
+      "cpu_perc": "0.82%",
+      "mem_usage": "53.22MiB / 500MiB",
+      "mem_perc": "10.64%",
+      "net_io": "953MB / 56.8GB",
+      "block_io": "1.29MB / 0B",
+      "pids": 18
+    },
+    {
+      "name": "root-node-exporter-1",
+      "cpu_perc": "0.00%",
+      "mem_usage": "10.13MiB / 500MiB",
+      "mem_perc": "2.03%",
+      "net_io": "272MB / 5.34GB",
+      "block_io": "2MB / 0B",
+      "pids": 5
+    },
+    {
+      "name": "ai_mesh_firewall-redis-1",
+      "cpu_perc": "0.47%",
+      "mem_usage": "19.5MiB / 1GiB",
+      "mem_perc": "1.90%",
+      "net_io": "141GB / 234GB",
+      "block_io": "21.9GB / 192GB",
+      "pids": 7
+    }
+  ],
+  "public_from_gcp": {
+    "gateway_health": {
+      "url": "https://aimeshgateway.zeroshield.ai/health",
+      "http_code": 200,
+      "time_total_s": 0.081098,
+      "body": {
+        "status": "ok",
+        "agent_id": "7ce4c6e2-31bf-4934-b735-ea206d4f1a78",
+        "policy_cache_loaded": true,
+        "policy_cache_version": 539,
+        "policy_count": 246,
+        "config_sync_loaded": false,
+        "firewall_enabled": true,
+        "enforcement_mode": "block",
+        "vector_policy_cache_loaded": true,
+        "vector_policy_cache_version": 449,
+        "vector_policy_count": 14,
+        "vector_clients": [],
+        "telemetry_queue_depth": 0
+      }
+    },
+    "ui": {
+      "url": "https://aimeshfirewall.zeroshield.ai/",
+      "http_code": 200,
+      "time_total_s": 0.09681
+    }
+  },
+  "bedrock_egress_from_ec2": {
+    "command_requested": "time nc -zw3 bedrock-runtime.ap-south-1.amazonaws.com 443",
+    "nc_available": false,
+    "nc_exit": 127,
+    "fallback": "python3 socket.connect timeout=3",
+    "ok": true,
+    "elapsed_s": 0.002544,
+    "bash_dev_tcp": {
+      "ok": true,
+      "real_s": 0.004
+    },
+    "target": "bedrock-runtime.ap-south-1.amazonaws.com:443"
+  },
+  "notes": [
+    "Read-only capture. No prod writes, no docker restart.",
+    "WEB_CONCURRENCY=6 overrides detector workers=4 (cpu_budget=4.0 from NanoCpus).",
+    "GATEWAY_LOADTEST_STUB_LLM unset/empty \u2014 live Bedrock path, not stub.",
+    "BEDROCK_ADJUDICATOR_MODEL empty (default model in code).",
+    "config_sync_loaded=false on /health (policy cache is loaded).",
+    "Gateway idle CPU 0.60%, mem 1.35GiB/7GiB (19.29%).",
+    "Highest idle CPU among app containers: workers-beat 1.21%, cadvisor 0.82%, workers 0.77%."
+  ]
+}

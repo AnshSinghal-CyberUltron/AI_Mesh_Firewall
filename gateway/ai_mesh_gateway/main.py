@@ -1000,6 +1000,7 @@ def _redact_for_client_response(zeroshield_dict: dict | None) -> dict | None:
         "enforcement_source",
         "scan_outcome",
         "risk_score",
+        "scan_only",
     }
     redacted = {k: v for k, v in zeroshield_dict.items() if k in safe_fields}
 
@@ -2726,6 +2727,180 @@ def _estimate_request_tokens(prompt: str, max_tokens: int = 0) -> int:
     return max(1, prompt_tokens + completion_budget)
 
 
+_CLIENT_ESTIMATED_TOKENS_MAX = 1_000_000
+
+
+def _pop_client_estimated_tokens(body: dict) -> int | None:
+    """Strip client ``estimated_tokens`` so it never reaches LiteLLM.
+
+    Returns a capped positive int, or None when absent/invalid.
+    """
+    if not isinstance(body, dict) or "estimated_tokens" not in body:
+        return None
+    raw = body.pop("estimated_tokens", None)
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return None
+    if n < 1:
+        return None
+    return min(n, _CLIENT_ESTIMATED_TOKENS_MAX)
+
+
+def _may_honor_client_token_estimate(auth_ctx) -> bool:
+    """TPM override is limited to simulator / playground / admin keys."""
+    if auth_ctx is None:
+        return False
+    try:
+        from playground_auth import is_live_test_project_id, should_skip_threat_intel
+    except ImportError:
+        from .playground_auth import is_live_test_project_id, should_skip_threat_intel
+    if should_skip_threat_intel(auth_ctx):
+        return True
+    if is_live_test_project_id(getattr(auth_ctx, "project_id", None)):
+        return True
+    try:
+        from admin_auth import is_admin
+    except ImportError:
+        from .admin_auth import is_admin
+    return bool(is_admin(auth_ctx))
+
+
+def _return_scan_only_chat(
+    *,
+    start: float,
+    prompt: str,
+    redacted_prompt: str | None,
+    policy_redacted_prompt: str,
+    scan_verdict,
+    input_decision,
+    check_resp: dict,
+    org_config: dict,
+    body: dict,
+    stage_metrics: dict,
+    ptimer,
+    request_intent: str = "",
+) -> "JSONResponse":
+    """HTTP 200 after input scan with no LLM call (absent/zero max_tokens, non-stream)."""
+    from pipeline_trace import build_pipeline_trace, finalize_stage_metrics
+
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    zs_action = "allow"
+    if input_decision is not None:
+        zs_action = str(getattr(input_decision, "action", None) or "allow")
+    elif scan_verdict is not None:
+        zs_action = str(getattr(scan_verdict, "action", None) or "allow")
+    if zs_action == "block":
+        # Terminal blocks already returned 403; never infer a residual block here.
+        zs_action = "allow"
+
+    if zs_action == "redact":
+        _sv_patterns = list(getattr(scan_verdict, "matched_patterns", None) or []) if scan_verdict else []
+        zs = _build_zeroshield_metadata(
+            action="redact",
+            reason="Sensitive data redacted. Scan-only probe — model was not called.",
+            detection_tier=getattr(scan_verdict, "tier", None) or "tier_1",
+            threat_type=getattr(scan_verdict, "threat_type", None) or "pii",
+            confidence=float(getattr(scan_verdict, "confidence", None) or 0.85),
+            matched_patterns=_sv_patterns,
+            original_prompt=prompt,
+            redacted_prompt=redacted_prompt,
+            detail=getattr(scan_verdict, "detail", None) or "",
+            processing_time_ms=elapsed_ms,
+            intent=request_intent,
+        )
+    else:
+        zs_reason, zs_threat, zs_conf, zs_patterns, zs_detail = (
+            "All security checks passed. Scan-only probe — model was not called.",
+            "none",
+            0.0,
+            [],
+            "",
+        )
+        if scan_verdict is not None:
+            _tuple = _resolve_success_metadata_from_verdict(
+                scan_verdict, org_config.get("enforcement_mode", "block"),
+            )
+            zs_action = _tuple[0] if zs_action == "allow" else zs_action
+            zs_reason, zs_threat, zs_conf, zs_patterns, zs_detail = _tuple[1:]
+            zs_reason = (
+                (zs_detail or zs_reason or "Input scan complete.")
+                + " Scan-only probe — model was not called."
+            )
+        zs = _build_zeroshield_metadata(
+            action=zs_action,
+            reason=zs_reason,
+            detection_tier=getattr(scan_verdict, "tier", None) if scan_verdict else "none",
+            threat_type=zs_threat,
+            confidence=zs_conf,
+            matched_patterns=zs_patterns,
+            original_prompt=prompt,
+            redacted_prompt=redacted_prompt,
+            detail=zs_detail,
+            processing_time_ms=elapsed_ms,
+            intent=request_intent,
+        )
+
+    zs["scan_only"] = True
+    if isinstance(check_resp, dict):
+        zs["matched_policy_names"] = (
+            check_resp.get("matched_policy_names")
+            or check_resp.get("matched_policies")
+            or []
+        )
+        zs["matched_rule_names"] = check_resp.get("matched_rules") or []
+
+    stage_metrics = finalize_stage_metrics(stage_metrics, start, ptimer=ptimer)
+    scanner_redaction_applied = bool(
+        scan_verdict
+        and (redacted_prompt or prompt) != (policy_redacted_prompt or prompt)
+    )
+    resp = {
+        "id": f"chatcmpl-scan-{(_REQUEST_ID.get('') or 'zs')[:24]}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": body.get("model") or "",
+        "choices": [{
+            "index": 0,
+            "message": {"role": "assistant", "content": ""},
+            "finish_reason": "stop",
+        }],
+        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        "zeroshield": zs,
+        "scan_only": True,
+    }
+    resp["pipeline_trace"] = _stamp_pipeline_trace_request_id(
+        build_pipeline_trace(
+            prompt=_redact_trace_text(prompt),
+            forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
+            policy_redacted_prompt=_redact_trace_text(policy_redacted_prompt)
+            if policy_redacted_prompt
+            else "",
+            policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
+            scanner_redaction_applied=scanner_redaction_applied,
+            stage_metrics=stage_metrics,
+            final_action=zs_action,
+            http_status=200,
+            scan_verdict=scan_verdict,
+            zeroshield=zs,
+            response_text="",
+            requested_model=body.get("model", ""),
+            prompt_in_operator_masked=_trace_prompt_operator_masked(prompt),
+            skip_inference=True,
+        )
+    )
+    if isinstance(resp.get("zeroshield"), dict):
+        resp["zeroshield"] = _redact_for_client_response(resp["zeroshield"]) or {}
+        resp["zeroshield"]["scan_only"] = True
+    _strip_internal_completion_keys(resp)
+    METRICS["allowed"] += 1
+    headers = {
+        "X-ZeroShield-Action": zs_action,
+        "X-ZeroShield-Scan-Only": "true",
+    }
+    return JSONResponse(content=resp, headers=_latin1_safe_headers(headers))
+
+
 def _blocked_keyword_matches(prompt_lower: str, keyword: str) -> bool:
     """Match firewall blocked keywords on word boundaries (avoids substring false positives)."""
     kw = (keyword or "").strip().lower()
@@ -3086,20 +3261,31 @@ def _extract_chat_routing_preferences(body: dict, org_config: dict, auth_ctx, sc
     # ``_SENSITIVITY_ORDER.get(...)`` downstream — a non-str (e.g. a dict) would
     # raise there. Coerce to a plain string; ignore non-str → "public".
     #
-    # F12 NOTE: the finding (org FirewallConfig.default_data_sensitivity is synced
-    # but never read) is real, but enforcing it as a hard floor here is NOT safe in
-    # the current data model — the field DEFAULT is 'internal' for ALL orgs while
-    # connected models are 'public', so flooring would 403 every org's default
-    # traffic (compliance_routing_unsatisfiable). Wiring the floor requires an
-    # operator decision: change the field default to 'public' + migrate existing
-    # rows, OR raise model sensitivity levels. Left as a flagged design item; the
-    # client-supplied value (fail-closed on unknown via the filters) is used as-is.
-    _ds = (
+    # D3 (supersedes the old F12 NOTE): the org's FirewallConfig.default_data_sensitivity
+    # is now READ and applied as a hard floor when the request does not state one —
+    # matching the Routing Governance copy ("Applied when requests don't specify a
+    # sensitivity level. Models below this level are excluded from routing.").
+    #
+    # The F12 note correctly warned that flooring was unsafe while the field defaulted
+    # to 'internal' for every org and connected models defaulted to 'public' — that
+    # combination 403s an org's entire default traffic. That is resolved by migration
+    # 0014, which flips the FirewallConfig default to 'public' and rewrites legacy
+    # never-explicitly-set rows, so the floor only bites when an operator deliberately
+    # raises it. ``data_sensitivity_source`` is reported in routing metadata so an
+    # operator can tell a client-stated floor from their own org default.
+    _ds_request = (
         routing_preferences.get("data_sensitivity")
         or metadata.get("data_sensitivity")
         or body.get("data_sensitivity")
-        or "public"
     )
+    _ds_org = org_config.get("default_data_sensitivity")
+    _ds = _ds_request if isinstance(_ds_request, str) and _ds_request.strip() else _ds_org
+    data_sensitivity_source = (
+        "request" if (isinstance(_ds_request, str) and _ds_request.strip())
+        else ("org_default" if (isinstance(_ds_org, str) and _ds_org.strip()) else "fallback")
+    )
+    if not (isinstance(_ds, str) and _ds.strip()):
+        _ds = "public"
     # Normalize to lowercase so the fail-closed compliance gate and the hard
     # filter (_SENSITIVITY_ORDER.get) agree (FC-01 case-variant fix).
     data_sensitivity = (_ds.strip().lower() if isinstance(_ds, str) else "public") or "public"
@@ -3238,6 +3424,10 @@ def _extract_chat_routing_preferences(body: dict, org_config: dict, auth_ctx, sc
         "preferred_model": preferred_model,
         "required_compliance": required_compliance,
         "data_sensitivity": data_sensitivity,
+        # D3: "request" (client stated it) vs "org_default" (operator's floor) vs
+        # "fallback" (neither set — public). Reported in routing metadata so an
+        # operator can tell whose policy caused a reroute or a 403.
+        "data_sensitivity_source": data_sensitivity_source,
         "latency_budget_ms": latency_budget_ms,
         "estimated_tokens": estimated_tokens,
         "weights": weights,
@@ -3258,6 +3448,7 @@ def _build_routing_metadata(
     request_risk_score: float,
     estimated_tokens: int,
     token_budget_tpm: int | None,
+    data_sensitivity_source: str = "request",
 ) -> dict:
     # ``requested_model`` is the RAW client-supplied model; echo only a sanitized
     # form so a malicious model name can't reflect into routing graphs/charts (R4).
@@ -3293,6 +3484,7 @@ def _build_routing_metadata(
         "decision_factors": selection.decision_factors,
         "candidate_count": selection.candidate_count,
         "data_sensitivity": data_sensitivity,
+        "data_sensitivity_source": data_sensitivity_source,
         "compliance_requirements": required_compliance,
         "request_risk_score": request_risk_score,
         "estimated_tokens": estimated_tokens,
@@ -4288,11 +4480,15 @@ def _routing_identity_set(routing_models: list[dict] | None) -> set[str]:
 def _routing_compliance_required(routing_prefs: dict) -> bool:
     """True when empty selection must hard-block (403).
 
-    Compliance tags remain fail-closed. Non-public sensitivity alone no longer
-    triggers this gate when soft-fallback can pick a best-available model
-    (selection is non-None). Sensitivity still contributes when selection is
-    None (no active models at all) so we do not fall through to a raw client
-    model.
+    Both compliance tags and non-public data sensitivity are fail-closed as of D3.
+    Sensitivity no longer soft-falls-back to a best-available model, so an empty
+    selection under a non-public floor is a genuine "no compliant model" condition
+    and must 403 rather than fall through to the client's raw model.
+
+    ``data_sensitivity`` here may originate from the CLIENT or from the org's
+    ``default_data_sensitivity`` floor (see ``_extract_chat_routing_preferences``);
+    both are enforced identically — ``data_sensitivity_source`` records which, for
+    the audit trail.
     """
     if [t for t in (routing_prefs.get("required_compliance") or []) if t]:
         return True
@@ -5594,11 +5790,32 @@ async def startup():
     if CONFIG.get("circuit_breaker_enabled", True) and REDIS_CLIENT is not None:
         from circuit_breaker import CircuitBreaker
 
+        def _cb_fallback_resolver(org_slug: str, model: str) -> str:
+            """Org fallback-chain first eligible model ≠ primary (best-effort)."""
+            try:
+                if CONFIG_SYNC is None:
+                    return ""
+                fb_payload = CONFIG_SYNC.get_fallback_chains(org_slug) or {}
+                chains = fb_payload.get("chains") or {}
+                per_primary = (fb_payload.get("per_primary") or {}).get(model) or []
+                candidates = list(per_primary)
+                for _profile, chain in chains.items():
+                    if isinstance(chain, list):
+                        candidates.extend(chain)
+                for cand in candidates:
+                    name = str(cand or "").strip()
+                    if name and name != model:
+                        return name
+            except Exception:  # noqa: BLE001
+                return ""
+            return ""
+
         CIRCUIT_BREAKER = CircuitBreaker(
             redis_client=REDIS_CLIENT,
             error_threshold=CONFIG.get("circuit_breaker_error_threshold", 0.5),
             min_requests=CONFIG.get("circuit_breaker_min_requests", 10),
             cooldown_seconds=CONFIG.get("circuit_breaker_cooldown_seconds", 120),
+            fallback_resolver=_cb_fallback_resolver,
         )
         LOG.info("Circuit breaker initialized")
 
@@ -5915,6 +6132,11 @@ async def shutdown():
         await VECTOR_POLICY_SYNC.stop()
     if _log_subscriber is not None:
         await _log_subscriber.stop()
+    try:
+        from bedrock_client import aclose_default_bedrock_client
+        await aclose_default_bedrock_client()
+    except Exception:
+        pass
     # Shut down MCP adapters
     try:
         from mcp_stdio_adapter import shutdown_all as stdio_shutdown
@@ -6142,6 +6364,11 @@ async def proxy_chat(
         # UTF-8 encodable) otherwise reaches litellm serialization (502 + hang)
         # and poisons the EnforcementEvent JSON column (dropping the event).
         raw_body = _strip_lone_surrogates(raw_body)
+        # Pop estimated_tokens from the RAW body before OpenAI normalization
+        # strips unknown top-level fields. Honored later for TPM on simulator/admin keys.
+        _client_estimated_tokens = (
+            _pop_client_estimated_tokens(raw_body) if isinstance(raw_body, dict) else None
+        )
         try:
             body = normalize_openai_chat_request(raw_body, strip_unknown_top_level=True)
             # RAG-02 (2026-08-03): ``documents`` / ``rag_context`` are the gateway's own
@@ -6187,6 +6414,8 @@ async def proxy_chat(
                     "code": "invalid_request_body",
                 },
             )
+        if isinstance(body, dict):
+            body.pop("estimated_tokens", None)
         _model_val = body.get("model")
         if _model_val is not None and not isinstance(_model_val, str):
             return JSONResponse(
@@ -6247,16 +6476,10 @@ async def proxy_chat(
                     },
                 )
             if _max_tokens_int == 0:
-                # max_tokens == 0 is the ZeroShield "scan-only / no-inference" probe
-                # sentinel: the rest of the gateway already treats it that way
-                # (needs_inference = max_tokens > 0). Rejecting 0 here as "invalid"
-                # CONTRADICTED that and broke every input-scan probe — the simulator
-                # (and any client that sends 0 to run guardrails WITHOUT paying for a
-                # completion) got a 400 "'max_tokens' must be a positive integer"
-                # instead of an input-scan verdict. Treat it like an absent
-                # max_tokens: drop the key so the request runs input scan + policy
-                # with no inference. (A negative value is still rejected above.)
-                body.pop("max_tokens", None)
+                # Explicit scan-only sentinel. Keep the key so it is distinguishable
+                # from an omitted max_tokens (OpenAI-compatible: omit → infer with
+                # the org default). Burst / Attack Simulator sends 0 to skip LiteLLM.
+                body["max_tokens"] = 0
             # C5: cap an absurd upper bound. A huge int was previously forwarded
             # upstream unbounded (provider-side error / quota burn). 1,000,000 is
             # a generous absolute ceiling well above any real output budget.
@@ -6715,7 +6938,12 @@ async def proxy_chat(
             inference_models and LLM_ROUTER is not None and routing_prefs["routing_enabled"]
         )
 
-        needs_inference = bool(body.get("stream")) or int(body.get("max_tokens") or 0) > 0
+        # OpenAI-compatible: omitted max_tokens means "use the org/provider default
+        # and run inference". Scan-only is ONLY the explicit sentinel max_tokens=0
+        # (non-stream). Stream always infers.
+        needs_inference = bool(body.get("stream")) or (
+            "max_tokens" not in body or int(body.get("max_tokens") or 0) > 0
+        )
         # #27: a provider-less org should still get the INPUT scan run (so the
         # Attack Simulator's single-run mode demonstrates BLOCKED instead of
         # short-circuiting to "Connect a model"). Defer the no-provider 422
@@ -6965,8 +7193,10 @@ async def proxy_chat(
                         )
 
         # ── Kill-switch check (Redis, ~0.1ms) ──
+        # Scan-only probes never call a model, so skip the inference kill-switch
+        # path (and its Redis round-trip) entirely.
         _ks_start = time.perf_counter()
-        if org_config.get("kill_switch_enabled", True):
+        if needs_inference and org_config.get("kill_switch_enabled", True):
             if REDIS_CLIENT is None:
                 METRICS["blocked"] += 1
                 _emit_telemetry(
@@ -7450,6 +7680,11 @@ async def proxy_chat(
             prompt_for_estimate,
             int(body.get("max_tokens") or 0),
         )
+        if (
+            _client_estimated_tokens is not None
+            and _may_honor_client_token_estimate(auth_ctx)
+        ):
+            estimated_request_tokens = _client_estimated_tokens
 
         # ── Per-org TPM rate limit enforcement (Phase 1 hardening) ──
         # Fail-CLOSED Lua check; org_tpm_limit=0 disables the ceiling.
@@ -7680,7 +7915,7 @@ async def proxy_chat(
             # non-int slips through (None / float / str) a bare min() raises
             # TypeError -> unhandled 500. Fall back to the configured ceiling.
             _mt = body.get("max_tokens")
-            if isinstance(_mt, int):
+            if isinstance(_mt, int) and _mt > 0:
                 body["max_tokens"] = min(_mt, max_tokens_config)
             elif body.get("max_completion_tokens") is not None:
                 # SEAM-A: the client sent ONLY max_completion_tokens (the o1/o3/gpt-5
@@ -7690,12 +7925,27 @@ async def proxy_chat(
                 _mct = body.get("max_completion_tokens")
                 if isinstance(_mct, int):
                     body["max_completion_tokens"] = min(_mct, max_tokens_config)
-            else:
+            elif needs_inference:
                 body["max_tokens"] = max_tokens_config
 
         if firewall_disabled:
             # Firewall is off -- skip all scanning, route directly to LLM
             is_stream = body.get("stream", False)
+            if not needs_inference:
+                return _return_scan_only_chat(
+                    start=start,
+                    prompt=prompt,
+                    redacted_prompt=redacted_prompt,
+                    policy_redacted_prompt=policy_redacted_prompt,
+                    scan_verdict=scan_verdict,
+                    input_decision=_input_decision,
+                    check_resp=check_resp,
+                    org_config=org_config,
+                    body=body,
+                    stage_metrics=stage_metrics,
+                    ptimer=_ptimer,
+                    request_intent="",
+                )
             if is_stream:
                 METRICS["allowed"] += 1
                 _audit_fire_and_forget(
@@ -8141,6 +8391,17 @@ async def proxy_chat(
                 scan_text = (effective_prompt or "") + "\n" + agent_data
             try:
                 if force_sync_tier2:
+                    # Routing is now fully deterministic (no network call), so there is
+                    # nothing left to overlap the Tier-2 input scan against — the former
+                    # T2-vs-adjudicator prefetch/gather has been removed.
+                    #
+                    # CRITICAL: this await is the ONLY place the Tier-2 scan coroutine is
+                    # consumed. Dropping it un-awaited would silently skip Tier-2 input
+                    # scanning entirely (a fail-OPEN on the security path that surfaces
+                    # only as a RuntimeWarning). A plain await also propagates
+                    # Tier2UnavailableStrict exactly as the previous
+                    # gather(return_exceptions=False) did, so the strict 503 fail-closed
+                    # contract below is unchanged.
                     verdict = await INPUT_SCANNER.scan_prompt_with_tier2(
                         scan_text,
                         is_rag=is_rag_request,
@@ -8594,6 +8855,22 @@ async def proxy_chat(
                         scan_verdict=verdict,
                     )
 
+        if not needs_inference:
+            return _return_scan_only_chat(
+                start=start,
+                prompt=prompt,
+                redacted_prompt=redacted_prompt,
+                policy_redacted_prompt=policy_redacted_prompt,
+                scan_verdict=scan_verdict,
+                input_decision=_input_decision,
+                check_resp=check_resp,
+                org_config=org_config,
+                body=body,
+                stage_metrics=stage_metrics,
+                ptimer=_ptimer,
+                request_intent=_request_intent,
+            )
+
         # I-02: governance must depend on ROUTING-CATALOGUE AVAILABILITY, not on
         # whether this worker happened to register an AGENT_ID — the same bug class
         # the policy path already fixed at ~6846 (`_policy_cache_ready or AGENT_ID`).
@@ -8917,10 +9194,10 @@ async def proxy_chat(
             inference_models, _zs_excluded = await _drop_isolated_or_killed_candidates(
                 inference_models, org_slug, auth_ctx.prefix if auth_ctx else "",
             )
-            selection = await LLM_ROUTER.adjudicate_model_selection(
+            # Deterministic selection — no LLM, no network call. Same inputs always
+            # produce the same winner (total ordering inside _score_routing_models).
+            selection = LLM_ROUTER.select_model(
                 routing_models=inference_models,
-                request_messages=body.get("messages") or [],
-                preferred_model=routing_prefs["preferred_model"],
                 request_risk_score=routing_prefs["request_risk_score"],
                 required_compliance=routing_prefs["required_compliance"],
                 data_sensitivity=routing_prefs["data_sensitivity"],
@@ -8928,8 +9205,8 @@ async def proxy_chat(
                 latency_budget_ms=routing_prefs["latency_budget_ms"],
                 weights=routing_prefs["weights"],
                 allowed_models=routing_allowed_models,
+                preferred_model=routing_prefs["preferred_model"],
                 token_budget_tpm=routing_prefs["token_budget_tpm"],
-                adjudicator_model=os.getenv("BEDROCK_ADJUDICATOR_MODEL", "").strip() or None,
             )
             if selection:
                 # Remap inactive selections onto highest-scored active candidate;
@@ -8954,6 +9231,7 @@ async def proxy_chat(
                     request_risk_score=routing_prefs["request_risk_score"],
                     estimated_tokens=routing_prefs["estimated_tokens"],
                     token_budget_tpm=routing_prefs["token_budget_tpm"],
+                    data_sensitivity_source=routing_prefs.get("data_sensitivity_source", "request"),
                 )
                 LOG.info(
                     "Chat routing selected model: %s (requested=%s, source=%s, reason=%s)",
@@ -9388,17 +9666,93 @@ async def proxy_chat(
         if CIRCUIT_BREAKER is not None:
             cb_status = await CIRCUIT_BREAKER.check(requested_model)
             if cb_status.should_block:
-                METRICS["blocked"] += 1
-                _cancel_deep_scan()
-                return JSONResponse(
-                    status_code=503,
-                    content={
-                        "error": "service_unavailable",
-                        "message": f"Circuit breaker OPEN for model '{requested_model}'. Try again later.",
-                        "code": "circuit_breaker_open",
-                    },
-                    headers={"Retry-After": str(CONFIG.get("circuit_breaker_cooldown_seconds", 120))},
-                )
+                # Prefer silent reroute when ModelState/resolver already provisioned
+                # a fallback (KS mirror may also carry action=reroute from the trip).
+                cb_fallback = ""
+                try:
+                    raw_ms = await REDIS_CLIENT.get(
+                        f"model_state:{org_slug or 'default'}:{requested_model}"
+                    )
+                    if raw_ms:
+                        _ms_p = json.loads(raw_ms if isinstance(raw_ms, str) else raw_ms.decode())
+                        cb_fallback = str(_ms_p.get("fallback_model") or "").strip()
+                except Exception:  # noqa: BLE001
+                    cb_fallback = ""
+                if not cb_fallback:
+                    try:
+                        cb_fallback = str(
+                            getattr(cb_status, "fallback_model", "") or ""
+                        ).strip()
+                    except Exception:  # noqa: BLE001
+                        cb_fallback = ""
+                if not cb_fallback and hasattr(CIRCUIT_BREAKER, "_resolve_trip_fallback"):
+                    try:
+                        cb_fallback = await CIRCUIT_BREAKER._resolve_trip_fallback(
+                            org_slug or "default", requested_model
+                        )
+                    except Exception:  # noqa: BLE001
+                        cb_fallback = ""
+                if cb_fallback and cb_fallback != requested_model:
+                    iso_ctx = _isolation_reroute_context(
+                        org_slug,
+                        _chat_capable_models(routing_models),
+                        routing_prefs,
+                        allowed_models,
+                        body=body,
+                    )
+                    compliant_model, cb_audit = _apply_compliant_isolation_reroute(
+                        primary_model=requested_model,
+                        requested_fallback=cb_fallback,
+                        ctx=iso_ctx,
+                        scope="circuit_breaker",
+                        trigger_source="circuit_breaker",
+                        reason="circuit_breaker_open",
+                    )
+                    if compliant_model:
+                        LOG.warning(
+                            "Circuit breaker OPEN: silent reroute %s -> %s",
+                            requested_model,
+                            compliant_model,
+                        )
+                        body["model"] = compliant_model
+                        requested_model = compliant_model
+                        isolation_reroute_locked = True
+                        isolation_reroute_audit = cb_audit
+                        _emit_telemetry(
+                            event_type="circuit_breaker",
+                            model=requested_model,
+                            user_id=user_id,
+                            project_id=str(project_id or ""),
+                            key_prefix=(auth_ctx.prefix if auth_ctx else ""),
+                            action="reroute",
+                            risk_score=0.70,
+                            threat_type="circuit_breaker",
+                            metadata=cb_audit,
+                        )
+                    else:
+                        METRICS["blocked"] += 1
+                        _cancel_deep_scan()
+                        return JSONResponse(
+                            status_code=503,
+                            content={
+                                "error": "service_unavailable",
+                                "message": f"Circuit breaker OPEN for model '{requested_model}'. Try again later.",
+                                "code": "circuit_breaker_open",
+                            },
+                            headers={"Retry-After": str(CONFIG.get("circuit_breaker_cooldown_seconds", 120))},
+                        )
+                else:
+                    METRICS["blocked"] += 1
+                    _cancel_deep_scan()
+                    return JSONResponse(
+                        status_code=503,
+                        content={
+                            "error": "service_unavailable",
+                            "message": f"Circuit breaker OPEN for model '{requested_model}'. Try again later.",
+                            "code": "circuit_breaker_open",
+                        },
+                        headers={"Retry-After": str(CONFIG.get("circuit_breaker_cooldown_seconds", 120))},
+                    )
 
         if is_stream:
             _cancel_deep_scan()

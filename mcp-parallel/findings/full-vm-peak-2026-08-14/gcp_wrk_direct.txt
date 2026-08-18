@@ -1,0 +1,211 @@
+tool=bombardier (hey/wrk not installed; hey github/s3 download failed)
+host=ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal arch=x86_64
+url=http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health
+timestamp_utc=2026-08-14T13:04:59Z
+note=GOMAXPROCS maps wrk -t; -c maps wrk -c; duration 15s; --fasthttp HTTP/1.1 keepalive
+
+========== RUN 1: 8 threads, 400 conns, 15s ==========
+cmd: GOMAXPROCS=8 /tmp/bombardier -c 400 -d 15s -t 5s -l --fasthttp http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health
+
+Bombarding http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health for 15s using 400 connection(s)
+ 00m14s 00m13s 00m13s 00m13s 00m13s 00m13s 00m12s 00m12s 00m12s 00m12s 00m12s 00m11s 00m11s 00m11s 00m11s 00m11s 00m10s 00m10s 00m10s 00m10s 00m10s 00m09s 00m09s 00m09s 00m09s 00m09s 00m08s 00m08s 00m08s 00m08s 00m08s 00m07s 00m07s 00m07s 00m07s 00m07s 00m06s 00m06s 00m06s 00m06s 00m06s 00m05s 00m05s 00m05s 00m05s 00m05s 00m04s 00m04s 00m04s 00m04s 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 15s
+Done!
+Statistics        Avg      Stdev        Max
+  Reqs/sec      7804.68    1647.76   12434.80
+  Latency       51.13ms    43.89ms   435.50ms
+  Latency Distribution
+     50%    40.05ms
+     75%    62.18ms
+     90%    86.60ms
+     95%   107.26ms
+     99%   299.59ms
+  HTTP codes:
+    1xx - 0, 2xx - 117480, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     4.61MB/s
+
+========== RUN 2: 16 threads, 2000 conns, 15s ==========
+cmd: GOMAXPROCS=16 /tmp/bombardier -c 2000 -d 15s -t 5s -l --fasthttp http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health
+
+Bombarding http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health for 15s using 2000 connection(s)
+ 00m14s 00m13s 00m13s 00m13s 00m13s 00m13s 00m12s 00m12s 00m12s 00m12s 00m12s 00m11s 00m11s 00m11s 00m11s 00m11s 00m10s 00m10s 00m10s 00m10s 00m10s 00m09s 00m09s 00m09s 00m09s 00m09s 00m08s 00m08s 00m08s 00m08s 00m08s 00m07s 00m07s 00m07s 00m07s 00m07s 00m06s 00m06s 00m06s 00m06s 00m06s 00m05s 00m05s 00m05s 00m05s 00m05s 00m04s 00m04s 00m04s 00m04s 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 15s
+Done!
+Statistics        Avg      Stdev        Max
+  Reqs/sec      5596.77    1669.73   10986.38
+  Latency      352.68ms   182.05ms      1.78s
+  Latency Distribution
+     50%   307.26ms
+     75%   438.82ms
+     90%   646.83ms
+     95%   748.89ms
+     99%      0.88s
+  HTTP codes:
+    1xx - 0, 2xx - 85689, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     3.33MB/s
+
+========== SWEET-SPOT SWEEP 5s GOMAXPROCS=16 (find peak vs httpx 8415 @ inflight=256) ==========
+
+----- GOMAXPROCS=16 -c 64 -d 5s -----
+Bombarding http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health for 5s using 64 connection(s)
+ 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 5s
+Done!
+Statistics        Avg      Stdev        Max
+  Reqs/sec      9715.94    1219.89   11783.75
+  Latency        6.58ms     6.76ms   139.46ms
+  Latency Distribution
+     50%     6.08ms
+     75%     6.87ms
+     90%     8.23ms
+     95%     9.46ms
+     99%    12.95ms
+  HTTP codes:
+    1xx - 0, 2xx - 48743, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     5.70MB/s
+
+----- GOMAXPROCS=16 -c 128 -d 5s -----
+Bombarding http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health for 5s using 128 connection(s)
+ 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 5s
+Done!
+Statistics        Avg      Stdev        Max
+  Reqs/sec      8904.40    1498.24   11876.47
+  Latency       14.34ms    18.11ms   310.79ms
+  Latency Distribution
+     50%    10.89ms
+     75%    15.81ms
+     90%    20.88ms
+     95%    29.45ms
+     99%   103.98ms
+  HTTP codes:
+    1xx - 0, 2xx - 44789, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     5.20MB/s
+
+----- GOMAXPROCS=16 -c 192 -d 5s -----
+Bombarding http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health for 5s using 192 connection(s)
+ 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 5s
+Done!
+Statistics        Avg      Stdev        Max
+  Reqs/sec      8756.00    1396.19   12400.36
+  Latency       21.87ms    26.31ms   317.54ms
+  Latency Distribution
+     50%    16.40ms
+     75%    25.03ms
+     90%    35.95ms
+     95%    45.86ms
+     99%   199.93ms
+  HTTP codes:
+    1xx - 0, 2xx - 44046, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     5.14MB/s
+
+----- GOMAXPROCS=16 -c 256 -d 5s -----
+Bombarding http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health for 5s using 256 connection(s)
+ 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 5s
+Done!
+Statistics        Avg      Stdev        Max
+  Reqs/sec      8602.63    1517.99   14002.72
+  Latency       29.66ms    38.00ms   494.42ms
+  Latency Distribution
+     50%    19.34ms
+     75%    30.66ms
+     90%    53.49ms
+     95%    91.07ms
+     99%   209.53ms
+  HTTP codes:
+    1xx - 0, 2xx - 43259, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     5.09MB/s
+
+----- GOMAXPROCS=16 -c 320 -d 5s -----
+Bombarding http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health for 5s using 320 connection(s)
+ 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 5s
+Done!
+Statistics        Avg      Stdev        Max
+  Reqs/sec      8051.70    1635.82   12416.19
+  Latency       39.50ms    42.44ms   426.48ms
+  Latency Distribution
+     50%    28.07ms
+     75%    47.17ms
+     90%    68.74ms
+     95%    90.89ms
+     99%   270.01ms
+  HTTP codes:
+    1xx - 0, 2xx - 40664, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     4.73MB/s
+
+========== 15s CONFIRM GOMAXPROCS=16 around c=64 (beat httpx 8415) ==========
+
+----- GOMAXPROCS=16 -c 32 -d 15s -----
+Bombarding http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health for 15s using 32 connection(s)
+ 00m14s 00m13s 00m13s 00m13s 00m13s 00m13s 00m12s 00m12s 00m12s 00m12s 00m12s 00m11s 00m11s 00m11s 00m11s 00m11s 00m10s 00m10s 00m10s 00m10s 00m10s 00m09s 00m09s 00m09s 00m09s 00m09s 00m08s 00m08s 00m08s 00m08s 00m08s 00m07s 00m07s 00m07s 00m07s 00m07s 00m06s 00m06s 00m06s 00m06s 00m06s 00m05s 00m05s 00m05s 00m05s 00m05s 00m04s 00m04s 00m04s 00m04s 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 15s
+Done!
+Statistics        Avg      Stdev        Max
+  Reqs/sec      8418.84     714.61    9571.17
+  Latency        3.80ms     2.98ms   101.81ms
+  Latency Distribution
+     50%     3.72ms
+     75%     4.29ms
+     90%     4.79ms
+     95%     5.13ms
+     99%     6.18ms
+  HTTP codes:
+    1xx - 0, 2xx - 126307, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     4.99MB/s
+
+----- GOMAXPROCS=16 -c 48 -d 15s -----
+Bombarding http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health for 15s using 48 connection(s)
+ 00m14s 00m13s 00m13s 00m13s 00m13s 00m13s 00m12s 00m12s 00m12s 00m12s 00m12s 00m11s 00m11s 00m11s 00m11s 00m11s 00m10s 00m10s 00m10s 00m10s 00m10s 00m09s 00m09s 00m09s 00m09s 00m09s 00m08s 00m08s 00m08s 00m08s 00m08s 00m07s 00m07s 00m07s 00m07s 00m07s 00m06s 00m06s 00m06s 00m06s 00m06s 00m05s 00m05s 00m05s 00m05s 00m05s 00m04s 00m04s 00m04s 00m04s 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 15s
+Done!
+Statistics        Avg      Stdev        Max
+  Reqs/sec      9280.40    1027.01   11170.74
+  Latency        5.17ms     4.94ms   107.22ms
+  Latency Distribution
+     50%     4.91ms
+     75%     5.51ms
+     90%     6.17ms
+     95%     6.73ms
+     99%     8.75ms
+  HTTP codes:
+    1xx - 0, 2xx - 139380, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     5.48MB/s
+
+----- GOMAXPROCS=16 -c 64 -d 15s -----
+Bombarding http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health for 15s using 64 connection(s)
+ 00m14s 00m13s 00m13s 00m13s 00m13s 00m13s 00m12s 00m12s 00m12s 00m12s 00m12s 00m11s 00m11s 00m11s 00m11s 00m11s 00m10s 00m10s 00m10s 00m10s 00m10s 00m09s 00m09s 00m09s 00m09s 00m09s 00m08s 00m08s 00m08s 00m08s 00m08s 00m07s 00m07s 00m07s 00m07s 00m07s 00m06s 00m06s 00m06s 00m06s 00m06s 00m05s 00m05s 00m05s 00m05s 00m05s 00m04s 00m04s 00m04s 00m04s 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 15s
+Done!
+Statistics        Avg      Stdev        Max
+  Reqs/sec      9758.28    1222.04   12109.75
+  Latency        6.56ms     6.92ms   152.12ms
+  Latency Distribution
+     50%     6.05ms
+     75%     6.64ms
+     90%     7.35ms
+     95%     8.07ms
+     99%    11.29ms
+  HTTP codes:
+    1xx - 0, 2xx - 146429, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     5.78MB/s
+
+----- GOMAXPROCS=16 -c 96 -d 15s -----
+Bombarding http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300/health for 15s using 96 connection(s)
+ 00m14s 00m13s 00m13s 00m13s 00m13s 00m13s 00m12s 00m12s 00m12s 00m12s 00m12s 00m11s 00m11s 00m11s 00m11s 00m11s 00m10s 00m10s 00m10s 00m10s 00m10s 00m09s 00m09s 00m09s 00m09s 00m09s 00m08s 00m08s 00m08s 00m08s 00m08s 00m07s 00m07s 00m07s 00m07s 00m07s 00m06s 00m06s 00m06s 00m06s 00m06s 00m05s 00m05s 00m05s 00m05s 00m05s 00m04s 00m04s 00m04s 00m04s 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 15s
+Done!
+Statistics        Avg      Stdev        Max
+  Reqs/sec      9698.30    1518.63   12828.98
+  Latency        9.89ms    10.89ms   157.19ms
+  Latency Distribution
+     50%     7.24ms
+     75%    11.74ms
+     90%    14.15ms
+     95%    15.23ms
+     99%    98.83ms
+  HTTP codes:
+    1xx - 0, 2xx - 145546, 3xx - 0, 4xx - 0, 5xx - 0
+    others - 0
+  Throughput:     5.74MB/s

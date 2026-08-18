@@ -63,7 +63,30 @@ export function useSimulatorEngine() {
       ...(gatewayKey ? { Authorization: `Bearer ${gatewayKey}` } : {}),
       ...(opts.headers || {}),
     };
-    const res = await fetch(url, { ...opts, headers });
+    let res;
+    try {
+      res = await fetch(url, { ...opts, headers });
+    } catch (err) {
+      const timedOut = err?.name === "TimeoutError" || /timeout/i.test(String(err?.message || ""));
+      if (err?.name === "AbortError" || timedOut) {
+        return {
+          ok: false,
+          status: 0,
+          headers: null,
+          data: {
+            error: timedOut ? "timeout" : "aborted",
+            code: timedOut ? "timeout" : "aborted",
+            message: timedOut
+              ? "Request timed out before the gateway responded."
+              : "Request aborted (reset, timeout, or new burst).",
+          },
+          aborted: !timedOut,
+          timedOut,
+          isStream: false,
+        };
+      }
+      throw err;
+    }
     const contentType = res.headers.get("content-type") || "";
     if (contentType.includes("text/event-stream")) {
       const sse = await import("../utils/liveGateway").then((m) => m.consumeSSEStream(res));

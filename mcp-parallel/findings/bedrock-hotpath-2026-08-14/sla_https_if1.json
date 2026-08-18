@@ -1,0 +1,149 @@
+{
+  "mode": "chat",
+  "gateway": "https://aimeshgateway.zeroshield.ai",
+  "workers": 1,
+  "conn": 1,
+  "inflight": 1,
+  "duration_s": 20.011,
+  "requests": 5,
+  "ok": 4,
+  "errors": 1,
+  "error_rate": 0.2,
+  "rps": 0.25,
+  "ok_rps": 0.2,
+  "scan_only": 0,
+  "codes": {
+    "200": 4,
+    "503": 1
+  },
+  "errors_by_signature": {
+    "HTTP 503 503 The inference provider is temporarily unavailable. Please try again.": 1
+  },
+  "client_latency_ms": {
+    "n": 5,
+    "mean": 3974.05,
+    "p50": 4448.241,
+    "p90": 5245.788,
+    "p95": 5245.788,
+    "p99": 5245.788,
+    "max": 5245.788
+  },
+  "addon_latency_ms": {
+    "n": 4,
+    "mean": 2864.875,
+    "p50": 2936.4,
+    "p90": 3061.2,
+    "p95": 3061.2,
+    "p99": 3061.2,
+    "max": 3061.2
+  },
+  "stage_latency_ms": {
+    "auth": {
+      "n": 4,
+      "mean": 0.475,
+      "p50": 0.5,
+      "p90": 0.7,
+      "p95": 0.7,
+      "p99": 0.7,
+      "max": 0.7
+    },
+    "rate_limit": {
+      "n": 4,
+      "mean": 0.3,
+      "p50": 0.3,
+      "p90": 0.3,
+      "p95": 0.3,
+      "p99": 0.3,
+      "max": 0.3
+    },
+    "policy": {
+      "n": 4,
+      "mean": 1.475,
+      "p50": 1.5,
+      "p90": 1.5,
+      "p95": 1.5,
+      "p99": 1.5,
+      "max": 1.5
+    },
+    "input_scan": {
+      "n": 4,
+      "mean": 1807.725,
+      "p50": 1916.3,
+      "p90": 1940.2,
+      "p95": 1940.2,
+      "p99": 1940.2,
+      "max": 1940.2
+    },
+    "kill_switch": {
+      "n": 4,
+      "mean": 0.225,
+      "p50": 0.2,
+      "p90": 0.3,
+      "p95": 0.3,
+      "p99": 0.3,
+      "max": 0.3
+    },
+    "model_routing": {
+      "n": 4,
+      "mean": 3.85,
+      "p50": 3.8,
+      "p90": 4.1,
+      "p95": 4.1,
+      "p99": 4.1,
+      "max": 4.1
+    },
+    "model_input": {
+      "n": 4,
+      "mean": 0.4,
+      "p50": 0.4,
+      "p90": 0.4,
+      "p95": 0.4,
+      "p99": 0.4,
+      "max": 0.4
+    },
+    "model_output": {
+      "n": 4,
+      "mean": 1666.7,
+      "p50": 2149.0,
+      "p90": 2357.3,
+      "p95": 2357.3,
+      "p99": 2357.3,
+      "max": 2357.3
+    },
+    "output_guardrail": {
+      "n": 4,
+      "mean": 1046.15,
+      "p50": 1054.0,
+      "p90": 1110.1,
+      "p95": 1110.1,
+      "p99": 1110.1,
+      "max": 1110.1
+    },
+    "total": {
+      "n": 4,
+      "mean": 4531.575,
+      "p50": 5134.0,
+      "p90": 5210.2,
+      "p95": 5210.2,
+      "p99": 5210.2,
+      "max": 5210.2
+    },
+    "addon": {
+      "n": 4,
+      "mean": 2864.875,
+      "p50": 2936.4,
+      "p90": 3061.2,
+      "p95": 3061.2,
+      "p99": 3061.2,
+      "max": 3061.2
+    }
+  },
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": "",
+    "full_nine_stages": true,
+    "unique_prompt": true
+  },
+  "_wall_orchestrated": 20.18,
+  "_returncode": 0
+}

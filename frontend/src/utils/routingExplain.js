@@ -155,22 +155,23 @@ export function summarizeRoutingDecision(routing = {}) {
   } else if (source === "routing_disabled") {
     const used = selected || requested;
     const modelLabel = used === "auto" ? "the default model" : used;
-    summary = `Org routing is off — the gateway used ${modelLabel} directly without running the adjudicator.`;
-  } else if (source === "weighted_fastpath") {
-    summary = `Weighted scoring selected ${selected || "a model"} without calling the adjudicator`;
-    if (count > 0) summary += ` (${count} eligible)`;
-    summary += `${because}.`;
-  } else if (source === "weighted_fallback") {
-    summary = `The Policy Adjudicator was unavailable, so weighted scoring selected ${selected || "a fallback model"}`;
-    if (count > 0) summary += ` from ${count} eligible models`;
-    summary += `${because}.`;
-  } else if (source === "policy_adjudicator" || source === "weighted" || source === "") {
+    summary = `Org routing is off — the gateway used ${modelLabel} directly without running routing policy.`;
+  } else if (
+    source === "deterministic_weighted" ||
+    // Legacy sources, retained so historical audit rows still explain themselves.
+    // All of these were produced by the removed Bedrock adjudicator path.
+    source === "policy_adjudicator" ||
+    source === "weighted" ||
+    source === "weighted_fastpath" ||
+    source === "weighted_fallback" ||
+    source === ""
+  ) {
     if (rerouted) {
-      summary = `You asked for ${requested}; the Policy Adjudicator chose ${selected} instead`;
+      summary = `You asked for ${requested}; routing policy selected ${selected} instead`;
       if (count > 0) summary += ` from ${count} eligible models`;
       summary += `${because}.`;
     } else {
-      summary = `The Policy Adjudicator selected ${selected || requested}`;
+      summary = `Routing policy selected ${selected || requested}`;
       if (count > 0) summary += ` as the best fit among ${count} eligible models`;
       summary += `${because}.`;
     }
@@ -193,5 +194,8 @@ export function routingHasTechnicalDetails(technical) {
   if (Number(technical.candidate_count) > 0) return true;
   if (technical.guard_reason) return true;
   if (Array.isArray(technical.fallback_chain) && technical.fallback_chain.length > 0) return true;
+  // Without this, an event whose ONLY populated field is candidate_scores would hide
+  // the entire technical panel (RoutingTechnicalDetails returns null on false).
+  if (Array.isArray(technical.candidate_scores) && technical.candidate_scores.length > 0) return true;
   return false;
 }

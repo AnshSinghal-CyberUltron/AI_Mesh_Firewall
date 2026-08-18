@@ -28,12 +28,9 @@ export function chatCompletionBody({
     body.stream = true;
   }
   if (!runInference) {
-    // "scan-only / no-inference" probe: OMIT max_tokens entirely (absent →
-    // gateway treats as no-inference). Previously this sent max_tokens=0, which
-    // the gateway's request validation rejects as "'max_tokens' must be a
-    // positive integer" (400) — so every probe surfaced a confusing block in the
-    // pipeline trace instead of the input-scan verdict.
-    delete body.max_tokens;
+    // Explicit scan-only sentinel. Omitting max_tokens is OpenAI-compatible
+    // (infer with the org default). max_tokens=0 skips LiteLLM after input scan.
+    body.max_tokens = 0;
   }
   if (routingPreferences && typeof routingPreferences === "object") {
     body.routing_preferences = routingPreferences;
@@ -387,6 +384,7 @@ function inferBlockedStage(data, httpStatus, zs) {
   const code = String(data?.code || "").toLowerCase();
   const category = String(data?.category || zs?.threat_type || "").toLowerCase();
   const tier = String(data?.detection_tier || data?.pipeline_stage || zs?.detection_tier || "").toLowerCase();
+  const blockedBy = String(data?.blocked_by || "").toLowerCase();
 
   if (isUpstreamProviderRateLimit(data, httpStatus)) return "model_output";
 
@@ -400,6 +398,14 @@ function inferBlockedStage(data, httpStatus, zs) {
     return "rate_limit";
   }
   if (code === "kill_switch_active") return "kill_switch";
+  if (
+    code === "circuit_breaker_open"
+    || code === "circuit_open"
+    || blockedBy === "circuit_breaker"
+  ) {
+    return "circuit_breaker";
+  }
+  if (code === "model_isolated") return "kill_switch";
   if (INFERENCE_SETUP_CODES.has(code) || data?.category === "inference_not_configured") {
     return "model_routing";
   }
@@ -428,6 +434,7 @@ function inferBlockedStage(data, httpStatus, zs) {
     if (bb === "input_scan" || bb.startsWith("tier")) return "input_scan";
     if (bb === "policy") return "policy";
     if (bb === "kill_switch") return "kill_switch";
+    if (bb === "circuit_breaker") return "circuit_breaker";
     if (bb === "model_routing" || bb === "model_not_allowed") return "model_routing";
     if (bb === "model_output" || bb.includes("inference")) return "model_output";
     if (bb === "output_guardrail" || bb === "output_guard") return "output_guardrail";

@@ -1,0 +1,26 @@
+RECREATE where=gcp mode=live
+ENABLE_TIER2=true
+GATEWAY_CIRCUIT_BREAKER_ENABLED=true
+GATEWAY_LOADTEST_STUB_LLM=0
+GATEWAY_OUTPUT_GUARD_ENABLED=true
+GATEWAY_TIER2_SAMPLE_RATE=1.0
+ROUTING_ADJUDICATOR_ALWAYS=true
+WEB_CONCURRENCY=16
+Nano=0 Mem=0
+---
+Container ai_mesh_firewall-pgbouncer-1 Running 
+ Container ai_mesh_firewall-frontend-1 Running 
+ Container ai_mesh_firewall-demo-1 Running 
+ Container ai_mesh_firewall-redis-1 Running 
+ Container ai_mesh_firewall-postgres-1 Running 
+ Container ai_mesh_firewall-http-everything-1 Running 
+ Container ai_mesh_firewall-control-1 Running 
+ Container ai_mesh_firewall-rabbitmq-1 Running 
+ Container ai_mesh_firewall-mcp-stub-1 Running 
+ Container ai_mesh_mcp_broker Running 
+ Container ai_mesh_firewall-sse-everything-1 Running 
+ Container ai_mesh_firewall-ws-everything-1 Running 
+ Container ai_mesh_firewall-gateway-1 Recreate 
+ Container ai_mesh_firewall-gateway-1 Recreated 
+ Container ai_mesh_firewall-gateway-1 Starting 
+ Container ai_mesh_firewall-gateway-1 Started

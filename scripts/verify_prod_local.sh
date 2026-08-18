@@ -80,7 +80,8 @@ grep -q 'location /demo/' "${ROOT}/deploy/nginx.conf" || die "nginx.conf missing
 grep -q 'location /demo/' "${ROOT}/deploy/nginx-ssl.conf" || die "nginx-ssl.conf missing /demo/ (HTTPS must proxy demo)"
 grep -q 'auth_basic' "${ROOT}/deploy/nginx.conf" && grep -A5 'location /demo/' "${ROOT}/deploy/nginx.conf" | grep -q 'auth_basic' \
   && die "nginx.conf /demo/ must not use auth_basic (in-app login)"
-pass "Dockerfiles + nginx server_name hosts + /demo HTTP/HTTPS"
+bash "${ROOT}/scripts/test_nginx_security.sh" || die "test_nginx_security.sh"
+pass "Dockerfiles + nginx server_name hosts + /demo HTTP/HTTPS + security headers"
 
 section "4/6 Prod.local overlay renders (non-conflicting ports)"
 "${COMPOSE_LOCAL[@]}" config >/tmp/prod-local-merged.yml \

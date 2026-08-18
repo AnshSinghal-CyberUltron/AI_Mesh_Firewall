@@ -1,0 +1,95 @@
+[
+  {
+    "label": "gcp_C_stub_if32",
+    "inflight": 32,
+    "ok_rps": 124.42,
+    "error_rate": 0.0055,
+    "p50": 147.477,
+    "codes": {
+      "200": 1269,
+      "400": 7
+    },
+    "p50_input_scan": 77.3,
+    "p50_model_output": 0.0,
+    "p50_policy": 19.7
+  },
+  {
+    "label": "gcp_C_stub_if128",
+    "inflight": 128,
+    "ok_rps": 116.75,
+    "error_rate": 0.0149,
+    "p50": 929.593,
+    "codes": {
+      "200": 1259,
+      "400": 12,
+      "422": 7
+    },
+    "p50_input_scan": 164.7,
+    "p50_model_output": 0.0,
+    "p50_policy": 231.5
+  },
+  {
+    "label": "gcp_C_stub_if512",
+    "inflight": 512,
+    "ok_rps": 96.92,
+    "error_rate": 0.1844,
+    "p50": 3825.663,
+    "codes": {
+      "200": 1216,
+      "422": 267,
+      "400": 8
+    },
+    "p50_input_scan": 657.6,
+    "p50_model_output": 0.0,
+    "p50_policy": 854.4
+  },
+  {
+    "label": "gcp_C_stub_if1024",
+    "inflight": 1024,
+    "ok_rps": 89.86,
+    "error_rate": 0.2313,
+    "p50": 7111.56,
+    "codes": {
+      "200": 1466,
+      "503": 21,
+      "400": 8,
+      "422": 412
+    },
+    "p50_input_scan": 559.8,
+    "p50_model_output": 0.0,
+    "p50_policy": 842.2
+  },
+  {
+    "label": "gcp_C_stub_if2048",
+    "inflight": 2048,
+    "ok_rps": 79.92,
+    "error_rate": 0.3689,
+    "p50": 13423.103,
+    "codes": {
+      "200": 1490,
+      "422": 795,
+      "400": 19,
+      "503": 57
+    },
+    "p50_input_scan": 571.4,
+    "p50_model_output": 0.0,
+    "p50_policy": 894.0
+  },
+  {
+    "label": "gcp_C_stub_if4096",
+    "inflight": 4096,
+    "ok_rps": 89.91,
+    "error_rate": 0.3418,
+    "p50": 20735.746,
+    "codes": {
+      "200": 3037,
+      "422": 1003,
+      "400": 15,
+      "503": 558,
+      "404": 1
+    },
+    "p50_input_scan": 480.6,
+    "p50_model_output": 0.0,
+    "p50_policy": 869.8
+  }
+]

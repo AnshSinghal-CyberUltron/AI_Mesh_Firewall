@@ -53,6 +53,9 @@ def _block():
 class _DummyBedrock:
     model = "zeroshield-guard"
 
+    async def ascan(self, *_a, **_k):
+        raise AssertionError("DummyBedrock.ascan must be stubbed")
+
 
 @pytest.fixture
 def scanner(monkeypatch):
@@ -66,7 +69,10 @@ def scanner(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_degraded_tier2_preserves_tier1_pii_redact(scanner, monkeypatch):
-    monkeypatch.setattr(scanner, "_bedrock_scan_sync", lambda *a, **k: _degraded())
+    async def _ascan(*_a, **_k):
+        return _degraded()
+
+    monkeypatch.setattr(scanner._bedrock_scanner, "ascan", _ascan)
     v = await scanner.scan_prompt_with_tier2(PII_PROMPT, org_tier2_strict=False)
     assert v.action == "redact", f"degraded Tier-2 DOWNGRADED Tier-1 PII redact -> {v.action}"
     assert v.threat_type == "pii"
@@ -74,14 +80,20 @@ async def test_degraded_tier2_preserves_tier1_pii_redact(scanner, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_permissive_tier2_allow_preserves_tier1_pii_redact(scanner, monkeypatch):
-    monkeypatch.setattr(scanner, "_bedrock_scan_sync", lambda *a, **k: _allow())
+    async def _ascan(*_a, **_k):
+        return _allow()
+
+    monkeypatch.setattr(scanner._bedrock_scanner, "ascan", _ascan)
     v = await scanner.scan_prompt_with_tier2(PII_PROMPT, org_tier2_strict=False)
     assert v.action == "redact", f"Tier-2 'allow' DOWNGRADED Tier-1 PII redact -> {v.action}"
 
 
 @pytest.mark.asyncio
 async def test_tier2_block_still_escalates_pii_prompt(scanner, monkeypatch):
-    monkeypatch.setattr(scanner, "_bedrock_scan_sync", lambda *a, **k: _block())
+    async def _ascan(*_a, **_k):
+        return _block()
+
+    monkeypatch.setattr(scanner._bedrock_scanner, "ascan", _ascan)
     v = await scanner.scan_prompt_with_tier2(PII_PROMPT, org_tier2_strict=False)
     assert v.action == "block", f"Tier-2 block escalation on a PII prompt was lost -> {v.action}"
 
@@ -89,7 +101,10 @@ async def test_tier2_block_still_escalates_pii_prompt(scanner, monkeypatch):
 @pytest.mark.asyncio
 async def test_clean_prompt_degraded_tier2_behaviour_unchanged(scanner, monkeypatch):
     """No Tier-1 redact to preserve -> the degraded fail-open path is untouched."""
-    monkeypatch.setattr(scanner, "_bedrock_scan_sync", lambda *a, **k: _degraded())
+    async def _ascan(*_a, **_k):
+        return _degraded()
+
+    monkeypatch.setattr(scanner._bedrock_scanner, "ascan", _ascan)
     v = await scanner.scan_prompt_with_tier2("what is the weather today", org_tier2_strict=False)
     assert v.action in ("flag", "allow")
     assert v.threat_type != "pii"

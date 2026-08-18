@@ -1,0 +1,54 @@
+{
+  "mode": "health",
+  "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+  "workers": 32,
+  "conn": 256,
+  "inflight": 8192,
+  "duration_s": 12.831,
+  "requests": 31633,
+  "ok": 31390,
+  "errors": 243,
+  "error_rate": 0.0077,
+  "rps": 2465.36,
+  "ok_rps": 2446.42,
+  "scan_only": 0,
+  "codes": {
+    "200": 31390,
+    "0": 243
+  },
+  "errors_by_signature": {
+    "EXC:ConnectTimeout": 209,
+    "EXC:ConnectError": 34
+  },
+  "client_latency_ms": {
+    "n": 31633,
+    "mean": 2527.116,
+    "p50": 507.799,
+    "p90": 6717.214,
+    "p95": 7520.311,
+    "p99": 9595.898,
+    "max": 11238.78
+  },
+  "addon_latency_ms": {
+    "n": 0,
+    "mean": null,
+    "p50": null,
+    "p90": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+  },
+  "stage_latency_ms": {},
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": "",
+    "full_nine_stages": false,
+    "unique_prompt": true
+  },
+  "_label": "prod_H_if8192",
+  "_where": "prod",
+  "_inflight": 8192,
+  "_wall": 13.0,
+  "_docker_before": "2026-08-17T06:00:08Z\nai_mesh_firewall-gateway-1|4.48%|1.307GiB / 12GiB|41\nai_mesh_firewall-nginx-1|0.00%|9.312MiB / 256MiB|9\nai_mesh_firewall-control-1|0.77%|347.8MiB / 2.5GiB|43\nai_mesh_firewall-pgbouncer-1|0.82%|4.719MiB / 256MiB|1\nai_mesh_firewall-postgres-1|2.81%|581.8MiB / 2.5GiB|11\nai_mesh_firewall-redis-1|1.44%|72.63MiB / 1GiB|7",
+  "_docker_after": "2026-08-17T06:00:23Z\nai_mesh_firewall-gateway-1|0.65%|1.399GiB / 12GiB|41\nai_mesh_firewall-nginx-1|0.00%|9.312MiB / 256MiB|9\nai_mesh_firewall-control-1|0.44%|347.3MiB / 2.5GiB|43\nai_mesh_firewall-pgbouncer-1|0.01%|4.156MiB / 256MiB|1\nai_mesh_firewall-postgres-1|0.00%|581.4MiB / 2.5GiB|11\nai_mesh_firewall-redis-1|0.48%|69.47MiB / 1GiB|7"
+}

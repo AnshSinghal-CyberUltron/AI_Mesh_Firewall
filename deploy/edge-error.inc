@@ -10,17 +10,14 @@
 # error_page pointing at a concrete internal URI survives it — verified: `..%2f` stays 400, now JSON.
 # No `=` on error_page: the ORIGINAL status is preserved (403 stays 403, 404 stays 404).
 #
-# The 5 security add_headers are repeated here because nginx does not inherit http-level add_header
-# into a block that defines its own (X-Request-ID) — omitting them would drop them from error bodies.
+# The 5 security add_headers are included here because nginx does not inherit
+# http-level add_header into a block that defines its own (X-Request-ID) —
+# omitting them would drop them from error bodies.
 error_page 400 401 403 404 405 413 414 431 /__edge_error.json;
 location = /__edge_error.json {
     internal;
     root /etc/nginx/edge_errors;
     default_type application/json;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-Frame-Options "DENY" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Content-Security-Policy "frame-ancestors 'none'" always;
-    add_header Strict-Transport-Security "max-age=31536000" always;
+    include /etc/nginx/security-headers.inc;
     add_header X-Request-ID $request_id always;
 }

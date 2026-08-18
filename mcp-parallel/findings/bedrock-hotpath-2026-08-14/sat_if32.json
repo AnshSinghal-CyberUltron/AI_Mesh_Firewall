@@ -1,0 +1,146 @@
+{
+  "mode": "chat",
+  "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+  "workers": 32,
+  "conn": 1,
+  "inflight": 32,
+  "duration_s": 24.459,
+  "requests": 162,
+  "ok": 162,
+  "errors": 0,
+  "error_rate": 0.0,
+  "rps": 6.62,
+  "ok_rps": 6.62,
+  "scan_only": 0,
+  "codes": {
+    "200": 162
+  },
+  "errors_by_signature": {},
+  "client_latency_ms": {
+    "n": 162,
+    "mean": 4426.886,
+    "p50": 4411.754,
+    "p90": 5385.543,
+    "p95": 6006.279,
+    "p99": 7433.767,
+    "max": 9765.585
+  },
+  "addon_latency_ms": {
+    "n": 162,
+    "mean": 2926.626,
+    "p50": 2853.2,
+    "p90": 3439.9,
+    "p95": 3717.8,
+    "p99": 3846.3,
+    "max": 4206.2
+  },
+  "stage_latency_ms": {
+    "auth": {
+      "n": 162,
+      "mean": 4.188,
+      "p50": 0.3,
+      "p90": 3.2,
+      "p95": 5.9,
+      "p99": 130.4,
+      "max": 247.8
+    },
+    "rate_limit": {
+      "n": 162,
+      "mean": 2.132,
+      "p50": 0.3,
+      "p90": 1.2,
+      "p95": 2.8,
+      "p99": 50.8,
+      "max": 106.1
+    },
+    "policy": {
+      "n": 162,
+      "mean": 11.8,
+      "p50": 1.4,
+      "p90": 27.7,
+      "p95": 95.0,
+      "p99": 146.3,
+      "max": 234.9
+    },
+    "input_scan": {
+      "n": 162,
+      "mean": 1743.175,
+      "p50": 1692.7,
+      "p90": 2181.2,
+      "p95": 2267.6,
+      "p99": 2559.4,
+      "max": 2831.6
+    },
+    "kill_switch": {
+      "n": 162,
+      "mean": 0.62,
+      "p50": 0.2,
+      "p90": 0.6,
+      "p95": 1.0,
+      "p99": 3.5,
+      "max": 25.9
+    },
+    "model_routing": {
+      "n": 162,
+      "mean": 4.825,
+      "p50": 4.2,
+      "p90": 6.5,
+      "p95": 8.3,
+      "p99": 9.9,
+      "max": 15.0
+    },
+    "model_input": {
+      "n": 162,
+      "mean": 0.536,
+      "p50": 0.4,
+      "p90": 0.6,
+      "p95": 1.7,
+      "p99": 2.3,
+      "max": 2.8
+    },
+    "model_output": {
+      "n": 162,
+      "mean": 1474.341,
+      "p50": 1568.1,
+      "p90": 2259.2,
+      "p95": 2722.4,
+      "p99": 3863.5,
+      "max": 7235.3
+    },
+    "output_guardrail": {
+      "n": 162,
+      "mean": 1152.346,
+      "p50": 1123.4,
+      "p90": 1370.3,
+      "p95": 1477.0,
+      "p99": 1628.5,
+      "max": 2224.1
+    },
+    "total": {
+      "n": 162,
+      "mean": 4400.967,
+      "p50": 4401.3,
+      "p90": 5319.8,
+      "p95": 5830.1,
+      "p99": 7410.2,
+      "max": 9756.1
+    },
+    "addon": {
+      "n": 162,
+      "mean": 2926.626,
+      "p50": 2853.2,
+      "p90": 3439.9,
+      "p95": 3717.8,
+      "p99": 3846.3,
+      "max": 4206.2
+    }
+  },
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": "",
+    "full_nine_stages": true,
+    "unique_prompt": true
+  },
+  "_wall_orchestrated": 24.63,
+  "_returncode": 0
+}

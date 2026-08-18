@@ -1,0 +1,155 @@
+{
+  "mode": "chat",
+  "gateway": "https://aimeshgateway.zeroshield.ai",
+  "workers": 16,
+  "conn": 8,
+  "inflight": 128,
+  "duration_s": 11.178,
+  "requests": 927,
+  "ok": 904,
+  "errors": 23,
+  "error_rate": 0.0248,
+  "rps": 82.93,
+  "ok_rps": 80.87,
+  "scan_only": 0,
+  "codes": {
+    "200": 904,
+    "400": 7,
+    "422": 16
+  },
+  "errors_by_signature": {
+    "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 16,
+    "HTTP 400 content_filter Request blocked due to security policy": 7
+  },
+  "client_latency_ms": {
+    "n": 927,
+    "mean": 1421.525,
+    "p50": 1363.372,
+    "p90": 2480.223,
+    "p95": 2867.32,
+    "p99": 3120.656,
+    "max": 3265.41
+  },
+  "addon_latency_ms": {
+    "n": 911,
+    "mean": 1222.722,
+    "p50": 1103.6,
+    "p90": 2168.5,
+    "p95": 2620.3,
+    "p99": 2957.1,
+    "max": 3117.7
+  },
+  "stage_latency_ms": {
+    "auth": {
+      "n": 911,
+      "mean": 60.651,
+      "p50": 19.9,
+      "p90": 179.4,
+      "p95": 237.4,
+      "p99": 427.8,
+      "max": 863.5
+    },
+    "rate_limit": {
+      "n": 911,
+      "mean": 0.129,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.1,
+      "max": 102.2
+    },
+    "policy": {
+      "n": 911,
+      "mean": 259.437,
+      "p50": 176.2,
+      "p90": 601.7,
+      "p95": 788.6,
+      "p99": 1270.8,
+      "max": 1587.5
+    },
+    "input_scan": {
+      "n": 911,
+      "mean": 430.234,
+      "p50": 324.0,
+      "p90": 904.1,
+      "p95": 1033.8,
+      "p99": 1266.2,
+      "max": 1441.5
+    },
+    "kill_switch": {
+      "n": 911,
+      "mean": 18.807,
+      "p50": 5.1,
+      "p90": 58.1,
+      "p95": 89.4,
+      "p99": 151.2,
+      "max": 256.6
+    },
+    "model_routing": {
+      "n": 911,
+      "mean": 230.164,
+      "p50": 143.5,
+      "p90": 588.5,
+      "p95": 883.3,
+      "p99": 1254.0,
+      "max": 1647.1
+    },
+    "model_input": {
+      "n": 911,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "model_output": {
+      "n": 911,
+      "mean": 0.007,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.1,
+      "max": 1.7
+    },
+    "output_guardrail": {
+      "n": 911,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "total": {
+      "n": 911,
+      "mean": 1222.729,
+      "p50": 1103.6,
+      "p90": 2168.5,
+      "p95": 2620.3,
+      "p99": 2957.1,
+      "max": 3117.7
+    },
+    "addon": {
+      "n": 911,
+      "mean": 1222.722,
+      "p50": 1103.6,
+      "p90": 2168.5,
+      "p95": 2620.3,
+      "p99": 2957.1,
+      "max": 3117.7
+    }
+  },
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": "",
+    "full_nine_stages": true,
+    "unique_prompt": true
+  },
+  "_label": "C_code_nlb_if128",
+  "_inflight": 128,
+  "_wall_orchestrated": 11.36,
+  "_docker_before": "2026-08-17T05:37:50Z\nai_mesh_firewall-gateway-1|1.82%|3.471GiB / 12GiB|402\nai_mesh_firewall-nginx-1|0.00%|8.969MiB / 256MiB|9\nai_mesh_firewall-control-1|0.47%|342.5MiB / 2.5GiB|43\nai_mesh_firewall-pgbouncer-1|0.84%|4.793MiB / 256MiB|1\nai_mesh_firewall-postgres-1|2.78%|450.7MiB / 2.5GiB|11\nai_mesh_firewall-redis-1|1.43%|86.97MiB / 1GiB|7",
+  "_docker_after": "2026-08-17T05:38:03Z\nai_mesh_firewall-gateway-1|1.88%|3.471GiB / 12GiB|402\nai_mesh_firewall-nginx-1|0.02%|8.969MiB / 256MiB|9\nai_mesh_firewall-control-1|0.48%|345.9MiB / 2.5GiB|43\nai_mesh_firewall-pgbouncer-1|0.01%|4.184MiB / 256MiB|1\nai_mesh_firewall-postgres-1|0.01%|460.3MiB / 2.5GiB|11\nai_mesh_firewall-redis-1|7.34%|81.16MiB / 1GiB|7",
+  "_harness_rc": 0
+}

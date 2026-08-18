@@ -66,3 +66,26 @@ class KillSwitchCredentialTests(TestCase):
         )
         assert not ser.is_valid()
         assert "action" in ser.errors
+
+    def test_orphan_credential_key_flagged_malformed(self):
+        """kill_switch:{org}:credential:{prefix} without :model: is malformed."""
+        from unittest.mock import MagicMock
+
+        from core.redis_kill_switch_views import _scan_org_kill_switch_keys
+
+        client = MagicMock()
+        orphan = "kill_switch:acme:credential:vKhak0tJ"
+        good = "kill_switch:acme:credential:vKhak0tJ:model:gpt-4o"
+        client.scan_iter.return_value = [orphan, good]
+
+        def _get(key):
+            if key == orphan:
+                return b'{"is_active": true, "action": "disable"}'
+            return b'{"is_active": true, "action": "disable", "org_slug": "acme"}'
+
+        client.get.side_effect = _get
+        findings = _scan_org_kill_switch_keys(client, "acme")
+        by_key = {f["key"]: f for f in findings}
+        assert by_key[orphan]["malformed"] is True
+        assert by_key[orphan]["status"] == "orphan_credential"
+        assert by_key[good]["malformed"] is False

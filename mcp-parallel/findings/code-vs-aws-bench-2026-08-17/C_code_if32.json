@@ -1,0 +1,153 @@
+{
+  "mode": "chat",
+  "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+  "workers": 8,
+  "conn": 4,
+  "inflight": 32,
+  "duration_s": 10.277,
+  "requests": 878,
+  "ok": 872,
+  "errors": 6,
+  "error_rate": 0.0068,
+  "rps": 85.43,
+  "ok_rps": 84.85,
+  "scan_only": 0,
+  "codes": {
+    "200": 872,
+    "400": 6
+  },
+  "errors_by_signature": {
+    "HTTP 400 content_filter Request blocked due to security policy": 6
+  },
+  "client_latency_ms": {
+    "n": 878,
+    "mean": 364.558,
+    "p50": 288.793,
+    "p90": 687.076,
+    "p95": 787.853,
+    "p99": 933.318,
+    "max": 1231.084
+  },
+  "addon_latency_ms": {
+    "n": 878,
+    "mean": 327.27,
+    "p50": 264.9,
+    "p90": 619.4,
+    "p95": 694.7,
+    "p99": 828.0,
+    "max": 927.2
+  },
+  "stage_latency_ms": {
+    "auth": {
+      "n": 878,
+      "mean": 6.594,
+      "p50": 1.1,
+      "p90": 15.0,
+      "p95": 26.2,
+      "p99": 109.1,
+      "max": 220.6
+    },
+    "rate_limit": {
+      "n": 878,
+      "mean": 0.003,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.1,
+      "max": 1.1
+    },
+    "policy": {
+      "n": 878,
+      "mean": 65.996,
+      "p50": 33.6,
+      "p90": 166.0,
+      "p95": 214.9,
+      "p99": 338.2,
+      "max": 426.3
+    },
+    "input_scan": {
+      "n": 878,
+      "mean": 132.154,
+      "p50": 105.2,
+      "p90": 233.2,
+      "p95": 296.5,
+      "p99": 364.0,
+      "max": 472.8
+    },
+    "kill_switch": {
+      "n": 878,
+      "mean": 2.836,
+      "p50": 0.8,
+      "p90": 7.2,
+      "p95": 10.1,
+      "p99": 27.9,
+      "max": 148.9
+    },
+    "model_routing": {
+      "n": 878,
+      "mean": 42.582,
+      "p50": 21.0,
+      "p90": 104.9,
+      "p95": 171.4,
+      "p99": 278.5,
+      "max": 394.2
+    },
+    "model_input": {
+      "n": 878,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "model_output": {
+      "n": 878,
+      "mean": 0.007,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.3,
+      "max": 1.0
+    },
+    "output_guardrail": {
+      "n": 878,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "total": {
+      "n": 878,
+      "mean": 327.278,
+      "p50": 264.9,
+      "p90": 619.4,
+      "p95": 694.7,
+      "p99": 828.0,
+      "max": 927.2
+    },
+    "addon": {
+      "n": 878,
+      "mean": 327.27,
+      "p50": 264.9,
+      "p90": 619.4,
+      "p95": 694.7,
+      "p99": 828.0,
+      "max": 927.2
+    }
+  },
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": "",
+    "full_nine_stages": true,
+    "unique_prompt": true
+  },
+  "_label": "C_code_if32",
+  "_inflight": 32,
+  "_wall_orchestrated": 10.44,
+  "_docker_before": "2026-08-17T05:36:03Z\nai_mesh_firewall-gateway-1|1.80%|3.225GiB / 12GiB|116\nai_mesh_firewall-nginx-1|0.03%|9.164MiB / 256MiB|9\nai_mesh_firewall-control-1|8.06%|300.3MiB / 2.5GiB|29\nai_mesh_firewall-pgbouncer-1|0.01%|4.414MiB / 256MiB|1\nai_mesh_firewall-postgres-1|0.01%|361.1MiB / 2.5GiB|11\nai_mesh_firewall-redis-1|2.33%|18.9MiB / 1GiB|6",
+  "_docker_after": "2026-08-17T05:36:16Z\nai_mesh_firewall-gateway-1|4.42%|3.275GiB / 12GiB|193\nai_mesh_firewall-nginx-1|0.00%|8.914MiB / 256MiB|9\nai_mesh_firewall-control-1|6.64%|311.3MiB / 2.5GiB|34\nai_mesh_firewall-pgbouncer-1|0.23%|4.676MiB / 256MiB|1\nai_mesh_firewall-postgres-1|2.18%|382.4MiB / 2.5GiB|11\nai_mesh_firewall-redis-1|2.64%|37.9MiB / 1GiB|6",
+  "_harness_rc": 0
+}

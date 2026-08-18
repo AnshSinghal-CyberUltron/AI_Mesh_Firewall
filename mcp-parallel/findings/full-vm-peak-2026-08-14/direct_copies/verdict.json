@@ -1,0 +1,302 @@
+{
+  "generated_at": "2026-08-14T12:42:19.648950+00:00",
+  "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+  "model": "auto",
+  "unique_prompt": true,
+  "stub_llm": "0",
+  "peak_health_ok_rps": 8415.8,
+  "peak_health_inflight": 256,
+  "peak_chat_ok_rps": 28.86,
+  "peak_chat_inflight": 512,
+  "peak_chat_error_rate": 0.2034,
+  "last_zero_error_chat": {
+    "inflight": null,
+    "ok_rps": null,
+    "p50_ms": null
+  },
+  "claimed_100k_rps": false,
+  "claimed_100k_reason": "100k RPS of live 9-stage (Bedrock T2 + adjudicator + output guard + BYOK) is not claimed unless a level measured ok_rps>=100000 with error_rate=0.",
+  "table": [
+    {
+      "label": "health_if256",
+      "inflight": 256,
+      "ok_rps": 8415.8,
+      "rps": 8415.8,
+      "error_rate": 0.0,
+      "codes": {
+        "200": 67784
+      },
+      "p50_ms": 19.174,
+      "p50_input_scan": null,
+      "p50_routing": null,
+      "top_errors": {}
+    },
+    {
+      "label": "health_if1024",
+      "inflight": 1024,
+      "ok_rps": 6206.89,
+      "rps": 6206.89,
+      "error_rate": 0.0,
+      "codes": {
+        "200": 50700
+      },
+      "p50_ms": 121.88,
+      "p50_input_scan": null,
+      "p50_routing": null,
+      "top_errors": {}
+    },
+    {
+      "label": "health_if4096",
+      "inflight": 4096,
+      "ok_rps": 4019.64,
+      "rps": 4034.63,
+      "error_rate": 0.0037,
+      "codes": {
+        "200": 41577,
+        "0": 155
+      },
+      "p50_ms": 533.327,
+      "p50_input_scan": null,
+      "p50_routing": null,
+      "top_errors": {
+        "EXC:ConnectTimeout": 155
+      }
+    },
+    {
+      "label": "health_if8192",
+      "inflight": 8192,
+      "ok_rps": 1762.31,
+      "rps": 1790.7,
+      "error_rate": 0.0159,
+      "codes": {
+        "200": 27122,
+        "0": 437
+      },
+      "p50_ms": 1214.839,
+      "p50_input_scan": null,
+      "p50_routing": null,
+      "top_errors": {
+        "EXC:ConnectTimeout": 436,
+        "EXC:ConnectError": 1
+      }
+    },
+    {
+      "label": "health_if16384",
+      "inflight": 16384,
+      "ok_rps": 1950.79,
+      "rps": 2154.01,
+      "error_rate": 0.0943,
+      "codes": {
+        "200": 31063,
+        "0": 3236
+      },
+      "p50_ms": 4142.264,
+      "p50_input_scan": null,
+      "p50_routing": null,
+      "top_errors": {
+        "EXC:ConnectTimeout": 3200,
+        "EXC:ConnectError": 36
+      }
+    },
+    {
+      "label": "health_if32768",
+      "inflight": 32768,
+      "ok_rps": 1680.52,
+      "rps": 2044.5,
+      "error_rate": 0.178,
+      "codes": {
+        "200": 35930,
+        "0": 7782
+      },
+      "p50_ms": 10747.378,
+      "p50_input_scan": null,
+      "p50_routing": null,
+      "top_errors": {
+        "EXC:ConnectTimeout": 7726,
+        "EXC:ConnectError": 56
+      }
+    },
+    {
+      "label": "chat_if32",
+      "inflight": 32,
+      "ok_rps": 6.29,
+      "rps": 6.45,
+      "error_rate": 0.0242,
+      "codes": {
+        "200": 161,
+        "400": 4
+      },
+      "p50_ms": 3791.037,
+      "p50_input_scan": 1480.3,
+      "p50_routing": 4.8,
+      "top_errors": {
+        "HTTP 400 content_filter Request blocked due to security policy": 4
+      }
+    },
+    {
+      "label": "chat_if64",
+      "inflight": 64,
+      "ok_rps": 13.33,
+      "rps": 13.33,
+      "error_rate": 0.0,
+      "codes": {
+        "200": 369
+      },
+      "p50_ms": 3329.6,
+      "p50_input_scan": 1371.2,
+      "p50_routing": 5.3,
+      "top_errors": {}
+    },
+    {
+      "label": "chat_if128",
+      "inflight": 128,
+      "ok_rps": 22.1,
+      "rps": 22.24,
+      "error_rate": 0.0061,
+      "codes": {
+        "200": 652,
+        "400": 4
+      },
+      "p50_ms": 3816.589,
+      "p50_input_scan": 1496.9,
+      "p50_routing": 9.6,
+      "top_errors": {
+        "HTTP 400 content_filter Request blocked due to security policy": 4
+      }
+    },
+    {
+      "label": "chat_if256",
+      "inflight": 256,
+      "ok_rps": 26.55,
+      "rps": 27.11,
+      "error_rate": 0.0208,
+      "codes": {
+        "200": 847,
+        "422": 15,
+        "400": 3
+      },
+      "p50_ms": 6331.481,
+      "p50_input_scan": 2570.2,
+      "p50_routing": 33.7,
+      "top_errors": {
+        "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 15,
+        "HTTP 400 content_filter Request blocked due to security policy": 3
+      }
+    },
+    {
+      "label": "chat_if512",
+      "inflight": 512,
+      "ok_rps": 28.86,
+      "rps": 36.23,
+      "error_rate": 0.2034,
+      "codes": {
+        "422": 70,
+        "200": 932,
+        "503": 160,
+        "400": 8
+      },
+      "p50_ms": 10129.123,
+      "p50_input_scan": 4638.9,
+      "p50_routing": 289.1,
+      "top_errors": {
+        "HTTP 503 tier2_unavailable Security scanner is temporarily unavailable; please retry shortly.": 159,
+        "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 70,
+        "HTTP 400 content_filter Request blocked due to security policy": 8,
+        "HTTP 503 kill_switch_active Model 'Haiku' is currently disabled.": 1
+      }
+    },
+    {
+      "label": "chat_if1024",
+      "inflight": 1024,
+      "ok_rps": 9.33,
+      "rps": 54.21,
+      "error_rate": 0.8279,
+      "codes": {
+        "503": 1398,
+        "422": 203,
+        "200": 336,
+        "400": 15
+      },
+      "p50_ms": 11719.158,
+      "p50_input_scan": 5302.8,
+      "p50_routing": 1333.1,
+      "top_errors": {
+        "HTTP 503 tier2_unavailable Security scanner is temporarily unavailable; please retry shortly.": 1386,
+        "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 203,
+        "HTTP 400 content_filter Request blocked due to security policy": 15,
+        "HTTP 503 kill_switch_active Model 'Haiku' is currently disabled.": 12
+      }
+    },
+    {
+      "label": "chat_if2048",
+      "inflight": 2048,
+      "ok_rps": 9.27,
+      "rps": 54.53,
+      "error_rate": 0.83,
+      "codes": {
+        "503": 1080,
+        "422": 431,
+        "0": 35,
+        "429": 733,
+        "200": 468,
+        "400": 6
+      },
+      "p50_ms": 21668.57,
+      "p50_input_scan": 7890.4,
+      "p50_routing": 1547.5,
+      "top_errors": {
+        "HTTP 503 tier2_unavailable Security scanner is temporarily unavailable; please retry shortly.": 1019,
+        "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 431,
+        "HTTP 429 rate_limit_exceeded Token rate limit exceeded (99997/100000 TPM, estimated 40 tokens for this request).": 68,
+        "HTTP 429 rate_limit_exceeded Token rate limit exceeded (99965/100000 TPM, estimated 40 tokens for this request).": 62
+      }
+    },
+    {
+      "label": "chat_if4096",
+      "inflight": 4096,
+      "ok_rps": 14.01,
+      "rps": 59.58,
+      "error_rate": 0.7649,
+      "codes": {
+        "503": 2347,
+        "422": 703,
+        "200": 1007,
+        "400": 16,
+        "0": 211
+      },
+      "p50_ms": 39554.658,
+      "p50_input_scan": 4953.0,
+      "p50_routing": 2394.4,
+      "top_errors": {
+        "HTTP 503 tier2_unavailable Security scanner is temporarily unavailable; please retry shortly.": 2305,
+        "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 703,
+        "EXC:ConnectTimeout": 140,
+        "EXC:RemoteProtocolError": 68
+      }
+    },
+    {
+      "label": "chat_if8192",
+      "inflight": 8192,
+      "ok_rps": 13.89,
+      "rps": 206.1,
+      "error_rate": 0.9326,
+      "codes": {
+        "0": 11068,
+        "429": 5369,
+        "503": 931,
+        "200": 1300,
+        "422": 601,
+        "400": 24
+      },
+      "p50_ms": 6037.196,
+      "p50_input_scan": 4899.4,
+      "p50_routing": 2250.4,
+      "top_errors": {
+        "EXC:ReadError": 10806,
+        "HTTP 429 rate_limit_exceeded Token rate limit exceeded (99977/100000 TPM, estimated 40 tokens for this request).": 1813,
+        "HTTP 503 tier2_unavailable Security scanner is temporarily unavailable; please retry shortly.": 833,
+        "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 601
+      }
+    }
+  ]
+}

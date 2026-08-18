@@ -812,6 +812,20 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
             except Exception:
                 logger.warning("Failed to dispatch enforcement notifications for drained telemetry", exc_info=True)
 
+            # Module 1.6: persist Header-bell Notification rows for isolation /
+            # kill-switch / circuit-breaker events (was audit-only → empty bell).
+            try:
+                from core.isolation_notify import create_isolation_bell_notifications_for_events
+
+                n = create_isolation_bell_notifications_for_events(events_to_create)
+                if n:
+                    logger.info("drain_telemetry_from_redis: created %d isolation bell notifications", n)
+            except Exception:
+                logger.warning(
+                    "drain_telemetry_from_redis: isolation bell notification failed",
+                    exc_info=True,
+                )
+
             # Auto-create HumanReviewItems for flagged events and
             # SecurityIncidents for blocked events so the frontend
             # ReviewQueuePanel and SecurityIncidentPanel have data.
@@ -852,9 +866,9 @@ def drain_telemetry_from_redis(batch_size: int = 50) -> int:
         except redis.RedisError:
             pass  # TTL will expire it
 
-    # Security Alerting & Notifications feature REMOVED: critical events are still
-    # persisted and surfaced in the dashboard, but no WebSocket/email alert is
-    # dispatched (the alerting config + email path were removed system-wide).
+    # Isolation / kill-switch / circuit-breaker events create Header-bell
+    # Notification rows via core.isolation_notify (Module 1.6). Email/Slack
+    # recipient config remains removed system-wide.
     return processed
 
 

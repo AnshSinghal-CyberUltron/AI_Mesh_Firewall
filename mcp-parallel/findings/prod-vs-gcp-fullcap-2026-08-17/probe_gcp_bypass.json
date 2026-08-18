@@ -1,0 +1,770 @@
+{
+  "gateway": "http://127.0.0.1:8300",
+  "model": "auto",
+  "n": 2,
+  "unique_prompt": true,
+  "records": [
+    {
+      "i": 0,
+      "nonce_suffix": "b22df262",
+      "status": 200,
+      "wall_ms": 1194.58,
+      "error": null,
+      "scan_only": false,
+      "total_latency_ms": 1159.7,
+      "stages": [
+        {
+          "stage": "auth",
+          "action": "allow",
+          "latency_ms": 0.8
+        },
+        {
+          "stage": "rate_limit",
+          "action": "allow",
+          "latency_ms": 0.4
+        },
+        {
+          "stage": "policy",
+          "action": "allow",
+          "latency_ms": 13.2
+        },
+        {
+          "stage": "input_scan",
+          "action": "allow",
+          "latency_ms": 72.2
+        },
+        {
+          "stage": "kill_switch",
+          "action": "allow",
+          "latency_ms": 2.7
+        },
+        {
+          "stage": "model_routing",
+          "action": "allow",
+          "latency_ms": 9.6
+        },
+        {
+          "stage": "model_input",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_output",
+          "action": "allow",
+          "latency_ms": 1033.7
+        },
+        {
+          "stage": "output_guardrail",
+          "action": "allow",
+          "latency_ms": 0.0
+        }
+      ],
+      "metrics": null,
+      "model": "auto",
+      "id": "chatcmpl-EDkdO7Xh9CyjH134dnUIwmkNWwuVt",
+      "pipeline_trace": {
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.8,
+            "detail": "Gateway API key accepted",
+            "decision_source": "gateway_auth",
+            "decision_source_label": "Gateway authentication",
+            "guard_reason": "Gateway API key accepted",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.4,
+            "detail": "Within org TPM / RPM limits",
+            "decision_source": "org_rate_limit",
+            "decision_source_label": "Org rate limit",
+            "guard_reason": "Within org TPM / RPM limits",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "policy",
+            "action": "allow",
+            "latency_ms": 13.2,
+            "detail": "Policy engine evaluated request against compiled rules; no matching policy rule",
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "prompt_in_operator_masked": false,
+            "redaction_display_note": "",
+            "decision_source": "policy_engine",
+            "decision_source_label": "Policy engine",
+            "guard_reason": "Policy engine \u2014 enforcement: ALLOW",
+            "tier": "policy",
+            "confidence": 0.0
+          },
+          {
+            "name": "input_scan",
+            "action": "allow",
+            "latency_ms": 72.2,
+            "detail": "ZeroShield Model \u2014 enforcement: ALLOW\nAll security checks passed. No threats detected.",
+            "threat_type": "clean",
+            "confidence": 0.0,
+            "risk_score": 0.0,
+            "scan_outcome": "clean",
+            "redact_noop": false,
+            "tier": "none",
+            "matched_patterns": [],
+            "prompt_submitted": "<redacted len=98>",
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "guard_model": "ZeroShield Model",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nThreat category: clean\nZeroShield Model \u2014 enforcement: ALLOW\nAll security checks passed. No threats detected.",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "zeroshield_guard_model",
+            "decision_source": "zeroshield_guard_model",
+            "decision_source_label": "ZeroShield Model",
+            "matched_policies": [],
+            "matched_rules": []
+          },
+          {
+            "name": "kill_switch",
+            "action": "allow",
+            "latency_ms": 2.7,
+            "detail": "No active kill-switch for this model",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "No active kill-switch for this model",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_routing",
+            "action": "allow",
+            "latency_ms": 9.6,
+            "detail": "Weighted selection (risk=30%, cost=20%, latency=20%, priority=30%)",
+            "requested_model": "auto",
+            "selected_model": "gpt-5.2",
+            "routed_model": "gpt-5.2",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "Weighted selection (risk=30%, cost=20%, latency=20%, priority=30%)",
+            "decision_source": "weighted_fastpath",
+            "decision_source_label": "Weighted Fastpath",
+            "policy_summary": "Low-risk request routed by deterministic weighted scoring (adjudicator skipped for latency).",
+            "decision_factors": [
+              "risk_weight=0.30",
+              "cost_weight=0.20",
+              "latency_weight=0.20",
+              "priority_weight=0.30",
+              "request_risk=0.00",
+              "data_sensitivity=public",
+              "adjudicator_skipped_low_risk"
+            ],
+            "weights": {
+              "risk": 0.3,
+              "cost": 0.2,
+              "latency": 0.2,
+              "priority": 0.3
+            },
+            "routing_score": 0.9534,
+            "candidate_count": 11,
+            "fallback_chain": [
+              "poolside/laguna-xs.2:free",
+              "nvidia/nemotron-3.5-content-safety:free",
+              "google/gemma-4-31b-it:free"
+            ],
+            "evaluator_model": "deterministic_weighted",
+            "guard_reason": "Weighted selection (risk=30%, cost=20%, latency=20%, priority=30%)\nDestination: LLM inference\nFactors: risk_weight=0.30, cost_weight=0.20, latency_weight=0.20, priority_weight=0.30, request_risk=0.00, data_sensitivity=public, adjudicator_skipped_low_risk\nWeights: risk=30%, cost=20%, latency=20%, priority=30%\nScore: 0.953\nCandidates: 11",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_input",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Prompt delivered to LLM",
+            "content": "<redacted len=98>",
+            "prompt_submitted": "<redacted len=98>",
+            "decision_source": "llm_request",
+            "decision_source_label": "LLM request",
+            "guard_reason": "Prompt delivered to LLM unchanged",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_output",
+            "action": "allow",
+            "latency_ms": 1033.7,
+            "detail": "LLM inference complete",
+            "content": "<redacted len=5>",
+            "decision_source": "llm_provider",
+            "decision_source_label": "LLM provider",
+            "guard_reason": "LLM inference complete",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=5>"
+          },
+          {
+            "name": "output_guardrail",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "content": "<redacted len=5>",
+            "prompt_in": "<redacted len=5>",
+            "prompt_out": "<redacted len=5>",
+            "guard_model": "ZeroShield Output Guard",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "output_guard",
+            "decision_source": "output_guard",
+            "decision_source_label": "ZeroShield Output Guard",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": []
+          }
+        ],
+        "total_latency_ms": 1159.7,
+        "stage_latency_sum_ms": 1132.6000000000001,
+        "overhead_ms": 27.1,
+        "final_action": "allow",
+        "prompt_preview": "[user]: What is the capital of France? Reply with the city name only. Marker TOK-18cc8221b22df262.",
+        "input_text": "<redacted len=98>",
+        "prompt_submitted": "<redacted len=98>",
+        "output_text": "<redacted len=5>",
+        "final_response": "<redacted len=5>",
+        "output_withheld": false,
+        "output_withheld_reason": "",
+        "input_was_redacted": false,
+        "input_text_before": "",
+        "input_text_after": "",
+        "guard_summary": {
+          "guard_model": "ZeroShield Model",
+          "guard_action": "allow",
+          "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nThreat category: clean\nZeroShield Model \u2014 enforcement: ALLOW\nAll security checks passed. No threats detected.",
+          "reason_code": "",
+          "recommended_action": "",
+          "guard_findings": [],
+          "enforcement_source": "zeroshield_guard_model",
+          "decision_source": "zeroshield_guard_model",
+          "decision_source_label": "ZeroShield Model"
+        },
+        "requested_model": "auto",
+        "routed_model": "gpt-5.2",
+        "routing_reason": "Weighted selection (risk=30%, cost=20%, latency=20%, priority=30%)",
+        "routing": {
+          "requested_model": "auto",
+          "selected_model": "gpt-5.2",
+          "routed_model": "gpt-5.2",
+          "route_destination": "llm",
+          "route_destination_label": "LLM inference",
+          "routing_reason": "Weighted selection (risk=30%, cost=20%, latency=20%, priority=30%)",
+          "decision_source": "weighted_fastpath",
+          "decision_source_label": "Weighted Fastpath",
+          "policy_summary": "Low-risk request routed by deterministic weighted scoring (adjudicator skipped for latency).",
+          "decision_factors": [
+            "risk_weight=0.30",
+            "cost_weight=0.20",
+            "latency_weight=0.20",
+            "priority_weight=0.30",
+            "request_risk=0.00",
+            "data_sensitivity=public",
+            "adjudicator_skipped_low_risk"
+          ],
+          "weights": {
+            "risk": 0.3,
+            "cost": 0.2,
+            "latency": 0.2,
+            "priority": 0.3
+          },
+          "routing_score": 0.9534,
+          "candidate_count": 11,
+          "fallback_chain": [
+            "poolside/laguna-xs.2:free",
+            "nvidia/nemotron-3.5-content-safety:free",
+            "google/gemma-4-31b-it:free"
+          ],
+          "evaluator_model": "deterministic_weighted"
+        },
+        "latency_breakdown": {
+          "by_stage": [
+            {
+              "stage": "model_output",
+              "latency_ms": 1033.7,
+              "share_pct": 89.1
+            },
+            {
+              "stage": "input_scan",
+              "latency_ms": 72.2,
+              "share_pct": 6.2
+            },
+            {
+              "stage": "policy",
+              "latency_ms": 13.2,
+              "share_pct": 1.1
+            },
+            {
+              "stage": "model_routing",
+              "latency_ms": 9.6,
+              "share_pct": 0.8
+            },
+            {
+              "stage": "kill_switch",
+              "latency_ms": 2.7,
+              "share_pct": 0.2
+            },
+            {
+              "stage": "auth",
+              "latency_ms": 0.8,
+              "share_pct": 0.1
+            },
+            {
+              "stage": "rate_limit",
+              "latency_ms": 0.4,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_input",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "output_guardrail",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            }
+          ],
+          "dominant_stage": "model_output",
+          "dominant_latency_ms": 1033.7,
+          "dominant_share_pct": 89.1,
+          "overhead_ms": 27.1,
+          "overhead_share_pct": 2.3,
+          "hints": [
+            {
+              "stage": "model_output",
+              "severity": "high",
+              "message": "Model Output took 1033.7ms (89% of total).",
+              "actions": [
+                "Switch to a smaller or faster model for this workload.",
+                "Enable prompt/response caching for repeat traffic.",
+                "Lower max_tokens or simplify tool schemas."
+              ]
+            }
+          ]
+        },
+        "request_id": "zs-b02350f1c34e"
+      }
+    },
+    {
+      "i": 1,
+      "nonce_suffix": "f964c7cb",
+      "status": 200,
+      "wall_ms": 897.01,
+      "error": null,
+      "scan_only": false,
+      "total_latency_ms": 891.9,
+      "stages": [
+        {
+          "stage": "auth",
+          "action": "allow",
+          "latency_ms": 0.3
+        },
+        {
+          "stage": "rate_limit",
+          "action": "allow",
+          "latency_ms": 0.3
+        },
+        {
+          "stage": "policy",
+          "action": "allow",
+          "latency_ms": 4.6
+        },
+        {
+          "stage": "input_scan",
+          "action": "allow",
+          "latency_ms": 41.5
+        },
+        {
+          "stage": "kill_switch",
+          "action": "allow",
+          "latency_ms": 0.2
+        },
+        {
+          "stage": "model_routing",
+          "action": "allow",
+          "latency_ms": 2.2
+        },
+        {
+          "stage": "model_input",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_output",
+          "action": "allow",
+          "latency_ms": 836.0
+        },
+        {
+          "stage": "output_guardrail",
+          "action": "allow",
+          "latency_ms": 0.0
+        }
+      ],
+      "metrics": null,
+      "model": "auto",
+      "id": "chatcmpl-EDkdP1DEaD75qwNdDlMnTNNtMJz2q",
+      "pipeline_trace": {
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.3,
+            "detail": "Gateway API key accepted",
+            "decision_source": "gateway_auth",
+            "decision_source_label": "Gateway authentication",
+            "guard_reason": "Gateway API key accepted",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.3,
+            "detail": "Within org TPM / RPM limits",
+            "decision_source": "org_rate_limit",
+            "decision_source_label": "Org rate limit",
+            "guard_reason": "Within org TPM / RPM limits",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "policy",
+            "action": "allow",
+            "latency_ms": 4.6,
+            "detail": "Policy engine evaluated request against compiled rules; no matching policy rule",
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "prompt_in_operator_masked": false,
+            "redaction_display_note": "",
+            "decision_source": "policy_engine",
+            "decision_source_label": "Policy engine",
+            "guard_reason": "Policy engine \u2014 enforcement: ALLOW",
+            "tier": "policy",
+            "confidence": 0.0
+          },
+          {
+            "name": "input_scan",
+            "action": "allow",
+            "latency_ms": 41.5,
+            "detail": "ZeroShield Model \u2014 enforcement: ALLOW\nAll security checks passed. No threats detected.",
+            "threat_type": "clean",
+            "confidence": 0.0,
+            "risk_score": 0.0,
+            "scan_outcome": "clean",
+            "redact_noop": false,
+            "tier": "none",
+            "matched_patterns": [],
+            "prompt_submitted": "<redacted len=98>",
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "guard_model": "ZeroShield Model",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nThreat category: clean\nZeroShield Model \u2014 enforcement: ALLOW\nAll security checks passed. No threats detected.",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "zeroshield_guard_model",
+            "decision_source": "zeroshield_guard_model",
+            "decision_source_label": "ZeroShield Model",
+            "matched_policies": [],
+            "matched_rules": []
+          },
+          {
+            "name": "kill_switch",
+            "action": "allow",
+            "latency_ms": 0.2,
+            "detail": "No active kill-switch for this model",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "No active kill-switch for this model",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_routing",
+            "action": "allow",
+            "latency_ms": 2.2,
+            "detail": "Weighted selection (risk=30%, cost=20%, latency=20%, priority=30%)",
+            "requested_model": "auto",
+            "selected_model": "gpt-5.2",
+            "routed_model": "gpt-5.2",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "Weighted selection (risk=30%, cost=20%, latency=20%, priority=30%)",
+            "decision_source": "weighted_fastpath",
+            "decision_source_label": "Weighted Fastpath",
+            "policy_summary": "Low-risk request routed by deterministic weighted scoring (adjudicator skipped for latency).",
+            "decision_factors": [
+              "risk_weight=0.30",
+              "cost_weight=0.20",
+              "latency_weight=0.20",
+              "priority_weight=0.30",
+              "request_risk=0.00",
+              "data_sensitivity=public",
+              "adjudicator_skipped_low_risk"
+            ],
+            "weights": {
+              "risk": 0.3,
+              "cost": 0.2,
+              "latency": 0.2,
+              "priority": 0.3
+            },
+            "routing_score": 0.9534,
+            "candidate_count": 11,
+            "fallback_chain": [
+              "poolside/laguna-xs.2:free",
+              "nvidia/nemotron-3.5-content-safety:free",
+              "google/gemma-4-31b-it:free"
+            ],
+            "evaluator_model": "deterministic_weighted",
+            "guard_reason": "Weighted selection (risk=30%, cost=20%, latency=20%, priority=30%)\nDestination: LLM inference\nFactors: risk_weight=0.30, cost_weight=0.20, latency_weight=0.20, priority_weight=0.30, request_risk=0.00, data_sensitivity=public, adjudicator_skipped_low_risk\nWeights: risk=30%, cost=20%, latency=20%, priority=30%\nScore: 0.953\nCandidates: 11",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_input",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Prompt delivered to LLM",
+            "content": "<redacted len=98>",
+            "prompt_submitted": "<redacted len=98>",
+            "decision_source": "llm_request",
+            "decision_source_label": "LLM request",
+            "guard_reason": "Prompt delivered to LLM unchanged",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_output",
+            "action": "allow",
+            "latency_ms": 836.0,
+            "detail": "LLM inference complete",
+            "content": "<redacted len=5>",
+            "decision_source": "llm_provider",
+            "decision_source_label": "LLM provider",
+            "guard_reason": "LLM inference complete",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=5>"
+          },
+          {
+            "name": "output_guardrail",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "content": "<redacted len=5>",
+            "prompt_in": "<redacted len=5>",
+            "prompt_out": "<redacted len=5>",
+            "guard_model": "ZeroShield Output Guard",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "output_guard",
+            "decision_source": "output_guard",
+            "decision_source_label": "ZeroShield Output Guard",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": []
+          }
+        ],
+        "total_latency_ms": 891.9,
+        "stage_latency_sum_ms": 885.1,
+        "overhead_ms": 6.8,
+        "final_action": "allow",
+        "prompt_preview": "[user]: What is the capital of France? Reply with the city name only. Marker TOK-18cc8221f964c7cb.",
+        "input_text": "<redacted len=98>",
+        "prompt_submitted": "<redacted len=98>",
+        "output_text": "<redacted len=5>",
+        "final_response": "<redacted len=5>",
+        "output_withheld": false,
+        "output_withheld_reason": "",
+        "input_was_redacted": false,
+        "input_text_before": "",
+        "input_text_after": "",
+        "guard_summary": {
+          "guard_model": "ZeroShield Model",
+          "guard_action": "allow",
+          "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nThreat category: clean\nZeroShield Model \u2014 enforcement: ALLOW\nAll security checks passed. No threats detected.",
+          "reason_code": "",
+          "recommended_action": "",
+          "guard_findings": [],
+          "enforcement_source": "zeroshield_guard_model",
+          "decision_source": "zeroshield_guard_model",
+          "decision_source_label": "ZeroShield Model"
+        },
+        "requested_model": "auto",
+        "routed_model": "gpt-5.2",
+        "routing_reason": "Weighted selection (risk=30%, cost=20%, latency=20%, priority=30%)",
+        "routing": {
+          "requested_model": "auto",
+          "selected_model": "gpt-5.2",
+          "routed_model": "gpt-5.2",
+          "route_destination": "llm",
+          "route_destination_label": "LLM inference",
+          "routing_reason": "Weighted selection (risk=30%, cost=20%, latency=20%, priority=30%)",
+          "decision_source": "weighted_fastpath",
+          "decision_source_label": "Weighted Fastpath",
+          "policy_summary": "Low-risk request routed by deterministic weighted scoring (adjudicator skipped for latency).",
+          "decision_factors": [
+            "risk_weight=0.30",
+            "cost_weight=0.20",
+            "latency_weight=0.20",
+            "priority_weight=0.30",
+            "request_risk=0.00",
+            "data_sensitivity=public",
+            "adjudicator_skipped_low_risk"
+          ],
+          "weights": {
+            "risk": 0.3,
+            "cost": 0.2,
+            "latency": 0.2,
+            "priority": 0.3
+          },
+          "routing_score": 0.9534,
+          "candidate_count": 11,
+          "fallback_chain": [
+            "poolside/laguna-xs.2:free",
+            "nvidia/nemotron-3.5-content-safety:free",
+            "google/gemma-4-31b-it:free"
+          ],
+          "evaluator_model": "deterministic_weighted"
+        },
+        "latency_breakdown": {
+          "by_stage": [
+            {
+              "stage": "model_output",
+              "latency_ms": 836.0,
+              "share_pct": 93.7
+            },
+            {
+              "stage": "input_scan",
+              "latency_ms": 41.5,
+              "share_pct": 4.7
+            },
+            {
+              "stage": "policy",
+              "latency_ms": 4.6,
+              "share_pct": 0.5
+            },
+            {
+              "stage": "model_routing",
+              "latency_ms": 2.2,
+              "share_pct": 0.2
+            },
+            {
+              "stage": "auth",
+              "latency_ms": 0.3,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "rate_limit",
+              "latency_ms": 0.3,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "kill_switch",
+              "latency_ms": 0.2,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_input",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "output_guardrail",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            }
+          ],
+          "dominant_stage": "model_output",
+          "dominant_latency_ms": 836.0,
+          "dominant_share_pct": 93.7,
+          "overhead_ms": 6.8,
+          "overhead_share_pct": 0.8,
+          "hints": [
+            {
+              "stage": "model_output",
+              "severity": "high",
+              "message": "Model Output took 836.0ms (94% of total).",
+              "actions": [
+                "Switch to a smaller or faster model for this workload.",
+                "Enable prompt/response caching for repeat traffic.",
+                "Lower max_tokens or simplify tool schemas."
+              ]
+            }
+          ]
+        },
+        "request_id": "zs-60e00af2a2ce"
+      }
+    }
+  ]
+}

@@ -6,12 +6,11 @@
 #   backend   https://aimeshbackend.zeroshield.ai
 #   gateway   https://aimeshgateway.zeroshield.ai
 #
-# Sized for c8g.2xlarge (8 vCPU / 16 GiB): gateway-first CPU, cgroup memory sum ~14.4 GiB.
-#
-# CPU hard-limit budget (must sum ≤ 8 — do NOT overcommit):
-#   gateway 4  +  control 2  +  workers 1  = 7  (~1 CPU headroom for PG/Redis/nginx/OS)
-# Pin workers to match: WEB_CONCURRENCY=4, CONTROL_WEB_CONCURRENCY=2.
-# Apps reach Postgres via pgbouncer:6432; migrations use DATABASE_URL_DIRECT.
+# Sized for c8g.2xlarge (8 vCPU / 16 GiB): gateway-first. Gateway has NO CPU
+# quota so it can use every idle core; memory ceiling 12 GiB (host 15 GiB minus
+# postgres/redis/OS). WEB_CONCURRENCY default 16 = 2× vCPU for I/O-bound
+# Bedrock/BYOK waits (research: I/O-bound uvicorn 2 workers/vCPU).
+# Apps + migrations reach Postgres via pgbouncer:6432 only (never postgres:5432).
 #
 # Build/push: infra/scripts/build-push-images.sh  |  Deploy: scripts/deploy-ec2.sh
 #
@@ -170,22 +169,25 @@ services:
     # Bind 8300 on host for Prometheus scrape (auth: METRICS_SCRAPER_KEY on /metrics)
     ports: !override ["0.0.0.0:8300:8300"]
     environment:
-      # 1 gunicorn worker per gateway vCPU (async uvicorn — not 2×CPU+1)
-      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
-      GUNICORN_WORKER_CONNECTIONS: ${GUNICORN_WORKER_CONNECTIONS:-1000}
+      # 2× vCPU for I/O-bound 9-stage (Bedrock + BYOK waits). Pin to 8 if RSS climbs.
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-16}
+      GATEWAY_CIRCUIT_BREAKER_ENABLED: ${GATEWAY_CIRCUIT_BREAKER_ENABLED:-true}
+      TIER2_BREAKER_MIN_CALLS: ${TIER2_BREAKER_MIN_CALLS:-5}
+      TIER2_BREAKER_FAILURE_THRESHOLD: ${TIER2_BREAKER_FAILURE_THRESHOLD:-0.5}
+      TIER2_BREAKER_COOLDOWN_SECONDS: ${TIER2_BREAKER_COOLDOWN_SECONDS:-30}
+      GUNICORN_WORKER_CONNECTIONS: ${GUNICORN_WORKER_CONNECTIONS:-20000}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-120}
       GUNICORN_KEEPALIVE: ${GUNICORN_KEEPALIVE:-65}
-      # Thread pools are per forked worker (4 workers × pool size = cluster total)
-      GATEWAY_SCANNER_THREAD_POOL_SIZE: ${GATEWAY_SCANNER_THREAD_POOL_SIZE:-4}
-      GATEWAY_BEDROCK_THREAD_POOL_SIZE: ${GATEWAY_BEDROCK_THREAD_POOL_SIZE:-8}
-      GATEWAY_VAULT_POOL_MIN: ${GATEWAY_VAULT_POOL_MIN:-1}
-      GATEWAY_VAULT_POOL_MAX: ${GATEWAY_VAULT_POOL_MAX:-4}
+      # Thread pools are per forked worker. Leave GATEWAY_BEDROCK_THREAD_POOL_SIZE
+      # unset so entrypoint.sh exports detector bedrock_pool (nofile/workers).
+      # Unset → entrypoint detector (scanner=cpu, redis_pool=asgi*4).
       GATEWAY_LAST_USED_DEBOUNCE_SECONDS: ${GATEWAY_LAST_USED_DEBOUNCE_SECONDS:-60}
-      GATEWAY_REDIS_MAX_CONNECTIONS: ${GATEWAY_REDIS_MAX_CONNECTIONS:-100}
-      GATEWAY_TIER2_CACHE_TTL_SECONDS: ${GATEWAY_TIER2_CACHE_TTL_SECONDS:-300}
+      GATEWAY_TIER2_CACHE_TTL_SECONDS: ${GATEWAY_TIER2_CACHE_TTL_SECONDS:-0}
       GATEWAY_TIER2_CACHE_MAX: ${GATEWAY_TIER2_CACHE_MAX:-3000}
       GATEWAY_TIER2_SAMPLE_RATE: ${GATEWAY_TIER2_SAMPLE_RATE:-1.0}
       ENABLE_TIER2: ${ENABLE_TIER2:-true}
+      # Empty = T2 scanner model (Haiku). Nova Micro is optional; this account
+      # rejects it on-demand. T2 scanner stays BEDROCK_TIER2_SCANNER_MODEL.
       GATEWAY_RAG_ENABLED: ${GATEWAY_RAG_ENABLED:-true}
       CHROMA_URL: ${CHROMA_URL:-}
       GATEWAY_TIER2_EXECUTION_MODE: ${GATEWAY_TIER2_EXECUTION_MODE:-sync_pre_llm}
@@ -212,11 +214,15 @@ services:
       timeout: 6s
       retries: 5
       start_period: 60s
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
     deploy:
       resources:
         limits:
-          cpus: "4"
-          memory: 7168M
+          # No CPU quota — CFS shares the 8 host cores; gateway takes idle.
+          memory: 12288M
 
   # ── Celery (always-on in prod — clear base `workers` profile) ───────────────
   workers:

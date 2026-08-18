@@ -1,0 +1,914 @@
+ts=2026-08-14T12:46:53Z
+ai_mesh_firewall-gateway-1|cpu=2.10%|mem=4.226GiB / 12GiB|pids=402
+nproc=8
+top - 12:46:55 up 73 days,  1:40,  0 users,  load average: 4.13, 7.05, 5.42
+Tasks: 335 total,   1 running, 334 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  0.8 us,  0.8 sy,  0.0 ni, 97.7 id,  0.8 wa,  0.0 hi,  0.0 si,  0.0 st
+MiB Mem :  15671.7 total,   1460.4 free,   8437.5 used,   5773.9 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6655.2 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2870899 ec2-user  20   0  225248   3372   2580 R   6.2   0.0   0:00.01 top
+      1 root      20   0  177396  14948   7440 S   0.0   0.1   5:02.98 systemd
+      2 root      20   0       0      0      0 S   0.0   0.0   0:04.42 kthreadd
+      3 root      20   0       0      0      0 S   0.0   0.0   0:00.00 pool_wo+
+      4 root       0 -20       0      0      0 I   0.0   0.0   0:00.00 kworker+
+cpu  73626988 763 21435177 4944246640 1542339 0 1838315 0 0 0
+cpu0 8646039 81 2690832 618441709 108090 0 216189 0 0 0
+cpu1 8934741 83 2681188 618209282 157497 0 243698 0 0 0
+---
+ts=2026-08-14T12:46:57Z
+ai_mesh_firewall-gateway-1|cpu=220.76%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:46:59 up 73 days,  1:40,  0 users,  load average: 5.32, 7.25, 5.50
+Tasks: 333 total,  18 running, 315 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 69.8 us, 20.9 sy,  0.0 ni,  0.8 id,  0.0 wa,  0.0 hi,  8.5 si,  0.0 st
+MiB Mem :  15671.7 total,   1462.4 free,   8434.2 used,   5775.2 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6658.5 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2370380  16576   3104 S 133.3   0.1   0:01.17 docker-+
+2408671 root      20   0 2903572 299324  28872 R  66.7   1.9   2:19.84 gunicorn
+2408663 root      20   0 2831640 299608  28824 R  60.0   1.9   2:22.16 gunicorn
+2408673 root      20   0 2696540 299472  28848 R  60.0   1.9   2:30.83 gunicorn
+2408660 root      20   0 2761812 296144  28820 R  53.3   1.8   2:16.52 gunicorn
+cpu  73627643 763 21435292 4944249011 1542340 0 1838374 0 0 0
+cpu0 8646125 81 2690842 618442006 108090 0 216197 0 0 0
+cpu1 8934816 83 2681209 618209578 157498 0 243705 0 0 0
+---
+ts=2026-08-14T12:47:01Z
+ai_mesh_firewall-gateway-1|cpu=613.74%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:03 up 73 days,  1:40,  0 users,  load average: 5.32, 7.25, 5.50
+Tasks: 334 total,  18 running, 316 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 75.8 us, 16.4 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  7.8 si,  0.0 st
+MiB Mem :  15671.7 total,   1419.8 free,   8476.8 used,   5775.2 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6615.8 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2370380  17384   3152 S 120.0   0.1   0:05.62 docker-+
+2408664 root      20   0 2769216 300656  28872 R  80.0   1.9   2:26.81 gunicorn
+2408668 root      20   0 2632940 301408  28872 R  80.0   1.9   2:26.43 gunicorn
+2408662 root      20   0 2700724 298524  28792 R  73.3   1.9   2:20.12 gunicorn
+2408674 root      20   0 2635076 302464  28872 R  60.0   1.9   2:29.45 gunicorn
+cpu  73629925 763 21435767 4944249011 1542340 0 1838567 0 0 0
+cpu0 8646413 81 2690895 618442007 108090 0 216224 0 0 0
+cpu1 8935090 83 2681273 618209578 157498 0 243736 0 0 0
+---
+ts=2026-08-14T12:47:05Z
+ai_mesh_firewall-gateway-1|cpu=619.26%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:06 up 73 days,  1:40,  0 users,  load average: 6.34, 7.42, 5.56
+Tasks: 334 total,  17 running, 317 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 74.2 us, 16.4 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  9.4 si,  0.0 st
+MiB Mem :  15671.7 total,   1420.3 free,   8476.3 used,   5775.2 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6616.3 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2370380  17524   3176 S 133.3   0.1   0:10.12 docker-+
+2408668 root      20   0 2632940 301408  28872 R  80.0   1.9   2:28.42 gunicorn
+2408669 root      20   0 2841504 313560  28872 R  73.3   2.0   2:49.52 gunicorn
+2408659 root      20   0 2904456 304672  28716 R  40.0   1.9   2:25.53 gunicorn
+2408660 root      20   0 2761812 296144  28820 R  40.0   1.8   2:19.42 gunicorn
+cpu  73632218 763 21436237 4944249012 1542340 0 1838756 0 0 0
+cpu0 8646690 81 2690957 618442007 108090 0 216254 0 0 0
+cpu1 8935387 83 2681328 618209578 157498 0 243753 0 0 0
+---
+ts=2026-08-14T12:47:08Z
+ai_mesh_firewall-gateway-1|cpu=613.63%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:10 up 73 days,  1:40,  0 users,  load average: 7.67, 7.68, 5.66
+Tasks: 334 total,  18 running, 316 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 78.9 us, 14.8 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  6.2 si,  0.0 st
+MiB Mem :  15671.7 total,   1434.1 free,   8462.5 used,   5775.2 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6630.1 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2370380  17772   3176 S 118.8   0.1   0:14.78 docker-+
+2408668 root      20   0 2632940 301408  28872 R  68.8   1.9   2:29.72 gunicorn
+2408667 root      20   0 2957596 298820  28872 R  62.5   1.9   2:35.26 gunicorn
+2408663 root      20   0 2831640 299608  28824 R  50.0   1.9   2:27.06 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  43.8   1.9   2:27.20 gunicorn
+cpu  73634543 763 21436663 4944249012 1542340 0 1838949 0 0 0
+cpu0 8646981 81 2691008 618442007 108090 0 216280 0 0 0
+cpu1 8935660 83 2681396 618209578 157498 0 243780 0 0 0
+---
+ts=2026-08-14T12:47:12Z
+ai_mesh_firewall-gateway-1|cpu=616.75%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:14 up 73 days,  1:40,  0 users,  load average: 8.42, 7.84, 5.72
+Tasks: 334 total,  17 running, 317 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 77.3 us, 14.1 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  8.6 si,  0.0 st
+MiB Mem :  15671.7 total,   1455.4 free,   8441.1 used,   5775.2 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6651.5 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2370380  17428   3176 S 120.0   0.1   0:19.37 docker-+
+2408671 root      20   0 2903572 299324  28872 R  93.3   1.9   2:25.31 gunicorn
+2408669 root      20   0 2841504 313560  28872 R  80.0   2.0   2:51.90 gunicorn
+2408666 root      20   0 2775564 299668  28872 R  53.3   1.9   2:24.46 gunicorn
+2408665 root      20   0 2910084 307292  28872 R  40.0   1.9   2:40.71 gunicorn
+cpu  73636851 763 21437100 4944249012 1542340 0 1839155 0 0 0
+cpu0 8647297 81 2691040 618442007 108090 0 216301 0 0 0
+cpu1 8935959 83 2681445 618209578 157498 0 243801 0 0 0
+---
+ts=2026-08-14T12:47:16Z
+ai_mesh_firewall-gateway-1|cpu=628.78%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:17 up 73 days,  1:40,  0 users,  load average: 8.42, 7.84, 5.72
+Tasks: 334 total,  19 running, 315 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 80.5 us, 12.5 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  7.0 si,  0.0 st
+MiB Mem :  15671.7 total,   1431.1 free,   8465.4 used,   5775.2 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6627.2 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2446220  17528   3176 S 112.5   0.1   0:23.82 docker-+
+2408665 root      20   0 2910084 307292  28872 R  81.2   1.9   2:41.93 gunicorn
+2408668 root      20   0 2632940 301408  28872 R  68.8   1.9   2:32.84 gunicorn
+2408659 root      20   0 2904456 304672  28716 R  62.5   1.9   2:30.55 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  56.2   1.9   2:29.73 gunicorn
+cpu  73639163 763 21437545 4944249013 1542340 0 1839340 0 0 0
+cpu0 8647576 81 2691105 618442007 108090 0 216325 0 0 0
+cpu1 8936242 83 2681509 618209578 157498 0 243822 0 0 0
+---
+ts=2026-08-14T12:47:19Z
+ai_mesh_firewall-gateway-1|cpu=620.02%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:21 up 73 days,  1:40,  0 users,  load average: 9.35, 8.04, 5.80
+Tasks: 334 total,  17 running, 317 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 78.9 us, 15.6 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  5.5 si,  0.0 st
+MiB Mem :  15671.7 total,   1436.5 free,   8460.0 used,   5775.2 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6632.6 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2446220  17724   3176 S 106.7   0.1   0:28.40 docker-+
+2408664 root      20   0 2769216 300656  28872 R  66.7   1.9   2:33.14 gunicorn
+2408663 root      20   0 2831640 299608  28824 R  60.0   1.9   2:31.25 gunicorn
+2408660 root      20   0 2761812 296144  28820 R  46.7   1.8   2:25.78 gunicorn
+2408665 root      20   0 2910084 307292  28872 R  46.7   1.9   2:43.44 gunicorn
+cpu  73641514 763 21437957 4944249014 1542340 0 1839527 0 0 0
+cpu0 8647879 81 2691147 618442007 108090 0 216349 0 0 0
+cpu1 8936555 83 2681543 618209578 157498 0 243844 0 0 0
+---
+ts=2026-08-14T12:47:23Z
+ai_mesh_firewall-gateway-1|cpu=627.06%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:25 up 73 days,  1:40,  0 users,  load average: 10.12, 8.22, 5.87
+Tasks: 338 total,  17 running, 321 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 75.8 us, 18.8 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  5.5 si,  0.0 st
+MiB Mem :  15671.7 total,   1366.4 free,   8525.1 used,   5780.2 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6562.9 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2871640 root      20   0 3123460  70900  17956 S 113.3   0.4   0:00.27 beam.smp
+2408546 root      20   0 2446220  17356   3176 S 106.7   0.1   0:32.89 docker-+
+2408663 root      20   0 2831640 299608  28824 R  93.3   1.9   2:33.16 gunicorn
+2408674 root      20   0 2635076 302464  28872 R  80.0   1.9   2:37.71 gunicorn
+2408662 root      20   0 2700724 298524  28792 R  46.7   1.9   2:28.87 gunicorn
+cpu  73643818 763 21438456 4944249015 1542340 0 1839712 0 0 0
+cpu0 8648174 81 2691204 618442007 108090 0 216371 0 0 0
+cpu1 8936845 83 2681598 618209578 157498 0 243873 0 0 0
+---
+ts=2026-08-14T12:47:27Z
+ai_mesh_firewall-gateway-1|cpu=610.73%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:29 up 73 days,  1:40,  0 users,  load average: 10.75, 8.38, 5.93
+Tasks: 334 total,  18 running, 316 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 75.8 us, 14.1 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi, 10.2 si,  0.0 st
+MiB Mem :  15671.7 total,   1431.7 free,   8464.5 used,   5775.6 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6628.2 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2446220  17452   3176 S 120.0   0.1   0:37.52 docker-+
+2408672 root      20   0 3063856 374268  28872 R  93.3   2.3   3:02.73 gunicorn
+2408669 root      20   0 2841504 313560  28872 R  73.3   2.0   2:59.25 gunicorn
+2408662 root      20   0 2700724 298524  28792 R  60.0   1.9   2:30.32 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  46.7   1.9   2:34.59 gunicorn
+cpu  73646141 763 21438907 4944249020 1542340 0 1839908 0 0 0
+cpu0 8648482 81 2691250 618442009 108090 0 216386 0 0 0
+cpu1 8937149 83 2681641 618209578 157498 0 243898 0 0 0
+---
+ts=2026-08-14T12:47:31Z
+ai_mesh_firewall-gateway-1|cpu=612.39%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:32 up 73 days,  1:40,  0 users,  load average: 10.75, 8.38, 5.93
+Tasks: 335 total,  19 running, 316 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 81.2 us, 12.5 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  6.2 si,  0.0 st
+MiB Mem :  15671.7 total,   1442.8 free,   8453.3 used,   5775.7 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6639.4 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2446220  17380   3176 S 125.0   0.1   0:42.08 docker-+
+2408665 root      20   0 2910084 307292  28872 R  81.2   1.9   2:47.27 gunicorn
+2408662 root      20   0 2700724 298524  28792 R  75.0   1.9   2:31.98 gunicorn
+2408671 root      20   0 2903572 299324  28872 R  62.5   1.9   2:31.87 gunicorn
+2408670 root      20   0 2763148 299892  28872 R  43.8   1.9   2:34.21 gunicorn
+cpu  73648477 763 21439327 4944249021 1542340 0 1840096 0 0 0
+cpu0 8648760 81 2691310 618442009 108090 0 216416 0 0 0
+cpu1 8937430 83 2681703 618209578 157498 0 243923 0 0 0
+---
+ts=2026-08-14T12:47:34Z
+ai_mesh_firewall-gateway-1|cpu=596.12%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:36 up 73 days,  1:40,  0 users,  load average: 11.57, 8.59, 6.01
+Tasks: 335 total,  19 running, 316 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 77.3 us, 15.6 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  7.0 si,  0.0 st
+MiB Mem :  15671.7 total,   1437.7 free,   8458.6 used,   5775.4 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6634.2 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2446220  17496   3176 S 146.7   0.1   0:46.52 docker-+
+2408664 root      20   0 2769216 300656  28872 R  73.3   1.9   2:39.36 gunicorn
+2408665 root      20   0 2910084 307292  28872 R  73.3   1.9   2:49.68 gunicorn
+2408670 root      20   0 2763148 299892  28872 R  73.3   1.9   2:35.42 gunicorn
+2408663 root      20   0 2831640 299608  28824 R  66.7   1.9   2:37.54 gunicorn
+cpu  73650799 763 21439763 4944249024 1542340 0 1840288 0 0 0
+cpu0 8649063 81 2691357 618442009 108090 0 216435 0 0 0
+cpu1 8937687 83 2681778 618209578 157498 0 243960 0 0 0
+---
+ts=2026-08-14T12:47:38Z
+ai_mesh_firewall-gateway-1|cpu=608.34%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:40 up 73 days,  1:41,  0 users,  load average: 12.17, 8.77, 6.08
+Tasks: 335 total,  18 running, 317 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 76.6 us, 17.2 sy,  0.0 ni,  0.8 id,  0.0 wa,  0.0 hi,  5.5 si,  0.0 st
+MiB Mem :  15671.7 total,   1441.6 free,   8454.4 used,   5775.7 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6638.2 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522060  18208   3176 S 100.0   0.1   0:51.01 docker-+
+2408666 root      20   0 2775564 299668  28872 R  68.8   1.9   2:34.15 gunicorn
+2408667 root      20   0 2957596 298820  28872 R  62.5   1.9   2:44.79 gunicorn
+2408664 root      20   0 2769216 300656  28872 R  56.2   1.9   2:40.82 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  43.8   1.9   2:39.46 gunicorn
+cpu  73653055 763 21440233 4944249026 1542340 0 1840512 0 0 0
+cpu0 8649360 81 2691408 618442010 108090 0 216456 0 0 0
+cpu1 8937946 83 2681852 618209578 157498 0 243996 0 0 0
+---
+ts=2026-08-14T12:47:42Z
+ai_mesh_firewall-gateway-1|cpu=604.63%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:43 up 73 days,  1:41,  0 users,  load average: 12.17, 8.77, 6.08
+Tasks: 335 total,  17 running, 318 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 78.9 us, 14.1 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  7.0 si,  0.0 st
+MiB Mem :  15671.7 total,   1442.5 free,   8453.6 used,   5775.6 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6639.0 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522060  17536   3176 S 120.0   0.1   0:55.50 docker-+
+2408659 root      20   0 2904456 304672  28716 R  86.7   1.9   2:39.20 gunicorn
+2408672 root      20   0 3063856 374268  28872 R  66.7   2.3   3:08.15 gunicorn
+2408673 root      20   0 2696540 299472  28848 R  66.7   1.9   2:47.40 gunicorn
+2408668 root      20   0 2632940 301408  28872 R  46.7   1.9   2:43.14 gunicorn
+cpu  73655350 763 21440659 4944249026 1542340 0 1840734 0 0 0
+cpu0 8649644 81 2691470 618442010 108090 0 216478 0 0 0
+cpu1 8938247 83 2681897 618209578 157498 0 244018 0 0 0
+---
+ts=2026-08-14T12:47:45Z
+ai_mesh_firewall-gateway-1|cpu=2.18%|mem=4.226GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:47 up 73 days,  1:41,  0 users,  load average: 12.79, 8.95, 6.16
+Tasks: 335 total,   1 running, 334 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  1.6 us,  0.8 sy,  0.0 ni, 97.7 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st
+MiB Mem :  15671.7 total,   1447.2 free,   8448.9 used,   5775.6 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6643.7 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2996845 999       20   0 3156624 164460  67116 S   6.7   1.0  84:23.14 beam.smp
+      1 root      20   0  177396  14948   7440 S   0.0   0.1   5:02.98 systemd
+      2 root      20   0       0      0      0 S   0.0   0.0   0:04.42 kthreadd
+      3 root      20   0       0      0      0 S   0.0   0.0   0:00.00 pool_wo+
+      4 root       0 -20       0      0      0 I   0.0   0.0   0:00.00 kworker+
+cpu  73656136 763 21440833 4944250904 1542341 0 1840818 0 0 0
+cpu0 8649754 81 2691489 618442239 108091 0 216487 0 0 0
+cpu1 8938332 83 2681917 618209818 157498 0 244036 0 0 0
+---
+ts=2026-08-14T12:47:49Z
+ai_mesh_firewall-gateway-1|cpu=616.76%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:51 up 73 days,  1:41,  0 users,  load average: 13.21, 9.10, 6.22
+Tasks: 335 total,  19 running, 316 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 79.7 us, 14.8 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  5.5 si,  0.0 st
+MiB Mem :  15671.7 total,   1404.0 free,   8490.8 used,   5776.9 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6601.8 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522316  32640   3176 S 126.7   0.2   1:00.12 docker-+
+2408666 root      20   0 2775564 299668  28872 R  80.0   1.9   2:37.68 gunicorn
+2408664 root      20   0 2769216 300656  28872 R  66.7   1.9   2:43.88 gunicorn
+2408672 root      20   0 3063856 374268  28872 R  66.7   2.3   3:09.73 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  40.0   1.9   2:42.81 gunicorn
+cpu  73657942 763 21441168 4944251575 1542341 0 1840963 0 0 0
+cpu0 8649996 81 2691517 618442322 108091 0 216504 0 0 0
+cpu1 8938565 83 2681955 618209901 157498 0 244052 0 0 0
+---
+ts=2026-08-14T12:47:53Z
+ai_mesh_firewall-gateway-1|cpu=602.38%|mem=4.229GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:54 up 73 days,  1:41,  0 users,  load average: 13.43, 9.22, 6.28
+Tasks: 335 total,  18 running, 317 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 80.9 us, 14.7 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  4.4 si,  0.0 st
+MiB Mem :  15671.7 total,   1431.8 free,   8463.1 used,   5776.8 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6629.5 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33076   3176 S 111.8   0.2   1:04.75 docker-+
+2408660 root      20   0 2761812 296144  28820 R  82.4   1.8   2:36.60 gunicorn
+2408664 root      20   0 2769216 300656  28872 R  76.5   1.9   2:46.00 gunicorn
+2408671 root      20   0 2903572 299324  28872 R  70.6   1.9   2:39.63 gunicorn
+2408673 root      20   0 2696540 299472  28848 R  41.2   1.9   2:50.59 gunicorn
+cpu  73660264 763 21441633 4944251576 1542341 0 1841135 0 0 0
+cpu0 8650261 81 2691595 618442323 108091 0 216531 0 0 0
+cpu1 8938874 83 2682006 618209901 157498 0 244062 0 0 0
+---
+ts=2026-08-14T12:47:56Z
+ai_mesh_firewall-gateway-1|cpu=614.74%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:47:58 up 73 days,  1:41,  0 users,  load average: 13.43, 9.22, 6.28
+Tasks: 335 total,  17 running, 318 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 86.7 us,  8.6 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  4.7 si,  0.0 st
+MiB Mem :  15671.7 total,   1447.5 free,   8447.1 used,   5777.1 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6645.5 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33352   3176 S 133.3   0.2   1:09.15 docker-+
+2408660 root      20   0 2761812 296144  28820 R  86.7   1.8   2:38.37 gunicorn
+2408668 root      20   0 2632940 301408  28872 R  73.3   1.9   2:48.08 gunicorn
+2408674 root      20   0 2635076 302464  28872 R  60.0   1.9   2:49.11 gunicorn
+2408673 root      20   0 2696540 299472  28848 R  53.3   1.9   2:52.01 gunicorn
+cpu  73662567 763 21442103 4944251580 1542341 0 1841317 0 0 0
+cpu0 8650496 81 2691695 618442323 108091 0 216566 0 0 0
+cpu1 8939202 83 2682032 618209901 157498 0 244078 0 0 0
+---
+ts=2026-08-14T12:48:00Z
+ai_mesh_firewall-gateway-1|cpu=611.06%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:02 up 73 days,  1:41,  0 users,  load average: 13.72, 9.35, 6.33
+Tasks: 339 total,  18 running, 321 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 78.1 us, 17.2 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  4.7 si,  0.0 st
+MiB Mem :  15671.7 total,   1433.3 free,   8461.3 used,   5777.1 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6631.3 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33296   3176 S 126.7   0.2   1:13.75 docker-+
+2408659 root      20   0 2904456 304672  28716 R  66.7   1.9   2:45.24 gunicorn
+2408664 root      20   0 2769216 300656  28872 R  60.0   1.9   2:49.45 gunicorn
+2408672 root      20   0 3063856 374268  28872 R  60.0   2.3   3:13.46 gunicorn
+2408660 root      20   0 2761812 296144  28820 R  40.0   1.8   2:39.81 gunicorn
+cpu  73664841 763 21442588 4944251580 1542341 0 1841510 0 0 0
+cpu0 8650768 81 2691761 618442323 108091 0 216597 0 0 0
+cpu1 8939484 83 2682099 618209901 157498 0 244098 0 0 0
+---
+ts=2026-08-14T12:48:04Z
+ai_mesh_firewall-gateway-1|cpu=611.10%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:05 up 73 days,  1:41,  0 users,  load average: 14.06, 9.49, 6.40
+Tasks: 335 total,  17 running, 318 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 82.0 us,  9.4 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  8.6 si,  0.0 st
+MiB Mem :  15671.7 total,   1453.7 free,   8441.0 used,   5777.0 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6651.6 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33120   3176 S 133.3   0.2   1:18.39 docker-+
+2408667 root      20   0 2957596 298820  28872 R  73.3   1.9   2:52.82 gunicorn
+2408660 root      20   0 2761812 296144  28820 R  60.0   1.8   2:41.10 gunicorn
+2408672 root      20   0 3063856 374268  28872 R  53.3   2.3   3:15.28 gunicorn
+2408669 root      20   0 2841504 313560  28872 R  46.7   2.0   3:11.71 gunicorn
+cpu  73667149 763 21443053 4944251580 1542341 0 1841689 0 0 0
+cpu0 8651051 81 2691820 618442323 108091 0 216624 0 0 0
+cpu1 8939779 83 2682155 618209901 157498 0 244116 0 0 0
+---
+ts=2026-08-14T12:48:07Z
+ai_mesh_firewall-gateway-1|cpu=604.25%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:09 up 73 days,  1:41,  0 users,  load average: 14.22, 9.60, 6.45
+Tasks: 335 total,  17 running, 318 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 78.9 us, 13.3 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  7.8 si,  0.0 st
+MiB Mem :  15671.7 total,   1454.5 free,   8440.2 used,   5777.1 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6652.5 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33020   3176 S 106.2   0.2   1:23.01 docker-+
+2408674 root      20   0 2635076 302464  28872 R  87.5   1.9   2:53.30 gunicorn
+2408671 root      20   0 2903572 299324  28872 R  68.8   1.9   2:44.31 gunicorn
+2408670 root      20   0 2763148 299892  28872 R  62.5   1.9   2:46.44 gunicorn
+2408666 root      20   0 2775564 299668  28872 R  43.8   1.9   2:45.09 gunicorn
+cpu  73669429 763 21443526 4944251580 1542341 0 1841879 0 0 0
+cpu0 8651343 81 2691876 618442323 108091 0 216643 0 0 0
+cpu1 8940081 83 2682201 618209901 157498 0 244136 0 0 0
+---
+ts=2026-08-14T12:48:11Z
+ai_mesh_firewall-gateway-1|cpu=604.15%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:13 up 73 days,  1:41,  0 users,  load average: 14.22, 9.60, 6.45
+Tasks: 335 total,  17 running, 318 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 79.7 us, 10.9 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  9.4 si,  0.0 st
+MiB Mem :  15671.7 total,   1452.0 free,   8442.6 used,   5777.0 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6650.0 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33052   3176 S 146.7   0.2   1:27.77 docker-+
+2408672 root      20   0 3063856 374268  28872 R  66.7   2.3   3:18.14 gunicorn
+2408663 root      20   0 2831640 299608  28824 R  60.0   1.9   2:50.74 gunicorn
+2408665 root      20   0 2910084 307292  28872 R  60.0   1.9   3:02.70 gunicorn
+2408667 root      20   0 2957596 298820  28872 R  60.0   1.9   2:55.49 gunicorn
+cpu  73671699 763 21443998 4944251582 1542341 0 1842088 0 0 0
+cpu0 8651619 81 2691936 618442323 108091 0 216676 0 0 0
+cpu1 8940373 83 2682261 618209901 157498 0 244153 0 0 0
+---
+ts=2026-08-14T12:48:15Z
+ai_mesh_firewall-gateway-1|cpu=596.13%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:17 up 73 days,  1:41,  0 users,  load average: 15.08, 9.86, 6.55
+Tasks: 333 total,  20 running, 313 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 83.6 us,  8.6 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  7.8 si,  0.0 st
+MiB Mem :  15671.7 total,   1470.9 free,   8423.9 used,   5777.0 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6668.7 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33296   3176 S 112.5   0.2   1:32.38 docker-+
+2408659 root      20   0 2904456 304672  28716 R  87.5   1.9   2:50.72 gunicorn
+2408665 root      20   0 2910084 307292  28872 R  87.5   1.9   3:04.22 gunicorn
+2408663 root      20   0 2831640 299608  28824 R  75.0   1.9   2:52.22 gunicorn
+2408671 root      20   0 2903572 299324  28872 R  68.8   1.9   2:48.22 gunicorn
+cpu  73674033 763 21444441 4944251585 1542341 0 1842260 0 0 0
+cpu0 8651910 81 2691986 618442323 108091 0 216704 0 0 0
+cpu1 8940683 83 2682307 618209901 157498 0 244166 0 0 0
+---
+ts=2026-08-14T12:48:19Z
+ai_mesh_firewall-gateway-1|cpu=610.32%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:20 up 73 days,  1:41,  0 users,  load average: 15.64, 10.06, 6.63
+Tasks: 333 total,  18 running, 315 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 78.9 us, 17.2 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  3.9 si,  0.0 st
+MiB Mem :  15671.7 total,   1445.6 free,   8449.2 used,   5776.9 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6643.4 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33128   3176 S 120.0   0.2   1:37.09 docker-+
+2408672 root      20   0 3063856 374268  28872 R  93.3   2.3   3:21.20 gunicorn
+2408666 root      20   0 2775564 299668  28872 R  86.7   1.9   2:49.85 gunicorn
+2408674 root      20   0 2635076 302464  28872 R  66.7   1.9   2:57.44 gunicorn
+2408659 root      20   0 2904456 304672  28716 R  40.0   1.9   2:52.52 gunicorn
+cpu  73676337 763 21444911 4944251585 1542341 0 1842477 0 0 0
+cpu0 8652229 81 2692022 618442323 108091 0 216723 0 0 0
+cpu1 8940976 83 2682366 618209901 157498 0 244188 0 0 0
+---
+ts=2026-08-14T12:48:22Z
+ai_mesh_firewall-gateway-1|cpu=602.75%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:24 up 73 days,  1:41,  0 users,  load average: 15.83, 10.19, 6.69
+Tasks: 333 total,  18 running, 315 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 77.3 us, 21.9 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  0.8 si,  0.0 st
+MiB Mem :  15671.7 total,   1430.7 free,   8463.9 used,   5777.2 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6628.7 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33080   3176 S 131.2   0.2   1:41.74 docker-+
+2408670 root      20   0 2763148 299892  28872 R  81.2   1.9   2:51.85 gunicorn
+2408664 root      20   0 2769216 300656  28872 R  68.8   1.9   2:57.57 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  56.2   1.9   2:55.28 gunicorn
+2408669 root      20   0 2841504 313560  28872 R  50.0   2.0   3:18.41 gunicorn
+cpu  73678625 763 21445400 4944251585 1542341 0 1842644 0 0 0
+cpu0 8652514 81 2692084 618442323 108091 0 216744 0 0 0
+cpu1 8941258 83 2682433 618209901 157498 0 244207 0 0 0
+---
+ts=2026-08-14T12:48:26Z
+ai_mesh_firewall-gateway-1|cpu=610.90%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:28 up 73 days,  1:41,  0 users,  load average: 15.83, 10.19, 6.69
+Tasks: 337 total,  18 running, 319 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 80.5 us, 14.1 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  5.5 si,  0.0 st
+MiB Mem :  15671.7 total,   1370.5 free,   8520.0 used,   5781.2 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6568.5 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33124   3176 S 113.3   0.2   1:46.30 docker-+
+2873252 root      20   0 3119632  69612  16248 S 113.3   0.4   0:00.26 beam.smp
+2408665 root      20   0 2910084 307292  28872 R  80.0   1.9   3:08.68 gunicorn
+2408667 root      20   0 2957596 298820  28872 R  66.7   1.9   3:00.98 gunicorn
+2408664 root      20   0 2769216 300656  28872 R  60.0   1.9   2:58.61 gunicorn
+cpu  73680960 763 21445808 4944251585 1542341 0 1842853 0 0 0
+cpu0 8652834 81 2692114 618442323 108091 0 216763 0 0 0
+cpu1 8941565 83 2682479 618209901 157498 0 244223 0 0 0
+---
+ts=2026-08-14T12:48:30Z
+ai_mesh_firewall-gateway-1|cpu=603.95%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:31 up 73 days,  1:41,  0 users,  load average: 16.00, 10.32, 6.75
+Tasks: 333 total,  17 running, 316 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 70.3 us, 23.4 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  6.2 si,  0.0 st
+MiB Mem :  15671.7 total,   1391.1 free,   8503.5 used,   5777.1 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6589.1 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33256   3176 S 118.8   0.2   1:50.94 docker-+
+2408661 root      20   0 2825436 297184  28820 R  68.8   1.9   2:58.49 gunicorn
+2408670 root      20   0 2763148 299892  28872 R  56.2   1.9   2:55.49 gunicorn
+2408674 root      20   0 2635076 302464  28872 R  56.2   1.9   3:01.46 gunicorn
+2408665 root      20   0 2910084 307292  28872 R  50.0   1.9   3:10.79 gunicorn
+cpu  73683221 763 21446291 4944251586 1542341 0 1843052 0 0 0
+cpu0 8653129 81 2692156 618442323 108091 0 216794 0 0 0
+cpu1 8941842 83 2682539 618209901 157498 0 244253 0 0 0
+---
+ts=2026-08-14T12:48:33Z
+ai_mesh_firewall-gateway-1|cpu=622.08%|mem=4.229GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:35 up 73 days,  1:41,  0 users,  load average: 16.64, 10.55, 6.85
+Tasks: 333 total,  17 running, 316 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 71.1 us, 18.8 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi, 10.2 si,  0.0 st
+MiB Mem :  15671.7 total,   1418.6 free,   8475.9 used,   5777.1 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6616.7 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33112   3176 S 133.3   0.2   1:55.56 docker-+
+2408664 root      20   0 2769216 300656  28872 R  86.7   1.9   3:02.28 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  66.7   1.9   2:59.78 gunicorn
+2408660 root      20   0 2761812 296144  28820 R  53.3   1.8   2:51.02 gunicorn
+2408666 root      20   0 2775564 299668  28872 R  40.0   1.9   2:55.42 gunicorn
+cpu  73685528 763 21446752 4944251587 1542341 0 1843235 0 0 0
+cpu0 8653423 81 2692209 618442323 108091 0 216816 0 0 0
+cpu1 8942141 83 2682588 618209901 157498 0 244274 0 0 0
+---
+ts=2026-08-14T12:48:37Z
+ai_mesh_firewall-gateway-1|cpu=596.74%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:39 up 73 days,  1:42,  0 users,  load average: 17.39, 10.80, 6.95
+Tasks: 333 total,  17 running, 316 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 73.4 us, 13.3 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi, 13.3 si,  0.0 st
+MiB Mem :  15671.7 total,   1406.4 free,   8487.8 used,   5777.6 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6605.1 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33340   3176 S 125.0   0.2   2:00.11 docker-+
+2408664 root      20   0 2769216 300656  28872 R  81.2   1.9   3:03.39 gunicorn
+2408669 root      20   0 2841504 313560  28872 R  68.8   2.0   3:23.38 gunicorn
+2408670 root      20   0 2763148 299892  28872 R  56.2   1.9   2:58.14 gunicorn
+2408674 root      20   0 2635076 302464  28872 R  56.2   1.9   3:04.72 gunicorn
+cpu  73687795 763 21447219 4944251589 1542341 0 1843442 0 0 0
+cpu0 8653707 81 2692279 618442323 108091 0 216830 0 0 0
+cpu1 8942408 83 2682657 618209901 157498 0 244306 0 0 0
+---
+ts=2026-08-14T12:48:41Z
+ai_mesh_firewall-gateway-1|cpu=617.49%|mem=4.229GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:42 up 73 days,  1:42,  0 users,  load average: 17.39, 10.80, 6.95
+Tasks: 333 total,  17 running, 316 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 81.2 us, 13.3 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  5.5 si,  0.0 st
+MiB Mem :  15671.7 total,   1439.4 free,   8454.8 used,   5777.5 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6637.8 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33432   3176 S 106.7   0.2   2:04.78 docker-+
+2408665 root      20   0 2910084 307292  28872 R  86.7   1.9   3:15.59 gunicorn
+2408674 root      20   0 2635076 302464  28872 R  86.7   1.9   3:07.12 gunicorn
+2408659 root      20   0 2904456 304672  28716 R  80.0   1.9   3:00.62 gunicorn
+2408666 root      20   0 2775564 299668  28872 R  66.7   1.9   2:57.91 gunicorn
+cpu  73690071 763 21447695 4944251589 1542341 0 1843649 0 0 0
+cpu0 8653983 81 2692342 618442323 108091 0 216861 0 0 0
+cpu1 8942716 83 2682702 618209901 157498 0 244323 0 0 0
+---
+ts=2026-08-14T12:48:44Z
+ai_mesh_firewall-gateway-1|cpu=611.88%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:46 up 73 days,  1:42,  0 users,  load average: 17.68, 10.97, 7.03
+Tasks: 335 total,  17 running, 318 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 73.4 us, 18.8 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  7.8 si,  0.0 st
+MiB Mem :  15671.7 total,   1431.1 free,   8463.1 used,   5777.5 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6629.5 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2522572  33976   3176 S 131.2   0.2   2:09.48 docker-+
+2408673 root      20   0 2696540 299472  28848 R  75.0   1.9   3:08.84 gunicorn
+2408666 root      20   0 2775564 299668  28872 R  62.5   1.9   2:59.30 gunicorn
+2408667 root      20   0 2957596 298820  28872 R  62.5   1.9   3:07.99 gunicorn
+2408674 root      20   0 2635076 302464  28872 R  56.2   1.9   3:08.95 gunicorn
+cpu  73692370 763 21448149 4944251589 1542341 0 1843847 0 0 0
+cpu0 8654257 81 2692405 618442323 108091 0 216893 0 0 0
+cpu1 8943001 83 2682760 618209901 157498 0 244349 0 0 0
+---
+ts=2026-08-14T12:48:48Z
+ai_mesh_firewall-gateway-1|cpu=1.87%|mem=4.226GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:51 up 73 days,  1:42,  0 users,  load average: 16.58, 10.86, 7.01
+Tasks: 333 total,   1 running, 332 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  0.8 us,  0.8 sy,  0.0 ni, 98.4 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st
+MiB Mem :  15671.7 total,   1460.5 free,   8435.1 used,   5776.2 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6657.6 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2805297 root      20   0  234644  72312  15544 S   6.2   0.5   2:34.12 uvicorn
+      1 root      20   0  177396  14948   7440 S   0.0   0.1   5:02.98 systemd
+      2 root      20   0       0      0      0 S   0.0   0.0   0:04.42 kthreadd
+      3 root      20   0       0      0      0 S   0.0   0.0   0:00.00 pool_wo+
+      4 root       0 -20       0      0      0 I   0.0   0.0   0:00.00 kworker+
+cpu  73693583 763 21448417 4944253549 1542342 0 1843950 0 0 0
+cpu0 8654407 81 2692438 618442572 108091 0 216906 0 0 0
+cpu1 8943151 83 2682795 618210146 157498 0 244362 0 0 0
+---
+ts=2026-08-14T12:48:53Z
+ai_mesh_firewall-gateway-1|cpu=619.09%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:54 up 73 days,  1:42,  0 users,  load average: 16.78, 10.99, 7.07
+Tasks: 333 total,  18 running, 315 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 79.7 us, 15.6 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  4.7 si,  0.0 st
+MiB Mem :  15671.7 total,   1364.4 free,   8526.2 used,   5781.1 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6566.4 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524172  55860   3176 S 113.3   0.3   2:15.27 docker-+
+2408666 root      20   0 2775564 299668  28872 R  80.0   1.9   3:01.16 gunicorn
+2408667 root      20   0 2957596 298820  28872 R  73.3   1.9   3:10.52 gunicorn
+2408672 root      20   0 3063856 374268  28872 R  73.3   2.3   3:33.03 gunicorn
+2408673 root      20   0 2696540 299472  28848 R  73.3   1.9   3:10.66 gunicorn
+cpu  73695385 763 21448749 4944254235 1542342 0 1844084 0 0 0
+cpu0 8654613 81 2692499 618442652 108091 0 216927 0 0 0
+cpu1 8943398 83 2682817 618210233 157498 0 244374 0 0 0
+---
+ts=2026-08-14T12:48:56Z
+ai_mesh_firewall-gateway-1|cpu=608.17%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:48:58 up 73 days,  1:42,  0 users,  load average: 16.78, 10.99, 7.07
+Tasks: 333 total,  17 running, 316 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 89.1 us,  7.0 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  3.9 si,  0.0 st
+MiB Mem :  15671.7 total,   1360.4 free,   8530.3 used,   5781.1 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6562.3 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524236  58548   3176 S 137.5   0.4   2:19.90 docker-+
+2408661 root      20   0 2825436 297184  28820 R  68.8   1.9   3:07.15 gunicorn
+2408668 root      20   0 2632940 301408  28872 R  68.8   1.9   3:08.24 gunicorn
+2408662 root      20   0 2700724 298524  28792 R  56.2   1.9   2:59.06 gunicorn
+2408674 root      20   0 2635076 302472  28872 R  43.8   1.9   3:11.47 gunicorn
+cpu  73697725 763 21449187 4944254236 1542342 0 1844250 0 0 0
+cpu0 8654877 81 2692575 618442652 108091 0 216955 0 0 0
+cpu1 8943676 83 2682881 618210233 157498 0 244400 0 0 0
+---
+ts=2026-08-14T12:49:00Z
+ai_mesh_firewall-gateway-1|cpu=614.45%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:02 up 73 days,  1:42,  0 users,  load average: 16.80, 11.09, 7.13
+Tasks: 333 total,  20 running, 313 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 75.0 us, 13.3 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi, 11.7 si,  0.0 st
+MiB Mem :  15671.7 total,   1314.9 free,   8575.8 used,   5781.1 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6516.8 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524300  58632   3176 S 133.3   0.4   2:24.55 docker-+
+2408668 root      20   0 2632940 301408  28872 R  93.3   1.9   3:10.14 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  86.7   1.9   3:09.29 gunicorn
+2408665 root      20   0 2910084 307292  28872 R  73.3   1.9   3:23.23 gunicorn
+2408666 root      20   0 2775564 299668  28872 R  60.0   1.9   3:04.22 gunicorn
+cpu  73700061 763 21449636 4944254236 1542342 0 1844449 0 0 0
+cpu0 8655162 81 2692636 618442652 108091 0 216982 0 0 0
+cpu1 8943959 83 2682949 618210233 157498 0 244422 0 0 0
+---
+ts=2026-08-14T12:49:04Z
+ai_mesh_firewall-gateway-1|cpu=618.63%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:05 up 73 days,  1:42,  0 users,  load average: 16.73, 11.17, 7.18
+Tasks: 333 total,  18 running, 315 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 75.7 us, 17.4 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  6.9 si,  0.0 st
+MiB Mem :  15671.7 total,   1332.0 free,   8558.7 used,   5781.1 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6534.0 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524300  58660   3176 S 131.2   0.4   2:29.28 docker-+
+2408662 root      20   0 2700724 298524  28792 R  87.5   1.9   3:02.49 gunicorn
+2408672 root      20   0 3063856 374268  28872 R  87.5   2.3   3:36.90 gunicorn
+2408666 root      20   0 2775564 299668  28872 R  68.8   1.9   3:06.12 gunicorn
+2408659 root      20   0 2904456 304672  28716 R  62.5   1.9   3:07.48 gunicorn
+cpu  73702365 763 21450084 4944254236 1542342 0 1844665 0 0 0
+cpu0 8655449 81 2692687 618442652 108091 0 217015 0 0 0
+cpu1 8944267 83 2682986 618210233 157498 0 244448 0 0 0
+---
+ts=2026-08-14T12:49:07Z
+ai_mesh_firewall-gateway-1|cpu=616.72%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:09 up 73 days,  1:42,  0 users,  load average: 16.99, 11.32, 7.24
+Tasks: 333 total,  19 running, 314 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 86.7 us, 10.9 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  2.3 si,  0.0 st
+MiB Mem :  15671.7 total,   1348.6 free,   8542.0 used,   5781.1 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6550.6 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524300  58776   3176 S 125.0   0.4   2:34.11 docker-+
+2408673 root      20   0 2696540 299472  28848 R  75.0   1.9   3:16.23 gunicorn
+2408668 root      20   0 2632940 301408  28872 R  62.5   1.9   3:13.25 gunicorn
+2408664 root      20   0 2769216 300656  28872 R  56.2   1.9   3:13.02 gunicorn
+2408667 root      20   0 2957596 298820  28872 R  43.8   1.9   3:16.50 gunicorn
+cpu  73704674 763 21450553 4944254236 1542342 0 1844871 0 0 0
+cpu0 8655736 81 2692753 618442652 108091 0 217035 0 0 0
+cpu1 8944546 83 2683039 618210233 157498 0 244489 0 0 0
+---
+ts=2026-08-14T12:49:11Z
+ai_mesh_firewall-gateway-1|cpu=606.99%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:13 up 73 days,  1:42,  0 users,  load average: 16.99, 11.32, 7.24
+Tasks: 333 total,  18 running, 315 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 78.1 us, 14.1 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  7.8 si,  0.0 st
+MiB Mem :  15671.7 total,   1345.3 free,   8545.4 used,   5781.0 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6547.2 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524300  59212   3176 S 120.0   0.4   2:38.77 docker-+
+2408672 root      20   0 3063856 374268  28872 R  86.7   2.3   3:40.18 gunicorn
+2408660 root      20   0 2761812 296144  28820 R  73.3   1.8   3:03.86 gunicorn
+2408663 root      20   0 2831640 299608  28824 R  73.3   1.9   3:11.30 gunicorn
+2408666 root      20   0 2775564 299668  28872 R  73.3   1.9   3:08.74 gunicorn
+cpu  73706935 763 21451036 4944254239 1542342 0 1845084 0 0 0
+cpu0 8656005 81 2692827 618442652 108091 0 217062 0 0 0
+cpu1 8944818 83 2683109 618210236 157498 0 244514 0 0 0
+---
+ts=2026-08-14T12:49:15Z
+ai_mesh_firewall-gateway-1|cpu=609.12%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:16 up 73 days,  1:42,  0 users,  load average: 17.07, 11.43, 7.30
+Tasks: 332 total,  17 running, 315 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 73.4 us, 18.8 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  7.8 si,  0.0 st
+MiB Mem :  15671.7 total,   1355.7 free,   8535.1 used,   5781.0 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6557.5 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524300  59220   3176 S 112.5   0.4   2:43.41 docker-+
+2408659 root      20   0 2904456 304672  28716 R  87.5   1.9   3:12.64 gunicorn
+2408672 root      20   0 3063856 374268  28872 R  56.2   2.3   3:41.88 gunicorn
+2408663 root      20   0 2831640 299608  28824 R  43.8   1.9   3:12.95 gunicorn
+2408673 root      20   0 2696540 299472  28848 R  43.8   1.9   3:19.26 gunicorn
+cpu  73709208 763 21451516 4944254243 1542342 0 1845280 0 0 0
+cpu0 8656312 81 2692874 618442652 108091 0 217077 0 0 0
+cpu1 8945094 83 2683173 618210236 157498 0 244543 0 0 0
+---
+ts=2026-08-14T12:49:18Z
+ai_mesh_firewall-gateway-1|cpu=617.12%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:20 up 73 days,  1:42,  0 users,  load average: 17.07, 11.53, 7.35
+Tasks: 336 total,  17 running, 319 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 75.0 us, 18.0 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  7.0 si,  0.0 st
+MiB Mem :  15671.7 total,   1307.4 free,   8578.3 used,   5786.1 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6509.3 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2874544 root      20   0 3124992  72560  18248 S 113.3   0.5   0:00.47 beam.smp
+2408546 root      20   0 2524300  59220   3176 S 106.7   0.4   2:48.08 docker-+
+2408662 root      20   0 2700724 298524  28792 R  80.0   1.9   3:08.26 gunicorn
+2408672 root      20   0 3063856 374268  28872 R  60.0   2.3   3:44.17 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  40.0   1.9   3:17.26 gunicorn
+cpu  73711508 763 21451974 4944254243 1542342 0 1845466 0 0 0
+cpu0 8656590 81 2692938 618442652 108091 0 217103 0 0 0
+cpu1 8945369 83 2683236 618210236 157498 0 244573 0 0 0
+---
+ts=2026-08-14T12:49:22Z
+ai_mesh_firewall-gateway-1|cpu=599.97%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:24 up 73 days,  1:42,  0 users,  load average: 17.06, 11.62, 7.41
+Tasks: 332 total,  19 running, 313 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 70.3 us, 18.8 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi, 10.9 si,  0.0 st
+MiB Mem :  15671.7 total,   1326.7 free,   8564.0 used,   5781.0 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6528.6 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524300  59252   3176 S 140.0   0.4   2:52.71 docker-+
+2408659 root      20   0 2904456 304672  28716 R  80.0   1.9   3:15.77 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  73.3   1.9   3:18.47 gunicorn
+2408665 root      20   0 2910084 307292  28872 R  60.0   1.9   3:31.07 gunicorn
+2408666 root      20   0 2775564 299668  28872 R  60.0   1.9   3:13.56 gunicorn
+cpu  73713756 763 21452463 4944254243 1542342 0 1845681 0 0 0
+cpu0 8656884 81 2692996 618442652 108091 0 217120 0 0 0
+cpu1 8945674 83 2683273 618210236 157498 0 244600 0 0 0
+---
+ts=2026-08-14T12:49:26Z
+ai_mesh_firewall-gateway-1|cpu=609.76%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:28 up 73 days,  1:42,  0 users,  load average: 17.06, 11.62, 7.41
+Tasks: 332 total,  17 running, 315 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 82.0 us, 14.1 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  3.9 si,  0.0 st
+MiB Mem :  15671.7 total,   1332.0 free,   8558.8 used,   5781.0 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6533.8 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524300  59780   3176 S 133.3   0.4   2:57.38 docker-+
+2408668 root      20   0 2632940 301408  28872 R  80.0   1.9   3:19.89 gunicorn
+2408659 root      20   0 2904456 304672  28716 R  60.0   1.9   3:17.52 gunicorn
+2408662 root      20   0 2700724 298524  28792 R  60.0   1.9   3:10.80 gunicorn
+2408664 root      20   0 2769216 300656  28872 R  40.0   1.9   3:19.68 gunicorn
+cpu  73716071 763 21452922 4944254243 1542342 0 1845859 0 0 0
+cpu0 8657181 81 2693047 618442652 108091 0 217141 0 0 0
+cpu1 8945967 83 2683327 618210236 157498 0 244622 0 0 0
+---
+ts=2026-08-14T12:49:30Z
+ai_mesh_firewall-gateway-1|cpu=607.96%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:31 up 73 days,  1:42,  0 users,  load average: 17.38, 11.77, 7.48
+Tasks: 333 total,  19 running, 314 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 80.5 us, 13.3 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  6.2 si,  0.0 st
+MiB Mem :  15671.7 total,   1336.8 free,   8553.8 used,   5781.1 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6538.7 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524300  59340   3176 S 100.0   0.4   3:02.07 docker-+
+2408664 root      20   0 2769216 300656  28872 R  86.7   1.9   3:21.13 gunicorn
+2408666 root      20   0 2775564 299668  28872 R  80.0   1.9   3:16.51 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  53.3   1.9   3:20.83 gunicorn
+2408662 root      20   0 2700724 298524  28792 R  40.0   1.9   3:11.96 gunicorn
+cpu  73718344 763 21453423 4944254245 1542342 0 1846035 0 0 0
+cpu0 8657496 81 2693089 618442652 108091 0 217153 0 0 0
+cpu1 8946234 83 2683402 618210236 157498 0 244649 0 0 0
+---
+ts=2026-08-14T12:49:33Z
+ai_mesh_firewall-gateway-1|cpu=617.57%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:35 up 73 days,  1:42,  0 users,  load average: 17.67, 11.93, 7.55
+Tasks: 332 total,  17 running, 315 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 77.3 us, 17.2 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  5.5 si,  0.0 st
+MiB Mem :  15671.7 total,   1364.8 free,   8525.9 used,   5781.0 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6566.7 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524556  59856   3176 S 140.0   0.4   3:06.86 docker-+
+2408659 root      20   0 2904456 304672  28716 R  73.3   1.9   3:20.87 gunicorn
+2408670 root      20   0 2763148 299896  28872 R  66.7   1.9   3:16.89 gunicorn
+2408674 root      20   0 2635076 302472  28872 R  66.7   1.9   3:24.58 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  40.0   1.9   3:22.54 gunicorn
+cpu  73720631 763 21453870 4944254245 1542342 0 1846253 0 0 0
+cpu0 8657798 81 2693141 618442652 108091 0 217168 0 0 0
+cpu1 8946523 83 2683460 618210236 157498 0 244671 0 0 0
+---
+ts=2026-08-14T12:49:37Z
+ai_mesh_firewall-gateway-1|cpu=616.81%|mem=4.238GiB / 12GiB|pids=403
+nproc=8
+top - 12:49:39 up 73 days,  1:43,  0 users,  load average: 17.78, 12.04, 7.61
+Tasks: 332 total,  17 running, 315 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 73.4 us, 17.2 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  9.4 si,  0.0 st
+MiB Mem :  15671.7 total,   1330.1 free,   8560.6 used,   5781.0 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6532.0 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524556  59280   3176 S 133.3   0.4   3:11.55 docker-+
+2408665 root      20   0 2910084 307292  28872 R  80.0   1.9   3:37.17 gunicorn
+2408670 root      20   0 2763148 299896  28872 R  73.3   1.9   3:18.57 gunicorn
+2408667 root      20   0 2957596 298820  28872 R  66.7   1.9   3:27.69 gunicorn
+2408671 root      20   0 2903572 299324  28872 R  53.3   1.9   3:15.18 gunicorn
+cpu  73722936 763 21454317 4944254245 1542342 0 1846453 0 0 0
+cpu0 8658086 81 2693198 618442652 108091 0 217192 0 0 0
+cpu1 8946820 83 2683516 618210236 157498 0 244687 0 0 0
+---
+ts=2026-08-14T12:49:41Z
+ai_mesh_firewall-gateway-1|cpu=550.78%|mem=4.229GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:42 up 73 days,  1:43,  0 users,  load average: 17.78, 12.04, 7.61
+Tasks: 333 total,  19 running, 314 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 83.6 us, 13.3 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  3.1 si,  0.0 st
+MiB Mem :  15671.7 total,   1329.0 free,   8561.7 used,   5781.0 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6530.9 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524556  59320   3176 S  93.8   0.4   3:16.02 docker-+
+2408665 root      20   0 2910084 307292  28872 R  75.0   1.9   3:38.88 gunicorn
+2408667 root      20   0 2957596 298820  28872 R  68.8   1.9   3:29.47 gunicorn
+2408661 root      20   0 2825436 297184  28820 R  62.5   1.9   3:25.05 gunicorn
+2408672 root      20   0 3063856 374268  28872 R  50.0   2.3   3:52.42 gunicorn
+cpu  73725217 763 21454781 4944254245 1542342 0 1846651 0 0 0
+cpu0 8658408 81 2693227 618442652 108091 0 217209 0 0 0
+cpu1 8947111 83 2683568 618210236 157498 0 244711 0 0 0
+---
+ts=2026-08-14T12:49:44Z
+ai_mesh_firewall-gateway-1|cpu=623.44%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:46 up 73 days,  1:43,  0 users,  load average: 17.79, 12.14, 7.67
+Tasks: 333 total,  18 running, 315 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 74.2 us, 20.3 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  5.5 si,  0.0 st
+MiB Mem :  15671.7 total,   1353.6 free,   8537.1 used,   5781.0 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6555.5 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524556  59448   3176 S 126.7   0.4   3:20.70 docker-+
+2408669 root      20   0 2841504 313560  28872 R  80.0   2.0   3:44.49 gunicorn
+2408674 root      20   0 2635076 302472  28872 R  73.3   1.9   3:28.92 gunicorn
+2408666 root      20   0 2775564 299668  28872 R  66.7   1.9   3:21.65 gunicorn
+2408659 root      20   0 2904456 304672  28716 R  53.3   1.9   3:25.71 gunicorn
+cpu  73727545 763 21455273 4944254246 1542342 0 1846871 0 0 0
+cpu0 8658716 81 2693273 618442652 108091 0 217235 0 0 0
+cpu1 8947404 83 2683622 618210236 157498 0 244744 0 0 0
+---
+ts=2026-08-14T12:49:48Z
+ai_mesh_firewall-gateway-1|cpu=610.95%|mem=4.228GiB / 12GiB|pids=402
+nproc=8
+top - 12:49:50 up 73 days,  1:43,  0 users,  load average: 17.97, 12.27, 7.74
+Tasks: 333 total,  19 running, 314 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 84.4 us, 10.9 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  4.7 si,  0.0 st
+MiB Mem :  15671.7 total,   1346.3 free,   8544.1 used,   5781.3 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   6548.5 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+2408546 root      20   0 2524556  59736   3176 S 106.2   0.4   3:25.24 docker-+
+2408670 root      20   0 2763148 299896  28872 R  93.8   1.9   3:22.87 gunicorn
+2408671 root      20   0 2903572 299324  28872 R  81.2   1.9   3:18.73 gunicorn
+2408665 root      20   0 2910084 307292  28872 R  75.0   1.9   3:42.33 gunicorn
+2408674 root      20   0 2635076 302472  28872 R  75.0   1.9   3:30.71 gunicorn
+cpu  73729832 763 21455755 4944254247 1542342 0 1847069 0 0 0
+cpu0 8658991 81 2693339 618442652 108091 0 217265 0 0 0
+cpu1 8947714 83 2683669 618210236 157498 0 244758 0 0 0
+---
+ts=2026-08-14T12:49:52Z
+ai_mesh_firewall-gateway-1|cpu=9.95%|mem=4.226GiB / 12GiB|pids=402

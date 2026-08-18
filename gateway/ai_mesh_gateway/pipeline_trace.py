@@ -407,7 +407,14 @@ _ROUTING_REASON_REPLACEMENTS = (
 DECISION_SOURCE_LABELS: dict[str, str] = {
     "kill_switch": "Kill switch",
     "model_state": "Model state isolation",
+    # Current source: routing is decided by deterministic weighted scoring, no LLM.
+    "deterministic_weighted": "Deterministic weighted routing",
+    # Legacy values retained so historical audit/trace rows still render a real label
+    # rather than an auto-title-cased slug. Nothing emits these any more.
     "policy_adjudicator": ZEROSHIELD_ADJUDICATOR_LABEL,
+    "weighted": "Deterministic weighted routing",
+    "weighted_fastpath": "Deterministic weighted routing",
+    "weighted_fallback": "Deterministic weighted routing",
     "routing_disabled": "Routing disabled",
     "no_routing_models": "No routing models",
     "policy_engine": "Policy engine",
@@ -937,6 +944,7 @@ def build_pipeline_trace(
     requested_model: str = "",
     output_scan_verdict: Any = None,
     prompt_in_operator_masked: bool = False,
+    skip_inference: bool = False,
 ) -> dict[str, Any]:
     """Return { stages: [...], total_latency_ms, prompt_preview } for the UI.
 
@@ -1009,7 +1017,7 @@ def build_pipeline_trace(
     _UPSTREAM_OF_MODEL = {
         "auth", "rate_limit", "policy", "input_scan", "kill_switch", "model_routing",
     }
-    _model_skipped = bool(is_blocked and blocked_stage in _UPSTREAM_OF_MODEL)
+    _model_skipped = bool(is_blocked and blocked_stage in _UPSTREAM_OF_MODEL) or bool(skip_inference)
 
     if scanner_redaction_applied is None:
         scanner_redaction_applied = bool(
@@ -1143,6 +1151,8 @@ def build_pipeline_trace(
     output_stage_action = _action("output_guardrail")
     if _output_own_action in ("block", "redact", "rewrite", "flag") and _enforced_at_output:
         output_stage_action = _output_own_action
+    if skip_inference:
+        output_stage_action = "skip"
     output_guard = build_guard_fields(
         verdict=output_scan_verdict,
         stage_action=output_stage_action,
@@ -1342,7 +1352,8 @@ def build_pipeline_trace(
             "action": "skip" if _model_skipped else "allow",
             "latency_ms": _latency("model_input"),
             "detail": (
-                "Prompt was not sent to the model (blocked upstream)" if _model_skipped
+                "Scan-only probe — model was not called" if skip_inference
+                else "Prompt was not sent to the model (blocked upstream)" if _model_skipped
                 else ("Sanitized (redacted) prompt delivered to the LLM"
                       if forwarded_prompt and forwarded_prompt != prompt
                       else "Prompt delivered to LLM")
@@ -1366,7 +1377,11 @@ def build_pipeline_trace(
             "name": "model_output",
             "action": _action("model_output", "skip" if _model_skipped else "allow"),
             "latency_ms": _latency("model_output"),
-            "detail": "LLM inference complete" if response_text else ("Inference skipped or blocked upstream" if _model_skipped else "No completion body"),
+            "detail": (
+                "Scan-only probe — model was not called" if skip_inference
+                else "LLM inference complete" if response_text
+                else ("Inference skipped or blocked upstream" if _model_skipped else "No completion body")
+            ),
             "content": _truncate(response_text, 2000) if response_text else "",
             **_empty_stage_why_fields(),
             **_decision_source_fields("llm_provider"),
@@ -1478,7 +1493,11 @@ def build_pipeline_trace(
     out_raw = zs.get("redacted_response") or zs.get("rewritten_response") or response_text or ""
     output_withheld = False
     output_withheld_reason = ""
-    if _model_skipped or (is_blocked and blocked_stage in _UPSTREAM_OF_MODEL):
+    if skip_inference and not is_blocked:
+        output_withheld = False
+        output_withheld_reason = "Scan-only probe — model was not called"
+        output_text = ""
+    elif _model_skipped or (is_blocked and blocked_stage in _UPSTREAM_OF_MODEL):
         _bl = (blocked_stage or "policy").replace("_", " ")
         output_withheld = True
         output_withheld_reason = f"Response withheld — request blocked at {_bl}"

@@ -79,16 +79,32 @@ def _scan_org_kill_switch_keys(client, org_slug: str) -> list[dict]:
         key_slug = key_parts[1] if len(key_parts) > 1 else ""
         slug_mismatch = bool(payload_slug and key_slug and payload_slug != key_slug)
 
+        # Orphan credential keys missing `:model:` segment
+        # Expected: kill_switch:{org}:credential:{prefix}:model:{model}
+        # Bad:       kill_switch:{org}:credential:{prefix}
+        orphan_credential = False
+        if len(key_parts) >= 3 and key_parts[2] == "credential":
+            # parts: [kill_switch, org, credential, prefix, model, model_name...]
+            if len(key_parts) < 6 or key_parts[4] != "model":
+                orphan_credential = True
+
+        malformed = slug_mismatch or orphan_credential
+        detail = "valid"
+        if slug_mismatch:
+            detail = f"payload.org_slug={payload_slug} key_slug={key_slug}"
+        elif orphan_credential:
+            detail = "credential key missing :model:{name} segment (gateway cannot match)"
+
         findings.append(
             {
                 "key": key_str,
-                "status": "ok" if not slug_mismatch else "slug_mismatch",
-                "malformed": slug_mismatch,
-                "detail": (
-                    f"payload.org_slug={payload_slug} key_slug={key_slug}"
-                    if slug_mismatch
-                    else "valid"
+                "status": (
+                    "orphan_credential"
+                    if orphan_credential
+                    else ("slug_mismatch" if slug_mismatch else "ok")
                 ),
+                "malformed": malformed,
+                "detail": detail,
                 "is_active": bool(data.get("is_active")),
                 "action": data.get("action"),
             }

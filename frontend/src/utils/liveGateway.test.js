@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import {
   consumeSSEStream,
   extractRoutingFromHeaders,
+  inferTerminalBlockedStage,
   normalizeChatPipelineResult,
   pinnedModelRoutingPreferences,
   simulatorRoutingPreferences,
+  chatCompletionBody,
 } from "./liveGateway.js";
 
 // ---------------------------------------------------------------------------
@@ -250,4 +252,25 @@ test("simulatorRoutingPreferences honours org routing_enabled (PIPELINE-0030)", 
     pinnedModelRoutingPreferences("nvidia/nemotron-3-super-120b-a12b:free"),
   );
   assert.equal(simulatorRoutingPreferences("auto", { orgRoutingEnabled: true }), null);
+});
+
+test("circuit_breaker_open maps to circuit_breaker, not a generic model_output error", () => {
+  assert.equal(
+    inferTerminalBlockedStage({ code: "circuit_breaker_open" }, 503, {}, "error"),
+    "circuit_breaker",
+  );
+});
+
+test("model_isolated maps to kill_switch stage", () => {
+  assert.equal(
+    inferTerminalBlockedStage({ code: "model_isolated", blocked_by: "kill_switch" }, 503, {}, "error"),
+    "kill_switch",
+  );
+});
+
+test("scan-only chat body sends max_tokens=0, inference omits the sentinel", () => {
+  const scan = chatCompletionBody({ prompt: "hi", model: "gpt-4o-mini", runInference: false });
+  assert.equal(scan.max_tokens, 0);
+  const infer = chatCompletionBody({ prompt: "hi", model: "gpt-4o-mini", runInference: true, maxTokens: 512 });
+  assert.equal(infer.max_tokens, 512);
 });

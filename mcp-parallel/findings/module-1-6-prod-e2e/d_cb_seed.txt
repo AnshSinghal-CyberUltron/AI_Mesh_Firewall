@@ -1,0 +1,5 @@
+OK
+OK
+OK
+open
+{"is_active":true,"action":"disable","fallback_model":"","reason":"circuit_breaker_open","org_slug":"zeroshield","trigger_source":"circuit_breaker"}

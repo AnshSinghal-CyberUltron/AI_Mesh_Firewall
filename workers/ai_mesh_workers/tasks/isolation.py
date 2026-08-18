@@ -101,6 +101,19 @@ def scan_model_risk_scores_task() -> dict:
             triggered_by="auto_risk_job",
             trigger_source="auto_risk",
         )
+        try:
+            from core.isolation_notify import notify_isolation_from_control
+
+            notify_isolation_from_control(
+                organization=ms.organization,
+                event_type="kill_switch",
+                model_name=model_name,
+                action=action,
+                reason=reason,
+                triggered_by="auto_risk_job",
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("isolation bell notify failed on auto_risk", exc_info=True)
         activated += 1
         logger.warning(
             "Auto-risk activated KillSwitch org=%s model=%s score=%.1f",
@@ -110,3 +123,43 @@ def scan_model_risk_scores_task() -> dict:
         )
 
     return {"scanned": scanned, "activated": activated, "skipped": skipped}
+
+
+@shared_task(name="isolation.expire_model_states")
+def expire_model_states_task() -> dict:
+    """Recover ModelState rows whose isolated_until has passed; Redis sync via signals."""
+    from django.utils import timezone
+
+    from core.models import KillSwitchAuditLog, ModelState
+
+    now = timezone.now()
+    qs = ModelState.objects.filter(
+        status="isolated", isolated_until__isnull=False, isolated_until__lt=now
+    )
+    recovered = 0
+    for ms in qs.iterator():
+        ms.status = "active"
+        ms.isolation_reason = ""
+        ms.isolated_at = None
+        ms.isolated_until = None
+        ms.action = "block"
+        ms.fallback_model = ""
+        ms.save()
+        recovered += 1
+        try:
+            if ms.organization_id:
+                KillSwitchAuditLog.objects.create(
+                    organization=ms.organization,
+                    event="model_recovered",
+                    model_name=ms.model_name,
+                    risk_score=ms.risk_score,
+                    threshold=ms.threshold,
+                    action="recover",
+                    reason="auto_expire isolated_until",
+                    triggered_by="expire_model_states_task",
+                    metadata={"trigger_source": "auto_expire"},
+                )
+        except Exception:  # noqa: BLE001
+            logger.debug("expire audit skipped", exc_info=True)
+    return {"recovered": recovered}
+

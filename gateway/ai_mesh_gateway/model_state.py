@@ -78,6 +78,18 @@ async def check_model_state(
                             "Model '%s' auto-recovery: isolated_until=%s has passed, treating as active",
                             model_name, isolated_until,
                         )
+                        # Heal Redis so UI/DB consumers see active (best-effort).
+                        healed = {
+                            **payload,
+                            "status": "active",
+                            "isolation_reason": "",
+                            "isolated_at": None,
+                            "isolated_until": None,
+                        }
+                        try:
+                            await redis_client.set(key, json.dumps(healed))
+                        except Exception as heal_exc:  # noqa: BLE001
+                            LOG.debug("model_state heal SET failed: %s", heal_exc)
                         return ModelStateVerdict(
                             status="active",
                             risk_score=risk_score,
@@ -221,6 +233,7 @@ async def check_auto_isolate(
     threshold: float = 80.0,
     action: str = "block",
     cooldown_seconds: int = AUTO_ISOLATION_COOLDOWN,
+    fallback_model: str = "",
 ) -> bool:
     """
     Check if model should be auto-isolated based on risk score exceeding threshold.
@@ -234,10 +247,19 @@ async def check_auto_isolate(
     state_key = f"model_state:{org_slug}:{model_name}"
     try:
         raw = await redis_client.get(state_key)
+        existing_fallback = ""
         if raw:
             payload = json.loads(raw if isinstance(raw, str) else raw.decode())
             if payload.get("status") == "isolated":
                 return False  # Already isolated
+            existing_fallback = str(payload.get("fallback_model") or "").strip()
+
+        fb = (fallback_model or existing_fallback or "").strip()
+        effective_action = action
+        if fb and fb != model_name:
+            effective_action = "reroute"
+        elif effective_action == "reroute" and not fb:
+            effective_action = "block"
 
         # Auto-isolate
         from datetime import datetime, timezone, timedelta
@@ -248,8 +270,8 @@ async def check_auto_isolate(
             "status": "isolated",
             "risk_score": round(current_risk, 2),
             "threshold": threshold,
-            "action": action,
-            "fallback_model": "",
+            "action": effective_action,
+            "fallback_model": fb if effective_action == "reroute" else "",
             "isolation_reason": f"Auto-isolated: risk score {current_risk:.1f} exceeded threshold {threshold:.1f}",
             "isolated_at": now.isoformat(),
             "isolated_until": isolated_until,
@@ -258,8 +280,8 @@ async def check_auto_isolate(
         await redis_client.set(state_key, json.dumps(isolation_payload))
 
         LOG.warning(
-            "AUTO-ISOLATED model '%s' (org=%s): risk=%.1f > threshold=%.1f, cooldown=%ds",
-            model_name, org_slug, current_risk, threshold, cooldown_seconds,
+            "AUTO-ISOLATED model '%s' (org=%s): risk=%.1f > threshold=%.1f, action=%s fallback=%r cooldown=%ds",
+            model_name, org_slug, current_risk, threshold, effective_action, fb, cooldown_seconds,
         )
         return True
 

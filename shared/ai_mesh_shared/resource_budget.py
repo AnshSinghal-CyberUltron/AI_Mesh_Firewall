@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import resource
 from dataclasses import asdict, dataclass
 from typing import Callable, Iterable, Optional
 
@@ -63,6 +64,10 @@ DEFAULT_THREAD_HI = 32
 #: Extra Postgres connections beyond ``workers * (db_threads + 1)`` to cover celery,
 #: admin/psql sessions, migrations, and co-tenant harnesses sharing the same DB.
 DEFAULT_PG_MARGIN = 50
+
+#: Bedrock thread-pool FD safety ceiling (not an RPS cap). boto3's default 10
+#: and asgi_threads' 32 are both too small for network-bound Tier-2 in-flight.
+DEFAULT_BEDROCK_FD_CEILING = 10000
 
 _BYTES_PER_MB = 1024 * 1024
 _BYTES_PER_GIB = 1024 * 1024 * 1024
@@ -222,6 +227,31 @@ def _clamp(x: int, lo: int, hi: int) -> int:
     return max(lo, min(x, max(lo, hi)))
 
 
+def _nofile_soft_limit(nofile: Optional[int] = None) -> int:
+    """Process soft RLIMIT_NOFILE, or an explicit override.
+
+    Unlimited / unreadable → the FD safety ceiling (same class as boto3's
+    hardware-derived pool). Never a programmer RPS cap.
+    """
+    if nofile is not None:
+        try:
+            n = int(nofile)
+        except (TypeError, ValueError):
+            n = 0
+        if n <= 0:
+            return DEFAULT_BEDROCK_FD_CEILING
+        return n
+    try:
+        soft, _hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        n = int(soft)
+    except Exception:
+        return DEFAULT_BEDROCK_FD_CEILING
+    infinity = getattr(resource, "RLIM_INFINITY", -1)
+    if n <= 0 or n == infinity:
+        return DEFAULT_BEDROCK_FD_CEILING
+    return n
+
+
 @dataclass(frozen=True)
 class ResourceBudget:
     """Detected hardware budget plus the derived sizing for the async stack."""
@@ -240,7 +270,7 @@ class ResourceBudget:
     pg_max_conns: int           # recommended Postgres max_connections for this svc
     # gateway per-worker offload pools (each multiplies by `workers`, so clamped)
     scanner_pool: int           # Tier-1 CPU scan pool  (~cpu, bounded)
-    bedrock_pool: int           # Tier-2 Bedrock network-I/O pool (== asgi_threads)
+    bedrock_pool: int           # Tier-2 Bedrock network-I/O pool (nofile/workers)
     vault_pool: int             # embedding-vault DB conn pool max (kept small — feeds pg)
     redis_pool: int             # per-worker Redis/cache pool ceiling (generous, scaled)
     headroom: float
@@ -277,12 +307,14 @@ def compute_sizing(
     thread_hi: int = DEFAULT_THREAD_HI,
     db_threads: Optional[int] = None,
     pg_margin: int = DEFAULT_PG_MARGIN,
+    nofile: Optional[int] = None,
 ) -> ResourceBudget:
     """Apply the sizing formula to a (cpu, ram) budget.
 
     workers      = clamp(min(round(cpu), floor(ram*headroom / rss)), min_workers, round(cpu))
     asgi_threads = clamp(round(cpu*2), thread_lo, thread_hi)
     pg_max_conns = max(100, workers * (db_threads + 1) + margin)
+    bedrock_pool = max(asgi_threads, min(nofile // workers, FD ceiling))
     """
     cpu_workers = max(1, round(cpu_budget))
     if per_worker_rss > 0:
@@ -296,13 +328,21 @@ def compute_sizing(
         db_threads = asgi_threads
     pg_max_conns = max(100, workers * (db_threads + 1) + pg_margin)
 
-    # Gateway per-worker offload pools. These multiply by `workers`, so each is
-    # clamped to keep total threads/connections bounded (perf_scratchpad item 11):
+    # Gateway per-worker offload pools:
     #   scanner (CPU-bound Tier-1) ~ one lane per core, capped at 16;
-    #   bedrock (network-I/O Tier-2) == asgi_threads (threads mostly wait on the API);
+    #   bedrock (network-I/O Tier-2) follows FD budget / workers, not cpu*2.
+    #     asgi_threads is 8–32 (sync offload); Bedrock waits on sockets so the
+    #     pool must be the per-worker in-flight budget. Ceiling is FD safety
+    #     (~10000), never 32. If nofile is 1024, raise ulimit rather than
+    #     shrinking this pool in code.
     #   vault (Postgres conn pool) kept small — workers*vault_pool feeds pg_max_conns.
     scanner_pool = _clamp(round(cpu_budget), 4, 16)
-    bedrock_pool = asgi_threads
+    nofile_soft = _nofile_soft_limit(nofile)
+    nofile_per_worker = min(
+        nofile_soft // max(workers, 1),
+        DEFAULT_BEDROCK_FD_CEILING,
+    )
+    bedrock_pool = max(asgi_threads, nofile_per_worker)
     vault_pool = _clamp(round(cpu_budget / 2), 2, 8)
     # Per-worker Redis/cache pool ceiling. Redis ops are sub-ms so the actual
     # concurrent-op count per worker is tiny; this is a generous lazy ceiling that

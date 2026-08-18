@@ -1,0 +1,110 @@
+{
+  "mode": "health",
+  "gateway": "http://127.0.0.1:8300",
+  "workers": 16,
+  "conn": 64,
+  "inflight": 1024,
+  "duration_s": 6.218,
+  "requests": 17123,
+  "ok": 17123,
+  "errors": 0,
+  "error_rate": 0.0,
+  "rps": 2753.62,
+  "ok_rps": 2753.62,
+  "scan_only": 0,
+  "codes": {
+    "200": 17123
+  },
+  "errors_by_signature": {},
+  "client_latency_ms": {
+    "n": 17123,
+    "mean": 337.654,
+    "p50": 245.894,
+    "p90": 707.593,
+    "p95": 916.693,
+    "p99": 1390.301,
+    "max": 3034.915
+  },
+  "addon_latency_ms": {
+    "n": 0,
+    "mean": null,
+    "p50": null,
+    "p90": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+  },
+  "stage_latency_ms": {},
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": "",
+    "full_nine_stages": false
+  },
+  "_label": "health_if1024",
+  "_inflight": 1024,
+  "_wall_orchestrated": 10.5,
+  "_docker_before": {
+    "ai_mesh_firewall-gateway-1": {
+      "cpu_pct": 8.65,
+      "cores": 0.09,
+      "mem": "3.381GiB / 58.85GiB",
+      "pids": "174"
+    },
+    "ai_mesh_firewall-control-1": {
+      "cpu_pct": 3.15,
+      "cores": 0.03,
+      "mem": "2.221GiB / 58.85GiB",
+      "pids": "309"
+    },
+    "ai_mesh_firewall-pgbouncer-1": {
+      "cpu_pct": 0.0,
+      "cores": 0.0,
+      "mem": "5.379MiB / 58.85GiB",
+      "pids": "1"
+    },
+    "ai_mesh_firewall-redis-1": {
+      "cpu_pct": 0.73,
+      "cores": 0.01,
+      "mem": "36.48MiB / 58.85GiB",
+      "pids": "7"
+    },
+    "ai_mesh_firewall-postgres-1": {
+      "cpu_pct": 0.01,
+      "cores": 0.0,
+      "mem": "220.5MiB / 58.85GiB",
+      "pids": "11"
+    }
+  },
+  "_docker_after": {
+    "ai_mesh_firewall-gateway-1": {
+      "cpu_pct": 0.82,
+      "cores": 0.01,
+      "mem": "3.382GiB / 58.85GiB",
+      "pids": "174"
+    },
+    "ai_mesh_firewall-control-1": {
+      "cpu_pct": 3.23,
+      "cores": 0.03,
+      "mem": "2.22GiB / 58.85GiB",
+      "pids": "309"
+    },
+    "ai_mesh_firewall-pgbouncer-1": {
+      "cpu_pct": 0.0,
+      "cores": 0.0,
+      "mem": "5.238MiB / 58.85GiB",
+      "pids": "1"
+    },
+    "ai_mesh_firewall-redis-1": {
+      "cpu_pct": 0.65,
+      "cores": 0.01,
+      "mem": "31.23MiB / 58.85GiB",
+      "pids": "7"
+    },
+    "ai_mesh_firewall-postgres-1": {
+      "cpu_pct": 0.37,
+      "cores": 0.0,
+      "mem": "221MiB / 58.85GiB",
+      "pids": "11"
+    }
+  }
+}

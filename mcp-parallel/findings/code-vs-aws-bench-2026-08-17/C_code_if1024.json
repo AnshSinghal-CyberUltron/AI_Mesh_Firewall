@@ -1,0 +1,157 @@
+{
+  "mode": "chat",
+  "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+  "workers": 32,
+  "conn": 32,
+  "inflight": 1024,
+  "duration_s": 17.968,
+  "requests": 1624,
+  "ok": 1284,
+  "errors": 340,
+  "error_rate": 0.2094,
+  "rps": 90.38,
+  "ok_rps": 71.46,
+  "scan_only": 0,
+  "codes": {
+    "200": 1284,
+    "422": 300,
+    "400": 19,
+    "503": 21
+  },
+  "errors_by_signature": {
+    "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 300,
+    "HTTP 503 kill_switch_active Model 'Haiku' is currently disabled.": 21,
+    "HTTP 400 content_filter Request blocked due to security policy": 19
+  },
+  "client_latency_ms": {
+    "n": 1624,
+    "mean": 10079.002,
+    "p50": 9271.468,
+    "p90": 16560.757,
+    "p95": 17087.63,
+    "p99": 17568.202,
+    "max": 17673.563
+  },
+  "addon_latency_ms": {
+    "n": 1303,
+    "mean": 6173.108,
+    "p50": 6093.4,
+    "p90": 8298.9,
+    "p95": 8682.5,
+    "p99": 9243.8,
+    "max": 9514.3
+  },
+  "stage_latency_ms": {
+    "auth": {
+      "n": 1303,
+      "mean": 1605.453,
+      "p50": 1528.6,
+      "p90": 3175.8,
+      "p95": 3576.0,
+      "p99": 4402.8,
+      "max": 5007.9
+    },
+    "rate_limit": {
+      "n": 1303,
+      "mean": 0.011,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 11.3
+    },
+    "policy": {
+      "n": 1303,
+      "mean": 577.963,
+      "p50": 485.4,
+      "p90": 1083.7,
+      "p95": 1321.7,
+      "p99": 1730.2,
+      "max": 2506.1
+    },
+    "input_scan": {
+      "n": 1303,
+      "mean": 764.669,
+      "p50": 665.7,
+      "p90": 1342.0,
+      "p95": 1509.2,
+      "p99": 1852.8,
+      "max": 2809.5
+    },
+    "kill_switch": {
+      "n": 1303,
+      "mean": 446.354,
+      "p50": 356.2,
+      "p90": 1015.9,
+      "p95": 1204.5,
+      "p99": 1678.7,
+      "max": 2658.3
+    },
+    "model_routing": {
+      "n": 1303,
+      "mean": 1397.92,
+      "p50": 1280.9,
+      "p90": 2467.9,
+      "p95": 2834.6,
+      "p99": 3344.6,
+      "max": 4313.0
+    },
+    "model_input": {
+      "n": 1303,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "model_output": {
+      "n": 1303,
+      "mean": 0.002,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.8
+    },
+    "output_guardrail": {
+      "n": 1303,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "total": {
+      "n": 1303,
+      "mean": 6173.11,
+      "p50": 6093.4,
+      "p90": 8298.9,
+      "p95": 8682.5,
+      "p99": 9243.8,
+      "max": 9514.3
+    },
+    "addon": {
+      "n": 1303,
+      "mean": 6173.108,
+      "p50": 6093.4,
+      "p90": 8298.9,
+      "p95": 8682.5,
+      "p99": 9243.8,
+      "max": 9514.3
+    }
+  },
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": "",
+    "full_nine_stages": true,
+    "unique_prompt": true
+  },
+  "_label": "C_code_if1024",
+  "_inflight": 1024,
+  "_wall_orchestrated": 18.14,
+  "_docker_before": "2026-08-17T05:36:57Z\nai_mesh_firewall-gateway-1|1.97%|3.399GiB / 12GiB|402\nai_mesh_firewall-nginx-1|0.02%|9.426MiB / 256MiB|9\nai_mesh_firewall-control-1|0.53%|328.9MiB / 2.5GiB|43\nai_mesh_firewall-pgbouncer-1|0.01%|4.16MiB / 256MiB|1\nai_mesh_firewall-postgres-1|0.00%|420.3MiB / 2.5GiB|11\nai_mesh_firewall-redis-1|0.66%|75.05MiB / 1GiB|7",
+  "_docker_after": "2026-08-17T05:37:17Z\nai_mesh_firewall-gateway-1|4.17%|3.455GiB / 12GiB|402\nai_mesh_firewall-nginx-1|0.00%|8.965MiB / 256MiB|9\nai_mesh_firewall-control-1|45.34%|336.5MiB / 2.5GiB|43\nai_mesh_firewall-pgbouncer-1|0.37%|4.387MiB / 256MiB|1\nai_mesh_firewall-postgres-1|12.25%|421.9MiB / 2.5GiB|11\nai_mesh_firewall-redis-1|2.91%|84.05MiB / 1GiB|7",
+  "_harness_rc": 0
+}

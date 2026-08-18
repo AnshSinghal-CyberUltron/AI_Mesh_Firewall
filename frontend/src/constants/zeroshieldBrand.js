@@ -32,7 +32,14 @@ const ROUTING_REASON_REPLACEMENTS = [
 const DECISION_SOURCE_LABELS = {
   kill_switch: "Kill switch",
   model_state: "Model state isolation",
+  // Current source: routing is deterministic weighted scoring, no LLM involved.
+  deterministic_weighted: "Deterministic weighted routing",
+  // Legacy values kept renderable so historical audit rows show a real label rather
+  // than an auto-title-cased slug. Nothing emits these any more.
   policy_adjudicator: ZEROSHIELD_ADJUDICATOR_LABEL,
+  weighted: "Deterministic weighted routing",
+  weighted_fastpath: "Deterministic weighted routing",
+  weighted_fallback: "Deterministic weighted routing",
   routing_disabled: "Routing disabled",
   no_routing_models: "No routing models",
   policy_engine: "Policy engine",

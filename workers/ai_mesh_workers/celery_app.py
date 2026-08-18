@@ -35,6 +35,10 @@ app.conf.beat_schedule = {
         "task": "isolation.scan_model_risk_scores",
         "schedule": 60.0,
     },
+    "expire-model-states": {
+        "task": "isolation.expire_model_states",
+        "schedule": 60.0,
+    },
     # Drain the gateway:jobs queue (async envelopes incl. vector_ingest) and
     # dispatch the routed handler tasks. This beat is the ONLY scheduler in the
     # stack (workers-beat); assigning app.conf.beat_schedule REPLACES the

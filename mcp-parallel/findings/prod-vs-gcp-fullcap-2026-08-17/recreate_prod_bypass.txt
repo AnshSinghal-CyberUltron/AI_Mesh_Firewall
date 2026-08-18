@@ -1,0 +1,17 @@
+RECREATE where=prod mode=bypass
+ENABLE_TIER2=false
+GATEWAY_CIRCUIT_BREAKER_ENABLED=false
+GATEWAY_LOADTEST_STUB_LLM=1
+GATEWAY_OUTPUT_GUARD_ENABLED=false
+GATEWAY_TIER2_SAMPLE_RATE=0
+ROUTING_ADJUDICATOR_ALWAYS=false
+WEB_CONCURRENCY=16
+Nano=0 Mem=12884901888
+---
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+ Container ai_mesh_firewall-gateway-1  Recreate
+ Container ai_mesh_firewall-gateway-1  Recreated
+ Container ai_mesh_firewall-gateway-1  Starting
+ Container ai_mesh_firewall-gateway-1  Started

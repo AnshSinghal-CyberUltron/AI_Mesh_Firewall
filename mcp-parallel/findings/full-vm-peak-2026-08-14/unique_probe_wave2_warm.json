@@ -1,0 +1,3072 @@
+{
+  "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+  "model": "auto",
+  "n": 8,
+  "unique_prompt": true,
+  "records": [
+    {
+      "i": 0,
+      "nonce_suffix": "9c83698e",
+      "status": 200,
+      "wall_ms": 3906.46,
+      "error": null,
+      "scan_only": false,
+      "total_latency_ms": 3865.7,
+      "stages": [
+        {
+          "stage": "auth",
+          "action": "allow",
+          "latency_ms": 0.8
+        },
+        {
+          "stage": "rate_limit",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "policy",
+          "action": "allow",
+          "latency_ms": 4.6
+        },
+        {
+          "stage": "input_scan",
+          "action": "allow",
+          "latency_ms": 1783.4
+        },
+        {
+          "stage": "kill_switch",
+          "action": "allow",
+          "latency_ms": 1.7
+        },
+        {
+          "stage": "model_routing",
+          "action": "allow",
+          "latency_ms": 4.4
+        },
+        {
+          "stage": "model_input",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_output",
+          "action": "allow",
+          "latency_ms": 1023.1
+        },
+        {
+          "stage": "output_guardrail",
+          "action": "allow",
+          "latency_ms": 1037.6
+        }
+      ],
+      "metrics": null,
+      "model": "auto",
+      "id": "chatcmpl-1786712022-t1f1y0JF3WOxuG8gwoMg",
+      "pipeline_trace": {
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.8,
+            "detail": "Gateway API key accepted",
+            "decision_source": "gateway_auth",
+            "decision_source_label": "Gateway authentication",
+            "guard_reason": "Gateway API key accepted",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Within org TPM / RPM limits",
+            "decision_source": "org_rate_limit",
+            "decision_source_label": "Org rate limit",
+            "guard_reason": "Within org TPM / RPM limits",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "policy",
+            "action": "allow",
+            "latency_ms": 4.6,
+            "detail": "Policy engine evaluated request against compiled rules; no matching policy rule",
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "prompt_in_operator_masked": false,
+            "redaction_display_note": "",
+            "decision_source": "policy_engine",
+            "decision_source_label": "Policy engine",
+            "guard_reason": "Policy engine \u2014 enforcement: ALLOW",
+            "tier": "policy",
+            "confidence": 0.0
+          },
+          {
+            "name": "input_scan",
+            "action": "allow",
+            "latency_ms": 1783.4,
+            "detail": "ZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "threat_type": "clean",
+            "confidence": 0.0,
+            "risk_score": 0.0,
+            "scan_outcome": "clean",
+            "redact_noop": false,
+            "tier": "tier_2",
+            "matched_patterns": [],
+            "prompt_submitted": "<redacted len=98>",
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "guard_model": "ZeroShield Model",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "reason_code": "model_recommendation",
+            "recommended_action": "allow",
+            "guard_findings": [],
+            "enforcement_source": "zeroshield_guard_model",
+            "decision_source": "zeroshield_guard_model",
+            "decision_source_label": "ZeroShield Model",
+            "matched_policies": [],
+            "matched_rules": []
+          },
+          {
+            "name": "kill_switch",
+            "action": "allow",
+            "latency_ms": 1.7,
+            "detail": "No active kill-switch for this model",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "No active kill-switch for this model",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_routing",
+            "action": "allow",
+            "latency_ms": 4.4,
+            "detail": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "requested_model": "auto",
+            "selected_model": "gemini-flash-cheap",
+            "routed_model": "gemini-flash-cheap",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "decision_source": "policy_adjudicator",
+            "decision_source_label": "ZeroShield Policy Adjudicator",
+            "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+            "decision_factors": [
+              "model_score=1.0000",
+              "risk_component=1.0000",
+              "cost_component=1.0000",
+              "latency_component=1.0000",
+              "priority_component=1.0000",
+              "candidates_evaluated=8",
+              "data_sensitivity=public",
+              "score_tie=true"
+            ],
+            "weights": {
+              "risk": 0.15,
+              "cost": 0.5,
+              "latency": 0.2,
+              "priority": 0.15
+            },
+            "routing_score": 1.0,
+            "candidate_count": 8,
+            "fallback_chain": [
+              "hermes-3-405b-free",
+              "llama-3.1-8b-cheap",
+              "llama-3.2-3b-free"
+            ],
+            "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+            "guard_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.\nDestination: LLM inference\nFactors: model_score=1.0000, risk_component=1.0000, cost_component=1.0000, latency_component=1.0000, priority_component=1.0000, candidates_evaluated=8, data_sensitivity=public, score_tie=true\nWeights: risk=15%, cost=50%, latency=20%, priority=15%\nScore: 1.0\nCandidates: 8",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_input",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Prompt delivered to LLM",
+            "content": "<redacted len=98>",
+            "prompt_submitted": "<redacted len=98>",
+            "decision_source": "llm_request",
+            "decision_source_label": "LLM request",
+            "guard_reason": "Prompt delivered to LLM unchanged",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_output",
+            "action": "allow",
+            "latency_ms": 1023.1,
+            "detail": "LLM inference complete",
+            "content": "<redacted len=5>",
+            "decision_source": "llm_provider",
+            "decision_source_label": "LLM provider",
+            "guard_reason": "LLM inference complete",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=5>"
+          },
+          {
+            "name": "output_guardrail",
+            "action": "allow",
+            "latency_ms": 1037.6,
+            "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "content": "<redacted len=5>",
+            "prompt_in": "<redacted len=5>",
+            "prompt_out": "<redacted len=5>",
+            "guard_model": "ZeroShield Output Guard",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "output_guard",
+            "decision_source": "output_guard",
+            "decision_source_label": "ZeroShield Output Guard",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": []
+          }
+        ],
+        "total_latency_ms": 3865.7,
+        "stage_latency_sum_ms": 3855.6,
+        "overhead_ms": 10.1,
+        "final_action": "allow",
+        "prompt_preview": "[user]: What is the capital of France? Reply with the city name only. Marker TOK-18cbad1d9c83698e.",
+        "input_text": "<redacted len=98>",
+        "prompt_submitted": "<redacted len=98>",
+        "output_text": "<redacted len=5>",
+        "final_response": "<redacted len=5>",
+        "output_withheld": false,
+        "output_withheld_reason": "",
+        "input_was_redacted": false,
+        "input_text_before": "",
+        "input_text_after": "",
+        "guard_summary": {
+          "guard_model": "ZeroShield Model",
+          "guard_action": "allow",
+          "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+          "reason_code": "model_recommendation",
+          "recommended_action": "allow",
+          "guard_findings": [],
+          "enforcement_source": "zeroshield_guard_model",
+          "decision_source": "zeroshield_guard_model",
+          "decision_source_label": "ZeroShield Model"
+        },
+        "requested_model": "auto",
+        "routed_model": "gemini-flash-cheap",
+        "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+        "routing": {
+          "requested_model": "auto",
+          "selected_model": "gemini-flash-cheap",
+          "routed_model": "gemini-flash-cheap",
+          "route_destination": "llm",
+          "route_destination_label": "LLM inference",
+          "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+          "decision_source": "policy_adjudicator",
+          "decision_source_label": "ZeroShield Policy Adjudicator",
+          "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+          "decision_factors": [
+            "model_score=1.0000",
+            "risk_component=1.0000",
+            "cost_component=1.0000",
+            "latency_component=1.0000",
+            "priority_component=1.0000",
+            "candidates_evaluated=8",
+            "data_sensitivity=public",
+            "score_tie=true"
+          ],
+          "weights": {
+            "risk": 0.15,
+            "cost": 0.5,
+            "latency": 0.2,
+            "priority": 0.15
+          },
+          "routing_score": 1.0,
+          "candidate_count": 8,
+          "fallback_chain": [
+            "hermes-3-405b-free",
+            "llama-3.1-8b-cheap",
+            "llama-3.2-3b-free"
+          ],
+          "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+        },
+        "latency_breakdown": {
+          "by_stage": [
+            {
+              "stage": "input_scan",
+              "latency_ms": 1783.4,
+              "share_pct": 46.1
+            },
+            {
+              "stage": "output_guardrail",
+              "latency_ms": 1037.6,
+              "share_pct": 26.8
+            },
+            {
+              "stage": "model_output",
+              "latency_ms": 1023.1,
+              "share_pct": 26.5
+            },
+            {
+              "stage": "policy",
+              "latency_ms": 4.6,
+              "share_pct": 0.1
+            },
+            {
+              "stage": "model_routing",
+              "latency_ms": 4.4,
+              "share_pct": 0.1
+            },
+            {
+              "stage": "kill_switch",
+              "latency_ms": 1.7,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "auth",
+              "latency_ms": 0.8,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "rate_limit",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_input",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            }
+          ],
+          "dominant_stage": "input_scan",
+          "dominant_latency_ms": 1783.4,
+          "dominant_share_pct": 46.1,
+          "overhead_ms": 10.1,
+          "overhead_share_pct": 0.3,
+          "hints": [
+            {
+              "stage": "input_scan",
+              "severity": "high",
+              "message": "Input Scan took 1783.4ms (46% of total).",
+              "actions": [
+                "Run Tier-2 (Bedrock) scans asynchronously when policy allows.",
+                "Disable Tier-2 for low-risk endpoints or monitor-only posture.",
+                "Narrow scan scope (fewer PII/secret detectors) if compliance permits."
+              ]
+            }
+          ]
+        },
+        "request_id": "zs-e6cc80513bcc"
+      }
+    },
+    {
+      "i": 1,
+      "nonce_suffix": "855ecaf0",
+      "status": 200,
+      "wall_ms": 3238.02,
+      "error": null,
+      "scan_only": false,
+      "total_latency_ms": 3228.7,
+      "stages": [
+        {
+          "stage": "auth",
+          "action": "allow",
+          "latency_ms": 0.4
+        },
+        {
+          "stage": "rate_limit",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "policy",
+          "action": "allow",
+          "latency_ms": 1.4
+        },
+        {
+          "stage": "input_scan",
+          "action": "allow",
+          "latency_ms": 1482.1
+        },
+        {
+          "stage": "kill_switch",
+          "action": "allow",
+          "latency_ms": 0.2
+        },
+        {
+          "stage": "model_routing",
+          "action": "allow",
+          "latency_ms": 4.2
+        },
+        {
+          "stage": "model_input",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_output",
+          "action": "allow",
+          "latency_ms": 820.6
+        },
+        {
+          "stage": "output_guardrail",
+          "action": "allow",
+          "latency_ms": 916.4
+        }
+      ],
+      "metrics": null,
+      "model": "auto",
+      "id": "chatcmpl-1786712025-7V7yhQAQtSstfz4Wp7Wk",
+      "pipeline_trace": {
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.4,
+            "detail": "Gateway API key accepted",
+            "decision_source": "gateway_auth",
+            "decision_source_label": "Gateway authentication",
+            "guard_reason": "Gateway API key accepted",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Within org TPM / RPM limits",
+            "decision_source": "org_rate_limit",
+            "decision_source_label": "Org rate limit",
+            "guard_reason": "Within org TPM / RPM limits",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "policy",
+            "action": "allow",
+            "latency_ms": 1.4,
+            "detail": "Policy engine evaluated request against compiled rules; no matching policy rule",
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "prompt_in_operator_masked": false,
+            "redaction_display_note": "",
+            "decision_source": "policy_engine",
+            "decision_source_label": "Policy engine",
+            "guard_reason": "Policy engine \u2014 enforcement: ALLOW",
+            "tier": "policy",
+            "confidence": 0.0
+          },
+          {
+            "name": "input_scan",
+            "action": "allow",
+            "latency_ms": 1482.1,
+            "detail": "ZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "threat_type": "clean",
+            "confidence": 0.0,
+            "risk_score": 0.0,
+            "scan_outcome": "clean",
+            "redact_noop": false,
+            "tier": "tier_2",
+            "matched_patterns": [],
+            "prompt_submitted": "<redacted len=98>",
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "guard_model": "ZeroShield Model",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "reason_code": "model_recommendation",
+            "recommended_action": "allow",
+            "guard_findings": [],
+            "enforcement_source": "zeroshield_guard_model",
+            "decision_source": "zeroshield_guard_model",
+            "decision_source_label": "ZeroShield Model",
+            "matched_policies": [],
+            "matched_rules": []
+          },
+          {
+            "name": "kill_switch",
+            "action": "allow",
+            "latency_ms": 0.2,
+            "detail": "No active kill-switch for this model",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "No active kill-switch for this model",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_routing",
+            "action": "allow",
+            "latency_ms": 4.2,
+            "detail": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "requested_model": "auto",
+            "selected_model": "gemini-flash-cheap",
+            "routed_model": "gemini-flash-cheap",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "decision_source": "policy_adjudicator",
+            "decision_source_label": "ZeroShield Policy Adjudicator",
+            "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+            "decision_factors": [
+              "model_score=1.0000",
+              "risk_component=1.0000",
+              "cost_component=1.0000",
+              "latency_component=1.0000",
+              "priority_component=1.0000",
+              "candidates_evaluated=8",
+              "data_sensitivity=public",
+              "score_tie=true"
+            ],
+            "weights": {
+              "risk": 0.15,
+              "cost": 0.5,
+              "latency": 0.2,
+              "priority": 0.15
+            },
+            "routing_score": 1.0,
+            "candidate_count": 8,
+            "fallback_chain": [
+              "hermes-3-405b-free",
+              "llama-3.1-8b-cheap",
+              "llama-3.2-3b-free"
+            ],
+            "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+            "guard_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.\nDestination: LLM inference\nFactors: model_score=1.0000, risk_component=1.0000, cost_component=1.0000, latency_component=1.0000, priority_component=1.0000, candidates_evaluated=8, data_sensitivity=public, score_tie=true\nWeights: risk=15%, cost=50%, latency=20%, priority=15%\nScore: 1.0\nCandidates: 8",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_input",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Prompt delivered to LLM",
+            "content": "<redacted len=98>",
+            "prompt_submitted": "<redacted len=98>",
+            "decision_source": "llm_request",
+            "decision_source_label": "LLM request",
+            "guard_reason": "Prompt delivered to LLM unchanged",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_output",
+            "action": "allow",
+            "latency_ms": 820.6,
+            "detail": "LLM inference complete",
+            "content": "<redacted len=5>",
+            "decision_source": "llm_provider",
+            "decision_source_label": "LLM provider",
+            "guard_reason": "LLM inference complete",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=5>"
+          },
+          {
+            "name": "output_guardrail",
+            "action": "allow",
+            "latency_ms": 916.4,
+            "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "content": "<redacted len=5>",
+            "prompt_in": "<redacted len=5>",
+            "prompt_out": "<redacted len=5>",
+            "guard_model": "ZeroShield Output Guard",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "output_guard",
+            "decision_source": "output_guard",
+            "decision_source_label": "ZeroShield Output Guard",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": []
+          }
+        ],
+        "total_latency_ms": 3228.7,
+        "stage_latency_sum_ms": 3225.2999999999997,
+        "overhead_ms": 3.4,
+        "final_action": "allow",
+        "prompt_preview": "[user]: What is the capital of France? Reply with the city name only. Marker TOK-18cbad1e855ecaf0.",
+        "input_text": "<redacted len=98>",
+        "prompt_submitted": "<redacted len=98>",
+        "output_text": "<redacted len=5>",
+        "final_response": "<redacted len=5>",
+        "output_withheld": false,
+        "output_withheld_reason": "",
+        "input_was_redacted": false,
+        "input_text_before": "",
+        "input_text_after": "",
+        "guard_summary": {
+          "guard_model": "ZeroShield Model",
+          "guard_action": "allow",
+          "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+          "reason_code": "model_recommendation",
+          "recommended_action": "allow",
+          "guard_findings": [],
+          "enforcement_source": "zeroshield_guard_model",
+          "decision_source": "zeroshield_guard_model",
+          "decision_source_label": "ZeroShield Model"
+        },
+        "requested_model": "auto",
+        "routed_model": "gemini-flash-cheap",
+        "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+        "routing": {
+          "requested_model": "auto",
+          "selected_model": "gemini-flash-cheap",
+          "routed_model": "gemini-flash-cheap",
+          "route_destination": "llm",
+          "route_destination_label": "LLM inference",
+          "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+          "decision_source": "policy_adjudicator",
+          "decision_source_label": "ZeroShield Policy Adjudicator",
+          "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+          "decision_factors": [
+            "model_score=1.0000",
+            "risk_component=1.0000",
+            "cost_component=1.0000",
+            "latency_component=1.0000",
+            "priority_component=1.0000",
+            "candidates_evaluated=8",
+            "data_sensitivity=public",
+            "score_tie=true"
+          ],
+          "weights": {
+            "risk": 0.15,
+            "cost": 0.5,
+            "latency": 0.2,
+            "priority": 0.15
+          },
+          "routing_score": 1.0,
+          "candidate_count": 8,
+          "fallback_chain": [
+            "hermes-3-405b-free",
+            "llama-3.1-8b-cheap",
+            "llama-3.2-3b-free"
+          ],
+          "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+        },
+        "latency_breakdown": {
+          "by_stage": [
+            {
+              "stage": "input_scan",
+              "latency_ms": 1482.1,
+              "share_pct": 45.9
+            },
+            {
+              "stage": "output_guardrail",
+              "latency_ms": 916.4,
+              "share_pct": 28.4
+            },
+            {
+              "stage": "model_output",
+              "latency_ms": 820.6,
+              "share_pct": 25.4
+            },
+            {
+              "stage": "model_routing",
+              "latency_ms": 4.2,
+              "share_pct": 0.1
+            },
+            {
+              "stage": "policy",
+              "latency_ms": 1.4,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "auth",
+              "latency_ms": 0.4,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "kill_switch",
+              "latency_ms": 0.2,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "rate_limit",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_input",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            }
+          ],
+          "dominant_stage": "input_scan",
+          "dominant_latency_ms": 1482.1,
+          "dominant_share_pct": 45.9,
+          "overhead_ms": 3.4,
+          "overhead_share_pct": 0.1,
+          "hints": [
+            {
+              "stage": "input_scan",
+              "severity": "high",
+              "message": "Input Scan took 1482.1ms (46% of total).",
+              "actions": [
+                "Run Tier-2 (Bedrock) scans asynchronously when policy allows.",
+                "Disable Tier-2 for low-risk endpoints or monitor-only posture.",
+                "Narrow scan scope (fewer PII/secret detectors) if compliance permits."
+              ]
+            }
+          ]
+        },
+        "request_id": "zs-3fee2ccde2b2"
+      }
+    },
+    {
+      "i": 2,
+      "nonce_suffix": "4662746e",
+      "status": 200,
+      "wall_ms": 3377.7,
+      "error": null,
+      "scan_only": false,
+      "total_latency_ms": 3367.3,
+      "stages": [
+        {
+          "stage": "auth",
+          "action": "allow",
+          "latency_ms": 0.3
+        },
+        {
+          "stage": "rate_limit",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "policy",
+          "action": "allow",
+          "latency_ms": 1.4
+        },
+        {
+          "stage": "input_scan",
+          "action": "allow",
+          "latency_ms": 1600.2
+        },
+        {
+          "stage": "kill_switch",
+          "action": "allow",
+          "latency_ms": 0.2
+        },
+        {
+          "stage": "model_routing",
+          "action": "allow",
+          "latency_ms": 4.5
+        },
+        {
+          "stage": "model_input",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_output",
+          "action": "allow",
+          "latency_ms": 625.0
+        },
+        {
+          "stage": "output_guardrail",
+          "action": "allow",
+          "latency_ms": 1132.3
+        }
+      ],
+      "metrics": null,
+      "model": "auto",
+      "id": "chatcmpl-1786712028-IDl8Zvhuz8HyZPxWXCO0",
+      "pipeline_trace": {
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.3,
+            "detail": "Gateway API key accepted",
+            "decision_source": "gateway_auth",
+            "decision_source_label": "Gateway authentication",
+            "guard_reason": "Gateway API key accepted",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Within org TPM / RPM limits",
+            "decision_source": "org_rate_limit",
+            "decision_source_label": "Org rate limit",
+            "guard_reason": "Within org TPM / RPM limits",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "policy",
+            "action": "allow",
+            "latency_ms": 1.4,
+            "detail": "Policy engine evaluated request against compiled rules; no matching policy rule",
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "prompt_in_operator_masked": false,
+            "redaction_display_note": "",
+            "decision_source": "policy_engine",
+            "decision_source_label": "Policy engine",
+            "guard_reason": "Policy engine \u2014 enforcement: ALLOW",
+            "tier": "policy",
+            "confidence": 0.0
+          },
+          {
+            "name": "input_scan",
+            "action": "allow",
+            "latency_ms": 1600.2,
+            "detail": "ZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "threat_type": "clean",
+            "confidence": 0.0,
+            "risk_score": 0.0,
+            "scan_outcome": "clean",
+            "redact_noop": false,
+            "tier": "tier_2",
+            "matched_patterns": [],
+            "prompt_submitted": "<redacted len=98>",
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "guard_model": "ZeroShield Model",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "reason_code": "model_recommendation",
+            "recommended_action": "allow",
+            "guard_findings": [],
+            "enforcement_source": "zeroshield_guard_model",
+            "decision_source": "zeroshield_guard_model",
+            "decision_source_label": "ZeroShield Model",
+            "matched_policies": [],
+            "matched_rules": []
+          },
+          {
+            "name": "kill_switch",
+            "action": "allow",
+            "latency_ms": 0.2,
+            "detail": "No active kill-switch for this model",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "No active kill-switch for this model",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_routing",
+            "action": "allow",
+            "latency_ms": 4.5,
+            "detail": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "requested_model": "auto",
+            "selected_model": "gemini-flash-cheap",
+            "routed_model": "gemini-flash-cheap",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "decision_source": "policy_adjudicator",
+            "decision_source_label": "ZeroShield Policy Adjudicator",
+            "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+            "decision_factors": [
+              "model_score=1.0000",
+              "risk_component=1.0000",
+              "cost_component=1.0000",
+              "latency_component=1.0000",
+              "priority_component=1.0000",
+              "candidates_evaluated=8",
+              "data_sensitivity=public",
+              "score_tie=true"
+            ],
+            "weights": {
+              "risk": 0.15,
+              "cost": 0.5,
+              "latency": 0.2,
+              "priority": 0.15
+            },
+            "routing_score": 1.0,
+            "candidate_count": 8,
+            "fallback_chain": [
+              "hermes-3-405b-free",
+              "llama-3.1-8b-cheap",
+              "llama-3.2-3b-free"
+            ],
+            "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+            "guard_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.\nDestination: LLM inference\nFactors: model_score=1.0000, risk_component=1.0000, cost_component=1.0000, latency_component=1.0000, priority_component=1.0000, candidates_evaluated=8, data_sensitivity=public, score_tie=true\nWeights: risk=15%, cost=50%, latency=20%, priority=15%\nScore: 1.0\nCandidates: 8",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_input",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Prompt delivered to LLM",
+            "content": "<redacted len=98>",
+            "prompt_submitted": "<redacted len=98>",
+            "decision_source": "llm_request",
+            "decision_source_label": "LLM request",
+            "guard_reason": "Prompt delivered to LLM unchanged",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_output",
+            "action": "allow",
+            "latency_ms": 625.0,
+            "detail": "LLM inference complete",
+            "content": "<redacted len=5>",
+            "decision_source": "llm_provider",
+            "decision_source_label": "LLM provider",
+            "guard_reason": "LLM inference complete",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=5>"
+          },
+          {
+            "name": "output_guardrail",
+            "action": "allow",
+            "latency_ms": 1132.3,
+            "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "content": "<redacted len=5>",
+            "prompt_in": "<redacted len=5>",
+            "prompt_out": "<redacted len=5>",
+            "guard_model": "ZeroShield Output Guard",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "output_guard",
+            "decision_source": "output_guard",
+            "decision_source_label": "ZeroShield Output Guard",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": []
+          }
+        ],
+        "total_latency_ms": 3367.3,
+        "stage_latency_sum_ms": 3363.9,
+        "overhead_ms": 3.4,
+        "final_action": "allow",
+        "prompt_preview": "[user]: What is the capital of France? Reply with the city name only. Marker TOK-18cbad1f4662746e.",
+        "input_text": "<redacted len=98>",
+        "prompt_submitted": "<redacted len=98>",
+        "output_text": "<redacted len=5>",
+        "final_response": "<redacted len=5>",
+        "output_withheld": false,
+        "output_withheld_reason": "",
+        "input_was_redacted": false,
+        "input_text_before": "",
+        "input_text_after": "",
+        "guard_summary": {
+          "guard_model": "ZeroShield Model",
+          "guard_action": "allow",
+          "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+          "reason_code": "model_recommendation",
+          "recommended_action": "allow",
+          "guard_findings": [],
+          "enforcement_source": "zeroshield_guard_model",
+          "decision_source": "zeroshield_guard_model",
+          "decision_source_label": "ZeroShield Model"
+        },
+        "requested_model": "auto",
+        "routed_model": "gemini-flash-cheap",
+        "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+        "routing": {
+          "requested_model": "auto",
+          "selected_model": "gemini-flash-cheap",
+          "routed_model": "gemini-flash-cheap",
+          "route_destination": "llm",
+          "route_destination_label": "LLM inference",
+          "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+          "decision_source": "policy_adjudicator",
+          "decision_source_label": "ZeroShield Policy Adjudicator",
+          "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+          "decision_factors": [
+            "model_score=1.0000",
+            "risk_component=1.0000",
+            "cost_component=1.0000",
+            "latency_component=1.0000",
+            "priority_component=1.0000",
+            "candidates_evaluated=8",
+            "data_sensitivity=public",
+            "score_tie=true"
+          ],
+          "weights": {
+            "risk": 0.15,
+            "cost": 0.5,
+            "latency": 0.2,
+            "priority": 0.15
+          },
+          "routing_score": 1.0,
+          "candidate_count": 8,
+          "fallback_chain": [
+            "hermes-3-405b-free",
+            "llama-3.1-8b-cheap",
+            "llama-3.2-3b-free"
+          ],
+          "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+        },
+        "latency_breakdown": {
+          "by_stage": [
+            {
+              "stage": "input_scan",
+              "latency_ms": 1600.2,
+              "share_pct": 47.5
+            },
+            {
+              "stage": "output_guardrail",
+              "latency_ms": 1132.3,
+              "share_pct": 33.6
+            },
+            {
+              "stage": "model_output",
+              "latency_ms": 625.0,
+              "share_pct": 18.6
+            },
+            {
+              "stage": "model_routing",
+              "latency_ms": 4.5,
+              "share_pct": 0.1
+            },
+            {
+              "stage": "policy",
+              "latency_ms": 1.4,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "auth",
+              "latency_ms": 0.3,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "kill_switch",
+              "latency_ms": 0.2,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "rate_limit",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_input",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            }
+          ],
+          "dominant_stage": "input_scan",
+          "dominant_latency_ms": 1600.2,
+          "dominant_share_pct": 47.5,
+          "overhead_ms": 3.4,
+          "overhead_share_pct": 0.1,
+          "hints": [
+            {
+              "stage": "input_scan",
+              "severity": "high",
+              "message": "Input Scan took 1600.2ms (48% of total).",
+              "actions": [
+                "Run Tier-2 (Bedrock) scans asynchronously when policy allows.",
+                "Disable Tier-2 for low-risk endpoints or monitor-only posture.",
+                "Narrow scan scope (fewer PII/secret detectors) if compliance permits."
+              ]
+            }
+          ]
+        },
+        "request_id": "zs-c0f825c3a8a0"
+      }
+    },
+    {
+      "i": 3,
+      "nonce_suffix": "0fb93e8a",
+      "status": 200,
+      "wall_ms": 3440.35,
+      "error": null,
+      "scan_only": false,
+      "total_latency_ms": 3431.0,
+      "stages": [
+        {
+          "stage": "auth",
+          "action": "allow",
+          "latency_ms": 0.3
+        },
+        {
+          "stage": "rate_limit",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "policy",
+          "action": "allow",
+          "latency_ms": 1.4
+        },
+        {
+          "stage": "input_scan",
+          "action": "allow",
+          "latency_ms": 1455.4
+        },
+        {
+          "stage": "kill_switch",
+          "action": "allow",
+          "latency_ms": 0.2
+        },
+        {
+          "stage": "model_routing",
+          "action": "allow",
+          "latency_ms": 4.6
+        },
+        {
+          "stage": "model_input",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_output",
+          "action": "allow",
+          "latency_ms": 916.1
+        },
+        {
+          "stage": "output_guardrail",
+          "action": "allow",
+          "latency_ms": 1049.5
+        }
+      ],
+      "metrics": null,
+      "model": "auto",
+      "id": "chatcmpl-1786712031-UVjRPnYmszsKlPTyCVzd",
+      "pipeline_trace": {
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.3,
+            "detail": "Gateway API key accepted",
+            "decision_source": "gateway_auth",
+            "decision_source_label": "Gateway authentication",
+            "guard_reason": "Gateway API key accepted",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Within org TPM / RPM limits",
+            "decision_source": "org_rate_limit",
+            "decision_source_label": "Org rate limit",
+            "guard_reason": "Within org TPM / RPM limits",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "policy",
+            "action": "allow",
+            "latency_ms": 1.4,
+            "detail": "Policy engine evaluated request against compiled rules; no matching policy rule",
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "prompt_in_operator_masked": false,
+            "redaction_display_note": "",
+            "decision_source": "policy_engine",
+            "decision_source_label": "Policy engine",
+            "guard_reason": "Policy engine \u2014 enforcement: ALLOW",
+            "tier": "policy",
+            "confidence": 0.0
+          },
+          {
+            "name": "input_scan",
+            "action": "allow",
+            "latency_ms": 1455.4,
+            "detail": "ZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "threat_type": "clean",
+            "confidence": 0.0,
+            "risk_score": 0.0,
+            "scan_outcome": "clean",
+            "redact_noop": false,
+            "tier": "tier_2",
+            "matched_patterns": [],
+            "prompt_submitted": "<redacted len=98>",
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "guard_model": "ZeroShield Model",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "reason_code": "model_recommendation",
+            "recommended_action": "allow",
+            "guard_findings": [],
+            "enforcement_source": "zeroshield_guard_model",
+            "decision_source": "zeroshield_guard_model",
+            "decision_source_label": "ZeroShield Model",
+            "matched_policies": [],
+            "matched_rules": []
+          },
+          {
+            "name": "kill_switch",
+            "action": "allow",
+            "latency_ms": 0.2,
+            "detail": "No active kill-switch for this model",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "No active kill-switch for this model",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_routing",
+            "action": "allow",
+            "latency_ms": 4.6,
+            "detail": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "requested_model": "auto",
+            "selected_model": "gemini-flash-cheap",
+            "routed_model": "gemini-flash-cheap",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "decision_source": "policy_adjudicator",
+            "decision_source_label": "ZeroShield Policy Adjudicator",
+            "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+            "decision_factors": [
+              "model_score=1.0000",
+              "risk_component=1.0000",
+              "cost_component=1.0000",
+              "latency_component=1.0000",
+              "priority_component=1.0000",
+              "candidates_evaluated=8",
+              "data_sensitivity=public",
+              "score_tie=true"
+            ],
+            "weights": {
+              "risk": 0.15,
+              "cost": 0.5,
+              "latency": 0.2,
+              "priority": 0.15
+            },
+            "routing_score": 1.0,
+            "candidate_count": 8,
+            "fallback_chain": [
+              "hermes-3-405b-free",
+              "llama-3.1-8b-cheap",
+              "llama-3.2-3b-free"
+            ],
+            "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+            "guard_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.\nDestination: LLM inference\nFactors: model_score=1.0000, risk_component=1.0000, cost_component=1.0000, latency_component=1.0000, priority_component=1.0000, candidates_evaluated=8, data_sensitivity=public, score_tie=true\nWeights: risk=15%, cost=50%, latency=20%, priority=15%\nScore: 1.0\nCandidates: 8",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_input",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Prompt delivered to LLM",
+            "content": "<redacted len=98>",
+            "prompt_submitted": "<redacted len=98>",
+            "decision_source": "llm_request",
+            "decision_source_label": "LLM request",
+            "guard_reason": "Prompt delivered to LLM unchanged",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_output",
+            "action": "allow",
+            "latency_ms": 916.1,
+            "detail": "LLM inference complete",
+            "content": "<redacted len=5>",
+            "decision_source": "llm_provider",
+            "decision_source_label": "LLM provider",
+            "guard_reason": "LLM inference complete",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=5>"
+          },
+          {
+            "name": "output_guardrail",
+            "action": "allow",
+            "latency_ms": 1049.5,
+            "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "content": "<redacted len=5>",
+            "prompt_in": "<redacted len=5>",
+            "prompt_out": "<redacted len=5>",
+            "guard_model": "ZeroShield Output Guard",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "output_guard",
+            "decision_source": "output_guard",
+            "decision_source_label": "ZeroShield Output Guard",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": []
+          }
+        ],
+        "total_latency_ms": 3431.0,
+        "stage_latency_sum_ms": 3427.5,
+        "overhead_ms": 3.5,
+        "final_action": "allow",
+        "prompt_preview": "[user]: What is the capital of France? Reply with the city name only. Marker TOK-18cbad200fb93e8a.",
+        "input_text": "<redacted len=98>",
+        "prompt_submitted": "<redacted len=98>",
+        "output_text": "<redacted len=5>",
+        "final_response": "<redacted len=5>",
+        "output_withheld": false,
+        "output_withheld_reason": "",
+        "input_was_redacted": false,
+        "input_text_before": "",
+        "input_text_after": "",
+        "guard_summary": {
+          "guard_model": "ZeroShield Model",
+          "guard_action": "allow",
+          "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+          "reason_code": "model_recommendation",
+          "recommended_action": "allow",
+          "guard_findings": [],
+          "enforcement_source": "zeroshield_guard_model",
+          "decision_source": "zeroshield_guard_model",
+          "decision_source_label": "ZeroShield Model"
+        },
+        "requested_model": "auto",
+        "routed_model": "gemini-flash-cheap",
+        "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+        "routing": {
+          "requested_model": "auto",
+          "selected_model": "gemini-flash-cheap",
+          "routed_model": "gemini-flash-cheap",
+          "route_destination": "llm",
+          "route_destination_label": "LLM inference",
+          "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+          "decision_source": "policy_adjudicator",
+          "decision_source_label": "ZeroShield Policy Adjudicator",
+          "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+          "decision_factors": [
+            "model_score=1.0000",
+            "risk_component=1.0000",
+            "cost_component=1.0000",
+            "latency_component=1.0000",
+            "priority_component=1.0000",
+            "candidates_evaluated=8",
+            "data_sensitivity=public",
+            "score_tie=true"
+          ],
+          "weights": {
+            "risk": 0.15,
+            "cost": 0.5,
+            "latency": 0.2,
+            "priority": 0.15
+          },
+          "routing_score": 1.0,
+          "candidate_count": 8,
+          "fallback_chain": [
+            "hermes-3-405b-free",
+            "llama-3.1-8b-cheap",
+            "llama-3.2-3b-free"
+          ],
+          "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+        },
+        "latency_breakdown": {
+          "by_stage": [
+            {
+              "stage": "input_scan",
+              "latency_ms": 1455.4,
+              "share_pct": 42.4
+            },
+            {
+              "stage": "output_guardrail",
+              "latency_ms": 1049.5,
+              "share_pct": 30.6
+            },
+            {
+              "stage": "model_output",
+              "latency_ms": 916.1,
+              "share_pct": 26.7
+            },
+            {
+              "stage": "model_routing",
+              "latency_ms": 4.6,
+              "share_pct": 0.1
+            },
+            {
+              "stage": "policy",
+              "latency_ms": 1.4,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "auth",
+              "latency_ms": 0.3,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "kill_switch",
+              "latency_ms": 0.2,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "rate_limit",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_input",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            }
+          ],
+          "dominant_stage": "input_scan",
+          "dominant_latency_ms": 1455.4,
+          "dominant_share_pct": 42.4,
+          "overhead_ms": 3.5,
+          "overhead_share_pct": 0.1,
+          "hints": [
+            {
+              "stage": "input_scan",
+              "severity": "high",
+              "message": "Input Scan took 1455.4ms (42% of total).",
+              "actions": [
+                "Run Tier-2 (Bedrock) scans asynchronously when policy allows.",
+                "Disable Tier-2 for low-risk endpoints or monitor-only posture.",
+                "Narrow scan scope (fewer PII/secret detectors) if compliance permits."
+              ]
+            }
+          ]
+        },
+        "request_id": "zs-c4a0d218f5a6"
+      }
+    },
+    {
+      "i": 4,
+      "nonce_suffix": "dccc1aff",
+      "status": 200,
+      "wall_ms": 3306.57,
+      "error": null,
+      "scan_only": false,
+      "total_latency_ms": 3297.3,
+      "stages": [
+        {
+          "stage": "auth",
+          "action": "allow",
+          "latency_ms": 0.3
+        },
+        {
+          "stage": "rate_limit",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "policy",
+          "action": "allow",
+          "latency_ms": 1.4
+        },
+        {
+          "stage": "input_scan",
+          "action": "allow",
+          "latency_ms": 1567.4
+        },
+        {
+          "stage": "kill_switch",
+          "action": "allow",
+          "latency_ms": 0.2
+        },
+        {
+          "stage": "model_routing",
+          "action": "allow",
+          "latency_ms": 4.6
+        },
+        {
+          "stage": "model_input",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_output",
+          "action": "allow",
+          "latency_ms": 758.9
+        },
+        {
+          "stage": "output_guardrail",
+          "action": "allow",
+          "latency_ms": 961.1
+        }
+      ],
+      "metrics": null,
+      "model": "auto",
+      "id": "chatcmpl-1786712035-ga6BnqKVb3WJcNgYt5WM",
+      "pipeline_trace": {
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.3,
+            "detail": "Gateway API key accepted",
+            "decision_source": "gateway_auth",
+            "decision_source_label": "Gateway authentication",
+            "guard_reason": "Gateway API key accepted",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Within org TPM / RPM limits",
+            "decision_source": "org_rate_limit",
+            "decision_source_label": "Org rate limit",
+            "guard_reason": "Within org TPM / RPM limits",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "policy",
+            "action": "allow",
+            "latency_ms": 1.4,
+            "detail": "Policy engine evaluated request against compiled rules; no matching policy rule",
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "prompt_in_operator_masked": false,
+            "redaction_display_note": "",
+            "decision_source": "policy_engine",
+            "decision_source_label": "Policy engine",
+            "guard_reason": "Policy engine \u2014 enforcement: ALLOW",
+            "tier": "policy",
+            "confidence": 0.0
+          },
+          {
+            "name": "input_scan",
+            "action": "allow",
+            "latency_ms": 1567.4,
+            "detail": "ZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "threat_type": "clean",
+            "confidence": 0.0,
+            "risk_score": 0.0,
+            "scan_outcome": "clean",
+            "redact_noop": false,
+            "tier": "tier_2",
+            "matched_patterns": [],
+            "prompt_submitted": "<redacted len=98>",
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "guard_model": "ZeroShield Model",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "reason_code": "model_recommendation",
+            "recommended_action": "allow",
+            "guard_findings": [],
+            "enforcement_source": "zeroshield_guard_model",
+            "decision_source": "zeroshield_guard_model",
+            "decision_source_label": "ZeroShield Model",
+            "matched_policies": [],
+            "matched_rules": []
+          },
+          {
+            "name": "kill_switch",
+            "action": "allow",
+            "latency_ms": 0.2,
+            "detail": "No active kill-switch for this model",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "No active kill-switch for this model",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_routing",
+            "action": "allow",
+            "latency_ms": 4.6,
+            "detail": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "requested_model": "auto",
+            "selected_model": "gemini-flash-cheap",
+            "routed_model": "gemini-flash-cheap",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "decision_source": "policy_adjudicator",
+            "decision_source_label": "ZeroShield Policy Adjudicator",
+            "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+            "decision_factors": [
+              "model_score=1.0000",
+              "risk_component=1.0000",
+              "cost_component=1.0000",
+              "latency_component=1.0000",
+              "priority_component=1.0000",
+              "candidates_evaluated=8",
+              "data_sensitivity=public",
+              "score_tie=true"
+            ],
+            "weights": {
+              "risk": 0.15,
+              "cost": 0.5,
+              "latency": 0.2,
+              "priority": 0.15
+            },
+            "routing_score": 1.0,
+            "candidate_count": 8,
+            "fallback_chain": [
+              "hermes-3-405b-free",
+              "llama-3.1-8b-cheap",
+              "llama-3.2-3b-free"
+            ],
+            "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+            "guard_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.\nDestination: LLM inference\nFactors: model_score=1.0000, risk_component=1.0000, cost_component=1.0000, latency_component=1.0000, priority_component=1.0000, candidates_evaluated=8, data_sensitivity=public, score_tie=true\nWeights: risk=15%, cost=50%, latency=20%, priority=15%\nScore: 1.0\nCandidates: 8",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_input",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Prompt delivered to LLM",
+            "content": "<redacted len=98>",
+            "prompt_submitted": "<redacted len=98>",
+            "decision_source": "llm_request",
+            "decision_source_label": "LLM request",
+            "guard_reason": "Prompt delivered to LLM unchanged",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_output",
+            "action": "allow",
+            "latency_ms": 758.9,
+            "detail": "LLM inference complete",
+            "content": "<redacted len=5>",
+            "decision_source": "llm_provider",
+            "decision_source_label": "LLM provider",
+            "guard_reason": "LLM inference complete",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=5>"
+          },
+          {
+            "name": "output_guardrail",
+            "action": "allow",
+            "latency_ms": 961.1,
+            "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "content": "<redacted len=5>",
+            "prompt_in": "<redacted len=5>",
+            "prompt_out": "<redacted len=5>",
+            "guard_model": "ZeroShield Output Guard",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "output_guard",
+            "decision_source": "output_guard",
+            "decision_source_label": "ZeroShield Output Guard",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": []
+          }
+        ],
+        "total_latency_ms": 3297.3,
+        "stage_latency_sum_ms": 3293.9,
+        "overhead_ms": 3.4,
+        "final_action": "allow",
+        "prompt_preview": "[user]: What is the capital of France? Reply with the city name only. Marker TOK-18cbad20dccc1aff.",
+        "input_text": "<redacted len=98>",
+        "prompt_submitted": "<redacted len=98>",
+        "output_text": "<redacted len=5>",
+        "final_response": "<redacted len=5>",
+        "output_withheld": false,
+        "output_withheld_reason": "",
+        "input_was_redacted": false,
+        "input_text_before": "",
+        "input_text_after": "",
+        "guard_summary": {
+          "guard_model": "ZeroShield Model",
+          "guard_action": "allow",
+          "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+          "reason_code": "model_recommendation",
+          "recommended_action": "allow",
+          "guard_findings": [],
+          "enforcement_source": "zeroshield_guard_model",
+          "decision_source": "zeroshield_guard_model",
+          "decision_source_label": "ZeroShield Model"
+        },
+        "requested_model": "auto",
+        "routed_model": "gemini-flash-cheap",
+        "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+        "routing": {
+          "requested_model": "auto",
+          "selected_model": "gemini-flash-cheap",
+          "routed_model": "gemini-flash-cheap",
+          "route_destination": "llm",
+          "route_destination_label": "LLM inference",
+          "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+          "decision_source": "policy_adjudicator",
+          "decision_source_label": "ZeroShield Policy Adjudicator",
+          "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+          "decision_factors": [
+            "model_score=1.0000",
+            "risk_component=1.0000",
+            "cost_component=1.0000",
+            "latency_component=1.0000",
+            "priority_component=1.0000",
+            "candidates_evaluated=8",
+            "data_sensitivity=public",
+            "score_tie=true"
+          ],
+          "weights": {
+            "risk": 0.15,
+            "cost": 0.5,
+            "latency": 0.2,
+            "priority": 0.15
+          },
+          "routing_score": 1.0,
+          "candidate_count": 8,
+          "fallback_chain": [
+            "hermes-3-405b-free",
+            "llama-3.1-8b-cheap",
+            "llama-3.2-3b-free"
+          ],
+          "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+        },
+        "latency_breakdown": {
+          "by_stage": [
+            {
+              "stage": "input_scan",
+              "latency_ms": 1567.4,
+              "share_pct": 47.5
+            },
+            {
+              "stage": "output_guardrail",
+              "latency_ms": 961.1,
+              "share_pct": 29.1
+            },
+            {
+              "stage": "model_output",
+              "latency_ms": 758.9,
+              "share_pct": 23.0
+            },
+            {
+              "stage": "model_routing",
+              "latency_ms": 4.6,
+              "share_pct": 0.1
+            },
+            {
+              "stage": "policy",
+              "latency_ms": 1.4,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "auth",
+              "latency_ms": 0.3,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "kill_switch",
+              "latency_ms": 0.2,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "rate_limit",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_input",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            }
+          ],
+          "dominant_stage": "input_scan",
+          "dominant_latency_ms": 1567.4,
+          "dominant_share_pct": 47.5,
+          "overhead_ms": 3.4,
+          "overhead_share_pct": 0.1,
+          "hints": [
+            {
+              "stage": "input_scan",
+              "severity": "high",
+              "message": "Input Scan took 1567.4ms (48% of total).",
+              "actions": [
+                "Run Tier-2 (Bedrock) scans asynchronously when policy allows.",
+                "Disable Tier-2 for low-risk endpoints or monitor-only posture.",
+                "Narrow scan scope (fewer PII/secret detectors) if compliance permits."
+              ]
+            }
+          ]
+        },
+        "request_id": "zs-7dcb473ebadb"
+      }
+    },
+    {
+      "i": 5,
+      "nonce_suffix": "a1e5bd54",
+      "status": 200,
+      "wall_ms": 3515.01,
+      "error": null,
+      "scan_only": false,
+      "total_latency_ms": 3505.5,
+      "stages": [
+        {
+          "stage": "auth",
+          "action": "allow",
+          "latency_ms": 0.3
+        },
+        {
+          "stage": "rate_limit",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "policy",
+          "action": "allow",
+          "latency_ms": 1.4
+        },
+        {
+          "stage": "input_scan",
+          "action": "allow",
+          "latency_ms": 1506.4
+        },
+        {
+          "stage": "kill_switch",
+          "action": "allow",
+          "latency_ms": 0.2
+        },
+        {
+          "stage": "model_routing",
+          "action": "allow",
+          "latency_ms": 4.7
+        },
+        {
+          "stage": "model_input",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_output",
+          "action": "allow",
+          "latency_ms": 915.8
+        },
+        {
+          "stage": "output_guardrail",
+          "action": "allow",
+          "latency_ms": 1073.4
+        }
+      ],
+      "metrics": null,
+      "model": "auto",
+      "id": "chatcmpl-1786712038-UX2DRT8PyjJmLTGaAsFG",
+      "pipeline_trace": {
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.3,
+            "detail": "Gateway API key accepted",
+            "decision_source": "gateway_auth",
+            "decision_source_label": "Gateway authentication",
+            "guard_reason": "Gateway API key accepted",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Within org TPM / RPM limits",
+            "decision_source": "org_rate_limit",
+            "decision_source_label": "Org rate limit",
+            "guard_reason": "Within org TPM / RPM limits",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "policy",
+            "action": "allow",
+            "latency_ms": 1.4,
+            "detail": "Policy engine evaluated request against compiled rules; no matching policy rule",
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "prompt_in_operator_masked": false,
+            "redaction_display_note": "",
+            "decision_source": "policy_engine",
+            "decision_source_label": "Policy engine",
+            "guard_reason": "Policy engine \u2014 enforcement: ALLOW",
+            "tier": "policy",
+            "confidence": 0.0
+          },
+          {
+            "name": "input_scan",
+            "action": "allow",
+            "latency_ms": 1506.4,
+            "detail": "ZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "threat_type": "clean",
+            "confidence": 0.0,
+            "risk_score": 0.0,
+            "scan_outcome": "clean",
+            "redact_noop": false,
+            "tier": "tier_2",
+            "matched_patterns": [],
+            "prompt_submitted": "<redacted len=98>",
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "guard_model": "ZeroShield Model",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "reason_code": "model_recommendation",
+            "recommended_action": "allow",
+            "guard_findings": [],
+            "enforcement_source": "zeroshield_guard_model",
+            "decision_source": "zeroshield_guard_model",
+            "decision_source_label": "ZeroShield Model",
+            "matched_policies": [],
+            "matched_rules": []
+          },
+          {
+            "name": "kill_switch",
+            "action": "allow",
+            "latency_ms": 0.2,
+            "detail": "No active kill-switch for this model",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "No active kill-switch for this model",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_routing",
+            "action": "allow",
+            "latency_ms": 4.7,
+            "detail": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "requested_model": "auto",
+            "selected_model": "gemini-flash-cheap",
+            "routed_model": "gemini-flash-cheap",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "decision_source": "policy_adjudicator",
+            "decision_source_label": "ZeroShield Policy Adjudicator",
+            "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+            "decision_factors": [
+              "model_score=1.0000",
+              "risk_component=1.0000",
+              "cost_component=1.0000",
+              "latency_component=1.0000",
+              "priority_component=1.0000",
+              "candidates_evaluated=8",
+              "data_sensitivity=public",
+              "score_tie=true"
+            ],
+            "weights": {
+              "risk": 0.15,
+              "cost": 0.5,
+              "latency": 0.2,
+              "priority": 0.15
+            },
+            "routing_score": 1.0,
+            "candidate_count": 8,
+            "fallback_chain": [
+              "hermes-3-405b-free",
+              "llama-3.1-8b-cheap",
+              "llama-3.2-3b-free"
+            ],
+            "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+            "guard_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.\nDestination: LLM inference\nFactors: model_score=1.0000, risk_component=1.0000, cost_component=1.0000, latency_component=1.0000, priority_component=1.0000, candidates_evaluated=8, data_sensitivity=public, score_tie=true\nWeights: risk=15%, cost=50%, latency=20%, priority=15%\nScore: 1.0\nCandidates: 8",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_input",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Prompt delivered to LLM",
+            "content": "<redacted len=98>",
+            "prompt_submitted": "<redacted len=98>",
+            "decision_source": "llm_request",
+            "decision_source_label": "LLM request",
+            "guard_reason": "Prompt delivered to LLM unchanged",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_output",
+            "action": "allow",
+            "latency_ms": 915.8,
+            "detail": "LLM inference complete",
+            "content": "<redacted len=5>",
+            "decision_source": "llm_provider",
+            "decision_source_label": "LLM provider",
+            "guard_reason": "LLM inference complete",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=5>"
+          },
+          {
+            "name": "output_guardrail",
+            "action": "allow",
+            "latency_ms": 1073.4,
+            "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "content": "<redacted len=5>",
+            "prompt_in": "<redacted len=5>",
+            "prompt_out": "<redacted len=5>",
+            "guard_model": "ZeroShield Output Guard",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "output_guard",
+            "decision_source": "output_guard",
+            "decision_source_label": "ZeroShield Output Guard",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": []
+          }
+        ],
+        "total_latency_ms": 3505.5,
+        "stage_latency_sum_ms": 3502.2000000000003,
+        "overhead_ms": 3.3,
+        "final_action": "allow",
+        "prompt_preview": "[user]: What is the capital of France? Reply with the city name only. Marker TOK-18cbad21a1e5bd54.",
+        "input_text": "<redacted len=98>",
+        "prompt_submitted": "<redacted len=98>",
+        "output_text": "<redacted len=5>",
+        "final_response": "<redacted len=5>",
+        "output_withheld": false,
+        "output_withheld_reason": "",
+        "input_was_redacted": false,
+        "input_text_before": "",
+        "input_text_after": "",
+        "guard_summary": {
+          "guard_model": "ZeroShield Model",
+          "guard_action": "allow",
+          "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+          "reason_code": "model_recommendation",
+          "recommended_action": "allow",
+          "guard_findings": [],
+          "enforcement_source": "zeroshield_guard_model",
+          "decision_source": "zeroshield_guard_model",
+          "decision_source_label": "ZeroShield Model"
+        },
+        "requested_model": "auto",
+        "routed_model": "gemini-flash-cheap",
+        "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+        "routing": {
+          "requested_model": "auto",
+          "selected_model": "gemini-flash-cheap",
+          "routed_model": "gemini-flash-cheap",
+          "route_destination": "llm",
+          "route_destination_label": "LLM inference",
+          "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+          "decision_source": "policy_adjudicator",
+          "decision_source_label": "ZeroShield Policy Adjudicator",
+          "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+          "decision_factors": [
+            "model_score=1.0000",
+            "risk_component=1.0000",
+            "cost_component=1.0000",
+            "latency_component=1.0000",
+            "priority_component=1.0000",
+            "candidates_evaluated=8",
+            "data_sensitivity=public",
+            "score_tie=true"
+          ],
+          "weights": {
+            "risk": 0.15,
+            "cost": 0.5,
+            "latency": 0.2,
+            "priority": 0.15
+          },
+          "routing_score": 1.0,
+          "candidate_count": 8,
+          "fallback_chain": [
+            "hermes-3-405b-free",
+            "llama-3.1-8b-cheap",
+            "llama-3.2-3b-free"
+          ],
+          "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+        },
+        "latency_breakdown": {
+          "by_stage": [
+            {
+              "stage": "input_scan",
+              "latency_ms": 1506.4,
+              "share_pct": 43.0
+            },
+            {
+              "stage": "output_guardrail",
+              "latency_ms": 1073.4,
+              "share_pct": 30.6
+            },
+            {
+              "stage": "model_output",
+              "latency_ms": 915.8,
+              "share_pct": 26.1
+            },
+            {
+              "stage": "model_routing",
+              "latency_ms": 4.7,
+              "share_pct": 0.1
+            },
+            {
+              "stage": "policy",
+              "latency_ms": 1.4,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "auth",
+              "latency_ms": 0.3,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "kill_switch",
+              "latency_ms": 0.2,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "rate_limit",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_input",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            }
+          ],
+          "dominant_stage": "input_scan",
+          "dominant_latency_ms": 1506.4,
+          "dominant_share_pct": 43.0,
+          "overhead_ms": 3.3,
+          "overhead_share_pct": 0.1,
+          "hints": [
+            {
+              "stage": "input_scan",
+              "severity": "high",
+              "message": "Input Scan took 1506.4ms (43% of total).",
+              "actions": [
+                "Run Tier-2 (Bedrock) scans asynchronously when policy allows.",
+                "Disable Tier-2 for low-risk endpoints or monitor-only posture.",
+                "Narrow scan scope (fewer PII/secret detectors) if compliance permits."
+              ]
+            }
+          ]
+        },
+        "request_id": "zs-94ed37ce34da"
+      }
+    },
+    {
+      "i": 6,
+      "nonce_suffix": "736baeea",
+      "status": 200,
+      "wall_ms": 3026.67,
+      "error": null,
+      "scan_only": false,
+      "total_latency_ms": 3016.9,
+      "stages": [
+        {
+          "stage": "auth",
+          "action": "allow",
+          "latency_ms": 0.3
+        },
+        {
+          "stage": "rate_limit",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "policy",
+          "action": "allow",
+          "latency_ms": 1.4
+        },
+        {
+          "stage": "input_scan",
+          "action": "allow",
+          "latency_ms": 1377.3
+        },
+        {
+          "stage": "kill_switch",
+          "action": "allow",
+          "latency_ms": 0.2
+        },
+        {
+          "stage": "model_routing",
+          "action": "allow",
+          "latency_ms": 4.4
+        },
+        {
+          "stage": "model_input",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_output",
+          "action": "allow",
+          "latency_ms": 679.1
+        },
+        {
+          "stage": "output_guardrail",
+          "action": "allow",
+          "latency_ms": 950.8
+        }
+      ],
+      "metrics": null,
+      "model": "auto",
+      "id": "chatcmpl-1786712042-JypMffRdsKtmZSzl2SC9",
+      "pipeline_trace": {
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.3,
+            "detail": "Gateway API key accepted",
+            "decision_source": "gateway_auth",
+            "decision_source_label": "Gateway authentication",
+            "guard_reason": "Gateway API key accepted",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Within org TPM / RPM limits",
+            "decision_source": "org_rate_limit",
+            "decision_source_label": "Org rate limit",
+            "guard_reason": "Within org TPM / RPM limits",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "policy",
+            "action": "allow",
+            "latency_ms": 1.4,
+            "detail": "Policy engine evaluated request against compiled rules; no matching policy rule",
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "prompt_in_operator_masked": false,
+            "redaction_display_note": "",
+            "decision_source": "policy_engine",
+            "decision_source_label": "Policy engine",
+            "guard_reason": "Policy engine \u2014 enforcement: ALLOW",
+            "tier": "policy",
+            "confidence": 0.0
+          },
+          {
+            "name": "input_scan",
+            "action": "allow",
+            "latency_ms": 1377.3,
+            "detail": "ZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "threat_type": "clean",
+            "confidence": 0.0,
+            "risk_score": 0.0,
+            "scan_outcome": "clean",
+            "redact_noop": false,
+            "tier": "tier_2",
+            "matched_patterns": [],
+            "prompt_submitted": "<redacted len=98>",
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "guard_model": "ZeroShield Model",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "reason_code": "model_recommendation",
+            "recommended_action": "allow",
+            "guard_findings": [],
+            "enforcement_source": "zeroshield_guard_model",
+            "decision_source": "zeroshield_guard_model",
+            "decision_source_label": "ZeroShield Model",
+            "matched_policies": [],
+            "matched_rules": []
+          },
+          {
+            "name": "kill_switch",
+            "action": "allow",
+            "latency_ms": 0.2,
+            "detail": "No active kill-switch for this model",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "No active kill-switch for this model",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_routing",
+            "action": "allow",
+            "latency_ms": 4.4,
+            "detail": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "requested_model": "auto",
+            "selected_model": "gemini-flash-cheap",
+            "routed_model": "gemini-flash-cheap",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "decision_source": "policy_adjudicator",
+            "decision_source_label": "ZeroShield Policy Adjudicator",
+            "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+            "decision_factors": [
+              "model_score=1.0000",
+              "risk_component=1.0000",
+              "cost_component=1.0000",
+              "latency_component=1.0000",
+              "priority_component=1.0000",
+              "candidates_evaluated=8",
+              "data_sensitivity=public",
+              "score_tie=true"
+            ],
+            "weights": {
+              "risk": 0.15,
+              "cost": 0.5,
+              "latency": 0.2,
+              "priority": 0.15
+            },
+            "routing_score": 1.0,
+            "candidate_count": 8,
+            "fallback_chain": [
+              "hermes-3-405b-free",
+              "llama-3.1-8b-cheap",
+              "llama-3.2-3b-free"
+            ],
+            "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+            "guard_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.\nDestination: LLM inference\nFactors: model_score=1.0000, risk_component=1.0000, cost_component=1.0000, latency_component=1.0000, priority_component=1.0000, candidates_evaluated=8, data_sensitivity=public, score_tie=true\nWeights: risk=15%, cost=50%, latency=20%, priority=15%\nScore: 1.0\nCandidates: 8",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_input",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Prompt delivered to LLM",
+            "content": "<redacted len=98>",
+            "prompt_submitted": "<redacted len=98>",
+            "decision_source": "llm_request",
+            "decision_source_label": "LLM request",
+            "guard_reason": "Prompt delivered to LLM unchanged",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_output",
+            "action": "allow",
+            "latency_ms": 679.1,
+            "detail": "LLM inference complete",
+            "content": "<redacted len=5>",
+            "decision_source": "llm_provider",
+            "decision_source_label": "LLM provider",
+            "guard_reason": "LLM inference complete",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=5>"
+          },
+          {
+            "name": "output_guardrail",
+            "action": "allow",
+            "latency_ms": 950.8,
+            "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "content": "<redacted len=5>",
+            "prompt_in": "<redacted len=5>",
+            "prompt_out": "<redacted len=5>",
+            "guard_model": "ZeroShield Output Guard",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "output_guard",
+            "decision_source": "output_guard",
+            "decision_source_label": "ZeroShield Output Guard",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": []
+          }
+        ],
+        "total_latency_ms": 3016.9,
+        "stage_latency_sum_ms": 3013.5,
+        "overhead_ms": 3.4,
+        "final_action": "allow",
+        "prompt_preview": "[user]: What is the capital of France? Reply with the city name only. Marker TOK-18cbad22736baeea.",
+        "input_text": "<redacted len=98>",
+        "prompt_submitted": "<redacted len=98>",
+        "output_text": "<redacted len=5>",
+        "final_response": "<redacted len=5>",
+        "output_withheld": false,
+        "output_withheld_reason": "",
+        "input_was_redacted": false,
+        "input_text_before": "",
+        "input_text_after": "",
+        "guard_summary": {
+          "guard_model": "ZeroShield Model",
+          "guard_action": "allow",
+          "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+          "reason_code": "model_recommendation",
+          "recommended_action": "allow",
+          "guard_findings": [],
+          "enforcement_source": "zeroshield_guard_model",
+          "decision_source": "zeroshield_guard_model",
+          "decision_source_label": "ZeroShield Model"
+        },
+        "requested_model": "auto",
+        "routed_model": "gemini-flash-cheap",
+        "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+        "routing": {
+          "requested_model": "auto",
+          "selected_model": "gemini-flash-cheap",
+          "routed_model": "gemini-flash-cheap",
+          "route_destination": "llm",
+          "route_destination_label": "LLM inference",
+          "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+          "decision_source": "policy_adjudicator",
+          "decision_source_label": "ZeroShield Policy Adjudicator",
+          "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+          "decision_factors": [
+            "model_score=1.0000",
+            "risk_component=1.0000",
+            "cost_component=1.0000",
+            "latency_component=1.0000",
+            "priority_component=1.0000",
+            "candidates_evaluated=8",
+            "data_sensitivity=public",
+            "score_tie=true"
+          ],
+          "weights": {
+            "risk": 0.15,
+            "cost": 0.5,
+            "latency": 0.2,
+            "priority": 0.15
+          },
+          "routing_score": 1.0,
+          "candidate_count": 8,
+          "fallback_chain": [
+            "hermes-3-405b-free",
+            "llama-3.1-8b-cheap",
+            "llama-3.2-3b-free"
+          ],
+          "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+        },
+        "latency_breakdown": {
+          "by_stage": [
+            {
+              "stage": "input_scan",
+              "latency_ms": 1377.3,
+              "share_pct": 45.7
+            },
+            {
+              "stage": "output_guardrail",
+              "latency_ms": 950.8,
+              "share_pct": 31.5
+            },
+            {
+              "stage": "model_output",
+              "latency_ms": 679.1,
+              "share_pct": 22.5
+            },
+            {
+              "stage": "model_routing",
+              "latency_ms": 4.4,
+              "share_pct": 0.1
+            },
+            {
+              "stage": "policy",
+              "latency_ms": 1.4,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "auth",
+              "latency_ms": 0.3,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "kill_switch",
+              "latency_ms": 0.2,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "rate_limit",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_input",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            }
+          ],
+          "dominant_stage": "input_scan",
+          "dominant_latency_ms": 1377.3,
+          "dominant_share_pct": 45.7,
+          "overhead_ms": 3.4,
+          "overhead_share_pct": 0.1,
+          "hints": [
+            {
+              "stage": "input_scan",
+              "severity": "high",
+              "message": "Input Scan took 1377.3ms (46% of total).",
+              "actions": [
+                "Run Tier-2 (Bedrock) scans asynchronously when policy allows.",
+                "Disable Tier-2 for low-risk endpoints or monitor-only posture.",
+                "Narrow scan scope (fewer PII/secret detectors) if compliance permits."
+              ]
+            }
+          ]
+        },
+        "request_id": "zs-646990eb625c"
+      }
+    },
+    {
+      "i": 7,
+      "nonce_suffix": "27d61adf",
+      "status": 200,
+      "wall_ms": 3498.19,
+      "error": null,
+      "scan_only": false,
+      "total_latency_ms": 3488.0,
+      "stages": [
+        {
+          "stage": "auth",
+          "action": "allow",
+          "latency_ms": 0.3
+        },
+        {
+          "stage": "rate_limit",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "policy",
+          "action": "allow",
+          "latency_ms": 1.4
+        },
+        {
+          "stage": "input_scan",
+          "action": "allow",
+          "latency_ms": 1442.0
+        },
+        {
+          "stage": "kill_switch",
+          "action": "allow",
+          "latency_ms": 0.2
+        },
+        {
+          "stage": "model_routing",
+          "action": "allow",
+          "latency_ms": 4.1
+        },
+        {
+          "stage": "model_input",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_output",
+          "action": "allow",
+          "latency_ms": 955.7
+        },
+        {
+          "stage": "output_guardrail",
+          "action": "allow",
+          "latency_ms": 1080.9
+        }
+      ],
+      "metrics": null,
+      "model": "auto",
+      "id": "chatcmpl-1786712045-goINYDFBxu0QXIOi89Qa",
+      "pipeline_trace": {
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.3,
+            "detail": "Gateway API key accepted",
+            "decision_source": "gateway_auth",
+            "decision_source_label": "Gateway authentication",
+            "guard_reason": "Gateway API key accepted",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Within org TPM / RPM limits",
+            "decision_source": "org_rate_limit",
+            "decision_source_label": "Org rate limit",
+            "guard_reason": "Within org TPM / RPM limits",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "policy",
+            "action": "allow",
+            "latency_ms": 1.4,
+            "detail": "Policy engine evaluated request against compiled rules; no matching policy rule",
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "prompt_in_operator_masked": false,
+            "redaction_display_note": "",
+            "decision_source": "policy_engine",
+            "decision_source_label": "Policy engine",
+            "guard_reason": "Policy engine \u2014 enforcement: ALLOW",
+            "tier": "policy",
+            "confidence": 0.0
+          },
+          {
+            "name": "input_scan",
+            "action": "allow",
+            "latency_ms": 1442.0,
+            "detail": "ZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "threat_type": "clean",
+            "confidence": 0.0,
+            "risk_score": 0.0,
+            "scan_outcome": "clean",
+            "redact_noop": false,
+            "tier": "tier_2",
+            "matched_patterns": [],
+            "prompt_submitted": "<redacted len=98>",
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>",
+            "guard_model": "ZeroShield Model",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+            "reason_code": "model_recommendation",
+            "recommended_action": "allow",
+            "guard_findings": [],
+            "enforcement_source": "zeroshield_guard_model",
+            "decision_source": "zeroshield_guard_model",
+            "decision_source_label": "ZeroShield Model",
+            "matched_policies": [],
+            "matched_rules": []
+          },
+          {
+            "name": "kill_switch",
+            "action": "allow",
+            "latency_ms": 0.2,
+            "detail": "No active kill-switch for this model",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "No active kill-switch for this model",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_routing",
+            "action": "allow",
+            "latency_ms": 4.1,
+            "detail": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "requested_model": "auto",
+            "selected_model": "gemini-flash-cheap",
+            "routed_model": "gemini-flash-cheap",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+            "decision_source": "policy_adjudicator",
+            "decision_source_label": "ZeroShield Policy Adjudicator",
+            "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+            "decision_factors": [
+              "model_score=1.0000",
+              "risk_component=1.0000",
+              "cost_component=1.0000",
+              "latency_component=1.0000",
+              "priority_component=1.0000",
+              "candidates_evaluated=8",
+              "data_sensitivity=public",
+              "score_tie=true"
+            ],
+            "weights": {
+              "risk": 0.15,
+              "cost": 0.5,
+              "latency": 0.2,
+              "priority": 0.15
+            },
+            "routing_score": 1.0,
+            "candidate_count": 8,
+            "fallback_chain": [
+              "hermes-3-405b-free",
+              "llama-3.1-8b-cheap",
+              "llama-3.2-3b-free"
+            ],
+            "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+            "guard_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.\nDestination: LLM inference\nFactors: model_score=1.0000, risk_component=1.0000, cost_component=1.0000, latency_component=1.0000, priority_component=1.0000, candidates_evaluated=8, data_sensitivity=public, score_tie=true\nWeights: risk=15%, cost=50%, latency=20%, priority=15%\nScore: 1.0\nCandidates: 8",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_input",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Prompt delivered to LLM",
+            "content": "<redacted len=98>",
+            "prompt_submitted": "<redacted len=98>",
+            "decision_source": "llm_request",
+            "decision_source_label": "LLM request",
+            "guard_reason": "Prompt delivered to LLM unchanged",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=98>"
+          },
+          {
+            "name": "model_output",
+            "action": "allow",
+            "latency_ms": 955.7,
+            "detail": "LLM inference complete",
+            "content": "<redacted len=5>",
+            "decision_source": "llm_provider",
+            "decision_source_label": "LLM provider",
+            "guard_reason": "LLM inference complete",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=98>",
+            "prompt_out": "<redacted len=5>"
+          },
+          {
+            "name": "output_guardrail",
+            "action": "allow",
+            "latency_ms": 1080.9,
+            "detail": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "content": "<redacted len=5>",
+            "prompt_in": "<redacted len=5>",
+            "prompt_out": "<redacted len=5>",
+            "guard_model": "ZeroShield Output Guard",
+            "guard_action": "allow",
+            "guard_reason": "ZeroShield Output Guard \u2014 enforcement: ALLOW",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "output_guard",
+            "decision_source": "output_guard",
+            "decision_source_label": "ZeroShield Output Guard",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": []
+          }
+        ],
+        "total_latency_ms": 3488.0,
+        "stage_latency_sum_ms": 3484.6,
+        "overhead_ms": 3.4,
+        "final_action": "allow",
+        "prompt_preview": "[user]: What is the capital of France? Reply with the city name only. Marker TOK-18cbad2327d61adf.",
+        "input_text": "<redacted len=98>",
+        "prompt_submitted": "<redacted len=98>",
+        "output_text": "<redacted len=5>",
+        "final_response": "<redacted len=5>",
+        "output_withheld": false,
+        "output_withheld_reason": "",
+        "input_was_redacted": false,
+        "input_text_before": "",
+        "input_text_after": "",
+        "guard_summary": {
+          "guard_model": "ZeroShield Model",
+          "guard_action": "allow",
+          "guard_reason": "ZeroShield Model \u2014 enforcement: ALLOW\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: clean\nZeroShield Model (Tier-2) completed \u2014 no threats detected.",
+          "reason_code": "model_recommendation",
+          "recommended_action": "allow",
+          "guard_findings": [],
+          "enforcement_source": "zeroshield_guard_model",
+          "decision_source": "zeroshield_guard_model",
+          "decision_source_label": "ZeroShield Model"
+        },
+        "requested_model": "auto",
+        "routed_model": "gemini-flash-cheap",
+        "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+        "routing": {
+          "requested_model": "auto",
+          "selected_model": "gemini-flash-cheap",
+          "routed_model": "gemini-flash-cheap",
+          "route_destination": "llm",
+          "route_destination_label": "LLM inference",
+          "routing_reason": "ZeroShield Policy Adjudicator selected 'gemini-flash-cheap' (score=1.0000) from 8 candidates. Risk=0.00, latency_budget_ms=30000, estimated_tokens=38, token_budget_tpm=n/a. Weights: risk=15%, cost=50%, latency=20%, priority=15%.",
+          "decision_source": "policy_adjudicator",
+          "decision_source_label": "ZeroShield Policy Adjudicator",
+          "policy_summary": "Model meets sensitivity=restricted, compliance=['HIPAA']. Risk=0.00, latency_sla=30000ms.",
+          "decision_factors": [
+            "model_score=1.0000",
+            "risk_component=1.0000",
+            "cost_component=1.0000",
+            "latency_component=1.0000",
+            "priority_component=1.0000",
+            "candidates_evaluated=8",
+            "data_sensitivity=public",
+            "score_tie=true"
+          ],
+          "weights": {
+            "risk": 0.15,
+            "cost": 0.5,
+            "latency": 0.2,
+            "priority": 0.15
+          },
+          "routing_score": 1.0,
+          "candidate_count": 8,
+          "fallback_chain": [
+            "hermes-3-405b-free",
+            "llama-3.1-8b-cheap",
+            "llama-3.2-3b-free"
+          ],
+          "evaluator_model": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+        },
+        "latency_breakdown": {
+          "by_stage": [
+            {
+              "stage": "input_scan",
+              "latency_ms": 1442.0,
+              "share_pct": 41.3
+            },
+            {
+              "stage": "output_guardrail",
+              "latency_ms": 1080.9,
+              "share_pct": 31.0
+            },
+            {
+              "stage": "model_output",
+              "latency_ms": 955.7,
+              "share_pct": 27.4
+            },
+            {
+              "stage": "model_routing",
+              "latency_ms": 4.1,
+              "share_pct": 0.1
+            },
+            {
+              "stage": "policy",
+              "latency_ms": 1.4,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "auth",
+              "latency_ms": 0.3,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "kill_switch",
+              "latency_ms": 0.2,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "rate_limit",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_input",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            }
+          ],
+          "dominant_stage": "input_scan",
+          "dominant_latency_ms": 1442.0,
+          "dominant_share_pct": 41.3,
+          "overhead_ms": 3.4,
+          "overhead_share_pct": 0.1,
+          "hints": [
+            {
+              "stage": "input_scan",
+              "severity": "high",
+              "message": "Input Scan took 1442.0ms (41% of total).",
+              "actions": [
+                "Run Tier-2 (Bedrock) scans asynchronously when policy allows.",
+                "Disable Tier-2 for low-risk endpoints or monitor-only posture.",
+                "Narrow scan scope (fewer PII/secret detectors) if compliance permits."
+              ]
+            }
+          ]
+        },
+        "request_id": "zs-a765fa73a718"
+      }
+    }
+  ]
+}

@@ -1,0 +1,151 @@
+{
+  "mode": "chat",
+  "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+  "workers": 16,
+  "conn": 16,
+  "inflight": 256,
+  "duration_s": 32.009,
+  "requests": 874,
+  "ok": 862,
+  "errors": 12,
+  "error_rate": 0.0137,
+  "rps": 27.3,
+  "ok_rps": 26.93,
+  "scan_only": 0,
+  "codes": {
+    "422": 4,
+    "200": 862,
+    "400": 6,
+    "503": 2
+  },
+  "errors_by_signature": {
+    "HTTP 400 content_filter Request blocked due to security policy": 6,
+    "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 4,
+    "HTTP 503 kill_switch_active Model 'Haiku' is currently disabled.": 2
+  },
+  "client_latency_ms": {
+    "n": 874,
+    "mean": 6468.022,
+    "p50": 6169.878,
+    "p90": 9668.754,
+    "p95": 11068.205,
+    "p99": 13277.375,
+    "max": 14916.571
+  },
+  "addon_latency_ms": {
+    "n": 868,
+    "mean": 5399.72,
+    "p50": 5227.7,
+    "p90": 8348.2,
+    "p95": 9584.4,
+    "p99": 11710.9,
+    "max": 13671.3
+  },
+  "stage_latency_ms": {
+    "auth": {
+      "n": 868,
+      "mean": 115.167,
+      "p50": 7.7,
+      "p90": 205.5,
+      "p95": 549.3,
+      "p99": 2394.0,
+      "max": 2817.3
+    },
+    "rate_limit": {
+      "n": 868,
+      "mean": 0.009,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.2,
+      "max": 2.3
+    },
+    "policy": {
+      "n": 868,
+      "mean": 232.799,
+      "p50": 69.2,
+      "p90": 731.7,
+      "p95": 1035.0,
+      "p99": 1720.5,
+      "max": 1986.7
+    },
+    "input_scan": {
+      "n": 868,
+      "mean": 2668.425,
+      "p50": 2488.4,
+      "p90": 4160.2,
+      "p95": 4629.4,
+      "p99": 6095.9,
+      "max": 8194.1
+    },
+    "kill_switch": {
+      "n": 868,
+      "mean": 52.027,
+      "p50": 2.2,
+      "p90": 102.2,
+      "p95": 334.2,
+      "p99": 854.9,
+      "max": 1909.2
+    },
+    "model_routing": {
+      "n": 868,
+      "mean": 964.968,
+      "p50": 539.8,
+      "p90": 2422.2,
+      "p95": 2937.0,
+      "p99": 3863.9,
+      "max": 4678.2
+    },
+    "model_input": {
+      "n": 868,
+      "mean": 0.001,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.3
+    },
+    "model_output": {
+      "n": 868,
+      "mean": 876.877,
+      "p50": 737.1,
+      "p90": 1149.6,
+      "p95": 1428.5,
+      "p99": 2370.7,
+      "max": 9197.4
+    },
+    "output_guardrail": {
+      "n": 868,
+      "mean": 1247.251,
+      "p50": 1172.8,
+      "p90": 2364.6,
+      "p95": 2736.6,
+      "p99": 3308.2,
+      "max": 5079.0
+    },
+    "total": {
+      "n": 868,
+      "mean": 6276.596,
+      "p50": 6043.0,
+      "p90": 9282.4,
+      "p95": 10948.2,
+      "p99": 13149.1,
+      "max": 14489.5
+    },
+    "addon": {
+      "n": 868,
+      "mean": 5399.72,
+      "p50": 5227.7,
+      "p90": 8348.2,
+      "p95": 9584.4,
+      "p99": 11710.9,
+      "max": 13671.3
+    }
+  },
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": "",
+    "full_nine_stages": true,
+    "unique_prompt": true
+  }
+}

@@ -339,7 +339,7 @@ async def _gov_build(monkeypatch, *, catalogue=CATALOGUE, allowed_models=None):
         {"id": n, "object": "model", "created": 1704067200, "owned_by": "openai"}
         for n in names])
     lr.estimate_prompt_tokens = MagicMock(return_value=500)
-    lr.adjudicate_model_selection = real.adjudicate_model_selection
+    lr.select_model = real.select_model
     lr.resolve_runtime_selection = real.resolve_runtime_selection
 
     for attr, val in {

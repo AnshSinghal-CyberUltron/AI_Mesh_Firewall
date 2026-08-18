@@ -1,0 +1,13 @@
+PROD BASELINE 2026-08-14T10:14:13Z (read-only SSH AIMeshFirewall)
+Host: ip-172-31-9-177 c8g.2xlarge i-07a9d65b103ac1a87 ap-south-1b | nproc=8 | 15Gi RAM (5.3Gi used, 9.6Gi avail) | uname 6.18.30-61.116.amzn2023.aarch64 | ip_forward=1 | ulimit -n=65535
+Gateway: ai_mesh_firewall-gateway-1 healthy Up 2d | Image ai-mesh-gateway:latest | Started 2026-08-12T09:55:57Z
+Cgroup: NanoCpus=4000000000 (4.0 CPU) Memory=7516192768 (7GiB) CpuQuota=0 CpuPeriod=0 | cpu.max=400000 100000
+Env: WEB_CONCURRENCY=6 GATEWAY_BEDROCK_THREAD_POOL_SIZE=8 GUNICORN_WORKER_CONNECTIONS=1000 GATEWAY_TIER2_CACHE_TTL_SECONDS=300 ENABLE_TIER2=true BEDROCK_REGION=ap-south-1
+Env empty: GATEWAY_LOADTEST_STUB_LLM= BEDROCK_ADJUDICATOR_MODEL=
+nproc in container=8 (host CPUs; ignores 4-CPU cgroup). resource_budget --json: cpu_budget=4.0 workers=4 bedrock_pool=8 cpu_bound=true (cgroup-v2)
+Health /health: status=ok policy_cache_version=539 policy_count=246 enforcement_mode=block firewall_enabled=true config_sync_loaded=false
+Public GCP: https://aimeshgateway.zeroshield.ai/health 200 t=0.081s | UI https://aimeshfirewall.zeroshield.ai/ 200 t=0.097s
+docker stats idle: gateway CPU 0.60% mem 1.35GiB/7GiB 19.29% pids=103 | control 0.42% 1.086GiB/2.5GiB | workers 0.77% | beat 1.21%
+Bedrock egress: nc not installed (exit 127). python socket to bedrock-runtime.ap-south-1.amazonaws.com:443 ok in 0.0025s
+Mismatch: live workers pinned at 6 via WEB_CONCURRENCY vs detector recommendation 4 for 4-CPU cgroup.
+No prod changes. 15 containers running.

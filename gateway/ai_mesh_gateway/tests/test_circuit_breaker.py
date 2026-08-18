@@ -82,6 +82,59 @@ def test_open_circuit_sets_kill_switch_key(fake_redis, fake_sync_redis):
     payload = json.loads(raw)
     assert payload["is_active"] is True
     assert payload["trigger_source"] == "circuit_breaker"
+    assert payload["action"] == "disable"
+    assert not payload.get("fallback_model")
+
+
+def test_open_circuit_trip_reroutes_when_model_state_has_fallback(fake_redis, fake_sync_redis):
+    """CB OPEN mirrors KS action=reroute when ModelState.fallback_model is set."""
+    import json
+
+    fake_sync_redis.set(
+        "model_state:acme:gpt-4o",
+        json.dumps({"status": "active", "fallback_model": "gpt-4o-mini", "action": "block"}),
+    )
+    cb = _new_breaker(fake_redis, error_threshold=0.5, min_requests=4, cooldown_seconds=30)
+
+    async def go():
+        for _ in range(4):
+            await cb.record_error("gpt-4o", org_slug="acme")
+        return await cb.check("gpt-4o")
+
+    status = _run(go())
+    assert status.should_block is True
+    raw = fake_sync_redis.get("kill_switch:acme:model:gpt-4o")
+    payload = json.loads(raw)
+    assert payload["action"] == "reroute"
+    assert payload["fallback_model"] == "gpt-4o-mini"
+    assert payload["trigger_source"] == "circuit_breaker"
+
+
+def test_open_circuit_trip_uses_fallback_resolver(fake_redis, fake_sync_redis):
+    import json
+
+    def resolver(org_slug, model):
+        assert org_slug == "acme"
+        assert model == "primary"
+        return "fallback-model"
+
+    cb = CircuitBreaker(
+        fake_redis,
+        error_threshold=0.5,
+        min_requests=4,
+        cooldown_seconds=30,
+        fallback_resolver=resolver,
+    )
+
+    async def go():
+        for _ in range(4):
+            await cb.record_error("primary", org_slug="acme")
+        return await cb.check("primary")
+
+    _run(go())
+    payload = json.loads(fake_sync_redis.get("kill_switch:acme:model:primary"))
+    assert payload["action"] == "reroute"
+    assert payload["fallback_model"] == "fallback-model"
 
 
 def test_does_not_open_when_under_threshold(fake_redis):

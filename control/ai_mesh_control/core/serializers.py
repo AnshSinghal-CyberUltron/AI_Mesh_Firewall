@@ -490,9 +490,28 @@ class ModelStateUpdateSerializer(serializers.Serializer):
     cooldown_seconds = serializers.IntegerField(min_value=30, max_value=86400, required=False)
 
     def validate(self, attrs):
-        if attrs.get("action") == "reroute" and not attrs.get("fallback_model"):
+        # Partial PATCH may send only ``action``; reuse instance.fallback_model
+        # when the operator already configured a target (Kill-Switch parity).
+        instance = self.context.get("instance")
+        action = attrs.get("action")
+        if action is None and instance is not None:
+            action = getattr(instance, "action", None)
+
+        if "fallback_model" in attrs:
+            fallback = (attrs.get("fallback_model") or "").strip()
+        elif instance is not None:
+            fallback = (getattr(instance, "fallback_model", None) or "").strip()
+        else:
+            fallback = ""
+
+        if action == "reroute" and not fallback:
             raise serializers.ValidationError(
                 {"fallback_model": "Fallback model is required for reroute action."}
+            )
+        model_name = getattr(instance, "model_name", None) if instance is not None else None
+        if fallback and model_name and fallback == model_name:
+            raise serializers.ValidationError(
+                {"fallback_model": "fallback_model must differ from model_name (self-loop)."}
             )
         return attrs
 

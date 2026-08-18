@@ -17,7 +17,7 @@ def test_model_routing_reroute_when_models_differ():
             "routed_model": "Haiku",
             "rerouted": True,
             "routing_reason": "ZeroShield Policy Adjudicator selected 'Haiku'",
-            "decision_source": "policy_adjudicator",
+            "decision_source": "deterministic_weighted",
         },
         requested_model="gpt-5.2",
     )
@@ -39,7 +39,7 @@ def test_full_adjudicator_routing_stage_fields_populated():
             "routed_model": "Haiku",
             "route_destination": "llm",
             "routing_reason": "ZeroShield Policy Adjudicator selected 'Haiku' (score=0.87) from 3 candidates.",
-            "decision_source": "policy_adjudicator",
+            "decision_source": "deterministic_weighted",
             "policy_summary": "Weighted adjudication under org routing policy",
             "decision_factors": factors,
             "weights": weights,
@@ -54,7 +54,7 @@ def test_full_adjudicator_routing_stage_fields_populated():
     routing = next(s for s in trace["stages"] if s["name"] == "model_routing")
     for key in ROUTING_STAGE_KEYS:
         assert key in routing, f"missing routing key {key}"
-    assert routing["decision_source"] == "policy_adjudicator"
+    assert routing["decision_source"] == "deterministic_weighted"
     assert routing["policy_summary"] == "Weighted adjudication under org routing policy"
     assert routing["decision_factors"] == factors
     assert routing["weights"] == weights
@@ -92,7 +92,7 @@ def test_sanitize_routing_reason_replaces_bedrock_branding():
             "selected_model": "Haiku",
             "rerouted": True,
             "routing_reason": raw,
-            "decision_source": "policy_adjudicator",
+            "decision_source": "deterministic_weighted",
         },
     )
     routing = next(s for s in trace["stages"] if s["name"] == "model_routing")

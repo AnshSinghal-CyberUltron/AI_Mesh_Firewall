@@ -212,6 +212,19 @@ class KillSwitchViewSet(viewsets.ModelViewSet):
                 triggered_by=request.user.email or request.user.username,
                 trigger_source="manual",
             )
+            try:
+                from core.isolation_notify import notify_isolation_from_control
+
+                notify_isolation_from_control(
+                    organization=org,
+                    event_type="kill_switch",
+                    model_name=instance.model_name,
+                    action=instance.action,
+                    reason=instance.reason or "",
+                    triggered_by=request.user.email or request.user.username or "",
+                )
+            except Exception:  # noqa: BLE001
+                logger.warning("isolation bell notify failed on kill-switch activate", exc_info=True)
 
         logger.warning(
             "KillSwitch ACTIVATED: model=%s action=%s by=%s reason=%s",

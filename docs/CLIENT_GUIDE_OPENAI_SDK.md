@@ -487,6 +487,15 @@ and within your key's allowlist — otherwise the request fails closed rather th
 an unvetted model. Kill-switch is enforced on chat, embeddings, the Responses API, and
 **mid-stream**.
 
+**Circuit breaker:** when a model’s error rate trips the breaker, the gateway opens the
+circuit. If that model already has a validated ModelState/kill-switch **reroute** fallback,
+traffic is shifted silently (same validation path as kill-switch). Without a fallback the
+client sees `503` (`circuit_breaker_open` / `kill_switch_active`). Operators are notified via
+the in-app notification bell (and optional email when `ALERT_EMAIL_*` is configured).
+
+**Dashboard cadence:** Model State cards poll status every ~5 seconds. Risk scores update when
+traffic is scored and via a periodic auto-scan (~60s) — they are not recomputed on every UI poll.
+
 ---
 
 ## 11. §1.7 Output guardrails

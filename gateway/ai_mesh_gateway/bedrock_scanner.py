@@ -652,6 +652,83 @@ class BedrockScanner:
             payload["reasoning_effort"] = "low"
         return payload
 
+    def _prepare_scan(
+        self,
+        prompt: str,
+        context: Optional[str] = None,
+        request_id: Optional[str] = None,
+    ) -> tuple[str, float, Dict[str, Any], Optional[str]]:
+        import time as _time
+
+        reqid = request_id or new_request_id()
+        scan_start = _time.time()
+
+        truncated_prompt = _head_tail(prompt, MAX_PROMPT_CHARS)
+
+        if context and context.strip() != truncated_prompt.strip():
+            truncated_context = _head_tail(context, MAX_PROMPT_CHARS)
+            user_content = (
+                f"ORIGINAL TEXT:\n---\n{truncated_context}\n---\n\n"
+                f"DEOBFUSCATED VERSION:\n---\n{truncated_prompt}\n---\n\n"
+                f"NOTE: The deobfuscated version was produced by splitting "
+                f"concatenated words and normalizing l33tspeak. If it reveals "
+                f"an attack pattern, classify accordingly with high confidence."
+            )
+        else:
+            user_content = f"TEXT TO ANALYZE:\n---\n{truncated_prompt}\n---"
+
+        max_tokens = _env_int("BEDROCK_MAX_TOKENS", 1024, min_value=1, max_value=65536)
+
+        log_scan_start(
+            request_id=reqid,
+            prompt_len=len(prompt),
+            truncated_len=len(truncated_prompt),
+            has_context=bool(context),
+            model=self.model,
+            max_tokens=max_tokens,
+        )
+
+        payload = self._build_payload(user_content, max_tokens)
+        deployment_path = os.getenv("BEDROCK_DEPLOYMENT_PATH")
+        return reqid, scan_start, payload, deployment_path
+
+    def _scan_client_error(
+        self,
+        exc: Exception,
+        reqid: str,
+        scan_start: float,
+        payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        import time as _time
+
+        elapsed = _time.time() - scan_start
+        try:
+            from .bedrock_logger import log_bedrock_error
+        except ImportError:
+            from bedrock_logger import log_bedrock_error
+        log_bedrock_error(
+            request_id=reqid,
+            model=self.model,
+            region=getattr(self.client, "region", "unknown"),
+            elapsed_s=elapsed,
+            error=str(exc),
+            error_type=type(exc).__name__,
+            payload_bytes=len(json.dumps(payload)),
+        )
+        return {
+            **DEGRADED_RESULT,
+            "meta": {
+                "error": str(exc),
+                "request_id": reqid,
+                "recommended_action": "monitor",
+                "suggested_redactions": [],
+                "raw_findings_count": 0,
+                "raw_findings": [],
+                "decision_reason": "client_error",
+                "degraded": True,
+            },
+        }
+
     def scan(self, prompt: str, context: Optional[str] = None, request_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Send a compact scan request to Bedrock and normalize the response.
@@ -672,43 +749,9 @@ class BedrockScanner:
 
         Returns a dict compatible with RiskScorer.calculate_risk input.
         """
-        import time as _time
-
-        reqid = request_id or new_request_id()
-        scan_start = _time.time()
-
-        truncated_prompt = _head_tail(prompt, MAX_PROMPT_CHARS)
-
-        if context and context.strip() != truncated_prompt.strip():
-            truncated_context = _head_tail(context, MAX_PROMPT_CHARS)
-            user_content = (
-                f"ORIGINAL TEXT:\n---\n{truncated_context}\n---\n\n"
-                f"DEOBFUSCATED VERSION:\n---\n{truncated_prompt}\n---\n\n"
-                f"NOTE: The deobfuscated version was produced by splitting "
-                f"concatenated words and normalizing l33tspeak. If it reveals "
-                f"an attack pattern, classify accordingly with high confidence."
-            )
-        else:
-            user_content = f"TEXT TO ANALYZE:\n---\n{truncated_prompt}\n---"
-
-        # Default 1024 matches control-plane BedrockScanner — 256 truncates
-        # multi-finding JSON mid-string (prod zs-b108b10ebd35 tokens_out=256).
-        max_tokens = _env_int("BEDROCK_MAX_TOKENS", 1024, min_value=1, max_value=65536)
-
-        # ── Dedicated Bedrock log: SCAN START ──
-        log_scan_start(
-            request_id=reqid,
-            prompt_len=len(prompt),
-            truncated_len=len(truncated_prompt),
-            has_context=bool(context),
-            model=self.model,
-            max_tokens=max_tokens,
+        reqid, scan_start, payload, deployment_path = self._prepare_scan(
+            prompt, context, request_id,
         )
-
-        payload = self._build_payload(user_content, max_tokens)
-
-        deployment_path = os.getenv("BEDROCK_DEPLOYMENT_PATH")
-
         try:
             resp = self.client.scan_prompt(
                 model=self.model,
@@ -718,37 +761,41 @@ class BedrockScanner:
                 call_site="tier2_scan",
             )
         except Exception as exc:
-            elapsed = _time.time() - scan_start
-            try:
-                from .bedrock_logger import log_bedrock_error
-            except ImportError:
-                from bedrock_logger import log_bedrock_error
-            log_bedrock_error(
-                request_id=reqid,
+            return self._scan_client_error(exc, reqid, scan_start, payload)
+        return self._complete_scan(resp, reqid, scan_start)
+
+    async def ascan(
+        self,
+        prompt: str,
+        context: Optional[str] = None,
+        request_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Async ``scan`` — awaits ``ascan_prompt`` instead of blocking converse."""
+        reqid, scan_start, payload, deployment_path = self._prepare_scan(
+            prompt, context, request_id,
+        )
+        try:
+            resp = await self.client.ascan_prompt(
                 model=self.model,
-                region=getattr(self.client, "region", "unknown"),
-                elapsed_s=elapsed,
-                error=str(exc),
-                error_type=type(exc).__name__,
-                payload_bytes=len(json.dumps(payload)),
+                prompt_payload=payload,
+                deployment_path=deployment_path,
+                request_id=reqid,
+                call_site="tier2_scan",
             )
-            return {
-                **DEGRADED_RESULT,
-                "meta": {
-                    "error": str(exc),
-                    "request_id": reqid,
-                    "recommended_action": "monitor",
-                    "suggested_redactions": [],
-                    "raw_findings_count": 0,
-                    "raw_findings": [],
-                    "decision_reason": "client_error",
-                    # Unambiguous degraded sentinel: Bedrock/Tier-2 is
-                    # unavailable, so callers must fall back to the Tier-1
-                    # static decision (static-first / fail-open) rather than
-                    # treating this as a content threat.
-                    "degraded": True,
-                },
-            }
+        except (ImportError, RuntimeError):
+            # Session/import failures must fail closed (do not skip T2 as flag).
+            raise
+        except Exception as exc:
+            return self._scan_client_error(exc, reqid, scan_start, payload)
+        return self._complete_scan(resp, reqid, scan_start)
+
+    def _complete_scan(
+        self,
+        resp: Dict[str, Any],
+        reqid: str,
+        scan_start: float,
+    ) -> Dict[str, Any]:
+        import time as _time
 
         parsed = self._extract_content(resp)
 

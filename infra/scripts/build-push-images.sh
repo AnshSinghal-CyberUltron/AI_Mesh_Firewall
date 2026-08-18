@@ -1,14 +1,27 @@
 #!/usr/bin/env bash
-# Build (linux/arm64 for c8g by default) and push gateway, control, workers, nginx to ECR.
-# Run on your laptop/CI with ECR-capable AWS credentials — EC2 only pulls.
-# Usage: ./infra/scripts/build-push-images.sh [tag]
-#   DOCKER_PLATFORM=linux/amd64 ./infra/scripts/build-push-images.sh v1.0.1
+# Parallel ECR build+push — saturate build VM (16c / ~60GiB / high-IOPS).
+# Prod EC2 is c8g (aarch64) → default platform linux/arm64.
+#
+# Usage:
+#   ./infra/scripts/build-push-images.sh [tag]
+#   DOCKER_PLATFORM=linux/arm64 FORCE_REBUILD=1 ./infra/scripts/build-push-images.sh latest
+#
+# Env:
+#   FORCE_REBUILD=1     → --no-cache on every image
+#   AIM_BUILDX_BUILDER  → buildx builder name (default aim-fast)
+#   USE_ENV_AWS_KEYS=true → honor AWS_* from .env (default: ignore .env keys)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=vm-capacity.sh
+source "${ROOT}/infra/scripts/vm-capacity.sh"
+aim_capacity_export
+
 TAG="${1:-v1.0.0}"
 REGION="${AWS_REGION:-ap-south-1}"
 PLATFORM="${DOCKER_PLATFORM:-linux/arm64}"
+LOG="/tmp/aim-ecr-parallel-build-${TAG}.log"
+exec > >(tee -a "$LOG") 2>&1
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -31,8 +44,8 @@ if [[ -f "${ROOT}/.env" ]]; then
   set -a && source "${ROOT}/.env" && set +a
 fi
 
-# .env often holds Bedrock/service IAM keys for containers — not for laptop ECR push.
-# Default AWS CLI chain (profile, SSO, instance role) is used unless USE_ENV_AWS_KEYS=true.
+aim_capacity_export
+
 if [[ "${USE_ENV_AWS_KEYS:-}" != "true" ]]; then
   if [[ -n "${AWS_ACCESS_KEY_ID:-}" ]]; then
     echo "==> Using default AWS CLI credentials for ECR (ignoring AWS_* keys from .env)"
@@ -48,6 +61,10 @@ else
   ECR="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
 fi
 
+echo "=== AI Mesh parallel ECR build start $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+aim_capacity_print
+echo "TAG=$TAG  PLATFORM=$PLATFORM  ECR=$ECR"
+
 _ensure_ecr_repos() {
   local repo
   for repo in ai-mesh-gateway ai-mesh-control ai-mesh-workers ai-mesh-nginx ai-mesh-demo ai-mesh-mcp-broker ai-mesh-mcp-sandbox; do
@@ -55,13 +72,14 @@ _ensure_ecr_repos() {
       continue
     fi
     aws ecr create-repository --repository-name "${repo}" --region "${REGION}" >/dev/null \
-      || die "create ECR repo ${repo} failed — create manually or use admin/deploy IAM credentials"
+      || die "create ECR repo ${repo} failed"
   done
 }
 _ensure_ecr_repos
 
+echo "=== ECR login ==="
 ECR_PASSWORD="$(aws ecr get-login-password --region "${REGION}" 2>/dev/null)" \
-  || die "ecr:GetAuthorizationToken failed (region=${REGION}). Run: aws sts get-caller-identity — use an IAM user/role with ECR push, or set USE_ENV_AWS_KEYS=true if .env keys should be used."
+  || die "ecr:GetAuthorizationToken failed (region=${REGION})"
 [[ -n "${ECR_PASSWORD}" ]] || die "ECR login password empty"
 printf '%s' "${ECR_PASSWORD}" | docker login --username AWS --password-stdin "${ECR}"
 
@@ -72,43 +90,107 @@ if [[ ! -f "${ROOT}/frontend/dist/index.html" ]]; then
   bash "${ROOT}/infra/scripts/build-frontend-prod.sh"
 fi
 
-docker build --platform "${PLATFORM}" -f gateway/Dockerfile \
-  -t "${ECR}/ai-mesh-gateway:${TAG}" .
-docker push "${ECR}/ai-mesh-gateway:${TAG}"
+aim_ensure_buildx_builder "$AIM_BUILDX_BUILDER"
 
-docker build --platform "${PLATFORM}" -f control/Dockerfile \
-  -t "${ECR}/ai-mesh-control:${TAG}" .
-docker push "${ECR}/ai-mesh-control:${TAG}"
+COMMON=(
+  docker buildx build
+  --builder "$AIM_BUILDX_BUILDER"
+  --platform "$PLATFORM"
+  --push
+  --provenance=false
+  --sbom=false
+  --network=host
+)
+if [[ "${FORCE_REBUILD:-0}" == "1" || "${FORCE_REBUILD:-}" == "true" ]]; then
+  COMMON+=(--no-cache)
+  echo "==> FORCE_REBUILD: --no-cache"
+fi
 
-docker build --platform "${PLATFORM}" -f workers/Dockerfile \
-  -t "${ECR}/ai-mesh-workers:${TAG}" .
-docker push "${ECR}/ai-mesh-workers:${TAG}"
+# Append -t repo:TAG and -t repo:latest (unless TAG is already latest).
+append_ecr_tags() {
+  local -n _arr=$1
+  local repo="$2"
+  _arr+=(-t "${ECR}/${repo}:${TAG}")
+  if [[ "${TAG}" != "latest" ]]; then
+    _arr+=(-t "${ECR}/${repo}:latest")
+  fi
+}
 
-docker build --platform "${PLATFORM}" -f examples/zeroshield-openai-demo/Dockerfile \
-  -t "${ECR}/ai-mesh-demo:${TAG}" examples/zeroshield-openai-demo
-docker push "${ECR}/ai-mesh-demo:${TAG}"
+echo "=== launching 7 image builds in PARALLEL ==="
+pids=()
+names=()
 
-# nginx bakes the /demo/ Basic Auth credential (apr1 hash) from these build args.
-docker build --platform "${PLATFORM}" -f deploy/Dockerfile.nginx \
-  --build-arg "DEMO_AUTH_USER=${DEMO_AUTH_USER:-superuser}" \
-  --build-arg "DEMO_AUTH_PASSWORD=${DEMO_AUTH_PASSWORD:-change-me}" \
-  -t "${ECR}/ai-mesh-nginx:${TAG}" .
-docker push "${ECR}/ai-mesh-nginx:${TAG}"
+_run() {
+  local name="$1"
+  shift
+  (
+    echo "[${name}] START $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    "$@"
+    echo "[${name}] DONE $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  ) >"/tmp/aim-build-${name}.log" 2>&1 &
+  pids+=($!)
+  names+=("${name}")
+}
 
-# MCP broker + per-org sandbox image (required by docker-compose.prod.yml always-on MCP path)
-docker build --platform "${PLATFORM}" -f services/mcp-broker/Dockerfile \
-  -t "${ECR}/ai-mesh-mcp-broker:${TAG}" .
-docker push "${ECR}/ai-mesh-mcp-broker:${TAG}"
+gw_args=("${COMMON[@]}"); append_ecr_tags gw_args ai-mesh-gateway
+gw_args+=(-f gateway/Dockerfile .)
+_run gateway "${gw_args[@]}"
 
-docker build --platform "${PLATFORM}" -f services/mcp-broker/sandbox-image/Dockerfile \
-  -t "${ECR}/ai-mesh-mcp-sandbox:${TAG}" \
-  -t "ai-mesh/mcp-sandbox:${TAG}" .
-docker push "${ECR}/ai-mesh-mcp-sandbox:${TAG}"
+ctl_args=("${COMMON[@]}"); append_ecr_tags ctl_args ai-mesh-control
+ctl_args+=(-f control/Dockerfile .)
+_run control "${ctl_args[@]}"
+
+wrk_args=("${COMMON[@]}"); append_ecr_tags wrk_args ai-mesh-workers
+wrk_args+=(-f workers/Dockerfile .)
+_run workers "${wrk_args[@]}"
+
+demo_args=("${COMMON[@]}"); append_ecr_tags demo_args ai-mesh-demo
+demo_args+=(-f examples/zeroshield-openai-demo/Dockerfile examples/zeroshield-openai-demo)
+_run demo "${demo_args[@]}"
+
+ngx_args=("${COMMON[@]}"); append_ecr_tags ngx_args ai-mesh-nginx
+ngx_args+=(
+  --build-arg "DEMO_AUTH_USER=${DEMO_AUTH_USER:-superuser}"
+  --build-arg "DEMO_AUTH_PASSWORD=${DEMO_AUTH_PASSWORD:-change-me}"
+  -f deploy/Dockerfile.nginx .
+)
+_run nginx "${ngx_args[@]}"
+
+brk_args=("${COMMON[@]}"); append_ecr_tags brk_args ai-mesh-mcp-broker
+brk_args+=(-f services/mcp-broker/Dockerfile .)
+_run mcp-broker "${brk_args[@]}"
+
+# Note: do NOT -t ai-mesh/mcp-sandbox here — buildx --push would try Docker Hub.
+# Broker on EC2 pulls ${ECR}/ai-mesh-mcp-sandbox:${TAG} (compose sets MCP_SANDBOX_IMAGE).
+sbx_args=("${COMMON[@]}"); append_ecr_tags sbx_args ai-mesh-mcp-sandbox
+sbx_args+=(-f services/mcp-broker/sandbox-image/Dockerfile .)
+_run mcp-sandbox "${sbx_args[@]}"
+
+echo "PIDs: ${pids[*]}  names: ${names[*]}"
+echo "Per-image logs: /tmp/aim-build-*.log  aggregate: $LOG"
+
+if ! aim_wait_pids pids names; then
+  echo "ONE OR MORE BUILDS FAILED — see $LOG and /tmp/aim-build-*.log"
+  for n in "${names[@]}"; do
+    echo "---- tail /tmp/aim-build-${n}.log ----"
+    tail -n 40 "/tmp/aim-build-${n}.log" 2>/dev/null || true
+  done
+  exit 1
+fi
+
+echo "=== ECR image verify ==="
+for repo in ai-mesh-gateway ai-mesh-control ai-mesh-workers ai-mesh-nginx ai-mesh-demo ai-mesh-mcp-broker ai-mesh-mcp-sandbox; do
+  aws ecr describe-images --repository-name "$repo" --region "$REGION" \
+    --image-ids "imageTag=$TAG" \
+    --query 'imageDetails[0].{tag:imageTags[0],pushed:imagePushedAt,bytes:imageSizeInBytes}' \
+    --output table 2>/dev/null || echo "MISSING ${repo}:${TAG}"
+done
 
 _update_env_kv "IMAGE_TAG" "${TAG}" "${ROOT}/.env"
 _update_env_kv "ECR_REGISTRY" "${ECR}" "${ROOT}/.env"
 
-echo "Pushed (${PLATFORM}):"
+echo "=== ALL PARALLEL BUILDS PUSHED $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+echo "Platform: ${PLATFORM}"
 echo "  ${ECR}/ai-mesh-gateway:${TAG}"
 echo "  ${ECR}/ai-mesh-control:${TAG}"
 echo "  ${ECR}/ai-mesh-workers:${TAG}"
@@ -116,7 +198,8 @@ echo "  ${ECR}/ai-mesh-nginx:${TAG}"
 echo "  ${ECR}/ai-mesh-demo:${TAG}"
 echo "  ${ECR}/ai-mesh-mcp-broker:${TAG}"
 echo "  ${ECR}/ai-mesh-mcp-sandbox:${TAG}"
-echo ""
-echo "Updated .env (sync-to-ec2 copies this to EC2):"
-echo "  ECR_REGISTRY=${ECR}"
-echo "  IMAGE_TAG=${TAG}"
+if [[ "${TAG}" != "latest" ]]; then
+  echo "  (+ :latest aliases for the same digests)"
+fi
+echo "Updated .env: ECR_REGISTRY=${ECR} IMAGE_TAG=${TAG}"
+echo "Log: $LOG"

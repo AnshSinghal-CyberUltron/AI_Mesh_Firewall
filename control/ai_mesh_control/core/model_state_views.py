@@ -153,7 +153,13 @@ class ModelStatusDetailView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @staticmethod
+    def _norm_model_name(model_name: str) -> str:
+        # <path:> may include a trailing slash depending on client encoding.
+        return (model_name or "").strip().rstrip("/")
+
     def get(self, request, model_name):
+        model_name = self._norm_model_name(model_name)
         org = _get_org(request)
         if not org:
             return Response({"error": "No organization"}, status=status.HTTP_404_NOT_FOUND)
@@ -164,6 +170,7 @@ class ModelStatusDetailView(APIView):
         return Response(ModelStateSerializer(state).data)
 
     def patch(self, request, model_name):
+        model_name = self._norm_model_name(model_name)
         # Changing isolation/threshold config is an admin-only containment action.
         if not IsAdminOrSuperuser().has_permission(request, self):
             return Response(
@@ -192,12 +199,30 @@ class ModelStatusDetailView(APIView):
             organization=org, model_name=model_name,
         )
 
-        serializer = ModelStateUpdateSerializer(data=request.data)
+        serializer = ModelStateUpdateSerializer(
+            data=request.data,
+            context={"instance": state, "request": request},
+        )
         serializer.is_valid(raise_exception=True)
 
         for field in ("threshold", "action", "fallback_model", "cooldown_seconds"):
             if field in serializer.validated_data:
                 setattr(state, field, serializer.validated_data[field])
+        # When switching to reroute without sending fallback_model, keep the
+        # existing value (serializer already validated it is non-empty).
+        if (
+            serializer.validated_data.get("action") == "reroute"
+            and "fallback_model" not in serializer.validated_data
+            and not (state.fallback_model or "").strip()
+        ):
+            return Response(
+                {"fallback_model": ["Fallback model is required for reroute action."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # Clearing action away from reroute: drop stale fallback so GET stays honest.
+        if serializer.validated_data.get("action") in ("block", "alert"):
+            if "fallback_model" not in serializer.validated_data:
+                state.fallback_model = ""
         # M-20 root cause: the DRF path called .save() without ever invoking the
         # model's clean(), so ModelState.clean() (self-loop guard) never ran.
         # full_clean() enforces model-level invariants before persisting.
@@ -288,6 +313,20 @@ class ModelIsolateView(APIView):
             metadata={"source": "manual", "cooldown_seconds": cooldown},
         )
 
+        try:
+            from core.isolation_notify import notify_isolation_from_control
+
+            notify_isolation_from_control(
+                organization=org,
+                event_type="model_isolation",
+                model_name=data["model_name"],
+                action=state.action,
+                reason=state.isolation_reason,
+                triggered_by=request.user.email or "",
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("isolation bell notify failed on isolate", exc_info=True)
+
         logger.warning(
             "MODEL ISOLATED: model=%s org=%s action=%s reason=%s by=%s",
             data["model_name"], org.slug, state.action,
@@ -302,6 +341,7 @@ class ModelRecoverView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrSuperuser]
 
     def post(self, request, model_name):
+        model_name = (model_name or "").strip().rstrip("/")
         org = _get_org(request)
         if not org:
             return Response({"error": "No organization"}, status=status.HTTP_400_BAD_REQUEST)

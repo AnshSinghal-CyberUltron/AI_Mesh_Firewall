@@ -8,7 +8,7 @@ import os
 import sys
 import types
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 if "litellm" not in sys.modules:
     fake_litellm = types.ModuleType("litellm")
@@ -130,7 +130,14 @@ class RoutingPreferencesDifferentiationTests(unittest.TestCase):
         self.assertIsNotNone(sel)
         self.assertEqual(sel.model_name, "cheap-free")
 
-    def test_sensitivity_confidential_soft_fallback_when_only_public(self):
+    def test_sensitivity_confidential_fails_closed_when_only_public(self):
+        """D3: sensitivity is a HARD floor — no soft-fallback to an under-approved model.
+
+        Previously this soft-fell-back to "best available", which served confidential
+        data on a public-only model and contradicted the Routing Governance copy
+        ("Models below this level are excluded from routing"). Now it returns None so
+        the caller emits 403 compliance_routing_unsatisfiable.
+        """
         router = LLMRouter({"org_only_inference": True})
         public_only = [
             {
@@ -159,10 +166,7 @@ class RoutingPreferencesDifferentiationTests(unittest.TestCase):
             data_sensitivity="confidential",
             weights={"risk": 0, "cost": 0, "latency": 0, "priority": 1},
         )
-        self.assertIsNotNone(sel)
-        self.assertTrue(sel.sensitivity_fallback)
-        self.assertIn("sensitivity_unsatisfiable_fallback", sel.decision_factors)
-        self.assertEqual(sel.model_name, "public-b")
+        self.assertIsNone(sel, "confidential data must not route onto a public-only catalogue")
 
     def test_sensitivity_prefers_matching_model(self):
         router = LLMRouter({"org_only_inference": True})
@@ -184,96 +188,45 @@ class RoutingPreferencesDifferentiationTests(unittest.TestCase):
         )
         self.assertIsNone(sel)
 
-    def test_weight_extreme_skips_adjudicator_and_honors_cost(self):
+    def test_dominant_cost_weight_selects_cheapest_deterministically(self):
+        """A dominant cost weight picks the cheapest — with NO LLM in the path."""
         router = LLMRouter({"org_only_inference": True})
-        mock_client = MagicMock()
-        with patch.dict(os.environ, {"ROUTING_ADJUDICATOR_ALWAYS": "true"}, clear=False):
-            with patch(
-                "ai_mesh_gateway.bedrock_client.default_bedrock_client",
-                return_value=mock_client,
-            ):
-                selection = asyncio.run(
-                    router.adjudicate_model_selection(
-                        routing_models=_catalog(),
-                        request_messages=[{"role": "user", "content": "hi"}],
-                        request_risk_score=0.0,
-                        weights={"risk": 0, "cost": 1, "latency": 0, "priority": 0},
-                    )
-                )
+        selection = router.select_model(
+            routing_models=_catalog(),
+            request_risk_score=0.0,
+            weights={"risk": 0, "cost": 1, "latency": 0, "priority": 0},
+        )
         self.assertIsNotNone(selection)
         self.assertEqual(selection.model_name, "cheap-free")
-        self.assertEqual(selection.decision_source, "weighted_fastpath")
-        self.assertTrue(
-            any("weight_extreme" in str(f) for f in (selection.decision_factors or []))
-        )
-        mock_client.converse.assert_not_called()
+        self.assertEqual(selection.decision_source, "deterministic_weighted")
+        self.assertEqual(selection.evaluator_model, "")
 
-    def test_adjudicator_always_invokes_on_balanced_weights(self):
+    def test_balanced_weights_never_call_an_llm(self):
+        """Balanced weights used to REQUIRE a Bedrock adjudicator round-trip.
+
+        That contract is deleted: routing is deterministic at every weight vector.
+        Any Bedrock client construction here is a regression, so make it explode.
+        """
         router = LLMRouter({"org_only_inference": True})
         router._active_model_names = ["cheap-free", "safe-internal"]
-        mock_client = MagicMock()
-        mock_client.converse.return_value = {
-            "raw": {
-                "choices": [
-                    {
-                        "message": {
-                            "content": json.dumps(
-                                {
-                                    "selected_model": "safe-internal",
-                                    "reason": "Prefer safer model.",
-                                    "policy_summary": "Balanced preference.",
-                                    "decision_factors": ["risk"],
-                                }
-                            )
-                        }
-                    }
-                ]
-            },
-            "tokens_in": 10,
-            "tokens_out": 5,
-            "elapsed_s": 0.1,
-            "model_id": DEFAULT_HAIKU_45,
-            "call_site": "adjudicator",
-        }
-        with patch.dict(
-            os.environ,
-            {"ROUTING_ADJUDICATOR_ALWAYS": "true", "BEDROCK_ADJUDICATOR_MODEL": DEFAULT_HAIKU_45},
-            clear=False,
-        ):
-            with patch(
-                "ai_mesh_gateway.bedrock_client.default_bedrock_client",
-                return_value=mock_client,
-            ):
-                selection = asyncio.run(
-                    router.adjudicate_model_selection(
-                        routing_models=_catalog()[:2],
-                        request_messages=[{"role": "user", "content": "hi"}],
-                        request_risk_score=0.0,
-                        weights={"risk": 0.4, "cost": 0.3, "latency": 0.2, "priority": 0.1},
-                    )
-                )
-        self.assertIsNotNone(selection)
-        self.assertEqual(selection.decision_source, "policy_adjudicator")
-        mock_client.converse.assert_called_once()
 
-    def test_adjudicator_skipped_single_candidate_even_when_always(self):
-        router = LLMRouter({"org_only_inference": True})
-        mock_client = MagicMock()
-        with patch.dict(os.environ, {"ROUTING_ADJUDICATOR_ALWAYS": "true"}, clear=False):
-            with patch(
-                "ai_mesh_gateway.bedrock_client.default_bedrock_client",
-                return_value=mock_client,
-            ):
-                selection = asyncio.run(
-                    router.adjudicate_model_selection(
-                        routing_models=_catalog()[:1],
-                        request_messages=[{"role": "user", "content": "hi"}],
-                        request_risk_score=0.0,
-                    )
-                )
+        def _forbidden(*_a, **_kw):
+            raise AssertionError("routing must not construct a Bedrock client")
+
+        with patch("ai_mesh_gateway.bedrock_client.default_bedrock_client", _forbidden):
+            selection = router.select_model(routing_models=_catalog())
+
         self.assertIsNotNone(selection)
-        self.assertEqual(selection.decision_source, "weighted_fastpath")
-        mock_client.converse.assert_not_called()
+        self.assertEqual(selection.decision_source, "deterministic_weighted")
+
+    def test_single_candidate_is_still_deterministic(self):
+        router = LLMRouter({"org_only_inference": True})
+        only = [_catalog()[0]]
+        selection = router.select_model(routing_models=only)
+        self.assertIsNotNone(selection)
+        self.assertEqual(selection.model_name, only[0]["model_name"])
+        self.assertEqual(selection.candidate_count, 1)
+        self.assertEqual(selection.decision_source, "deterministic_weighted")
 
     def test_resolve_runtime_prefers_highest_scored_active(self):
         router = LLMRouter({"org_only_inference": True})

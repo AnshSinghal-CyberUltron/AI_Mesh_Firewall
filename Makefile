@@ -1,36 +1,69 @@
 # AI Mesh Firewall — local + production deploy targets
 #
+# This Makefile saturates the build VM (nproc cores, BuildKit + compose parallel).
+# Source of capacity knobs: infra/scripts/vm-capacity.sh
+#
 # Local (dev):
 #   make up | make down | make ps | make logs | make migrate
+#   make build                 # parallel rebuild of local stack images
 #
 # Production (ECR → EC2):
-#   make verify-prod-local          # local gate (no SSH / no :80 steal)
-#   make deploy-full-ec2 TAG=vX.Y.Z  # build UI → push ECR → sync → remote up
+#   make verify-prod-local
+#   make deploy-full-ec2 TAG=latest   # parallel ECR push → sync → remote up
 #
-# Prod-like locally (isolated ports 18xxx, needs local images):
+# Prod-like locally (isolated ports 18xxx):
 #   make build-prod-images-local && make up-prod-local
 
-.PHONY: help up up-demo up-workers up-all down ps logs migrate rebuild-control seed-pii-policy \
-	extract-plan deploy-ec2 sync-ec2 sync-ec2-deploy frontend-build deploy-full-ec2 \
-	ecr-push attach-ec2-iam observability-apply verify-observability \
-	test-prod-compose verify-prod-local build-prod-images-local up-prod-local down-prod-local \
-	prod-config mcp-adversarial-gate mcp-adversarial-reset-prd mcp-adversarial-reset \
+.PHONY: help capacity up up-demo up-workers up-all down ps logs migrate rebuild-control \
+	build build-parallel extract-plan deploy-ec2 sync-ec2 sync-ec2-deploy frontend-build \
+	deploy-full-ec2 ecr-push ecr-push-parallel attach-ec2-iam observability-apply \
+	verify-observability test-prod-compose verify-prod-local build-prod-images-local \
+	up-prod-local down-prod-local prod-config \
+	mcp-adversarial-gate mcp-adversarial-reset-prd mcp-adversarial-reset \
 	mcp-adversarial-iter mcp-adversarial-loop
+
+# ── VM capacity (16c / ~60GiB) — apply to every docker/compose/npm target ─────
+NPROC := $(shell nproc 2>/dev/null || echo 4)
+export NPROC
+export GOMAXPROCS ?= $(NPROC)
+export DOCKER_BUILDKIT ?= 1
+export COMPOSE_DOCKER_CLI_BUILD ?= 1
+export BUILDKIT_PROGRESS ?= plain
+export BUILDKIT_MAX_PARALLELISM ?= $(NPROC)
+export BUILDKIT_STEP_LOG_MAX_SIZE ?= 10485760
+export COMPOSE_PARALLEL_LIMIT ?= $(NPROC)
+export AIM_BUILD_PARALLEL ?= $(NPROC)
+export UV_THREADPOOL_SIZE ?= $(NPROC)
+export npm_config_jobs ?= $(NPROC)
+export AIM_DOCKER_NETWORK ?= host
+export AIM_BUILDX_BUILDER ?= aim-fast
+# Node heap for Vite prod builds (override if needed)
+export NODE_OPTIONS ?= --max-old-space-size=8192
 
 COMPOSE := docker compose
 COMPOSE_PROD := docker compose -f docker-compose.yml -f docker-compose.prod.yml
 COMPOSE_PROD_LOCAL := docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.prod.local.yml
+# Parallelism via COMPOSE_PARALLEL_LIMIT (compose v2 has no --parallel flag)
+COMPOSE_BUILD := $(COMPOSE) build
 
 # Defaults for local prod-like runs (override: make up-prod-local ECR_REGISTRY=… IMAGE_TAG=…)
 ECR_REGISTRY ?= local.ecr.test
 IMAGE_TAG ?= local
 export ECR_REGISTRY IMAGE_TAG
 
+# Prod EC2 is c8g (arm64); override only for amd64 experiments
+DOCKER_PLATFORM ?= linux/arm64
+export DOCKER_PLATFORM
+
 help:
 	@echo "AI Mesh Firewall — make targets"
 	@echo ""
+	@echo "VM capacity (auto): nproc=$(NPROC) BUILDKIT_MAX_PARALLELISM=$(BUILDKIT_MAX_PARALLELISM) COMPOSE_PARALLEL_LIMIT=$(COMPOSE_PARALLEL_LIMIT)"
+	@echo "  make capacity           Print cores/RAM/disk + build env"
+	@echo ""
 	@echo "Local development"
 	@echo "  make up                 Start postgres redis rabbitmq control gateway demo frontend"
+	@echo "  make build              Parallel rebuild of local compose images (full VM)"
 	@echo "  make up-demo            Build/start OpenAI SDK demo only (:8770 + /demo via :8180)"
 	@echo "  make up-workers         Start celery workers + beat"
 	@echo "  make up-all             Start all profiles (services + telemetry-pilot)"
@@ -38,30 +71,41 @@ help:
 	@echo "  make migrate            Run Django migrations"
 	@echo "  Demo UI: http://127.0.0.1:8180/demo/  (console login → org gateway key)"
 	@echo ""
-	@echo "Production deploy (end-to-end)"
+	@echo "Production deploy (end-to-end, parallel ECR builds)"
 	@echo "  make verify-prod-local  Validate prod compose + deploy scripts (local)"
 	@echo "  make test-prod-compose  Compose config / URL / ECR parity gate"
-	@echo "  make frontend-build     Vite production build (VITE_* from .env)"
-	@echo "  make ecr-push TAG=vX    Build+push gateway/control/workers/nginx/demo/mcp-* to ECR"
+	@echo "  make frontend-build     Vite production build (all cores)"
+	@echo "  make ecr-push TAG=vX    Parallel buildx push gateway/control/workers/nginx/demo/mcp-*"
 	@echo "  make sync-ec2           Rsync compose+.env+scripts to EC2 (no app source)"
 	@echo "  make sync-ec2-deploy    Sync then remote deploy-ec2.sh"
 	@echo "  make deploy-ec2         On EC2: pull ECR + compose prod up + health checks"
-	@echo "  make deploy-full-ec2 TAG=vX   LOCAL→ECR→EC2 full pipeline"
+	@echo "  make deploy-full-ec2 TAG=latest   LOCAL parallel→ECR→EC2 full pipeline"
+	@echo "  FORCE_REBUILD=1 make ecr-push TAG=latest   # --no-cache all images"
 	@echo ""
 	@echo "Prod-like local (ports 18xxx; does not replace running :8180 stack)"
-	@echo "  make build-prod-images-local   Build all ECR-named images locally (no push)"
+	@echo "  make build-prod-images-local   Parallel local build of all ECR-named images"
 	@echo "  make up-prod-local             compose.prod + prod.local up"
 	@echo "  make down-prod-local           Tear down prodlocal project"
 	@echo "  make prod-config               Render merged prod compose config"
 	@echo ""
 	@echo "Hosts: aimeshfirewall | aimeshbackend | aimeshgateway .zeroshield.ai"
 
+capacity:
+	@bash -c 'source infra/scripts/vm-capacity.sh && aim_capacity_print'
+
 # ── Local development ─────────────────────────────────────────────────────────
 up:
 	$(COMPOSE) up -d postgres redis rabbitmq control gateway demo frontend
 
+# Parallel rebuild of the local stack images, then (re)start core services
+build build-parallel:
+	@bash -c 'source infra/scripts/vm-capacity.sh && aim_capacity_print'
+	$(COMPOSE_BUILD) postgres redis rabbitmq control gateway demo frontend workers workers-beat 2>/dev/null \
+		|| $(COMPOSE_BUILD)
+	@echo "Local images rebuilt with COMPOSE_PARALLEL_LIMIT=$(COMPOSE_PARALLEL_LIMIT)"
+
 up-demo:
-	$(COMPOSE) build demo
+	$(COMPOSE_BUILD) demo
 	$(COMPOSE) up -d demo
 	@echo "Demo: http://127.0.0.1:8770/  and  http://127.0.0.1:8180/demo/"
 
@@ -84,7 +128,7 @@ migrate:
 	$(COMPOSE) exec control python manage.py migrate
 
 rebuild-control:
-	$(COMPOSE) build control
+	$(COMPOSE_BUILD) control
 	$(COMPOSE) up -d control
 
 seed-pii-policy:
@@ -107,6 +151,7 @@ prod-config:
 	@$(COMPOSE_PROD) config >/dev/null && echo "OK: compose config renders"
 
 build-prod-images-local:
+	@bash -c 'source infra/scripts/vm-capacity.sh && aim_capacity_print'
 	bash scripts/build-prod-images-local.sh $(if $(TAG),--tag $(TAG),)
 
 up-prod-local:
@@ -149,14 +194,21 @@ sync-ec2-deploy:
 	bash scripts/sync-to-ec2.sh --deploy
 
 frontend-build:
+	@bash -c 'source infra/scripts/vm-capacity.sh && aim_capacity_print'
 	bash infra/scripts/build-frontend-prod.sh
 
-# Full pipeline: local ECR build/push → frontend build → sync deploy config → EC2 pull
+# Full pipeline: parallel local ECR build/push → frontend build → sync → EC2 pull
 deploy-full-ec2: verify-prod-local
+	@bash -c 'source infra/scripts/vm-capacity.sh && aim_capacity_print'
 	bash scripts/deploy-full-ec2.sh $(if $(TAG),--tag $(TAG),)
 
+# Parallel buildx push (ecr-push-parallel is an alias)
+ecr-push-parallel: ecr-push
+
 ecr-push:
-	bash infra/scripts/build-push-images.sh $(TAG)
+	@test -n "$(TAG)" || (echo "Usage: make ecr-push TAG=latest   # or TAG=vX.Y.Z"; exit 1)
+	@bash -c 'source infra/scripts/vm-capacity.sh && aim_capacity_print'
+	DOCKER_PLATFORM=$(DOCKER_PLATFORM) bash infra/scripts/build-push-images.sh $(TAG)
 
 attach-ec2-iam:
 	bash scripts/attach-ec2-iam-policy.sh

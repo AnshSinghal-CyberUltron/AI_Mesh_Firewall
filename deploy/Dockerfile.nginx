@@ -13,6 +13,8 @@ COPY deploy/nginx-ssl.conf /etc/nginx/conf.d/02-ssl.conf
 # standalone config (only conf.d/*.conf is auto-included).
 COPY deploy/edge-error.inc /etc/nginx/edge-error.inc
 COPY deploy/edge-error.json /etc/nginx/edge_errors/__edge_error.json
+COPY deploy/security-headers.inc /etc/nginx/security-headers.inc
+COPY deploy/require-edge-https.inc /etc/nginx/require-edge-https.inc
 
 # Superuser gate for the /demo/ reference app (HTTP Basic Auth). Credentials are
 # baked from build args sourced from .env at build time; the htpasswd stores only

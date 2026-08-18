@@ -198,7 +198,10 @@ async def test_adv50_input_scanner_blocks_on_truncated(case: AdvCase, monkeypatc
     s._bedrock_scanner = bs
     s._tier2_sample_rate = 1.0
     s._tier2_cache_ttl = 0.0
-    monkeypatch.setattr(s, "_bedrock_scan_sync", lambda *a, **k: normalized)
+    async def _ascan_normalized(*_a, **_k):
+        return normalized
+
+    monkeypatch.setattr(s._bedrock_scanner, "ascan", _ascan_normalized)
 
     verdict = await s.scan_prompt_with_tier2(case.prompt, org_tier2_override=True, org_slug="adv50")
     assert verdict.action == "block", (
@@ -298,7 +301,10 @@ async def test_benign_clean_json_allow_through_input_scanner(monkeypatch):
     s._bedrock_scanner = bs
     s._tier2_sample_rate = 1.0
     s._tier2_cache_ttl = 0.0
-    monkeypatch.setattr(s, "_bedrock_scan_sync", lambda *a, **k: normalized)
+    async def _ascan_normalized(*_a, **_k):
+        return normalized
+
+    monkeypatch.setattr(s._bedrock_scanner, "ascan", _ascan_normalized)
     verdict = await s.scan_prompt_with_tier2("What is 2+2?", org_tier2_override=True)
     assert verdict.action in ("allow", "flag")
     assert verdict.action != "block"

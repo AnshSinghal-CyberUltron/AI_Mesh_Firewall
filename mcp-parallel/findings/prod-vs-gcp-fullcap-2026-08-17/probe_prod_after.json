@@ -1,0 +1,690 @@
+{
+  "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+  "model": "auto",
+  "n": 2,
+  "unique_prompt": true,
+  "records": [
+    {
+      "i": 0,
+      "nonce_suffix": "ab073f58",
+      "status": 403,
+      "wall_ms": 56.77,
+      "error": {
+        "message": "Request blocked due to security policy",
+        "type": "permission_error",
+        "param": null,
+        "code": "threat_intel_blocked"
+      },
+      "scan_only": false,
+      "total_latency_ms": 2.9,
+      "stages": [
+        {
+          "stage": "auth",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "rate_limit",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "policy",
+          "action": "block",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "input_scan",
+          "action": "skip",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "kill_switch",
+          "action": "skip",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_routing",
+          "action": "skip",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_input",
+          "action": "skip",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_output",
+          "action": "skip",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "output_guardrail",
+          "action": "skip",
+          "latency_ms": 0.0
+        }
+      ],
+      "metrics": null,
+      "model": null,
+      "id": null,
+      "pipeline_trace": {
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Gateway API key accepted",
+            "decision_source": "gateway_auth",
+            "decision_source_label": "Gateway authentication",
+            "guard_reason": "Gateway API key accepted",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>"
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Within org TPM / RPM limits",
+            "decision_source": "org_rate_limit",
+            "decision_source_label": "Org rate limit",
+            "guard_reason": "Within org TPM / RPM limits",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>"
+          },
+          {
+            "name": "policy",
+            "action": "block",
+            "latency_ms": 0.0,
+            "detail": "Blocked by threat intelligence (risk_score=1.00, threshold=0.75).",
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>",
+            "prompt_in_operator_masked": false,
+            "redaction_display_note": "",
+            "decision_source": "policy_engine",
+            "decision_source_label": "Policy engine",
+            "guard_reason": "Policy engine \u2014 enforcement: BLOCK\nBlocked by threat intelligence (risk_score=1.00, threshold=0.75).",
+            "tier": "policy",
+            "confidence": 1.0
+          },
+          {
+            "name": "input_scan",
+            "action": "skip",
+            "latency_ms": 0.0,
+            "detail": "Skipped \u2014 request was blocked upstream at policy",
+            "threat_type": "",
+            "confidence": 0,
+            "risk_score": null,
+            "scan_outcome": "",
+            "redact_noop": false,
+            "tier": "",
+            "matched_patterns": [],
+            "prompt_submitted": "<redacted len=0>",
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>",
+            "guard_model": "",
+            "guard_action": "",
+            "guard_reason": "",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "",
+            "decision_source": "",
+            "decision_source_label": "",
+            "matched_policies": [],
+            "matched_rules": []
+          },
+          {
+            "name": "kill_switch",
+            "action": "skip",
+            "latency_ms": 0.0,
+            "detail": "Skipped \u2014 request was blocked upstream at policy",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>"
+          },
+          {
+            "name": "model_routing",
+            "action": "skip",
+            "latency_ms": 0.0,
+            "detail": "Skipped \u2014 request was blocked upstream at policy",
+            "requested_model": "",
+            "selected_model": "",
+            "routed_model": "",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "",
+            "decision_source": "",
+            "decision_source_label": "",
+            "policy_summary": "",
+            "decision_factors": [],
+            "weights": {},
+            "routing_score": 0,
+            "candidate_count": 0,
+            "fallback_chain": [],
+            "evaluator_model": "",
+            "guard_reason": "Destination: LLM inference",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>"
+          },
+          {
+            "name": "model_input",
+            "action": "skip",
+            "latency_ms": 0.0,
+            "detail": "Skipped \u2014 request was blocked upstream at policy",
+            "content": "<redacted len=0>",
+            "prompt_submitted": "<redacted len=0>",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>"
+          },
+          {
+            "name": "model_output",
+            "action": "skip",
+            "latency_ms": 0.0,
+            "detail": "Skipped \u2014 request was blocked upstream at policy",
+            "content": "<redacted len=0>",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>"
+          },
+          {
+            "name": "output_guardrail",
+            "action": "skip",
+            "latency_ms": 0.0,
+            "detail": "Skipped \u2014 request was blocked upstream at policy",
+            "content": "<redacted len=0>",
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>",
+            "guard_model": "",
+            "guard_action": "",
+            "guard_reason": "",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "",
+            "decision_source": "",
+            "decision_source_label": "",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": []
+          }
+        ],
+        "total_latency_ms": 2.9,
+        "stage_latency_sum_ms": 0.0,
+        "overhead_ms": 2.9,
+        "final_action": "block",
+        "prompt_preview": "",
+        "input_text": "<redacted len=0>",
+        "prompt_submitted": "<redacted len=0>",
+        "output_text": "<redacted len=0>",
+        "final_response": "<redacted len=0>",
+        "output_withheld": true,
+        "output_withheld_reason": "Response withheld \u2014 request blocked at policy",
+        "input_was_redacted": false,
+        "input_text_before": "",
+        "input_text_after": "",
+        "guard_summary": {
+          "guard_model": "ZeroShield Model",
+          "guard_action": "block",
+          "guard_reason": "ZeroShield Model \u2014 enforcement: BLOCK\nThreat category: high risk actor\nConfidence: 100%\nBlocked by threat intelligence (risk_score=1.00, threshold=0.75).",
+          "reason_code": "",
+          "recommended_action": "",
+          "guard_findings": [],
+          "enforcement_source": "zeroshield_guard_model",
+          "decision_source": "zeroshield_guard_model",
+          "decision_source_label": "ZeroShield Model"
+        },
+        "requested_model": "",
+        "routed_model": "",
+        "routing_reason": "",
+        "routing": {
+          "requested_model": "",
+          "selected_model": "",
+          "routed_model": "",
+          "route_destination": "llm",
+          "route_destination_label": "LLM inference",
+          "routing_reason": "",
+          "decision_source": "",
+          "decision_source_label": "",
+          "policy_summary": "",
+          "decision_factors": [],
+          "weights": {},
+          "routing_score": 0,
+          "candidate_count": 0,
+          "fallback_chain": [],
+          "evaluator_model": ""
+        },
+        "latency_breakdown": {
+          "by_stage": [
+            {
+              "stage": "auth",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "rate_limit",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "policy",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "input_scan",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "kill_switch",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_routing",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_input",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_output",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "output_guardrail",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            }
+          ],
+          "dominant_stage": "",
+          "dominant_latency_ms": 0.0,
+          "dominant_share_pct": 0.0,
+          "overhead_ms": 2.9,
+          "overhead_share_pct": 100.0,
+          "hints": []
+        },
+        "request_id": "zs-d6d081272ab8"
+      }
+    },
+    {
+      "i": 1,
+      "nonce_suffix": "ae6cf423",
+      "status": 403,
+      "wall_ms": 6.85,
+      "error": {
+        "message": "Request blocked due to security policy",
+        "type": "permission_error",
+        "param": null,
+        "code": "threat_intel_blocked"
+      },
+      "scan_only": false,
+      "total_latency_ms": 0.8,
+      "stages": [
+        {
+          "stage": "auth",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "rate_limit",
+          "action": "allow",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "policy",
+          "action": "block",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "input_scan",
+          "action": "skip",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "kill_switch",
+          "action": "skip",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_routing",
+          "action": "skip",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_input",
+          "action": "skip",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "model_output",
+          "action": "skip",
+          "latency_ms": 0.0
+        },
+        {
+          "stage": "output_guardrail",
+          "action": "skip",
+          "latency_ms": 0.0
+        }
+      ],
+      "metrics": null,
+      "model": null,
+      "id": null,
+      "pipeline_trace": {
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Gateway API key accepted",
+            "decision_source": "gateway_auth",
+            "decision_source_label": "Gateway authentication",
+            "guard_reason": "Gateway API key accepted",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>"
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.0,
+            "detail": "Within org TPM / RPM limits",
+            "decision_source": "org_rate_limit",
+            "decision_source_label": "Org rate limit",
+            "guard_reason": "Within org TPM / RPM limits",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>"
+          },
+          {
+            "name": "policy",
+            "action": "block",
+            "latency_ms": 0.0,
+            "detail": "Blocked by threat intelligence (risk_score=1.00, threshold=0.75).",
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>",
+            "prompt_in_operator_masked": false,
+            "redaction_display_note": "",
+            "decision_source": "policy_engine",
+            "decision_source_label": "Policy engine",
+            "guard_reason": "Policy engine \u2014 enforcement: BLOCK\nBlocked by threat intelligence (risk_score=1.00, threshold=0.75).",
+            "tier": "policy",
+            "confidence": 1.0
+          },
+          {
+            "name": "input_scan",
+            "action": "skip",
+            "latency_ms": 0.0,
+            "detail": "Skipped \u2014 request was blocked upstream at policy",
+            "threat_type": "",
+            "confidence": 0,
+            "risk_score": null,
+            "scan_outcome": "",
+            "redact_noop": false,
+            "tier": "",
+            "matched_patterns": [],
+            "prompt_submitted": "<redacted len=0>",
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>",
+            "guard_model": "",
+            "guard_action": "",
+            "guard_reason": "",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "",
+            "decision_source": "",
+            "decision_source_label": "",
+            "matched_policies": [],
+            "matched_rules": []
+          },
+          {
+            "name": "kill_switch",
+            "action": "skip",
+            "latency_ms": 0.0,
+            "detail": "Skipped \u2014 request was blocked upstream at policy",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>"
+          },
+          {
+            "name": "model_routing",
+            "action": "skip",
+            "latency_ms": 0.0,
+            "detail": "Skipped \u2014 request was blocked upstream at policy",
+            "requested_model": "",
+            "selected_model": "",
+            "routed_model": "",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "",
+            "decision_source": "",
+            "decision_source_label": "",
+            "policy_summary": "",
+            "decision_factors": [],
+            "weights": {},
+            "routing_score": 0,
+            "candidate_count": 0,
+            "fallback_chain": [],
+            "evaluator_model": "",
+            "guard_reason": "Destination: LLM inference",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>"
+          },
+          {
+            "name": "model_input",
+            "action": "skip",
+            "latency_ms": 0.0,
+            "detail": "Skipped \u2014 request was blocked upstream at policy",
+            "content": "<redacted len=0>",
+            "prompt_submitted": "<redacted len=0>",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>"
+          },
+          {
+            "name": "model_output",
+            "action": "skip",
+            "latency_ms": 0.0,
+            "detail": "Skipped \u2014 request was blocked upstream at policy",
+            "content": "<redacted len=0>",
+            "decision_source": "",
+            "decision_source_label": "",
+            "guard_reason": "",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": [],
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>"
+          },
+          {
+            "name": "output_guardrail",
+            "action": "skip",
+            "latency_ms": 0.0,
+            "detail": "Skipped \u2014 request was blocked upstream at policy",
+            "content": "<redacted len=0>",
+            "prompt_in": "<redacted len=0>",
+            "prompt_out": "<redacted len=0>",
+            "guard_model": "",
+            "guard_action": "",
+            "guard_reason": "",
+            "reason_code": "",
+            "recommended_action": "",
+            "guard_findings": [],
+            "enforcement_source": "",
+            "decision_source": "",
+            "decision_source_label": "",
+            "tier": "",
+            "confidence": 0,
+            "matched_policies": [],
+            "matched_rules": []
+          }
+        ],
+        "total_latency_ms": 0.8,
+        "stage_latency_sum_ms": 0.0,
+        "overhead_ms": 0.8,
+        "final_action": "block",
+        "prompt_preview": "",
+        "input_text": "<redacted len=0>",
+        "prompt_submitted": "<redacted len=0>",
+        "output_text": "<redacted len=0>",
+        "final_response": "<redacted len=0>",
+        "output_withheld": true,
+        "output_withheld_reason": "Response withheld \u2014 request blocked at policy",
+        "input_was_redacted": false,
+        "input_text_before": "",
+        "input_text_after": "",
+        "guard_summary": {
+          "guard_model": "ZeroShield Model",
+          "guard_action": "block",
+          "guard_reason": "ZeroShield Model \u2014 enforcement: BLOCK\nThreat category: high risk actor\nConfidence: 100%\nBlocked by threat intelligence (risk_score=1.00, threshold=0.75).",
+          "reason_code": "",
+          "recommended_action": "",
+          "guard_findings": [],
+          "enforcement_source": "zeroshield_guard_model",
+          "decision_source": "zeroshield_guard_model",
+          "decision_source_label": "ZeroShield Model"
+        },
+        "requested_model": "",
+        "routed_model": "",
+        "routing_reason": "",
+        "routing": {
+          "requested_model": "",
+          "selected_model": "",
+          "routed_model": "",
+          "route_destination": "llm",
+          "route_destination_label": "LLM inference",
+          "routing_reason": "",
+          "decision_source": "",
+          "decision_source_label": "",
+          "policy_summary": "",
+          "decision_factors": [],
+          "weights": {},
+          "routing_score": 0,
+          "candidate_count": 0,
+          "fallback_chain": [],
+          "evaluator_model": ""
+        },
+        "latency_breakdown": {
+          "by_stage": [
+            {
+              "stage": "auth",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "rate_limit",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "policy",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "input_scan",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "kill_switch",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_routing",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_input",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "model_output",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            },
+            {
+              "stage": "output_guardrail",
+              "latency_ms": 0.0,
+              "share_pct": 0.0
+            }
+          ],
+          "dominant_stage": "",
+          "dominant_latency_ms": 0.0,
+          "dominant_share_pct": 0.0,
+          "overhead_ms": 0.8,
+          "overhead_share_pct": 100.0,
+          "hints": []
+        },
+        "request_id": "zs-90f6da5d7f5c"
+      }
+    }
+  ]
+}

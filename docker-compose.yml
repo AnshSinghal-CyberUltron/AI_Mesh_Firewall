@@ -32,8 +32,8 @@ services:
       timeout: 5s
       retries: 5
 
-  # Transaction-mode pooler in front of Postgres. Apps use DATABASE_URL →
-  # pgbouncer:6432; migrations / DDL use DATABASE_URL_DIRECT → postgres:5432.
+  # Transaction-mode pooler in front of Postgres. Apps + migrations use
+  # pgbouncer:6432 only (never dial postgres:5432 from application containers).
   pgbouncer:
     image: edoburu/pgbouncer:v1.23.1-p1
     ports: ["6432:6432"]
@@ -121,7 +121,8 @@ services:
       # .env may set gateway PYTHONPATH — override so gunicorn/daphne resolve main_app.
       PYTHONPATH: /app/shared:/app/control/ai_mesh_control
       DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@pgbouncer:6432/${POSTGRES_DB:-ai_mesh_firewall}
-      DATABASE_URL_DIRECT: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      # Alias kept for older scripts — must stay on PgBouncer (never postgres:5432).
+      DATABASE_URL_DIRECT: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@pgbouncer:6432/${POSTGRES_DB:-ai_mesh_firewall}
       # Transaction pooling: do not hold idle server connections.
       POSTGRES_CONN_MAX_AGE: ${POSTGRES_CONN_MAX_AGE:-0}
       DISABLE_SERVER_SIDE_CURSORS: ${DISABLE_SERVER_SIDE_CURSORS:-true}
@@ -161,7 +162,8 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: main_app.settings
       DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@pgbouncer:6432/${POSTGRES_DB:-ai_mesh_firewall}
-      DATABASE_URL_DIRECT: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      # Alias kept for older scripts — must stay on PgBouncer (never postgres:5432).
+      DATABASE_URL_DIRECT: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@pgbouncer:6432/${POSTGRES_DB:-ai_mesh_firewall}
       POSTGRES_CONN_MAX_AGE: ${POSTGRES_CONN_MAX_AGE:-0}
       DISABLE_SERVER_SIDE_CURSORS: ${DISABLE_SERVER_SIDE_CURSORS:-true}
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
@@ -184,7 +186,8 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: main_app.settings
       DATABASE_URL: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@pgbouncer:6432/${POSTGRES_DB:-ai_mesh_firewall}
-      DATABASE_URL_DIRECT: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@postgres:5432/${POSTGRES_DB:-ai_mesh_firewall}
+      # Alias kept for older scripts — must stay on PgBouncer (never postgres:5432).
+      DATABASE_URL_DIRECT: postgresql://${POSTGRES_USER:-ai_mesh_firewall}:${POSTGRES_PASSWORD:-ai_mesh_firewall}@pgbouncer:6432/${POSTGRES_DB:-ai_mesh_firewall}
       POSTGRES_CONN_MAX_AGE: ${POSTGRES_CONN_MAX_AGE:-0}
       DISABLE_SERVER_SIDE_CURSORS: ${DISABLE_SERVER_SIDE_CURSORS:-true}
       CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
@@ -227,9 +230,11 @@ services:
       BEDROCK_REGION: ${BEDROCK_REGION:-ap-south-1}
       BEDROCK_MODEL: ${BEDROCK_MODEL:-global.anthropic.claude-haiku-4-5-20251001-v1:0}
       ENABLE_TIER2: ${ENABLE_TIER2:-true}
-      # Always run Bedrock routing adjudicator when >1 candidates (skip only
-      # single-candidate). Set false to restore low-risk weighted_fastpath.
-      ROUTING_ADJUDICATOR_ALWAYS: ${ROUTING_ADJUDICATOR_ALWAYS:-true}
+      GATEWAY_TIER2_CACHE_TTL_SECONDS: ${GATEWAY_TIER2_CACHE_TTL_SECONDS:-0}
+      # Capacity bench only. Default off. When 1, LiteLLM/BYOK is stubbed so
+      # /v1/chat/completions still runs the 9-stage pipeline minus provider RTT.
+      GATEWAY_LOADTEST_STUB_LLM: ${GATEWAY_LOADTEST_STUB_LLM:-0}
+      GUNICORN_WORKER_CONNECTIONS: ${GUNICORN_WORKER_CONNECTIONS:-20000}
       GUARDRAILS_SERVICE_URL: http://guardrails:8310
       MCP_BROKER_URL: http://mcp-broker:8311
       MCP_BROKER_INTERNAL_KEY: ${MCP_BROKER_INTERNAL_KEY:-dev-mcp-broker-key-change-me}

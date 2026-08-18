@@ -81,18 +81,23 @@ def test_degraded_returns_alert(fake_redis, fake_sync_redis):
 
 def test_auto_recovery_when_isolated_until_passed(fake_redis, fake_sync_redis):
     past = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat().replace("+00:00", "Z")
+    key = "model_state:acme:m"
     fake_sync_redis.set(
-        "model_state:acme:m",
+        key,
         json.dumps({
             "status": "isolated",
             "action": "block",
             "isolated_until": past,
             "risk_score": 95.0,
             "threshold": 80.0,
+            "isolation_reason": "stale",
         }),
     )
     v = _run(check_model_state(fake_redis, "m", org_slug="acme"))
     assert v.status == "active"
+    healed = json.loads(fake_sync_redis.get(key))
+    assert healed["status"] == "active"
+    assert healed.get("isolated_until") in (None, "")
 
 
 def test_still_isolated_when_isolated_until_future(fake_redis, fake_sync_redis):

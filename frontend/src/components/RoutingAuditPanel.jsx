@@ -12,6 +12,7 @@ import {
   getEventMetadata,
 } from "../utils/routingEventFields";
 import { summarizeRoutingDecision } from "../utils/routingExplain";
+import { formatDecisionSource } from "../constants/zeroshieldBrand";
 import { RoutingTechnicalDetails } from "./RoutingTechnicalDetails";
 
 const SENSITIVITY_COLORS = {
@@ -159,7 +160,7 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
             const fallbacks = extra.fallback_chain || [];
             const sensitivity = extra.data_sensitivity || "public";
             const weights = extra.weights || {};
-            const decisionSource = extra.decision_source || meta.decision_source || "weighted";
+            const decisionSource = extra.decision_source || meta.decision_source || "deterministic_weighted";
             const policySummary = extra.policy_summary || meta.policy_summary || "";
             const decisionFactors = extra.decision_factors || meta.decision_factors || [];
             const rerouted = typeof extra.rerouted === "boolean"
@@ -221,7 +222,7 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
                   )}
 
                   <span className="hidden lg:inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-100 dark:bg-violet-800/30 text-violet-700 dark:text-violet-300">
-                    {decisionSource === "policy_adjudicator" ? "Policy adjudicated" : "Weighted fallback"}
+                    {formatDecisionSource(decisionSource)}
                   </span>
 
                   <span className={`hidden lg:inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium ${rerouted ? "bg-amber-100 dark:bg-amber-800/30 text-amber-700 dark:text-amber-300" : "bg-emerald-100 dark:bg-emerald-800/30 text-emerald-700 dark:text-emerald-300"}`}>

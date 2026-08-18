@@ -33,6 +33,17 @@ import pytest
 import pytest_asyncio
 
 
+@pytest.fixture(autouse=True)
+def _reset_bedrock_client_singleton():
+    """Task 2: isolate the process-wide Bedrock boto3 client between tests."""
+    from ai_mesh_gateway.bedrock_client import reset_bedrock_client_for_tests
+
+    reset_bedrock_client_for_tests()
+    yield
+    reset_bedrock_client_for_tests()
+
+
+
 @pytest.fixture()
 def fake_redis_server():
     """Shared in-memory Redis server for all fixtures in a test."""

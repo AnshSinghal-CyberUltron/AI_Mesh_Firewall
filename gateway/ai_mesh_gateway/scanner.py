@@ -1067,7 +1067,7 @@ class InputScanner:
         # invocation from starving Tier-1 workers (the head-of-line blocking that
         # caused the gateway to collapse under load).
         bedrock_pool_size = _env_int(
-            "GATEWAY_BEDROCK_THREAD_POOL_SIZE", 16, min_value=1, max_value=256)
+            "GATEWAY_BEDROCK_THREAD_POOL_SIZE", 16, min_value=1)
         self._bedrock_executor = ThreadPoolExecutor(
             max_workers=bedrock_pool_size,
             thread_name_prefix="bedrock",
@@ -1089,8 +1089,9 @@ class InputScanner:
         self._tier2_sample_rate = _env_float(
             "GATEWAY_TIER2_SAMPLE_RATE", 1.0, min_value=0.0, max_value=1.0)
         LOG.info(
-            "InputScanner initialized (thread_pool_size=%d, attack_categories=%d, pii_patterns=%d)",
+            "InputScanner initialized (thread_pool_size=%d, bedrock_pool_size=%d, attack_categories=%d, pii_patterns=%d)",
             thread_pool_size,
+            bedrock_pool_size,
             len(ATTACK_PATTERNS),
             len(PII_PATTERNS),
         )
@@ -1999,7 +2000,7 @@ class InputScanner:
     ) -> ScanVerdict:
         """
         Run Tier-1 regex/deterministic checks first. If no blocking verdict,
-        and Tier-2 is enabled, call the Bedrock scanner (async via executor)
+        and Tier-2 is enabled, await the Bedrock scanner (native async aconverse)
         and combine results to produce a final ScanVerdict.
 
         Deobfuscated text is passed to Bedrock alongside the original so the
@@ -2102,11 +2103,10 @@ class InputScanner:
         ):
             return tier1
 
-        loop = asyncio.get_event_loop()
         if bedrock_normalized is None:
             try:
-                bedrock_normalized = await loop.run_in_executor(
-                    self._bedrock_executor, self._bedrock_scan_sync, bedrock_input, original_context, request_id,
+                bedrock_normalized = await self._bedrock_scanner.ascan(
+                    bedrock_input, context=original_context, request_id=request_id or None,
                 )
             except Exception:
                 # Hard failure during Bedrock invocation counts toward the
@@ -2417,10 +2417,9 @@ class InputScanner:
             return tier1
 
         if bedrock_normalized is None:
-            loop = asyncio.get_event_loop()
             try:
-                bedrock_normalized = await loop.run_in_executor(
-                    self._bedrock_executor, self._bedrock_scan_sync, text, None, request_id,
+                bedrock_normalized = await self._bedrock_scanner.ascan(
+                    text, context=None, request_id=request_id or None,
                 )
             except Exception:
                 BREAKER.record_result(org_slug, scanner_model_id, failure=True)

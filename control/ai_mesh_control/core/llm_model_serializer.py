@@ -9,6 +9,20 @@ from core.models import (
     is_platform_managed_llm_model_name,
     is_platform_managed_llm_provider,
 )
+from core.routing_compliance import (
+    SUPPORTED_COMPLIANCE_FRAMEWORKS,
+    canonical_compliance_tag,
+)
+
+# Routing attributes an operator MUST state when registering a model. Defaults would
+# make every model score identically, which is what made routing arbitrary before.
+REQUIRED_ROUTING_FIELDS_ON_CREATE = (
+    "data_sensitivity_level",
+    "cost_per_1k_input_tokens",
+    "latency_sla_ms",
+    "routing_priority",
+    "risk_score",
+)
 
 
 class LLMModelConfigSerializer(serializers.ModelSerializer):
@@ -72,11 +86,62 @@ class LLMModelConfigSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Model ID cannot be empty.")
         return value.strip()
 
+    def validate_compliance_tags(self, value):
+        """Canonicalize compliance tags and reject unknown frameworks.
+
+        These are matched by the gateway's routing filter. When they were free text,
+        an operator typing 'hipaa' on one model and 'HIPAA' on another produced a
+        catalogue where a client asking for either got a partial match — or, if every
+        model used the other casing, a spurious 'no compliant model' 403. Storing a
+        canonical form makes the filter's job unambiguous.
+        """
+        if value in (None, ""):
+            return []
+        if not isinstance(value, (list, tuple)):
+            raise serializers.ValidationError("Compliance tags must be a list.")
+        canonical, unknown = [], []
+        for raw in value:
+            tag = canonical_compliance_tag(raw)
+            if not tag:
+                continue
+            if tag not in SUPPORTED_COMPLIANCE_FRAMEWORKS:
+                unknown.append(str(raw))
+            elif tag not in canonical:
+                canonical.append(tag)
+        if unknown:
+            raise serializers.ValidationError(
+                f"Unsupported compliance framework(s): {', '.join(unknown)}. "
+                f"Supported: {', '.join(SUPPORTED_COMPLIANCE_FRAMEWORKS)}."
+            )
+        return canonical
+
     def validate(self, attrs):
         """
-        Keep the endpoint backward-compatible with clients that send null for
-        optional routing/cost fields by coercing nulls to model defaults.
+        Routing configuration is COMPULSORY when adding a model.
+
+        A model saved on bare defaults (cost 0, SLA 30000, priority 0, risk 0) is
+        indistinguishable from every other default model, so the weighted scorer has
+        nothing to rank on — every candidate ties and the winner falls to catalogue
+        order. Requiring these up front is what makes routing meaningful at all, so
+        they are mandatory on CREATE. Updates stay partial-friendly: an existing model
+        already carries values, and PATCHing one field must not force a full resend.
         """
+        is_create = self.instance is None
+        if is_create:
+            missing = [
+                field for field in REQUIRED_ROUTING_FIELDS_ON_CREATE
+                if attrs.get(field) is None
+            ]
+            if missing:
+                raise serializers.ValidationError({
+                    field: (
+                        "Routing configuration is required when adding a model. "
+                        "Without it this model cannot be ranked against the others "
+                        "and routing decisions become arbitrary."
+                    )
+                    for field in missing
+                })
+
         null_to_default = {
             "cost_per_1k_input_tokens": Decimal("0"),
             "cost_per_1k_output_tokens": Decimal("0"),

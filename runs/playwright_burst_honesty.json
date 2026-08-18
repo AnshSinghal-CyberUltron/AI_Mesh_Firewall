@@ -1,0 +1,71 @@
+{
+  "ok": true,
+  "asserts": [
+    {
+      "label": "seed auth (ok)",
+      "pass": true
+    },
+    {
+      "label": "Requests input has no HTML max cap",
+      "pass": true
+    },
+    {
+      "label": "Concurrency input has no HTML max cap",
+      "pass": true
+    },
+    {
+      "label": "UI announces Sending 500 at 100 in-flight",
+      "pass": true
+    },
+    {
+      "label": "Include model inference checkbox present",
+      "pass": true
+    },
+    {
+      "label": "Inference defaults OFF (scan-only)",
+      "pass": true
+    },
+    {
+      "label": "browser sent 12 POSTs, got 12",
+      "pass": true
+    },
+    {
+      "label": "every Standard Burst POST has max_tokens=0",
+      "pass": true
+    },
+    {
+      "label": "Standard Burst does not send estimated_tokens",
+      "pass": true
+    },
+    {
+      "label": "results header shows scan-only (no model call)",
+      "pass": true
+    },
+    {
+      "label": "Rate-Limit Probe defaults to 20/20",
+      "pass": true
+    },
+    {
+      "label": "probe sent 20 POSTs, got 20",
+      "pass": true
+    },
+    {
+      "label": "probe POSTs are scan-only (max_tokens=0)",
+      "pass": true
+    },
+    {
+      "label": "probe sends estimated_tokens=8000",
+      "pass": true
+    },
+    {
+      "label": "probe forces the clean prompt",
+      "pass": true
+    }
+  ],
+  "pageErrors": [],
+  "captured": {
+    "standard": 12,
+    "probe": 20
+  },
+  "error": null
+}

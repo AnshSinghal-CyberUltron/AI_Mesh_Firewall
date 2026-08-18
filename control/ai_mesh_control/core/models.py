@@ -1315,12 +1315,24 @@ class FirewallConfig(models.Model):
             ("confidential", "Confidential"),
             ("restricted", "Restricted"),
         ],
-        default="internal",
-        help_text="Default data sensitivity level for routing decisions.",
+        # D3/R1 (migration 0039): defaults to "public", NOT "internal". The gateway now
+        # enforces this as a hard floor; defaulting to "internal" while LLMModelConfig
+        # defaults to "public" would 403 every org's default traffic.
+        default="public",
+        help_text=(
+            "Default data sensitivity applied when a request does not specify one. "
+            "Enforced as a HARD floor: models approved below this level are excluded "
+            "from routing, and a request with no eligible model is refused rather than "
+            "downgraded onto an under-approved model."
+        ),
     )
     routing_enabled = models.BooleanField(
         default=True,
-        help_text="Enable Bedrock-adjudicated dynamic model routing for /v1/chat/completions.",
+        help_text=(
+            "Enable deterministic weighted model routing for /v1/chat/completions. "
+            "When off, the client's requested model is used directly (governance "
+            "filters still apply)."
+        ),
     )
 
     # -- Meta --

@@ -1,0 +1,155 @@
+{
+  "mode": "chat",
+  "gateway": "http://127.0.0.1:8300",
+  "workers": 16,
+  "conn": 8,
+  "inflight": 128,
+  "duration_s": 18.573,
+  "requests": 242,
+  "ok": 236,
+  "errors": 6,
+  "error_rate": 0.0248,
+  "rps": 13.03,
+  "ok_rps": 12.71,
+  "scan_only": 0,
+  "codes": {
+    "200": 236,
+    "400": 5,
+    "422": 1
+  },
+  "errors_by_signature": {
+    "HTTP 400 content_filter Request blocked due to security policy": 5,
+    "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 1
+  },
+  "client_latency_ms": {
+    "n": 242,
+    "mean": 7815.347,
+    "p50": 7633.494,
+    "p90": 9446.569,
+    "p95": 10912.709,
+    "p99": 12113.345,
+    "max": 15023.426
+  },
+  "addon_latency_ms": {
+    "n": 241,
+    "mean": 6862.92,
+    "p50": 6737.8,
+    "p90": 8423.9,
+    "p95": 8647.5,
+    "p99": 11145.7,
+    "max": 11241.0
+  },
+  "stage_latency_ms": {
+    "auth": {
+      "n": 241,
+      "mean": 39.677,
+      "p50": 16.4,
+      "p90": 90.6,
+      "p95": 201.4,
+      "p99": 383.9,
+      "max": 524.4
+    },
+    "rate_limit": {
+      "n": 241,
+      "mean": 86.593,
+      "p50": 10.3,
+      "p90": 280.3,
+      "p95": 580.1,
+      "p99": 830.2,
+      "max": 970.5
+    },
+    "policy": {
+      "n": 241,
+      "mean": 467.658,
+      "p50": 370.0,
+      "p90": 1127.5,
+      "p95": 1239.8,
+      "p99": 1404.0,
+      "max": 1528.7
+    },
+    "input_scan": {
+      "n": 241,
+      "mean": 1456.948,
+      "p50": 1463.5,
+      "p90": 1981.0,
+      "p95": 2157.0,
+      "p99": 2406.5,
+      "max": 2484.6
+    },
+    "kill_switch": {
+      "n": 241,
+      "mean": 41.631,
+      "p50": 4.8,
+      "p90": 103.6,
+      "p95": 178.4,
+      "p99": 574.2,
+      "max": 1157.8
+    },
+    "model_routing": {
+      "n": 241,
+      "mean": 3612.604,
+      "p50": 3473.1,
+      "p90": 4603.1,
+      "p95": 5487.1,
+      "p99": 6256.2,
+      "max": 6577.6
+    },
+    "model_input": {
+      "n": 241,
+      "mean": 2.79,
+      "p50": 0.5,
+      "p90": 3.5,
+      "p95": 7.0,
+      "p99": 52.0,
+      "max": 182.7
+    },
+    "model_output": {
+      "n": 241,
+      "mean": 895.733,
+      "p50": 789.7,
+      "p90": 1050.5,
+      "p95": 1307.1,
+      "p99": 3548.0,
+      "max": 7421.7
+    },
+    "output_guardrail": {
+      "n": 241,
+      "mean": 1038.286,
+      "p50": 1015.1,
+      "p90": 1293.2,
+      "p95": 1414.7,
+      "p99": 1936.5,
+      "max": 2130.8
+    },
+    "total": {
+      "n": 241,
+      "mean": 7758.654,
+      "p50": 7597.9,
+      "p90": 9349.4,
+      "p95": 10866.7,
+      "p99": 12055.2,
+      "max": 14982.9
+    },
+    "addon": {
+      "n": 241,
+      "mean": 6862.92,
+      "p50": 6737.8,
+      "p90": 8423.9,
+      "p95": 8647.5,
+      "p99": 11145.7,
+      "max": 11241.0
+    }
+  },
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": "",
+    "full_nine_stages": true,
+    "unique_prompt": true
+  },
+  "_label": "gcp_C_if128",
+  "_where": "gcp",
+  "_inflight": 128,
+  "_wall": 18.74,
+  "_docker_before": "2026-08-17T06:00:48Z\nai_mesh_firewall-gateway-1|0.33%|1.397GiB / 58.85GiB|127\nai_mesh_firewall-control-1|3.15%|2.361GiB / 58.85GiB|312\nai_mesh_firewall-pgbouncer-1|0.00%|5.438MiB / 58.85GiB|1\nai_mesh_firewall-redis-1|0.55%|27.24MiB / 58.85GiB|7\nai_mesh_firewall-postgres-1|0.00%|234.6MiB / 58.85GiB|11",
+  "_docker_after": "2026-08-17T06:01:08Z\nai_mesh_firewall-gateway-1|0.30%|1.563GiB / 58.85GiB|291\nai_mesh_firewall-control-1|3.42%|2.38GiB / 58.85GiB|312\nai_mesh_firewall-pgbouncer-1|0.01%|5.531MiB / 58.85GiB|1\nai_mesh_firewall-redis-1|0.70%|33.16MiB / 58.85GiB|7\nai_mesh_firewall-postgres-1|0.01%|249.3MiB / 58.85GiB|11"
+}

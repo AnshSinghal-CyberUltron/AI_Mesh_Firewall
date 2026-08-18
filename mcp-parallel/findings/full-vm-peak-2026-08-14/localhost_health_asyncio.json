@@ -1,0 +1,38 @@
+[
+  {
+    "nconn": 200,
+    "duration_s": 12.092,
+    "ok": 81175,
+    "err": 0,
+    "exc": 0,
+    "eof": 0,
+    "connect_err": 0,
+    "ok_rps": 6713.23,
+    "error_rate": 0.0,
+    "other": {}
+  },
+  {
+    "nconn": 400,
+    "duration_s": 12.167,
+    "ok": 76867,
+    "err": 0,
+    "exc": 0,
+    "eof": 0,
+    "connect_err": 0,
+    "ok_rps": 6317.49,
+    "error_rate": 0.0,
+    "other": {}
+  },
+  {
+    "nconn": 800,
+    "duration_s": 12.244,
+    "ok": 70481,
+    "err": 0,
+    "exc": 0,
+    "eof": 0,
+    "connect_err": 0,
+    "ok_rps": 5756.58,
+    "error_rate": 0.0,
+    "other": {}
+  }
+]

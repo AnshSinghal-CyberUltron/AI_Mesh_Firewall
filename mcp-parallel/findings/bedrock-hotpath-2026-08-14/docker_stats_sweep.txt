@@ -1,0 +1,322 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+2026-08-14T11:28:09Z
+ai_mesh_firewall-gateway-1 cpu=0.87% mem=1.3GiB / 7GiB pids=45
+ai_mesh_firewall-control-1 cpu=0.49% mem=1.087GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=0.45% mem=19.09MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.00% mem=131.5MiB / 2.5GiB pids=11
+---
+2026-08-14T11:28:13Z
+ai_mesh_firewall-gateway-1 cpu=0.77% mem=1.3GiB / 7GiB pids=45
+ai_mesh_firewall-control-1 cpu=0.49% mem=1.088GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=1.30% mem=18.79MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.00% mem=131.5MiB / 2.5GiB pids=11
+---
+2026-08-14T11:28:18Z
+ai_mesh_firewall-gateway-1 cpu=0.67% mem=1.3GiB / 7GiB pids=45
+ai_mesh_firewall-control-1 cpu=0.50% mem=1.087GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=0.47% mem=18.34MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.00% mem=131.5MiB / 2.5GiB pids=11
+---
+2026-08-14T11:28:22Z
+ai_mesh_firewall-gateway-1 cpu=0.64% mem=1.3GiB / 7GiB pids=45
+ai_mesh_firewall-control-1 cpu=0.42% mem=1.088GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=0.43% mem=18.38MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.00% mem=131.5MiB / 2.5GiB pids=11
+---
+2026-08-14T11:28:27Z
+ai_mesh_firewall-gateway-1 cpu=0.68% mem=1.3GiB / 7GiB pids=45
+ai_mesh_firewall-control-1 cpu=0.49% mem=1.088GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=0.45% mem=18.57MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.00% mem=131.5MiB / 2.5GiB pids=11
+---
+2026-08-14T11:28:31Z
+ai_mesh_firewall-gateway-1 cpu=1.05% mem=1.3GiB / 7GiB pids=45
+ai_mesh_firewall-control-1 cpu=8.05% mem=1.088GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=0.51% mem=18.12MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.36% mem=131.9MiB / 2.5GiB pids=11
+---
+2026-08-14T11:28:36Z
+ai_mesh_firewall-gateway-1 cpu=0.73% mem=1.301GiB / 7GiB pids=45
+ai_mesh_firewall-control-1 cpu=0.47% mem=1.087GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=0.46% mem=18.88MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.01% mem=131.6MiB / 2.5GiB pids=11
+---
+2026-08-14T11:28:41Z
+ai_mesh_firewall-gateway-1 cpu=8.18% mem=1.301GiB / 7GiB pids=45
+ai_mesh_firewall-control-1 cpu=0.43% mem=1.088GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=0.71% mem=18.44MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.01% mem=131.5MiB / 2.5GiB pids=11
+---
+2026-08-14T11:28:45Z
+ai_mesh_firewall-gateway-1 cpu=0.88% mem=1.301GiB / 7GiB pids=45
+ai_mesh_firewall-control-1 cpu=0.74% mem=1.087GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=0.45% mem=18.57MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.00% mem=131.6MiB / 2.5GiB pids=11
+---
+2026-08-14T11:28:50Z
+ai_mesh_firewall-gateway-1 cpu=1.96% mem=1.301GiB / 7GiB pids=45
+ai_mesh_firewall-control-1 cpu=0.51% mem=1.088GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=0.55% mem=19.02MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.06% mem=132MiB / 2.5GiB pids=11
+---
+2026-08-14T11:28:54Z
+ai_mesh_firewall-gateway-1 cpu=20.14% mem=1.402GiB / 7GiB pids=51
+ai_mesh_firewall-control-1 cpu=3.20% mem=1.088GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=1.32% mem=19.58MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.26% mem=132.3MiB / 2.5GiB pids=11
+---
+2026-08-14T11:28:59Z
+ai_mesh_firewall-gateway-1 cpu=10.47% mem=1.404GiB / 7GiB pids=51
+ai_mesh_firewall-control-1 cpu=0.49% mem=1.088GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=1.68% mem=19.93MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.36% mem=132.2MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:03Z
+ai_mesh_firewall-gateway-1 cpu=30.91% mem=1.405GiB / 7GiB pids=51
+ai_mesh_firewall-control-1 cpu=2.17% mem=1.089GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=2.37% mem=19.7MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=2.98% mem=133.2MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:08Z
+ai_mesh_firewall-gateway-1 cpu=18.72% mem=1.405GiB / 7GiB pids=51
+ai_mesh_firewall-control-1 cpu=0.80% mem=1.087GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=1.43% mem=19.44MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.38% mem=133.4MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:12Z
+ai_mesh_firewall-gateway-1 cpu=5.93% mem=1.405GiB / 7GiB pids=51
+ai_mesh_firewall-control-1 cpu=0.46% mem=1.088GiB / 2.5GiB pids=34
+ai_mesh_firewall-redis-1 cpu=0.82% mem=20.29MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.41% mem=133.1MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:17Z
+ai_mesh_firewall-gateway-1 cpu=46.70% mem=1.415GiB / 7GiB pids=64
+ai_mesh_firewall-control-1 cpu=14.46% mem=1.086GiB / 2.5GiB pids=35
+ai_mesh_firewall-redis-1 cpu=5.37% mem=21.91MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.12% mem=133.2MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:21Z
+ai_mesh_firewall-gateway-1 cpu=26.69% mem=1.418GiB / 7GiB pids=64
+ai_mesh_firewall-control-1 cpu=4.22% mem=1.086GiB / 2.5GiB pids=35
+ai_mesh_firewall-redis-1 cpu=2.77% mem=23.32MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.56% mem=137MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:26Z
+ai_mesh_firewall-gateway-1 cpu=86.18% mem=1.419GiB / 7GiB pids=65
+ai_mesh_firewall-control-1 cpu=3.54% mem=1.086GiB / 2.5GiB pids=36
+ai_mesh_firewall-redis-1 cpu=4.21% mem=24.05MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.44% mem=136.6MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:30Z
+ai_mesh_firewall-gateway-1 cpu=74.51% mem=1.421GiB / 7GiB pids=65
+ai_mesh_firewall-control-1 cpu=10.44% mem=1.088GiB / 2.5GiB pids=36
+ai_mesh_firewall-redis-1 cpu=5.29% mem=24.59MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.46% mem=137.1MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:35Z
+ai_mesh_firewall-gateway-1 cpu=47.99% mem=1.421GiB / 7GiB pids=66
+ai_mesh_firewall-control-1 cpu=4.42% mem=1.089GiB / 2.5GiB pids=36
+ai_mesh_firewall-redis-1 cpu=4.62% mem=22.98MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=4.01% mem=137.2MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:39Z
+ai_mesh_firewall-gateway-1 cpu=5.04% mem=1.419GiB / 7GiB pids=66
+ai_mesh_firewall-control-1 cpu=0.49% mem=1.088GiB / 2.5GiB pids=36
+ai_mesh_firewall-redis-1 cpu=0.78% mem=23.02MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.29% mem=138.4MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:44Z
+ai_mesh_firewall-gateway-1 cpu=193.36% mem=1.462GiB / 7GiB pids=83
+ai_mesh_firewall-control-1 cpu=20.33% mem=1.088GiB / 2.5GiB pids=36
+ai_mesh_firewall-redis-1 cpu=13.31% mem=28.93MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.19% mem=138.7MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:48Z
+ai_mesh_firewall-gateway-1 cpu=312.17% mem=1.467GiB / 7GiB pids=88
+ai_mesh_firewall-control-1 cpu=11.73% mem=1.088GiB / 2.5GiB pids=36
+ai_mesh_firewall-redis-1 cpu=12.99% mem=33.83MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=1.49% mem=142.9MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:53Z
+ai_mesh_firewall-gateway-1 cpu=360.39% mem=1.471GiB / 7GiB pids=92
+ai_mesh_firewall-control-1 cpu=12.84% mem=1.088GiB / 2.5GiB pids=36
+ai_mesh_firewall-redis-1 cpu=13.70% mem=35.09MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=1.53% mem=147.2MiB / 2.5GiB pids=11
+---
+2026-08-14T11:29:57Z
+ai_mesh_firewall-gateway-1 cpu=361.75% mem=1.474GiB / 7GiB pids=97
+ai_mesh_firewall-control-1 cpu=10.68% mem=1.088GiB / 2.5GiB pids=37
+ai_mesh_firewall-redis-1 cpu=14.19% mem=34.71MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=4.57% mem=148.7MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:02Z
+ai_mesh_firewall-gateway-1 cpu=59.88% mem=1.474GiB / 7GiB pids=99
+ai_mesh_firewall-control-1 cpu=16.55% mem=1.089GiB / 2.5GiB pids=37
+ai_mesh_firewall-redis-1 cpu=4.02% mem=34.29MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=1.54% mem=155.5MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:07Z
+ai_mesh_firewall-gateway-1 cpu=306.65% mem=1.482GiB / 7GiB pids=108
+ai_mesh_firewall-control-1 cpu=0.51% mem=1.088GiB / 2.5GiB pids=37
+ai_mesh_firewall-redis-1 cpu=6.58% mem=33.39MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.40% mem=156.5MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:11Z
+ai_mesh_firewall-gateway-1 cpu=390.50% mem=1.56GiB / 7GiB pids=113
+ai_mesh_firewall-control-1 cpu=17.66% mem=1.089GiB / 2.5GiB pids=37
+ai_mesh_firewall-redis-1 cpu=18.04% mem=33.74MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.55% mem=157.1MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:16Z
+ai_mesh_firewall-gateway-1 cpu=384.36% mem=1.579GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=10.54% mem=1.089GiB / 2.5GiB pids=37
+ai_mesh_firewall-redis-1 cpu=14.91% mem=36.95MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=5.67% mem=160.4MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:20Z
+ai_mesh_firewall-gateway-1 cpu=384.74% mem=1.583GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=6.74% mem=1.096GiB / 2.5GiB pids=38
+ai_mesh_firewall-redis-1 cpu=16.41% mem=38.71MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=1.92% mem=158.2MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:25Z
+ai_mesh_firewall-gateway-1 cpu=386.65% mem=1.587GiB / 7GiB pids=129
+ai_mesh_firewall-control-1 cpu=28.59% mem=1.097GiB / 2.5GiB pids=40
+ai_mesh_firewall-redis-1 cpu=15.37% mem=37.94MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=2.47% mem=162.4MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:29Z
+ai_mesh_firewall-gateway-1 cpu=152.45% mem=1.586GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=33.25% mem=1.099GiB / 2.5GiB pids=42
+ai_mesh_firewall-redis-1 cpu=11.85% mem=39.47MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=7.11% mem=165.5MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:33Z
+ai_mesh_firewall-gateway-1 cpu=42.78% mem=1.585GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=11.87% mem=1.096GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=2.83% mem=39.45MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=2.81% mem=167.2MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:37Z
+ai_mesh_firewall-gateway-1 cpu=2.56% mem=1.584GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.46% mem=1.097GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=0.62% mem=37.43MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=1.89% mem=167.7MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:42Z
+ai_mesh_firewall-gateway-1 cpu=382.92% mem=1.616GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=70.32% mem=1.113GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=16.21% mem=43.62MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=22.16% mem=167.8MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:46Z
+ai_mesh_firewall-gateway-1 cpu=382.12% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=73.36% mem=1.139GiB / 2.5GiB pids=42
+ai_mesh_firewall-redis-1 cpu=12.82% mem=42.41MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=20.43% mem=196.1MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:51Z
+ai_mesh_firewall-gateway-1 cpu=383.86% mem=1.631GiB / 7GiB pids=129
+ai_mesh_firewall-control-1 cpu=61.00% mem=1.141GiB / 2.5GiB pids=42
+ai_mesh_firewall-redis-1 cpu=16.59% mem=45.95MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=22.58% mem=202.4MiB / 2.5GiB pids=11
+---
+2026-08-14T11:30:55Z
+ai_mesh_firewall-gateway-1 cpu=385.35% mem=1.621GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=21.49% mem=1.138GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=12.41% mem=45.39MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=21.20% mem=262.6MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:00Z
+ai_mesh_firewall-gateway-1 cpu=1.73% mem=1.618GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=41.94% mem=1.141GiB / 2.5GiB pids=43
+ai_mesh_firewall-redis-1 cpu=7.41% mem=47.86MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=21.46% mem=223.9MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:04Z
+ai_mesh_firewall-gateway-1 cpu=0.78% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.50% mem=1.138GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=1.41% mem=39.89MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.04% mem=243.4MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:09Z
+ai_mesh_firewall-gateway-1 cpu=0.93% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.49% mem=1.139GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=0.50% mem=37.83MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.03% mem=243.1MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:14Z
+ai_mesh_firewall-gateway-1 cpu=0.66% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.48% mem=1.139GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=0.49% mem=38.08MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.82% mem=243.4MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:18Z
+ai_mesh_firewall-gateway-1 cpu=0.68% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.46% mem=1.139GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=0.52% mem=29.71MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.05% mem=243.3MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:23Z
+ai_mesh_firewall-gateway-1 cpu=1.40% mem=1.618GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=1.65% mem=1.14GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=0.57% mem=29.48MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.34% mem=223.5MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:27Z
+ai_mesh_firewall-gateway-1 cpu=0.66% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.47% mem=1.139GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=0.51% mem=29.96MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.04% mem=223.3MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:32Z
+ai_mesh_firewall-gateway-1 cpu=0.60% mem=1.618GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.44% mem=1.139GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=0.48% mem=29.79MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.41% mem=223.5MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:36Z
+ai_mesh_firewall-gateway-1 cpu=0.77% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.50% mem=1.138GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=7.59% mem=29.38MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.41% mem=223.9MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:41Z
+ai_mesh_firewall-gateway-1 cpu=0.65% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.48% mem=1.138GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=0.52% mem=29.87MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.05% mem=223.6MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:45Z
+ai_mesh_firewall-gateway-1 cpu=0.66% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.48% mem=1.138GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=0.49% mem=29.28MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=2.98% mem=224MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:50Z
+ai_mesh_firewall-gateway-1 cpu=0.61% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.47% mem=1.138GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=0.48% mem=29.64MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.04% mem=223.1MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:54Z
+ai_mesh_firewall-gateway-1 cpu=0.71% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.51% mem=1.138GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=1.31% mem=29.43MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=2.96% mem=223.9MiB / 2.5GiB pids=11
+---
+2026-08-14T11:31:59Z
+ai_mesh_firewall-gateway-1 cpu=0.62% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=0.49% mem=1.138GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=0.49% mem=29.45MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.03% mem=223.1MiB / 2.5GiB pids=11
+---
+2026-08-14T11:32:03Z
+ai_mesh_firewall-gateway-1 cpu=0.72% mem=1.619GiB / 7GiB pids=128
+ai_mesh_firewall-control-1 cpu=8.26% mem=1.138GiB / 2.5GiB pids=41
+ai_mesh_firewall-redis-1 cpu=0.51% mem=29.45MiB / 1GiB pids=7
+ai_mesh_firewall-postgres-1 cpu=0.04% mem=223.1MiB / 2.5GiB pids=11
+---
+2026-08-14T11:32:08Z

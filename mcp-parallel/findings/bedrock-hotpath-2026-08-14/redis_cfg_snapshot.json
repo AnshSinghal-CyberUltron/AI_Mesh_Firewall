@@ -1,0 +1,18 @@
+{
+  "captured_at_utc": "2026-08-14T11:26:34.582714+00:00",
+  "org_slug": "zeroshield",
+  "config": {
+    "rate_limit_enabled": true,
+    "burst_limit": 150,
+    "requests_per_minute": 1000,
+    "org_tpm_limit": 0
+  },
+  "auth": {
+    "rate_limit_tpm": 100000,
+    "rpm_limit": null,
+    "org_slug": "zeroshield",
+    "is_active": true,
+    "prefix": "dMs8qliW"
+  },
+  "notes": "Secrets redacted. Full original JSON kept only on local /tmp for restore."
+}

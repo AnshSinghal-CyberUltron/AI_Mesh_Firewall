@@ -176,7 +176,7 @@ def test_model_routing_stage_carries_routing_transparency(base_metrics):
             "original_model": "gpt-5.2",
             "selected_model": "Haiku",
             "routing_reason": "Adjudicator pick",
-            "decision_source": "policy_adjudicator",
+            "decision_source": "deterministic_weighted",
             "decision_factors": ["latency"],
             "weights": {"latency": 0.5},
         },
@@ -187,6 +187,6 @@ def test_model_routing_stage_carries_routing_transparency(base_metrics):
     _assert_stage_contract(routing)
     for key in ROUTING_STAGE_KEYS:
         assert key in routing, f"missing {key}"
-    assert routing["decision_source"] == "policy_adjudicator"
+    assert routing["decision_source"] == "deterministic_weighted"
     assert routing["guard_reason"]
     assert routing["route_destination"] == "llm"

@@ -474,6 +474,49 @@ def live_url():
     yield f"http://127.0.0.1:{port}"
     server.should_exit = True; th.join(timeout=5)
 
+async def test_circuit_breaker_open_without_fallback_returns_503(monkeypatch):
+    """CB OPEN with no ModelState fallback → 503 circuit_breaker_open (not silent)."""
+    from ai_mesh_gateway.circuit_breaker import CircuitBreaker, CircuitState
+
+    async with _env_ctx(monkeypatch) as env:
+        cb = CircuitBreaker(env.state, error_threshold=0.5, min_requests=1, cooldown_seconds=120)
+        # Force OPEN without waiting for error window
+        await env.state.set("circuit:state:gpt-4o-mini", CircuitState.OPEN.value)
+        await env.state.set("circuit:open_at:gpt-4o-mini", str(time.time()))
+        monkeypatch.setattr(gm, "CIRCUIT_BREAKER", cb)
+        with pytest.raises(openai.APIStatusError) as ei:
+            await env.client.chat.completions.create(model=PRIMARY, messages=MSG)
+        assert ei.value.status_code == 503
+        body = ei.value.response.json()
+        err = body.get("error") or body
+        assert err.get("code") in ("circuit_breaker_open", "kill_switch_active")
+        assert UPSTREAM == []
+
+
+async def test_circuit_breaker_open_with_model_state_fallback_reroutes(monkeypatch):
+    """CB OPEN + ModelState.fallback_model → silent 200 on fallback (upstream proves ALT)."""
+    from ai_mesh_gateway.circuit_breaker import CircuitBreaker, CircuitState
+
+    async with _env_ctx(monkeypatch) as env:
+        await env.state.set(
+            f"model_state:default:{PRIMARY}",
+            json.dumps({
+                "status": "active",
+                "action": "reroute",
+                "fallback_model": ALT,
+                "risk_score": 0,
+                "threshold": 80,
+            }),
+        )
+        cb = CircuitBreaker(env.state, error_threshold=0.5, min_requests=1, cooldown_seconds=120)
+        await env.state.set(f"circuit:state:{PRIMARY}", CircuitState.OPEN.value)
+        await env.state.set(f"circuit:open_at:{PRIMARY}", str(time.time()))
+        monkeypatch.setattr(gm, "CIRCUIT_BREAKER", cb)
+        r = await env.client.chat.completions.create(model=PRIMARY, messages=MSG)
+        assert r.choices[0].message.content
+        assert [b["model"] for b in UPSTREAM] == [ALT]
+
+
 async def test_live_killswitch_over_a_real_socket(live_url):
     """Real TCP socket, real chunked transfer. (a) A killed model on stream=true yields a
     503 JSON envelope with no SSE framing and no [DONE] — nothing partial is committed to

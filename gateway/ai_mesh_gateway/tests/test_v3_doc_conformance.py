@@ -1257,7 +1257,7 @@ async def doc_routed(monkeypatch):
     real._config = {"litellm_default_model": ""}
     real._active_model_names = list(names)
     real._qualified_model_names = set(names)
-    _resolved_main().LLM_ROUTER.adjudicate_model_selection = real.adjudicate_model_selection
+    _resolved_main().LLM_ROUTER.select_model = real.select_model
     _resolved_main().LLM_ROUTER.resolve_runtime_selection = real.resolve_runtime_selection
     _resolved_main().LLM_ROUTER.get_model_list = MagicMock(return_value=[
         {"id": n, "object": "model", "created": 1704067200, "owned_by": "openai"}

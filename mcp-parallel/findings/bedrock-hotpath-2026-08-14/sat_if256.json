@@ -1,0 +1,153 @@
+{
+  "mode": "chat",
+  "gateway": "http://ec2-35-154-124-71.ap-south-1.compute.amazonaws.com:8300",
+  "workers": 32,
+  "conn": 8,
+  "inflight": 256,
+  "duration_s": 31.505,
+  "requests": 867,
+  "ok": 775,
+  "errors": 92,
+  "error_rate": 0.1061,
+  "rps": 27.52,
+  "ok_rps": 24.6,
+  "scan_only": 0,
+  "codes": {
+    "200": 775,
+    "422": 87,
+    "500": 3,
+    "503": 2
+  },
+  "errors_by_signature": {
+    "HTTP 422 no_provider_configured No organization inference model is configured. Connect your provider API key under Firewall \u2192 Multi-Model Governance (1.5) \u2192 Model Connection. Organization keys": 87,
+    "HTTP 500 gateway_internal_error An internal gateway error occurred.": 3,
+    "HTTP 503 503 The inference provider is temporarily unavailable. Please try again.": 2
+  },
+  "client_latency_ms": {
+    "n": 867,
+    "mean": 6926.505,
+    "p50": 6700.916,
+    "p90": 9400.701,
+    "p95": 10691.026,
+    "p99": 12407.649,
+    "max": 15339.925
+  },
+  "addon_latency_ms": {
+    "n": 775,
+    "mean": 5232.97,
+    "p50": 5138.2,
+    "p90": 7462.3,
+    "p95": 8031.4,
+    "p99": 9111.3,
+    "max": 12299.3
+  },
+  "stage_latency_ms": {
+    "auth": {
+      "n": 775,
+      "mean": 232.094,
+      "p50": 80.0,
+      "p90": 816.4,
+      "p95": 1000.8,
+      "p99": 1171.5,
+      "max": 1266.2
+    },
+    "rate_limit": {
+      "n": 775,
+      "mean": 131.229,
+      "p50": 41.2,
+      "p90": 383.9,
+      "p95": 488.9,
+      "p99": 833.2,
+      "max": 1018.9
+    },
+    "policy": {
+      "n": 775,
+      "mean": 129.096,
+      "p50": 99.0,
+      "p90": 280.7,
+      "p95": 377.8,
+      "p99": 614.6,
+      "max": 1093.4
+    },
+    "input_scan": {
+      "n": 775,
+      "mean": 2702.285,
+      "p50": 2615.7,
+      "p90": 3757.6,
+      "p95": 4134.0,
+      "p99": 4935.0,
+      "max": 5938.4
+    },
+    "kill_switch": {
+      "n": 775,
+      "mean": 80.07,
+      "p50": 12.8,
+      "p90": 278.4,
+      "p95": 342.2,
+      "p99": 690.9,
+      "max": 751.8
+    },
+    "model_routing": {
+      "n": 775,
+      "mean": 379.058,
+      "p50": 121.6,
+      "p90": 1095.9,
+      "p95": 2083.0,
+      "p99": 2803.0,
+      "max": 3901.5
+    },
+    "model_input": {
+      "n": 775,
+      "mean": 34.643,
+      "p50": 10.5,
+      "p90": 99.4,
+      "p95": 139.7,
+      "p99": 272.8,
+      "max": 665.9
+    },
+    "model_output": {
+      "n": 775,
+      "mean": 1461.1,
+      "p50": 1551.6,
+      "p90": 2258.3,
+      "p95": 2534.8,
+      "p99": 3701.3,
+      "max": 11506.8
+    },
+    "output_guardrail": {
+      "n": 775,
+      "mean": 1281.925,
+      "p50": 1242.1,
+      "p90": 2251.6,
+      "p95": 2738.2,
+      "p99": 3703.1,
+      "max": 4187.9
+    },
+    "total": {
+      "n": 775,
+      "mean": 6694.069,
+      "p50": 6547.3,
+      "p90": 9080.6,
+      "p95": 9780.5,
+      "p99": 10906.2,
+      "max": 14929.9
+    },
+    "addon": {
+      "n": 775,
+      "mean": 5232.97,
+      "p50": 5138.2,
+      "p90": 7462.3,
+      "p95": 8031.4,
+      "p99": 9111.3,
+      "max": 12299.3
+    }
+  },
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": "",
+    "full_nine_stages": true,
+    "unique_prompt": true
+  },
+  "_wall_orchestrated": 31.67,
+  "_returncode": 0
+}

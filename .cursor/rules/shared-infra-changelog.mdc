@@ -13,6 +13,11 @@ affect the shared stack are mirrored here, in `docs/perf/CHANGELOG.md`,
 
 Newest first.
 
+## PERF-0014 — Full-VM parallel local + ECR builds (2026-08-12)
+- Makefile + `infra/scripts/vm-capacity.sh` + parallel `build-push-images.sh` /
+  `build-prod-images-local.sh`. Saturates 16c/60GiB via BuildKit + concurrent image jobs;
+  prod platform stays linux/arm64. AFFECTS: build tooling only.
+
 ## PERF-0013 — module-kpis type-safe metadata extraction + deploy (2026-07-03) [RUNNING STACK]
 - ModuleKpisView (dashboard "PROTECTED SUBMODULES") extracted the classifier's bounded
   10-key metadata set via KeyTransform (preserves native JSON types — bools/numbers)
