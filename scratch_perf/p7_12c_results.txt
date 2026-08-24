@@ -1,9 +1,0 @@
-PROFILE 12c/60g (--cpus=12 --memory=60g) — item 23
-detector: gateway 12 workers / control 12 workers (cpu_budget=12, asgi_threads=24, ram_gib=58.85 [capped at physical])
-gateway12: rps=5140 p99=270ms err=0 cores=8.2-8.8/12 mem=2.43GiB OOMKilled=false
-  -> ALL 12 workers engaged + evenly balanced (per-worker CPU 11.2-12.4% each; master 0.1%)
-  -> cores capped ~8-9 by co-located generator on the SHARED 16-core host (load avg 12-20 during run), NOT the gateway
-control12 (item 17): rps=3060 p99=154ms err=0/65591 cores=10.37/12 pg=29/400 redis=123/10000 (no starvation)
-RAM: gateway 2.4GiB / control ~2-3GiB, both << 44GiB (0.75*58.85) headroom; no OOM
-NOTE: full 12/12 core saturation needs a dedicated load box; the 6c profile (item 22) DID saturate 6.07/6
-      because 6 < spare host cores. On 16 cores, generator(~6) + 12-core target can't both be satisfied.

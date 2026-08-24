@@ -1,9 +1,0 @@
-agent: cursor-ralph-iter36
-story: P4.13/P6.18 iter36 — ws blockers recheck + 3-transport R1 regression
-since: 2026-07-02T14:30:00Z
-status: released
-files:
-  - mcp-parallel/findings/p4-13/RECHECK_ITER36.md
-  - docs/mcp/PARALLEL_CLAIMS.md
-  - .cursor/ralph/scratchpad.md
-  - scripts/ralph/mcp_progress.md

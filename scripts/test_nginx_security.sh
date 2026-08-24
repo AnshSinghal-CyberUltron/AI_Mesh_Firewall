@@ -15,6 +15,7 @@ SSL="${ROOT}/deploy/nginx-ssl.conf"
 INC="${ROOT}/deploy/security-headers.inc"
 EDGE="${ROOT}/deploy/edge-error.inc"
 EDGE_HTTPS="${ROOT}/deploy/require-edge-https.inc"
+OPENAPI_DENY="${ROOT}/deploy/deny-public-openapi.inc"
 DF="${ROOT}/deploy/Dockerfile.nginx"
 
 [[ -f "${HTTP}" ]] || die "missing ${HTTP}"
@@ -22,6 +23,7 @@ DF="${ROOT}/deploy/Dockerfile.nginx"
 [[ -f "${INC}" ]] || die "missing ${INC} (shared header snippet)"
 [[ -f "${EDGE}" ]] || die "missing ${EDGE}"
 [[ -f "${EDGE_HTTPS}" ]] || die "missing ${EDGE_HTTPS} (CWE-319 cleartext gate)"
+[[ -f "${OPENAPI_DENY}" ]] || die "missing ${OPENAPI_DENY} (CDL #12 gateway OpenAPI gate)"
 [[ -f "${DF}" ]] || die "missing ${DF}"
 
 grep -q 'server_tokens off;' "${HTTP}" || die "deploy/nginx.conf missing server_tokens off;"
@@ -44,10 +46,16 @@ grep -q 'COPY deploy/security-headers.inc /etc/nginx/security-headers.inc' "${DF
   || die "Dockerfile.nginx must COPY security-headers.inc next to edge-error.inc (not into conf.d/)"
 grep -q 'COPY deploy/require-edge-https.inc /etc/nginx/require-edge-https.inc' "${DF}" \
   || die "Dockerfile.nginx must COPY require-edge-https.inc"
+grep -q 'COPY deploy/deny-public-openapi.inc /etc/nginx/deny-public-openapi.inc' "${DF}" \
+  || die "Dockerfile.nginx must COPY deny-public-openapi.inc"
 grep -E 'COPY deploy/security-headers.inc .*/conf.d/' "${DF}" \
   && die "security-headers.inc must not land in conf.d/ (auto-loaded as a vhost)"
 grep -c 'include /etc/nginx/require-edge-https.inc;' "${HTTP}" | grep -qx 3 \
-  || die "nginx.conf must include require-edge-https.inc on all 3 named HTTP vhosts"
+    || die "nginx.conf must include require-edge-https.inc on all 3 named HTTP vhosts"
+grep -q 'include /etc/nginx/deny-public-openapi.inc;' "${HTTP}" \
+  || die "nginx.conf must include deny-public-openapi.inc on the gateway vhost"
+grep -q 'include /etc/nginx/deny-public-openapi.inc;' "${SSL}" \
+  || die "nginx-ssl.conf must include deny-public-openapi.inc on the gateway vhost"
 awk '
   /listen[[:space:]]+80[[:space:]]+default_server/ { in_def=1 }
   in_def {
@@ -192,6 +200,7 @@ NGINX_MOUNTS=(
   -v "${INC}:/etc/nginx/security-headers.inc:ro"
   -v "${EDGE}:/etc/nginx/edge-error.inc:ro"
   -v "${EDGE_HTTPS}:/etc/nginx/require-edge-https.inc:ro"
+  -v "${OPENAPI_DENY}:/etc/nginx/deny-public-openapi.inc:ro"
   -v "${TMP}/edge:/etc/nginx/edge_errors:ro"
   -v "${TMP}/html:/usr/share/nginx/html:ro"
   -v "${TMP}/ssl:/etc/nginx/ssl:ro"
@@ -200,7 +209,7 @@ NGINX_MOUNTS=(
   --add-host demo:127.0.0.1
 )
 
-docker run --rm "${NGINX_MOUNTS[@]}" nginx:1.27-alpine \
+docker run --rm "${NGINX_MOUNTS[@]}" nginx:1.30-alpine \
   sh -c 'rm -f /etc/nginx/conf.d/default.conf && nginx -t' \
   || die "nginx -t failed with baked-path includes"
 
@@ -209,7 +218,7 @@ cid="$(docker run -d --rm \
   "${NGINX_MOUNTS[@]}" \
   -p 127.0.0.1:18091:80 \
   -p 127.0.0.1:18453:443 \
-  nginx:1.27-alpine \
+  nginx:1.30-alpine \
   sh -c 'rm -f /etc/nginx/conf.d/default.conf && nginx -g "daemon off;"')"
 cleanup_cid() { docker rm -f "${cid}" >/dev/null 2>&1 || true; }
 trap 'cleanup_cid; rm -rf "${TMP}"' EXIT
@@ -274,4 +283,13 @@ echo "${unk}" | grep -qE '^HTTP/1\.[01] 403' || die "unknown Host /login expecte
 okroot="$(curl -sI -H "Host: 127.0.0.1" "http://127.0.0.1:18091/")"
 echo "${okroot}" | grep -qE '^HTTP/1\.[01] 200' || die "default_server GET / expected 200 for ALB health, got:"$'\n'"${okroot}"
 
-pass "docker nginx -t + /login headers + unknown-Host 403"
+gw_oa="$(curl -sI -H "Host: aimeshgateway.zeroshield.ai" \
+  -H "X-Forwarded-Proto: https" "http://127.0.0.1:18091/openapi.json")"
+echo "${gw_oa}" | grep -qE '^HTTP/1\.[01] 401' \
+  || die "gateway /openapi.json expected 401, got:"$'\n'"${gw_oa}"
+gw_docs="$(curl -sI -H "Host: aimeshgateway.zeroshield.ai" \
+  -H "X-Forwarded-Proto: https" "http://127.0.0.1:18091/docs")"
+echo "${gw_docs}" | grep -qE '^HTTP/1\.[01] 401' \
+  || die "gateway /docs expected 401, got:"$'\n'"${gw_docs}"
+
+pass "docker nginx -t + /login headers + unknown-Host 403 + gateway OpenAPI 401"

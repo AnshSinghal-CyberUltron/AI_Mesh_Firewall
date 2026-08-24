@@ -1,9 +1,0 @@
-agent: cursor-ralph-iter1
-story: C0
-files:
-  - docs/mcp/PARALLEL_CLAIMS.md
-  - mcp-parallel/**
-  - docs/mcp/**
-since: 2026-07-02T07:15:00Z
-status: released
-session: Cursor Ralph iter 1

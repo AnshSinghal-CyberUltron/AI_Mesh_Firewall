@@ -118,3 +118,36 @@ class AnalyticsMetadataFallbackTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data[0]["ruleName"], "Block SSN")
         self.assertEqual(response.data[0]["policyCode"], "POL-1")
+
+    def test_analytics_endpoints_ignore_bulky_prompt_blobs(self):
+        """Classifier keys must still work when metadata also holds a huge prompt."""
+        blob = "SSN 123-45-6789 " + ("x" * 50_000)
+        EnforcementEvent.objects.create(
+            organization=self.org,
+            policy=None,
+            user_id=9,
+            action=ACTION_BLOCK,
+            metadata={
+                "prompt": blob,
+                "completion": blob,
+                "owasp_code": "LLM01",
+                "threat_category": "prompt injection",
+                "pii_detected": True,
+                "policy_violations": ["POL-1"],
+                "matched_policies": ["POL-1"],
+                "matched_rules": ["Block SSN"],
+                "security_risk_score": 91,
+            },
+        )
+        analytics = self.client.get("/api/policies/analytics/?days=7")
+        self.assertEqual(analytics.status_code, 200)
+        self.assertGreaterEqual(analytics.data["total_violations"], 1)
+        violators = self.client.get("/api/policies/top-violators/?days=7&limit=10")
+        self.assertEqual(violators.status_code, 200)
+        user_rows = [r for r in violators.data if r.get("endpoint_identifier") == "user-9"]
+        self.assertEqual(len(user_rows), 1)
+        self.assertIn("POL-1", user_rows[0]["violated_policy_codes"])
+        rules = self.client.get("/api/policy/top-rules/?days=7&limit=10")
+        self.assertEqual(rules.status_code, 200)
+        self.assertEqual(rules.data[0]["ruleName"], "Block SSN")
+        self.assertEqual(rules.data[0]["triggered"], 1)

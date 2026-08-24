@@ -1,8 +1,0 @@
-agent: cursor-ralph-iter1
-story: P1.1
-files:
-  - mcp-parallel/findings/**
-since: 2026-07-02T07:15:00Z
-status: released
-session: Cursor Ralph iter 1
-note: Playwright repro — stdio Linear OAuth buttons + no-URL error

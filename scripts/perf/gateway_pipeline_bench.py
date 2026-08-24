@@ -28,12 +28,17 @@ WORKERS = max(1, int(os.environ.get("WORKERS", "8")))
 CONN = max(1, int(os.environ.get("CONN", "8")))
 DURATION_S = float(os.environ.get("DURATION_S", "15"))
 TIMEOUT_S = float(os.environ.get("TIMEOUT_S", "120"))
+CONNECT_TIMEOUT_S = float(os.environ.get("CONNECT_TIMEOUT_S", "10"))
+RAMP_S = float(os.environ.get("RAMP_S", "0"))
+SSL_VERIFY = os.environ.get("SSL_VERIFY", "1").strip().lower() not in ("0", "false", "no", "off")
+HTTP_HOST = os.environ.get("HTTP_HOST", "").strip()
 TARGET_CALLS = int(os.environ.get("TARGET_CALLS", "0"))  # 0 = time-based
 OUT = os.environ.get("OUT", "")
 MODEL = os.environ.get("MODEL", "gpt-4o-mini")
 PROMPT = os.environ.get("PROMPT", "Summarize the weather in one short sentence.")
 UNIQUE_PROMPT = os.environ.get("UNIQUE_PROMPT", "0").strip().lower() in ("1", "true", "yes", "on")
 MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "16"))
+ENABLE_ROUTING = os.environ.get("ENABLE_ROUTING", "1").strip().lower() not in ("0", "false", "no", "off")
 STAGE_NAMES = (
     "auth", "rate_limit", "policy", "input_scan", "kill_switch",
     "model_routing", "model_input", "model_output", "output_guardrail",
@@ -92,6 +97,14 @@ def addon_from_trace(trace: dict | None) -> tuple[float | None, dict]:
     by_stage["addon"] = addon
     return addon, by_stage
 
+STUB_IDS = frozenset({"chatcmpl-loadtest-stub"})  # loadtest stub model IDs frozenset means O(1) lookup
+REQUIRED_LIVE = ("input_scan", "output_guardrail")
+
+def compute_full_nine_stages(
+    *,
+    mode: str,
+)
+
 
 def _err_sig(status: int, body: dict | str, exc: str) -> str:
     if exc:
@@ -131,6 +144,7 @@ async def _one_chat(client: httpx.AsyncClient) -> dict:
                 "messages": [{"role": "user", "content": _chat_prompt()}],
                 "max_tokens": MAX_TOKENS,
                 "stream": False,
+                **({} if ENABLE_ROUTING else {"enable_routing": False}),
             },
         )
         wall_ms = (time.perf_counter() - t0) * 1000
@@ -197,9 +211,16 @@ async def _one_health(client: httpx.AsyncClient) -> dict:
 
 async def _worker_loop(quota: list, stop_at: float, results: list):
     limits = httpx.Limits(max_connections=CONN, max_keepalive_connections=CONN)
-    timeout = httpx.Timeout(TIMEOUT_S, connect=10.0)
+    timeout = httpx.Timeout(TIMEOUT_S, connect=CONNECT_TIMEOUT_S)
     fire = _one_chat if MODE == "chat" else _one_health
-    async with httpx.AsyncClient(http2=False, limits=limits, timeout=timeout) as client:
+    client_headers = {"Host": HTTP_HOST} if HTTP_HOST else None
+    async with httpx.AsyncClient(
+        http2=False,
+        limits=limits,
+        timeout=timeout,
+        verify=SSL_VERIFY,
+        headers=client_headers,
+    ) as client:
         sem = asyncio.Semaphore(CONN)
 
         async def _run_one():
@@ -207,6 +228,16 @@ async def _worker_loop(quota: list, stop_at: float, results: list):
                 return await fire(client)
 
         inflight: set[asyncio.Task] = set()
+        ramp_t0 = time.monotonic()
+
+        def inflight_cap() -> int:
+            if RAMP_S <= 0:
+                return CONN
+            elapsed = time.monotonic() - ramp_t0
+            if elapsed >= RAMP_S:
+                return CONN
+            return max(1, int(CONN * (elapsed / RAMP_S)))
+
         while True:
             if TARGET_CALLS and quota[0] <= 0 and not inflight:
                 break
@@ -215,7 +246,7 @@ async def _worker_loop(quota: list, stop_at: float, results: list):
             can_launch = (not TARGET_CALLS or quota[0] > 0) and (
                 TARGET_CALLS or time.monotonic() < stop_at
             )
-            while can_launch and len(inflight) < CONN:
+            while can_launch and len(inflight) < inflight_cap():
                 if TARGET_CALLS:
                     quota[0] -= 1
                 inflight.add(asyncio.create_task(_run_one()))
@@ -311,6 +342,7 @@ def run() -> dict:
         "workers": WORKERS,
         "conn": CONN,
         "inflight": WORKERS * CONN,
+        "ramp_s": RAMP_S,
         "duration_s": round(elapsed, 3),
         "requests": n,
         "ok": ok,

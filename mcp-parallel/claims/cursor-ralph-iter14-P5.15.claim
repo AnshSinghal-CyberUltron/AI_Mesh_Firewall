@@ -1,7 +1,0 @@
-{
-  "agent": "cursor-ralph-iter14",
-  "story": "P5.15",
-  "scope": ["frontend/**", "mcp-parallel/findings/p5-15/**", "docs/mcp/PARALLEL_CLAIMS.md", ".cursor/ralph/scratchpad.md"],
-  "since": "2026-07-02T16:00:00Z",
-  "status": "released"
-}

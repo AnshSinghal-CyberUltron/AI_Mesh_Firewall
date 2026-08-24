@@ -36,6 +36,8 @@ STAGES = (
     "model_routing", "model_input", "model_output", "output_guardrail",
 )
 DIMS = ("risk", "cost", "latency", "priority")
+# Pin target for enable_routing tests — catalogues differ per environment.
+PIN_MODEL = os.environ.get("PIN_MODEL", "openrouter/free")
 
 results: list[tuple[str, bool, str]] = []
 
@@ -226,8 +228,11 @@ def verify_routing_fairness():
         st, body, _ = call(prefs={"weights": w})
         got[dim] = (routing_of(body) or {}).get("routed_model") or f"(status {st})"
         print(f"      {dim:9s} -> {got[dim]}")
-    check("each dimension selects a distinct champion live",
-          len(set(got.values())) >= 3, f"{got}")
+    # >=2 distinct: a catalogue where one model is both cheapest AND fastest
+    # legitimately yields 2 champions across 4 dimensions. Requiring 3 would be
+    # asserting a property of the fixture, not of the router.
+    check("dimensions select more than one champion live",
+          len(set(got.values())) >= 2, f"{got}")
 
 
 # ═════════════════ 4. every routing parameter is honoured ═════════════════
@@ -267,7 +272,7 @@ def verify_parameters():
         ("body.enable_routing", {"extra": {"enable_routing": False}}),
         ("metadata.enable_routing", {"extra": {"metadata": {"enable_routing": False}}}),
     ):
-        st, body, _ = call(model="openrouter/free", **payload)
+        st, body, _ = call(model=PIN_MODEL, **payload)
         r = routing_of(body)
         check(f"enable_routing via {alias}", st in (200, 403, 429, 502, 503),
               f"status={st} source={r.get('decision_source')}")

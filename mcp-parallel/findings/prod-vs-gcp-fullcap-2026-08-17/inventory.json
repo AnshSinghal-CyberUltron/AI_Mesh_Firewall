@@ -1,8 +1,0 @@
-{
-  "prod": {
-    "raw": "NPROC=8\nARCH=aarch64\n               total        used        free      shared  buff/cache   available\nMem:            15Gi       3.4Gi       8.0Gi       426Mi       3.8Gi        11Gi\nNano=0 Mem=12884901888\n8\n6\n65535\n65535"
-  },
-  "gcp": {
-    "raw": "NPROC=16\nARCH=x86_64\n               total        used        free      shared  buff/cache   available\nMem:            58Gi        14Gi       1.0Gi       629Mi        44Gi        44Gi\nNano=0 Mem=0 CpuQuota=0\n16\n16"
-  }
-}

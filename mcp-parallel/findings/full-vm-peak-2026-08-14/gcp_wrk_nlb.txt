@@ -1,175 +1,0 @@
-tool=bombardier (hey/wrk not installed; hey github/s3 download failed)
-host=ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal arch=x86_64
-url=https://aimeshgateway.zeroshield.ai/health
-timestamp_utc=2026-08-14T13:05:44Z
-note=GOMAXPROCS maps wrk -t; -c maps wrk -c; duration 15s; --fasthttp HTTP/1.1 keepalive TLS
-
-========== RUN 1: 8 threads, 400 conns, 15s ==========
-cmd: GOMAXPROCS=8 /tmp/bombardier -c 400 -d 15s -t 5s -l --fasthttp https://aimeshgateway.zeroshield.ai/health
-
-Bombarding https://aimeshgateway.zeroshield.ai/health for 15s using 400 connection(s)
- 00m14s 00m13s 00m13s 00m13s 00m13s 00m13s 00m12s 00m12s 00m12s 00m12s 00m12s 00m11s 00m11s 00m11s 00m11s 00m11s 00m10s 00m10s 00m10s 00m10s 00m10s 00m09s 00m09s 00m09s 00m09s 00m09s 00m08s 00m08s 00m08s 00m08s 00m08s 00m07s 00m07s 00m07s 00m07s 00m07s 00m06s 00m06s 00m06s 00m06s 00m06s 00m05s 00m05s 00m05s 00m05s 00m05s 00m04s 00m04s 00m04s 00m04s 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 15s
-Done!
-Statistics        Avg      Stdev        Max
-  Reqs/sec      3416.73    1129.07    9951.92
-  Latency      116.62ms    66.21ms   703.99ms
-  Latency Distribution
-     50%    98.27ms
-     75%   137.44ms
-     90%   196.07ms
-     95%   250.33ms
-     99%   371.97ms
-  HTTP codes:
-    1xx - 0, 2xx - 51623, 3xx - 0, 4xx - 0, 5xx - 0
-    others - 0
-  Throughput:     2.96MB/s
-
-========== RUN 2: 16 threads, 2000 conns, 15s ==========
-cmd: GOMAXPROCS=16 /tmp/bombardier -c 2000 -d 15s -t 5s -l --fasthttp https://aimeshgateway.zeroshield.ai/health
-
-Bombarding https://aimeshgateway.zeroshield.ai/health for 15s using 2000 connection(s)
- 00m14s 00m14s 00m14s 00m14s 00m13s 00m13s 00m13s 00m12s 00m12s 00m12s 00m12s 00m12s 00m11s 00m11s 00m11s 00m11s 00m10s 00m10s 00m10s 00m10s 00m10s 00m09s 00m09s 00m09s 00m09s 00m09s 00m08s 00m08s 00m08s 00m08s 00m08s 00m07s 00m07s 00m07s 00m07s 00m07s 00m06s 00m06s 00m06s 00m06s 00m06s 00m05s 00m05s 00m05s 00m05s 00m05s 00m04s 00m04s 00m04s 00m04s 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 15s
-Done!
-Statistics        Avg      Stdev        Max
-  Reqs/sec      2903.87    1403.36    8832.10
-  Latency      673.57ms      2.20s     16.21s
-  Latency Distribution
-     50%   283.74ms
-     75%   433.24ms
-     90%   621.87ms
-     95%   768.64ms
-     99%     15.36s
-  HTTP codes:
-    1xx - 0, 2xx - 45360, 3xx - 0, 4xx - 0, 5xx - 0
-    others - 0
-  Throughput:     3.49MB/s
-
-========== NLB SWEET-SPOT SWEEP 5s GOMAXPROCS=16 ==========
-
------ GOMAXPROCS=16 -c 64 -d 5s TLS -----
-Bombarding https://aimeshgateway.zeroshield.ai/health for 5s using 64 connection(s)
- 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 5s
-Done!
-Statistics        Avg      Stdev        Max
-  Reqs/sec      4309.99    1301.43    7053.74
-  Latency       14.84ms     9.68ms   267.74ms
-  Latency Distribution
-     50%    12.46ms
-     75%    18.46ms
-     90%    27.53ms
-     95%    31.75ms
-     99%    40.20ms
-  HTTP codes:
-    1xx - 0, 2xx - 21592, 3xx - 0, 4xx - 0, 5xx - 0
-    others - 0
-  Throughput:     3.68MB/s
-
------ GOMAXPROCS=16 -c 128 -d 5s TLS -----
-Bombarding https://aimeshgateway.zeroshield.ai/health for 5s using 128 connection(s)
- 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 5s
-Done!
-Statistics        Avg      Stdev        Max
-  Reqs/sec      3004.07     629.77    4798.39
-  Latency       42.44ms    21.68ms   249.01ms
-  Latency Distribution
-     50%    38.55ms
-     75%    53.04ms
-     90%    68.93ms
-     95%    81.26ms
-     99%   116.77ms
-  HTTP codes:
-    1xx - 0, 2xx - 15117, 3xx - 0, 4xx - 0, 5xx - 0
-    others - 0
-  Throughput:     2.60MB/s
-
------ GOMAXPROCS=16 -c 192 -d 5s TLS -----
-Bombarding https://aimeshgateway.zeroshield.ai/health for 5s using 192 connection(s)
- 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 5s
-Done!
-Statistics        Avg      Stdev        Max
-  Reqs/sec      3095.54     696.73    6990.47
-  Latency       61.58ms    38.66ms   362.39ms
-  Latency Distribution
-     50%    52.41ms
-     75%    73.86ms
-     90%   103.40ms
-     95%   129.15ms
-     99%   222.59ms
-  HTTP codes:
-    1xx - 0, 2xx - 15644, 3xx - 0, 4xx - 0, 5xx - 0
-    others - 0
-  Throughput:     2.74MB/s
-
------ GOMAXPROCS=16 -c 256 -d 5s TLS -----
-Bombarding https://aimeshgateway.zeroshield.ai/health for 5s using 256 connection(s)
- 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 5s
-Done!
-Statistics        Avg      Stdev        Max
-  Reqs/sec      2985.03     788.98    5465.10
-  Latency       84.87ms    62.11ms   419.92ms
-  Latency Distribution
-     50%    65.35ms
-     75%   103.76ms
-     90%   162.65ms
-     95%   224.22ms
-     99%   318.93ms
-  HTTP codes:
-    1xx - 0, 2xx - 15208, 3xx - 0, 4xx - 0, 5xx - 0
-    others - 0
-  Throughput:     2.68MB/s
-
-========== NLB 15s CONFIRM GOMAXPROCS=16 around c=64 ==========
-
------ GOMAXPROCS=16 -c 32 -d 15s TLS -----
-Bombarding https://aimeshgateway.zeroshield.ai/health for 15s using 32 connection(s)
- 00m14s 00m13s 00m13s 00m13s 00m13s 00m13s 00m12s 00m12s 00m12s 00m12s 00m12s 00m11s 00m11s 00m11s 00m11s 00m11s 00m10s 00m10s 00m10s 00m10s 00m10s 00m09s 00m09s 00m09s 00m09s 00m09s 00m08s 00m08s 00m08s 00m08s 00m08s 00m07s 00m07s 00m07s 00m07s 00m07s 00m06s 00m06s 00m06s 00m06s 00m06s 00m05s 00m05s 00m05s 00m05s 00m05s 00m04s 00m04s 00m04s 00m04s 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 15s
-Done!
-Statistics        Avg      Stdev        Max
-  Reqs/sec      2847.33     301.75    3590.10
-  Latency       11.24ms     3.94ms   161.91ms
-  Latency Distribution
-     50%    10.53ms
-     75%    13.39ms
-     90%    16.57ms
-     95%    18.72ms
-     99%    23.50ms
-  HTTP codes:
-    1xx - 0, 2xx - 42721, 3xx - 0, 4xx - 0, 5xx - 0
-    others - 0
-  Throughput:     2.38MB/s
-
------ GOMAXPROCS=16 -c 48 -d 15s TLS -----
-Bombarding https://aimeshgateway.zeroshield.ai/health for 15s using 48 connection(s)
- 00m14s 00m13s 00m13s 00m13s 00m13s 00m13s 00m12s 00m12s 00m12s 00m12s 00m12s 00m11s 00m11s 00m11s 00m11s 00m11s 00m10s 00m10s 00m10s 00m10s 00m10s 00m09s 00m09s 00m09s 00m09s 00m09s 00m08s 00m08s 00m08s 00m08s 00m08s 00m07s 00m07s 00m07s 00m07s 00m07s 00m06s 00m06s 00m06s 00m06s 00m06s 00m05s 00m05s 00m05s 00m05s 00m05s 00m04s 00m04s 00m04s 00m04s 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 15s
-Done!
-Statistics        Avg      Stdev        Max
-  Reqs/sec      2657.47     560.12    3570.19
-  Latency       18.05ms    12.72ms   500.57ms
-  Latency Distribution
-     50%    15.60ms
-     75%    20.37ms
-     90%    28.32ms
-     95%    35.53ms
-     99%    52.35ms
-  HTTP codes:
-    1xx - 0, 2xx - 19311, 3xx - 0, 4xx - 0, 5xx - 20589
-    others - 0
-  Throughput:     1.92MB/s
-
------ GOMAXPROCS=16 -c 64 -d 15s TLS -----
-Bombarding https://aimeshgateway.zeroshield.ai/health for 15s using 64 connection(s)
- 00m14s 00m13s 00m13s 00m13s 00m13s 00m13s 00m12s 00m12s 00m12s 00m12s 00m12s 00m11s 00m11s 00m11s 00m11s 00m11s 00m10s 00m10s 00m10s 00m10s 00m10s 00m09s 00m09s 00m09s 00m09s 00m09s 00m08s 00m08s 00m08s 00m08s 00m08s 00m07s 00m07s 00m07s 00m07s 00m07s 00m06s 00m06s 00m06s 00m06s 00m06s 00m05s 00m05s 00m05s 00m05s 00m05s 00m04s 00m04s 00m04s 00m04s 00m04s 00m03s 00m03s 00m03s 00m03s 00m03s 00m02s 00m02s 00m02s 00m02s 00m02s 00m01s 00m01s 00m01s 00m01s 00m01s 15s
-Done!
-Statistics        Avg      Stdev        Max
-  Reqs/sec      3051.16    1204.22    6505.30
-  Latency       20.96ms    10.81ms   429.55ms
-  Latency Distribution
-     50%    18.74ms
-     75%    27.35ms
-     90%    35.88ms
-     95%    39.93ms
-     99%    58.07ms
-  HTTP codes:
-    1xx - 0, 2xx - 26167, 3xx - 0, 4xx - 0, 5xx - 19648
-    others - 0
-  Throughput:     2.28MB/s

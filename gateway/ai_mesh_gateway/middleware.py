@@ -32,9 +32,6 @@ REDIS_KEY_PREFIX = "auth:apikey:"
 EXCLUDED_PATHS: frozenset[str] = frozenset({
     "/health",
     "/metrics",
-    "/docs",
-    "/redoc",
-    "/openapi.json",
     "/v1/mcp/health",
     # SEC-04 FIX: Admin routes now require authentication
     # "/v1/admin/logs",           # REMOVED - requires auth

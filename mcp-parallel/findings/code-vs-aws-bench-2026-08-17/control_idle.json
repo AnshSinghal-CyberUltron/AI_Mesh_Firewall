@@ -1,9 +1,0 @@
-{
-  "control": {
-    "raw": "n 20 ok 20\np50 1.713\np95 2.329\nsample (200, '{\"status\": \"ok\"}', 4.143748999922536)"
-  },
-  "pg": {
-    "raw": "Timing is on.\n ok \n----\n  1\n(1 row)\n\nTime: 0.128 ms"
-  },
-  "stats": "2026-08-17T05:34:34Z\nai_mesh_firewall-nginx-1|0.00%|9.078MiB / 256MiB|9\nai_mesh_firewall-gateway-1|0.75%|1.315GiB / 12GiB|44\nai_mesh_firewall-control-1|0.43%|297MiB / 2.5GiB|29\nai_mesh_firewall-pgbouncer-1|0.01%|4.152MiB / 256MiB|1\nai_mesh_firewall-postgres-1|0.00%|358MiB / 2.5GiB|11\nai_mesh_firewall-redis-1|0.47%|13.09MiB / 1GiB|6"
-}

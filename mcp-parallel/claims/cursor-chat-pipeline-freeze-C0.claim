@@ -1,6 +1,0 @@
-agent: cursor-chat-pipeline-freeze
-story: C0-coordination
-scope: enforcement.py, policy_engine.py, tests/golden/, docs/pipeline/
-status: active
-since: 2026-07-02T09:15:00Z
-notes: Third parallel session — chat pipeline freeze. Does NOT own main.py until claim filed for 6b.

@@ -45,6 +45,11 @@ PRESETS = {
 SENSITIVITIES = ["public", "internal", "confidential", "restricted"]
 FRAMEWORKS = ["SOC2", "ISO27001", "HIPAA", "GDPR", "PCI-DSS", "NIST"]
 # Casing / separator drift an operator or client realistically produces.
+# Models to use for pin/enable_routing tests. Override per environment — the local
+# org and prod have different catalogues, and pinning a non-existent model yields a
+# 404 that looks like a routing failure but is just a bad fixture.
+PIN_MODELS = [m.strip() for m in os.environ.get("PIN_MODELS", "openrouter/free,gpt-5.2").split(",") if m.strip()]
+
 FRAMEWORK_VARIANTS = [
     "soc2", "SOC 2", "iso27001", "ISO-27001", "hipaa", "Hippa",
     "gdpr", "pci-dss", "PCI_DSS", "pci dss", "nist", "NIST-CSF",
@@ -226,7 +231,7 @@ def run_matrix(repeats: int, live_infer: bool) -> list[Result]:
                           next(iter(winners), ""), ""))
 
     # I. enable_routing=false must pin the requested model (2)
-    for pinned in ("openrouter/free", "gpt-5.2"):
+    for pinned in PIN_MODELS:
         st, body = call(model=pinned, prefs={"enable_routing": False})
         served = routed_model(body)
         ok = st in ACCEPTABLE and (served in ("", pinned) or st != 200)

@@ -1,6 +1,0 @@
-agent: cursor-ralph-pipeline
-story: P4-item-14-output-redact
-scope: gateway/ai_mesh_gateway/enforcement.py, main.py (_apply_output_guard_nonstream + connected sync output block), tests/test_pipeline_output_redact.py
-status: active
-since: 2026-07-03T12:00:00Z
-notes: PIPELINE-0014 — output guard redact (not block) for maskable PII; byte-verify; enforce_output wiring

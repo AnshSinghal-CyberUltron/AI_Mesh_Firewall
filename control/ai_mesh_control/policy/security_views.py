@@ -1605,13 +1605,16 @@ class OwaspStatsView(APIView):
         base_events = EnforcementEvent.objects.filter(created_at__gte=since)
         events = _enforcement_events_for_request(request, base_events)
 
-        # Aggregate by owasp_code(s) from metadata (support multiple vectors per event)
+        # Extract owasp fields in SQL — do not haul full metadata JSONB (OOM).
         by_code = defaultdict(lambda: {"detected": 0, "blocked": 0})
-        for ev in events.values("metadata", "action"):
-            meta = ev.get("metadata") or {}
-            codes = meta.get("owasp_codes")
+        owasp_rows = events.annotate(
+            _owasp_codes=KeyTransform("owasp_codes", "metadata"),
+            _owasp_code=KeyTextTransform("owasp_code", "metadata"),
+        ).values("action", "_owasp_codes", "_owasp_code")
+        for ev in owasp_rows.iterator(chunk_size=2000):
+            codes = ev.get("_owasp_codes")
             if codes is None:
-                single = (meta.get("owasp_code") or "").strip().upper()
+                single = (ev.get("_owasp_code") or "").strip().upper()
                 codes = [single] if single else []
             else:
                 codes = [str(c).strip().upper() for c in codes if c]

@@ -1,9 +1,0 @@
-agent: cursor-ralph-iter26
-story: P7.23 N2+N3 verify + P4.13/P6.18 iter26 recheck
-files:
-  - mcp-parallel/findings/p4-13/RECHECK_ITER26.md
-  - docs/mcp/PARALLEL_CLAIMS.md
-  - .cursor/ralph/scratchpad.md
-  - scripts/ralph/mcp_progress.md
-since: 2026-07-02T11:35:00Z
-status: released
