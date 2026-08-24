@@ -2,6 +2,15 @@
 __pycache__/
 *.pyc
 .venv/
+.venv312/
+
+# Local AI-tool / agent working dirs (runtime state, not source)
+.claude/
+.claude-flow/
+.cursor/
+.swarm/
+.skill-workspace/
+
 node_modules/
 dist/
 *.egg-info/
