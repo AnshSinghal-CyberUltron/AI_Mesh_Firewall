@@ -61,13 +61,34 @@ test("honestStageAction downgrades a no-op redact to flag", () => {
 
 test("honestStageAction keeps allow when scan_outcome is analyzed", () => {
   assert.equal(
-    honestStageAction({ action: "allow", scan_outcome: "analyzed", redact_noop: true }),
+    honestStageAction({ action: "allow", scan_outcome: "analyzed", redact_noop: true, latency_ms: 4.5 }),
     "allow",
   );
   assert.equal(
     honestStageAction({ action: "redact", scan_outcome: "analyzed", redact_noop: true }),
     "allow",
   );
+});
+
+test("honestStageAction renders 0ms allow as skip, not allow", () => {
+  assert.equal(honestStageAction({ action: "allow", latency_ms: 0 }), "skip");
+  assert.equal(honestStageAction({ action: "allow", latency_ms: 1.2 }), "allow");
+  assert.equal(honestStageAction({ action: "block", latency_ms: 0 }), "block");
+  assert.equal(honestStageAction({ action: "skip", latency_ms: 0 }), "skip");
+});
+
+test("buildHonestTraceStages badges a 0ms allow stage as skipped", () => {
+  const nodes = buildHonestTraceStages(
+    [
+      { stage: "kill_switch", action: "allow", latency_ms: 0 },
+      { stage: "input_scan", action: "allow", latency_ms: 4.5 },
+    ],
+    "allow",
+    {},
+  );
+  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  assert.equal(byId.kill_switch.badge, "skipped");
+  assert.equal(byId.input_scan.badge, "allowed");
 });
 
 test("buildHonestTraceStages gives EACH stage its own badge (no global smear)", () => {

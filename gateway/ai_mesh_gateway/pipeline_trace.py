@@ -11,12 +11,16 @@ import time
 from typing import Any
 
 # Ordered pipeline stages (Module 1.1 trace contract).
+# Runtime order in proxy_chat: auth → kill_switch → rate_limit → policy →
+# input_scan → model_routing → model_input → model_output → output_guardrail.
+# The previous list put kill_switch after input_scan, which made skip-after-block
+# mark a stage that had already run as skip.
 PIPELINE_STAGE_NAMES: tuple[str, ...] = (
     "auth",
+    "kill_switch",
     "rate_limit",
     "policy",
     "input_scan",
-    "kill_switch",
     "model_routing",
     "model_input",
     "model_output",
@@ -25,10 +29,10 @@ PIPELINE_STAGE_NAMES: tuple[str, ...] = (
 
 _STAGE_METRIC_KEYS: tuple[str, ...] = (
     "auth_ms",
+    "kill_switch_ms",
     "rate_limit_ms",
     "policy_ms",
     "input_scan_ms",
-    "kill_switch_ms",
     "model_routing_ms",
     "model_input_ms",
     "model_output_ms",
@@ -674,6 +678,41 @@ REASON_CODE_LABELS: dict[str, str] = {
 }
 
 
+def compute_addon_split(metrics: dict[str, Any] | None, total_ms: float) -> dict[str, float]:
+    """Firewall tax split: pre-model, post-model, and input Tier-2.
+
+    T_addon_pre  = accept → first byte toward the model (total − model_output − post)
+    T_addon_post = after last model token until we close (output_guardrail)
+    T_t2_ms      = input Tier-2 (inside T_addon_pre; Phase 1 gate is pre − t2)
+    """
+    m = metrics if isinstance(metrics, dict) else {}
+    model_out = 0.0
+    post = 0.0
+    t2 = 0.0
+    try:
+        model_out = float(m.get("model_output_ms") or 0.0)
+    except (TypeError, ValueError):
+        model_out = 0.0
+    try:
+        post = float(m.get("output_guardrail_ms") or 0.0)
+    except (TypeError, ValueError):
+        post = 0.0
+    try:
+        t2 = float(m.get("tier2_ms") or 0.0)
+    except (TypeError, ValueError):
+        t2 = 0.0
+    try:
+        total_f = float(total_ms or 0.0)
+    except (TypeError, ValueError):
+        total_f = 0.0
+    pre = round(max(0.0, total_f - model_out - post), 1)
+    return {
+        "t_addon_pre_ms": pre,
+        "t_addon_post_ms": _round_ms(post),
+        "t_t2_ms": _round_ms(t2),
+    }
+
+
 def _round_ms(value: Any, default: float = 0.0) -> float:
     try:
         n = float(value)
@@ -922,6 +961,8 @@ def _metrics(stage_metrics: dict | None) -> dict[str, float]:
         "overhead_ms": _round_ms(sm.get("overhead_ms")),
         "stage_latency_sum_ms": _round_ms(sm.get("stage_latency_sum_ms")),
         "total_ms": _round_ms(sm.get("total_ms") or sm.get("total_hint_ms")),
+        "tier1_ms": tier1,
+        "tier2_ms": tier2,
     }
 
 
@@ -1015,7 +1056,7 @@ def build_pipeline_trace(
     # otherwise the §1.7 audit trail is self-contradictory (output blocked while
     # the model that generated the blocked content is marked skipped).
     _UPSTREAM_OF_MODEL = {
-        "auth", "rate_limit", "policy", "input_scan", "kill_switch", "model_routing",
+        "auth", "kill_switch", "rate_limit", "policy", "input_scan", "model_routing",
     }
     _model_skipped = bool(is_blocked and blocked_stage in _UPSTREAM_OF_MODEL) or bool(skip_inference)
 
@@ -1072,12 +1113,8 @@ def build_pipeline_trace(
         if blocked_stage == stage:
             return "block"
         if is_blocked and blocked_stage and stage != blocked_stage:
-            idx_order = [
-                "auth", "rate_limit", "policy", "input_scan", "kill_switch",
-                "model_routing", "model_input", "model_output", "output_guardrail",
-            ]
             try:
-                if idx_order.index(stage) > idx_order.index(blocked_stage):
+                if list(PIPELINE_STAGE_NAMES).index(stage) > list(PIPELINE_STAGE_NAMES).index(blocked_stage):
                     return "skip"
             except ValueError:
                 pass
@@ -1242,6 +1279,17 @@ def build_pipeline_trace(
             "prompt_out": prompt_preview if _action("auth") != "block" else "",
         },
         {
+            "name": "kill_switch",
+            "action": kill_switch_action,
+            "latency_ms": _latency("kill_switch"),
+            "detail": kill_switch_detail,
+            **_empty_stage_why_fields(),
+            **_decision_source_fields("kill_switch" if ks_rerouted or blocked_stage == "kill_switch" else ""),
+            "guard_reason": kill_switch_detail,
+            "prompt_in": prompt_preview,
+            "prompt_out": prompt_preview if kill_switch_action not in ("block",) else "",
+        },
+        {
             "name": "rate_limit",
             "action": _action("rate_limit"),
             "latency_ms": _latency("rate_limit"),
@@ -1308,17 +1356,6 @@ def build_pipeline_trace(
             "prompt_in": scan_input_preview,
             "prompt_out": forwarded_preview,
             **input_guard,
-        },
-        {
-            "name": "kill_switch",
-            "action": kill_switch_action,
-            "latency_ms": _latency("kill_switch"),
-            "detail": kill_switch_detail,
-            **_empty_stage_why_fields(),
-            **_decision_source_fields("kill_switch" if ks_rerouted or blocked_stage == "kill_switch" else ""),
-            "guard_reason": kill_switch_detail,
-            "prompt_in": scan_input_preview,
-            "prompt_out": scan_input_preview if kill_switch_action not in ("block",) else "",
         },
         {
             "name": "model_routing",
@@ -1434,10 +1471,7 @@ def build_pipeline_trace(
     # centrally, makes the invariant hold for ALL stages regardless of each stage's
     # own action branch. No-op when not blocked → redact/flag/allow are unaffected.
     if is_blocked and blocked_stage:
-        _stage_order = [
-            "auth", "rate_limit", "policy", "input_scan", "kill_switch",
-            "model_routing", "model_input", "model_output", "output_guardrail",
-        ]
+        _stage_order = list(PIPELINE_STAGE_NAMES)
         _b_idx = _stage_order.index(blocked_stage) if blocked_stage in _stage_order else -1
         _blocked_label = blocked_stage.replace("_", " ")
         _clear_keys = (
@@ -1564,5 +1598,6 @@ def build_pipeline_trace(
             "evaluator_model": evaluator_model,
         },
     }
+    trace_out.update(compute_addon_split(metrics, total))
     attach_latency_breakdown(trace_out)
     return trace_out

@@ -35,6 +35,10 @@ export const STAGE_LABELS = {
 // main.py:1566, which relabels redact->flag when the bytes are unchanged).
 export function honestStageAction(stage) {
   let a = String((stage && stage.action) || "allow").toLowerCase();
+  const lat = stage && stage.latency_ms;
+  if (typeof lat === "number" && lat === 0 && (a === "allow" || a === "")) {
+    return "skip";
+  }
   const noop = stage && ((stage.metadata && stage.metadata.redact_noop) || stage.redact_noop);
   const analyzed = stage && stage.scan_outcome === "analyzed";
   if (analyzed && a === "allow") return a;

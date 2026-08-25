@@ -234,10 +234,10 @@ export function normalizeStreamChatPipelineResult(
 /** Stage order aligned with gateway/simulator_routes.py pipeline visualization. */
 const PIPELINE_STAGE_ORDER = [
   "auth",
+  "kill_switch",
   "rate_limit",
   "policy",
   "input_scan",
-  "kill_switch",
   "model_routing",
   "model_input",
   "model_output",

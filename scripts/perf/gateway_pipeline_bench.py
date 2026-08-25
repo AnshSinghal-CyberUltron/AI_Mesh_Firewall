@@ -40,7 +40,7 @@ UNIQUE_PROMPT = os.environ.get("UNIQUE_PROMPT", "0").strip().lower() in ("1", "t
 MAX_TOKENS = int(os.environ.get("MAX_TOKENS", "16"))
 ENABLE_ROUTING = os.environ.get("ENABLE_ROUTING", "1").strip().lower() not in ("0", "false", "no", "off")
 STAGE_NAMES = (
-    "auth", "rate_limit", "policy", "input_scan", "kill_switch",
+    "auth", "kill_switch", "rate_limit", "policy", "input_scan",
     "model_routing", "model_input", "model_output", "output_guardrail",
 )
 
@@ -95,6 +95,14 @@ def addon_from_trace(trace: dict | None) -> tuple[float | None, dict]:
     addon = round(max(0.0, (total_f or 0.0) - model_out), 3) if total_f is not None else None
     by_stage["total"] = total_f
     by_stage["addon"] = addon
+    for key in ("t_addon_pre_ms", "t_addon_post_ms", "t_t2_ms"):
+        raw = trace.get(key)
+        if raw is None:
+            continue
+        try:
+            by_stage[key.replace("_ms", "")] = round(float(raw), 3)
+        except (TypeError, ValueError):
+            pass
     return addon, by_stage
 
 STUB_IDS = frozenset({"chatcmpl-loadtest-stub"})

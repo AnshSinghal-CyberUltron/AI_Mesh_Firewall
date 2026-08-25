@@ -2,7 +2,7 @@
 """Live verification of the full 9-stage ZeroShield pipeline + routing fairness.
 
 Nine stages (pipeline_trace.PIPELINE_STAGE_NAMES):
-    auth -> rate_limit -> policy -> input_scan -> kill_switch
+    auth -> kill_switch -> rate_limit -> policy -> input_scan
          -> model_routing -> model_input -> model_output -> output_guardrail
 
 Verifies against a RUNNING gateway with REAL upstream inference:
@@ -32,7 +32,7 @@ GATEWAY = os.environ.get("GATEWAY_URL", "http://127.0.0.1:8300").rstrip("/")
 API_KEY = os.environ.get("GATEWAY_API_KEY", "")
 
 STAGES = (
-    "auth", "rate_limit", "policy", "input_scan", "kill_switch",
+    "auth", "kill_switch", "rate_limit", "policy", "input_scan",
     "model_routing", "model_input", "model_output", "output_guardrail",
 )
 DIMS = ("risk", "cost", "latency", "priority")
