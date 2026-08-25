@@ -68,10 +68,56 @@ LOG = logging.getLogger("gateway.llm_router")
 # client header — env on the gateway process only.
 _STUB_LLM_TRUTHY = frozenset({"1", "true", "yes", "on"})
 _STUB_LLM_WARNED = False
+_STUB_TOK_PER_S_MIN = 30.0
+_STUB_TOK_PER_S_MAX = 100.0
+_STUB_DURATION_MAX_S = 10.0
 
 
 def loadtest_stub_llm_enabled() -> bool:
     return os.environ.get("GATEWAY_LOADTEST_STUB_LLM", "").strip().lower() in _STUB_LLM_TRUTHY
+
+
+def loadtest_stub_tok_per_s() -> float:
+    raw = os.environ.get("GATEWAY_LOADTEST_STUB_TOK_PER_S", "50")
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        v = 50.0
+    if v <= 0:
+        v = 50.0
+    return max(_STUB_TOK_PER_S_MIN, min(_STUB_TOK_PER_S_MAX, v))
+
+
+def loadtest_stub_duration_s() -> float:
+    """Hold time for the token-emitting stub. 0 = instant one-token (default).
+
+    Positive values are capped at 10s. Values in (0, 2) are allowed so unit tests
+    can prove the hold without a 2s sleep; soaks set 2–10 via env.
+    """
+    raw = os.environ.get("GATEWAY_LOADTEST_STUB_DURATION_S", "0")
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        v = 0.0
+    if v <= 0:
+        return 0.0
+    return min(_STUB_DURATION_MAX_S, v)
+
+
+def _stub_token_count(duration_s: float, tok_per_s: float, body: dict | None = None) -> int:
+    if duration_s <= 0:
+        return 1
+    n = max(1, int(tok_per_s * duration_s))
+    max_tokens = (body or {}).get("max_tokens")
+    if isinstance(max_tokens, int) and max_tokens > 0:
+        n = max(1, min(n, max_tokens))
+    return n
+
+
+def _stub_token_words(n: int) -> list[str]:
+    if n <= 1:
+        return ["ok"]
+    return [f"tok{i}" for i in range(n)]
 
 
 def loadtest_stub_completion(body: dict | None = None) -> dict:
@@ -89,6 +135,81 @@ def loadtest_stub_completion(body: dict | None = None) -> dict:
         }],
         "usage": {"prompt_tokens": 8, "completion_tokens": 1, "total_tokens": 9},
     }
+
+
+def _loadtest_stub_held_completion(body: dict | None = None) -> dict:
+    duration = loadtest_stub_duration_s()
+    rate = loadtest_stub_tok_per_s()
+    n = _stub_token_count(duration, rate, body)
+    words = _stub_token_words(n)
+    model = str((body or {}).get("model") or "loadtest-stub")
+    return {
+        "id": "chatcmpl-loadtest-stub",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": model.split("::")[-1],
+        "choices": [{
+            "index": 0,
+            "message": {"role": "assistant", "content": " ".join(words)},
+            "finish_reason": "stop",
+        }],
+        "usage": {
+            "prompt_tokens": 8,
+            "completion_tokens": n,
+            "total_tokens": 8 + n,
+        },
+    }
+
+
+async def loadtest_stub_acompletion(body: dict | None = None) -> dict:
+    duration = loadtest_stub_duration_s()
+    if duration > 0:
+        await asyncio.sleep(duration)
+        return _loadtest_stub_held_completion(body)
+    return loadtest_stub_completion(body)
+
+
+async def loadtest_stub_stream(body: dict | None = None) -> AsyncGenerator[str, None]:
+    duration = loadtest_stub_duration_s()
+    rate = loadtest_stub_tok_per_s()
+    meta = loadtest_stub_completion(body)
+    if duration <= 0:
+        chunk = {
+            "id": meta["id"],
+            "object": "chat.completion.chunk",
+            "created": meta["created"],
+            "model": meta["model"],
+            "choices": [{
+                "index": 0,
+                "delta": {"role": "assistant", "content": "ok"},
+                "finish_reason": "stop",
+            }],
+        }
+        yield f"data: {json.dumps(chunk)}\n\n"
+        yield "data: [DONE]\n\n"
+        return
+    n = _stub_token_count(duration, rate, body)
+    words = _stub_token_words(n)
+    interval = duration / float(n)
+    for i, word in enumerate(words):
+        await asyncio.sleep(interval)
+        piece = word if i == n - 1 else f"{word} "
+        delta: dict[str, str] = {"content": piece}
+        if i == 0:
+            delta = {"role": "assistant", "content": piece}
+        chunk = {
+            "id": meta["id"],
+            "object": "chat.completion.chunk",
+            "created": meta["created"],
+            "model": meta["model"],
+            "choices": [{
+                "index": 0,
+                "delta": delta,
+                "finish_reason": "stop" if i == n - 1 else None,
+            }],
+        }
+        yield f"data: {json.dumps(chunk)}\n\n"
+    yield "data: [DONE]\n\n"
 
 
 def _warn_stub_llm_once() -> None:
@@ -1074,7 +1195,7 @@ class LLMRouter:
         body = self._apply_redaction(body, redacted_content, redaction_hints)
         if loadtest_stub_llm_enabled():
             _warn_stub_llm_once()
-            return 200, loadtest_stub_completion(body)
+            return 200, await loadtest_stub_acompletion(body)
         allowlist = self._pop_inference_allowlist(body)
         compliant_chain = self._pop_compliant_fallback_chain(body)
         kwargs = self._build_kwargs(body, stream=False, inference_allowlist=allowlist)
@@ -1378,20 +1499,8 @@ class LLMRouter:
         body = self._apply_redaction(body, redacted_content, redaction_hints)
         if loadtest_stub_llm_enabled():
             _warn_stub_llm_once()
-            stub = loadtest_stub_completion(body)
-            chunk = {
-                "id": stub["id"],
-                "object": "chat.completion.chunk",
-                "created": stub["created"],
-                "model": stub["model"],
-                "choices": [{
-                    "index": 0,
-                    "delta": {"role": "assistant", "content": "ok"},
-                    "finish_reason": "stop",
-                }],
-            }
-            yield f"data: {json.dumps(chunk)}\n\n"
-            yield "data: [DONE]\n\n"
+            async for frame in loadtest_stub_stream(body):
+                yield frame
             return
         allowlist = self._pop_inference_allowlist(body)
         compliant_chain = self._pop_compliant_fallback_chain(body)

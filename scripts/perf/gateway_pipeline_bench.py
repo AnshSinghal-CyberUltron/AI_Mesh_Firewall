@@ -97,13 +97,99 @@ def addon_from_trace(trace: dict | None) -> tuple[float | None, dict]:
     by_stage["addon"] = addon
     return addon, by_stage
 
-STUB_IDS = frozenset({"chatcmpl-loadtest-stub"})  # loadtest stub model IDs frozenset means O(1) lookup
-REQUIRED_LIVE = ("input_scan", "output_guardrail")
+STUB_IDS = frozenset({"chatcmpl-loadtest-stub"})
+REQUIRED_LIVE_STAGES = ("input_scan", "output_guardrail")
+_STUB_ENV_TRUTHY = frozenset({"1", "true", "yes", "on"})
 
-def compute_full_nine_stages(
+
+def extract_completion_id(body: object) -> str | None:
+    if not isinstance(body, dict):
+        return None
+    cid = body.get("id")
+    if isinstance(cid, str) and cid.strip():
+        return cid.strip()[:80]
+    return None
+
+
+def _stage_p50(stage_latency_ms: dict | None, name: str) -> float | None:
+    rec = (stage_latency_ms or {}).get(name)
+    if not isinstance(rec, dict):
+        return None
+    try:
+        return float(rec["p50"]) if rec.get("p50") is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def compute_full_nine_stages(*, mode: str, stage_latency_ms: dict | None = None) -> bool:
+    """True only when chat actually ran live input_scan and output_guardrail.
+
+    MODE==chat is not enough: scans-off and /health-shaped chat both fail.
+    """
+    if mode != "chat":
+        return False
+    for name in REQUIRED_LIVE_STAGES:
+        p50 = _stage_p50(stage_latency_ms, name)
+        if p50 is None or p50 <= 0:
+            return False
+    return True
+
+
+def _stub_llm_flag(stub_llm_env: str, completion_ids: dict | None) -> bool:
+    env_on = (stub_llm_env or "").strip().lower() in _STUB_ENV_TRUTHY
+    ids_hit = any(cid in STUB_IDS for cid in (completion_ids or {}))
+    return env_on or ids_hit
+
+
+def compute_capacity_fail_reasons(
     *,
     mode: str,
-)
+    full_nine_stages: bool,
+    stub_llm: bool,
+    unique_prompt: bool,
+) -> list[str]:
+    reasons: list[str] = []
+    if mode != "chat":
+        reasons.append("mode_not_chat")
+    if not full_nine_stages:
+        reasons.append("not_full_nine_stages")
+    if stub_llm:
+        reasons.append("stub_llm")
+    if not unique_prompt:
+        reasons.append("not_unique_prompt")
+    return reasons
+
+
+def build_honesty_report(
+    *,
+    mode: str,
+    stage_latency_ms: dict | None,
+    unique_prompt: bool,
+    stub_llm_env: str,
+    completion_ids: dict | None = None,
+) -> dict:
+    stub_llm = _stub_llm_flag(stub_llm_env, completion_ids)
+    full = compute_full_nine_stages(mode=mode, stage_latency_ms=stage_latency_ms)
+    reasons = compute_capacity_fail_reasons(
+        mode=mode,
+        full_nine_stages=full,
+        stub_llm=stub_llm,
+        unique_prompt=bool(unique_prompt),
+    )
+    eligible = not reasons
+    return {
+        "addon_definition": (
+            "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)"
+        ),
+        "stub_llm": stub_llm,
+        "stub_llm_env": stub_llm_env,
+        "full_nine_stages": full,
+        "unique_prompt": bool(unique_prompt),
+        "capacity_eligible": eligible,
+        "capacity_predicate": "pass" if eligible else "fail",
+        "capacity_fail_reasons": reasons,
+        "completion_ids": dict(completion_ids or {}),
+    }
 
 
 def _err_sig(status: int, body: dict | str, exc: str) -> str:
@@ -165,6 +251,7 @@ async def _one_chat(client: httpx.AsyncClient) -> dict:
             "wall_ms": wall_ms,
             "addon_ms": addon,
             "stages": stages,
+            "completion_id": extract_completion_id(body) if isinstance(body, dict) else None,
             "sig": None if ok else _err_sig(r.status_code, body, ""),
             "scan_only": bool(
                 isinstance(body, dict)
@@ -181,6 +268,7 @@ async def _one_chat(client: httpx.AsyncClient) -> dict:
             "wall_ms": wall_ms,
             "addon_ms": None,
             "stages": {},
+            "completion_id": None,
             "sig": _err_sig(0, {}, name),
             "scan_only": False,
         }
@@ -198,6 +286,7 @@ async def _one_health(client: httpx.AsyncClient) -> dict:
             "wall_ms": wall_ms,
             "addon_ms": None,
             "stages": {},
+            "completion_id": None,
             "sig": None if ok else _err_sig(r.status_code, r.text[:160], ""),
             "scan_only": False,
         }
@@ -205,7 +294,8 @@ async def _one_health(client: httpx.AsyncClient) -> dict:
         wall_ms = (time.perf_counter() - t0) * 1000
         return {
             "ok": False, "status": 0, "wall_ms": wall_ms, "addon_ms": None,
-            "stages": {}, "sig": _err_sig(0, {}, type(exc).__name__), "scan_only": False,
+            "stages": {}, "completion_id": None,
+            "sig": _err_sig(0, {}, type(exc).__name__), "scan_only": False,
         }
 
 
@@ -276,12 +366,14 @@ def _child(q: Queue, quota: int, stop_at: float):
             stage_sums.setdefault(k, []).append(v)
     codes = Counter(r["status"] for r in recs)
     sigs = Counter(r["sig"] for r in recs if r.get("sig"))
+    completion_ids = Counter(r["completion_id"] for r in recs if r.get("completion_id"))
     q.put({
         "n": len(recs),
         "ok": sum(1 for r in recs if r["ok"]),
         "scan_only": sum(1 for r in recs if r.get("scan_only")),
         "codes": dict(codes),
         "sigs": dict(sigs),
+        "completion_ids": dict(completion_ids),
         "walls": walls[-8000:],
         "addons": addons[-8000:],
         "stage_samples": {k: v[-2000:] for k, v in stage_sums.items() if v},
@@ -322,12 +414,14 @@ def run() -> dict:
     ok = sum(p["ok"] for p in parts)
     codes: Counter = Counter()
     sigs: Counter = Counter()
+    completion_ids: Counter = Counter()
     walls: list = []
     addons: list = []
     stages: dict[str, list] = {}
     for p in parts:
         codes.update(p["codes"])
         sigs.update(p["sigs"])
+        completion_ids.update(p.get("completion_ids") or {})
         walls.extend(p["walls"])
         addons.extend(p["addons"])
         for k, v in (p.get("stage_samples") or {}).items():
@@ -336,6 +430,7 @@ def run() -> dict:
         walls = random.sample(walls, 40000)
     if len(addons) > 40000:
         addons = random.sample(addons, 40000)
+    stage_latency_ms = {k: _merge_pct(v) for k, v in stages.items() if v}
     report = {
         "mode": MODE,
         "gateway": GATEWAY,
@@ -355,13 +450,14 @@ def run() -> dict:
         "errors_by_signature": dict(sigs.most_common(40)),
         "client_latency_ms": _merge_pct(walls),
         "addon_latency_ms": _merge_pct(addons),
-        "stage_latency_ms": {k: _merge_pct(v) for k, v in stages.items() if v},
-        "honesty": {
-            "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
-            "stub_llm": os.environ.get("GATEWAY_LOADTEST_STUB_LLM", ""),
-            "full_nine_stages": MODE == "chat",
-            "unique_prompt": UNIQUE_PROMPT,
-        },
+        "stage_latency_ms": stage_latency_ms,
+        "honesty": build_honesty_report(
+            mode=MODE,
+            stage_latency_ms=stage_latency_ms,
+            unique_prompt=UNIQUE_PROMPT,
+            stub_llm_env=os.environ.get("GATEWAY_LOADTEST_STUB_LLM", ""),
+            completion_ids=dict(completion_ids),
+        ),
     }
     if OUT:
         os.makedirs(os.path.dirname(OUT) or ".", exist_ok=True)
