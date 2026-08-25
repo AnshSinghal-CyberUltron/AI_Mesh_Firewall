@@ -7,6 +7,7 @@ for clean, separate log files in production.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict
 
 LOG = logging.getLogger("gateway.metrics")
@@ -47,7 +48,9 @@ def record_rule_hit(rule_id: str, severity: str, source: str = "bedrock") -> Non
 #
 # Counters/gauges/histograms only. Label values are bounded to non-PII fields
 # (org_slug, model name, coarse reason). No prompts, emails, IPs, or free-text.
-# A dedicated CollectorRegistry keeps /metrics output focused on AMF series.
+# Process-local scrape uses a dedicated CollectorRegistry. When
+# PROMETHEUS_MULTIPROC_DIR is set, render_latest uses MultiProcessCollector
+# so gunicorn workers aggregate (RC-8 under-report × WEB_CONCURRENCY).
 # ─────────────────────────────────────────────────────────────────────────────
 try:
     from prometheus_client import (
@@ -64,6 +67,8 @@ except Exception:  # pragma: no cover - prometheus_client missing in non-gateway
     _PROM_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
     REGISTRY = None  # type: ignore[assignment]
 
+
+_ADDON_BUCKETS = (0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0)
 
 if _PROM_AVAILABLE:
     REGISTRY = CollectorRegistry(auto_describe=True)
@@ -85,6 +90,7 @@ if _PROM_AVAILABLE:
         "amf_gateway_active_connections",
         "In-flight requests currently being processed.",
         registry=REGISTRY,
+        multiprocess_mode="livesum",
     )
     policy_blocks_total = Counter(
         "amf_gateway_policy_blocks_total",
@@ -210,18 +216,29 @@ if _PROM_AVAILABLE:
         "amf_gateway_pipeline_stage_seconds",
         "Per-stage latency inside chat completion pipeline (seconds).",
         ["org", "stage"],
-        buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
+        buckets=_ADDON_BUCKETS,
         registry=REGISTRY,
     )
+    t_addon_pre_seconds = Histogram(
+        "amf_gateway_t_addon_pre_seconds", "T_addon_pre seconds (includes input T2)",
+        ["org"], buckets=_ADDON_BUCKETS, registry=REGISTRY,
+    )
+    t_addon_post_seconds = Histogram(
+        "amf_gateway_t_addon_post_seconds", "T_addon_post seconds (output guard)",
+        ["org"], buckets=_ADDON_BUCKETS, registry=REGISTRY,
+    )
+    t_t2_seconds = Histogram(
+        "amf_gateway_t_t2_seconds", "Input Tier-2 seconds (inside T_addon_pre)",
+        ["org"], buckets=_ADDON_BUCKETS, registry=REGISTRY,
+    )
+    capacity_fail_total = Counter(
+        "amf_gateway_capacity_fail_total",
+        "Honesty/capacity predicate failures (never a live capacity RPS).",
+        ["reason"], registry=REGISTRY,
+    )
 
-_PIPELINE_STAGES = (
-    "auth",
-    "policy",
-    "tier1",
-    "tier2",
-    "upstream",
-    "telemetry",
-)
+_STUB_LLM_TRUTHY = frozenset({"1", "true", "yes", "on"})
+_PIPELINE_STAGES = ("auth", "policy", "tier1", "tier2", "upstream", "telemetry")
 
 
 def _safe_label(value: object, fallback: str = "unknown") -> str:
@@ -229,6 +246,63 @@ def _safe_label(value: object, fallback: str = "unknown") -> str:
         return fallback
     s = str(value).strip().lower()
     return s[:64] if s else fallback
+
+
+def _stub_llm_env_on() -> bool:
+    return os.environ.get("GATEWAY_LOADTEST_STUB_LLM", "").strip().lower() in _STUB_LLM_TRUTHY
+
+
+def _ms_or_none(raw: object) -> float | None:
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def record_capacity_fail(reason: str) -> None:
+    if not _PROM_AVAILABLE:
+        return
+    try:
+        capacity_fail_total.labels(reason=_safe_label(reason, "unspecified")).inc()
+    except Exception:
+        return
+
+
+def _observe_addon_split(org: str, stage_metrics_ms: dict[str, float] | None, duration_seconds: float) -> None:
+    metrics = stage_metrics_ms if isinstance(stage_metrics_ms, dict) else {}
+    pre = _ms_or_none(metrics.get("t_addon_pre_ms"))
+    post = _ms_or_none(metrics.get("t_addon_post_ms"))
+    t2 = _ms_or_none(metrics.get("t_t2_ms"))
+    if pre is None or post is None or t2 is None:
+        try:
+            from .pipeline_trace import compute_addon_split
+        except ImportError:
+            from pipeline_trace import compute_addon_split  # type: ignore[no-redef]
+        total_ms = _ms_or_none(metrics.get("total_latency_ms"))
+        if total_ms is None:
+            try:
+                total_ms = float(duration_seconds) * 1000.0
+            except (TypeError, ValueError):
+                total_ms = 0.0
+        split = compute_addon_split(metrics, total_ms)
+        pre = pre if pre is not None else split["t_addon_pre_ms"]
+        post = post if post is not None else split["t_addon_post_ms"]
+        t2 = t2 if t2 is not None else split["t_t2_ms"]
+    for metric, raw_ms in (
+        (t_addon_pre_seconds, pre), (t_addon_post_seconds, post), (t_t2_seconds, t2),
+    ):
+        try:
+            seconds = float(raw_ms) / 1000.0
+        except (TypeError, ValueError):
+            continue
+        if seconds < 0:
+            continue
+        try:
+            metric.labels(org=org).observe(seconds)
+        except Exception:
+            pass
 
 
 def record_request(org_slug: str, decision: str, latency_seconds: float) -> None:
@@ -386,7 +460,6 @@ def record_chat_completion(
     duration_seconds: float,
     stage_metrics_ms: dict[str, float] | None = None,
 ) -> None:
-    """Record chat-completion totals, wall time, and per-stage histograms."""
     if not _PROM_AVAILABLE:
         return
     org = _safe_label(org_slug, "anonymous")
@@ -396,24 +469,35 @@ def record_chat_completion(
         chat_request_duration_seconds.labels(org=org).observe(float(duration_seconds))
     except (TypeError, ValueError):
         pass
-    if not stage_metrics_ms:
-        return
-    for stage in _PIPELINE_STAGES:
-        key = f"{stage}_ms"
-        raw = stage_metrics_ms.get(key)
-        if raw is None:
-            continue
-        try:
-            seconds = float(raw) / 1000.0
-        except (TypeError, ValueError):
-            continue
-        if seconds < 0:
-            continue
-        pipeline_stage_seconds.labels(org=org, stage=stage).observe(seconds)
+    if stage_metrics_ms:
+        for stage in _PIPELINE_STAGES:
+            key = f"{stage}_ms"
+            raw = stage_metrics_ms.get(key)
+            if raw is None:
+                continue
+            try:
+                seconds = float(raw) / 1000.0
+            except (TypeError, ValueError):
+                continue
+            if seconds < 0:
+                continue
+            pipeline_stage_seconds.labels(org=org, stage=stage).observe(seconds)
+    _observe_addon_split(org, stage_metrics_ms, duration_seconds)
+    if _stub_llm_env_on():
+        record_capacity_fail("stub_llm")
 
 
 def render_latest() -> tuple[bytes, str]:
     """Return (body, content_type) for the /metrics handler."""
     if not _PROM_AVAILABLE:
         return b"# prometheus_client not installed\n", _PROM_CONTENT_TYPE
+    mp_dir = os.environ.get("PROMETHEUS_MULTIPROC_DIR") or os.environ.get("prometheus_multiproc_dir")
+    if mp_dir:
+        try:
+            from prometheus_client.multiprocess import MultiProcessCollector
+            registry = CollectorRegistry()
+            MultiProcessCollector(registry, path=mp_dir)
+            return generate_latest(registry), _PROM_CONTENT_TYPE
+        except Exception:
+            LOG.exception("prometheus multiprocess scrape failed; using process-local registry")
     return generate_latest(REGISTRY), _PROM_CONTENT_TYPE

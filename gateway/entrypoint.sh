@@ -53,8 +53,14 @@ echo "[gateway-entrypoint] WEB_CONCURRENCY=$WORKERS (source=$WSRC)" >&2
 python -m ai_mesh_shared.resource_budget --json 2>/dev/null \
     | sed 's/^/[gateway-entrypoint]   /' >&2 || true
 
+if [ -n "${PROMETHEUS_MULTIPROC_DIR:-}" ]; then
+    mkdir -p "$PROMETHEUS_MULTIPROC_DIR"
+    echo "[gateway-entrypoint] PROMETHEUS_MULTIPROC_DIR=$PROMETHEUS_MULTIPROC_DIR" >&2
+fi
+
 set -- gunicorn ai_mesh_gateway.main:app \
     -k uvicorn.workers.UvicornWorker \
+    --config /app/gateway/gunicorn.conf.py \
     --bind 0.0.0.0:8300 \
     --workers "$WORKERS" \
     --worker-connections "${GUNICORN_WORKER_CONNECTIONS:-20000}" \

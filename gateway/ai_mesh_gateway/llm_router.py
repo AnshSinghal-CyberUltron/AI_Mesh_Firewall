@@ -120,8 +120,24 @@ def _stub_token_words(n: int) -> list[str]:
     return [f"tok{i}" for i in range(n)]
 
 
+def _note_stub_capacity_fail() -> None:
+    """Best-effort honesty counter when the loadtest stub answers instead of BYOK."""
+    try:
+        from .metrics import record_capacity_fail
+    except ImportError:
+        try:
+            from metrics import record_capacity_fail  # type: ignore[no-redef]
+        except ImportError:
+            return
+    try:
+        record_capacity_fail("stub_llm")
+    except Exception:
+        return
+
+
 def loadtest_stub_completion(body: dict | None = None) -> dict:
     """OpenAI-shaped chat.completion with a benign one-token assistant reply."""
+    _note_stub_capacity_fail()
     model = str((body or {}).get("model") or "loadtest-stub")
     return {
         "id": "chatcmpl-loadtest-stub",
@@ -170,6 +186,7 @@ async def loadtest_stub_acompletion(body: dict | None = None) -> dict:
 
 
 async def loadtest_stub_stream(body: dict | None = None) -> AsyncGenerator[str, None]:
+    _note_stub_capacity_fail()
     duration = loadtest_stub_duration_s()
     rate = loadtest_stub_tok_per_s()
     meta = loadtest_stub_completion(body)
