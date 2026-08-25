@@ -1,0 +1,156 @@
+{
+  "not_a_capacity_rps": true,
+  "capacity_eligible": false,
+  "capacity_fail_reasons": [
+    "stub_llm",
+    "sidecar_auth_off",
+    "tier2_off",
+    "not_shared_compose_gateway"
+  ],
+  "method": {
+    "sidecar": "phase0-t-s1-gw",
+    "image": "ai_mesh_firewall-gateway + bind-mount working-tree ai_mesh_gateway",
+    "network": "ai_mesh_firewall_default (docker-compose local)",
+    "port": 18300,
+    "inflight": 4,
+    "stub_duration_s": 3.0,
+    "stub_tok_per_s": 50,
+    "waves": 3,
+    "web_concurrency": 1,
+    "auth_enabled": false,
+    "enable_tier2": false,
+    "stream": true,
+    "mem_limit": "1g",
+    "formula": "(peak_cgroup_MB - idle_median_cgroup_MB) / inflight"
+  },
+  "idle_cgroup_mb": [
+    281.91,
+    281.5,
+    281.96,
+    281.83,
+    281.43,
+    282.31
+  ],
+  "idle_median_mb": 281.91,
+  "soak_cgroup_mb": [
+    282.38,
+    285.32,
+    285.97,
+    285.61,
+    285.55,
+    285.47,
+    286.48
+  ],
+  "peak_cgroup_mb": 286.48,
+  "delta_mb": 4.57,
+  "mb_per_in_flight_stream": 1.14,
+  "oom_killed": false,
+  "sidecar_alive_end": true,
+  "soak": {
+    "requests": 12,
+    "ok": 12,
+    "errors": 0,
+    "error_rate": 0.0,
+    "stub_id_seen": 12,
+    "walls_s": [
+      4.049,
+      4.231,
+      4.23,
+      4.23,
+      3.811,
+      3.774,
+      3.81,
+      3.773,
+      3.958,
+      3.958,
+      3.958,
+      3.957
+    ],
+    "bytes": [
+      52837,
+      52839,
+      52837,
+      52839,
+      52837,
+      52835,
+      52837,
+      52835,
+      52837,
+      52837,
+      52837,
+      52839
+    ]
+  },
+  "docker_stats_idle": [
+    {
+      "raw": "257MiB / 1GiB\t25.09%\t0.06%",
+      "cgroup_bytes": 295600128
+    },
+    {
+      "raw": "256.6MiB / 1GiB\t25.06%\t0.06%",
+      "cgroup_bytes": 295170048
+    },
+    {
+      "raw": "256.6MiB / 1GiB\t25.06%\t0.15%",
+      "cgroup_bytes": 295661568
+    },
+    {
+      "raw": "256.2MiB / 1GiB\t25.02%\t0.05%",
+      "cgroup_bytes": 295522304
+    },
+    {
+      "raw": "256.4MiB / 1GiB\t25.04%\t0.05%",
+      "cgroup_bytes": 295104512
+    },
+    {
+      "raw": "257.1MiB / 1GiB\t25.10%\t0.05%",
+      "cgroup_bytes": 296026112
+    }
+  ],
+  "docker_stats_soak": [
+    {
+      "raw": "256.9MiB / 1GiB\t25.09%\t0.06%",
+      "cgroup_bytes": 296091648,
+      "t": 1787663286.113,
+      "alive": true
+    },
+    {
+      "raw": "260.6MiB / 1GiB\t25.45%\t26.14%",
+      "cgroup_bytes": 299184128,
+      "t": 1787663288.119,
+      "alive": true
+    },
+    {
+      "raw": "260.8MiB / 1GiB\t25.47%\t37.52%",
+      "cgroup_bytes": 299864064,
+      "t": 1787663290.119,
+      "alive": true
+    },
+    {
+      "raw": "260.6MiB / 1GiB\t25.45%\t15.06%",
+      "cgroup_bytes": 299479040,
+      "t": 1787663292.121,
+      "alive": true
+    },
+    {
+      "raw": "260.4MiB / 1GiB\t25.43%\t55.53%",
+      "cgroup_bytes": 299417600,
+      "t": 1787663294.124,
+      "alive": true
+    },
+    {
+      "raw": "260.5MiB / 1GiB\t25.44%\t20.75%",
+      "cgroup_bytes": 299339776,
+      "t": 1787663296.126,
+      "alive": true
+    },
+    {
+      "raw": "261.5MiB / 1GiB\t25.54%\t55.55%",
+      "cgroup_bytes": 300392448,
+      "t": 1787663298.129,
+      "alive": true
+    }
+  ],
+  "shared_gateway_cgroup_mb_end": 1212.28,
+  "aborted": false
+}
