@@ -1,0 +1,40 @@
+{
+  "generated_at": "2026-08-26T09:43:12Z",
+  "supersedes": "2026-08-26T07:43:30Z pack (do not cite 97.4ms p99 as this pass)",
+  "canonical": "mcp-parallel/findings/phase0/p10_gates.json",
+  "scope": "Phase 0c after ANALYTICS_SERVE_ROLLUPS=1 + control recycle recopy",
+  "decision": "SHIP_C2_POSTGRES_OVERRIDE",
+  "verdict": "P10_COMPLETE_WITH_RESIDUALS",
+  "open_clickhouse": false,
+  "analytics_serve_rollups": "1",
+  "gates": {
+    "0c.1_trigger": {
+      "ok": true,
+      "fired": false,
+      "overridden_by_user": true,
+      "worst_p99_ms_before": 3717.4,
+      "evidence": "mcp-parallel/findings/phase0c/tch1.json"
+    },
+    "T-C2_oracle_post_recycle": {
+      "ok": true,
+      "evidence": "mcp-parallel/findings/phase0c/tc2_compare_post_recycle.json"
+    },
+    "T-C2_http_post_recycle": {
+      "ok": true,
+      "worst_p99_ms": 191.1,
+      "evidence": "mcp-parallel/findings/phase0c/tc2_http_post_recycle.json"
+    },
+    "T-C2_ab_flag1_post_recycle": {
+      "ok": true,
+      "strict_1h_6h_raw_24h_7d_30d_rollup": true,
+      "evidence": "mcp-parallel/findings/phase0c/tc2_http_ab_flag1_post_recycle.json"
+    },
+    "customer_30d_overview_post_recycle": {
+      "ok": true,
+      "peakInflight": 2,
+      "evidence": "mcp-parallel/findings/phase0c/tf30d_frontend_post_recycle.json"
+    }
+  },
+  "all_ok": true,
+  "note": "all_ok means the 0c P-gates in this file passed. Full Phase 0 P10 residuals live in phase0/p10_gates.json."
+}

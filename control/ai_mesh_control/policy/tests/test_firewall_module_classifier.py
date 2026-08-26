@@ -6,7 +6,9 @@ from django.test import SimpleTestCase
 
 from policy.firewall_module_classifier import (
     MODULE_PRESSURE_METRIC,
+    empty_bucket,
     event_matches_module,
+    increment_bucket,
     module_enforcement_q,
     specialty_modules_for_event,
 )
@@ -69,3 +71,18 @@ class FirewallModuleClassifierTests(SimpleTestCase):
     def test_module_enforcement_q_1_3_includes_event_types(self):
         q = module_enforcement_q("1.3")
         self.assertIn("metadata__event_type", str(q))
+
+    def test_increment_bucket_accepts_group_count(self):
+        bucket = empty_bucket()
+        increment_bucket(
+            bucket,
+            is_blocked=True,
+            is_redacted=False,
+            is_critical=True,
+            is_flagged=True,
+            n=4,
+        )
+        self.assertEqual(bucket["total"], 4)
+        self.assertEqual(bucket["blocked"], 4)
+        self.assertEqual(bucket["critical"], 4)
+        self.assertEqual(bucket["flagged"], 4)

@@ -145,16 +145,18 @@ def increment_bucket(
     is_redacted: bool,
     is_critical: bool,
     is_flagged: bool = False,
+    n: int = 1,
 ) -> None:
-    bucket["total"] += 1
+    count = int(n)
+    bucket["total"] += count
     if is_blocked:
-        bucket["blocked"] += 1
+        bucket["blocked"] += count
     if is_redacted:
-        bucket["redacted"] += 1
+        bucket["redacted"] += count
     if is_flagged:
-        bucket["flagged"] = bucket.get("flagged", 0) + 1
+        bucket["flagged"] = bucket.get("flagged", 0) + count
     if is_critical:
-        bucket["critical"] += 1
+        bucket["critical"] += count
 
 
 def bucket_pressure(bucket: dict, module_id: str) -> int:

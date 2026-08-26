@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "rows": [
+    {
+      "path": "/api/health/",
+      "status": 200
+    },
+    {
+      "path": "/api/security/soc-kpis/?period=90d",
+      "status": 400,
+      "snippet": "{\"detail\":\"Invalid period '90d'. Use one of: 1h, 24h, 30d, 6h, 7d.\",\"code\":\"invalid_period\"}"
+    },
+    {
+      "path": "/api/security/soc-kpis/?period=7d",
+      "status": 200
+    }
+  ]
+}

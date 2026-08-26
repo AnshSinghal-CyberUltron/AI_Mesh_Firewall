@@ -1,0 +1,141 @@
+{
+  "generated_at": "2026-08-26T07:01:46.139658+00:00",
+  "ob2_days_clamp": {
+    "ok": true,
+    "pairs": [
+      {
+        "path": "/api/dashboard/model-usage/",
+        "status_30": 200,
+        "ms_30": 734.7,
+        "bytes_30": 2194,
+        "status_365": 200,
+        "ms_365": 713.8,
+        "bytes_365": 2194,
+        "bodies_equal": true
+      },
+      {
+        "path": "/api/dashboard/risk-distribution/",
+        "status_30": 200,
+        "ms_30": 986.9,
+        "bytes_30": 155,
+        "status_365": 200,
+        "ms_365": 982.0,
+        "bytes_365": 155,
+        "bodies_equal": true
+      }
+    ]
+  },
+  "oc_soc_kpis_30d": {
+    "n": 11,
+    "ms": [
+      3600.9,
+      3678.2,
+      3651.3,
+      3624.5,
+      3641.5,
+      3595.9,
+      3593.8,
+      3636.4,
+      3622.9,
+      3635.6,
+      3640.5
+    ],
+    "min_ms": 3593.8,
+    "median_ms": 3635.6,
+    "p99_nearest_rank_ms": 3678.2,
+    "max_ms": 3678.2,
+    "all_2xx": true,
+    "rows": [
+      {
+        "i": 0,
+        "status": 200,
+        "ms": 3600.9,
+        "bytes": 831
+      },
+      {
+        "i": 1,
+        "status": 200,
+        "ms": 3678.2,
+        "bytes": 831
+      },
+      {
+        "i": 2,
+        "status": 200,
+        "ms": 3651.3,
+        "bytes": 831
+      },
+      {
+        "i": 3,
+        "status": 200,
+        "ms": 3624.5,
+        "bytes": 831
+      },
+      {
+        "i": 4,
+        "status": 200,
+        "ms": 3641.5,
+        "bytes": 831
+      },
+      {
+        "i": 5,
+        "status": 200,
+        "ms": 3595.9,
+        "bytes": 831
+      },
+      {
+        "i": 6,
+        "status": 200,
+        "ms": 3593.8,
+        "bytes": 831
+      },
+      {
+        "i": 7,
+        "status": 200,
+        "ms": 3636.4,
+        "bytes": 831
+      },
+      {
+        "i": 8,
+        "status": 200,
+        "ms": 3622.9,
+        "bytes": 831
+      },
+      {
+        "i": 9,
+        "status": 200,
+        "ms": 3635.6,
+        "bytes": 831
+      },
+      {
+        "i": 10,
+        "status": 200,
+        "ms": 3640.5,
+        "bytes": 831
+      }
+    ],
+    "open_phase_0c": false
+  },
+  "tc4b": {
+    "ok": true,
+    "raise_constant": false,
+    "DEFAULT_PER_WORKER_RSS_MB": 512,
+    "peak_worker_rss_mb": 164.95,
+    "workers": [
+      {
+        "pid": 11907,
+        "rss_kb": 168540,
+        "rss_mb": 164.59
+      },
+      {
+        "pid": 11936,
+        "rss_kb": 168608,
+        "rss_mb": 164.66
+      },
+      {
+        "pid": 11958,
+        "rss_kb": 168904,
+        "rss_mb": 164.95
+      }
+    ]
+  }
+}

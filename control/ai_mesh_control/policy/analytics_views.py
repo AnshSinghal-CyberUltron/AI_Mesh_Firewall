@@ -5,8 +5,9 @@ Policy analytics, top-rules, and top-violators APIs for Policy Management and SO
 from collections import defaultdict
 from datetime import timedelta
 
-from django.db.models import Count, Q
+from django.db.models import Count, Max, Q
 from django.db.models.fields.json import KeyTransform
+from django.db.models.functions import ExtractHour, TruncDate, TruncWeek
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -17,6 +18,7 @@ from policy.constants import ACTION_BLOCK, ACTION_MONITOR, ACTION_REDACT
 from policy.models import EnforcementEvent, Policy, Rule
 from policy.security_views import _enforcement_events_for_request
 from policy.telemetry_resolution import metadata_policy_codes, metadata_rule_names
+from policy.analytics_sql import annotate_numeric_float
 
 # Do not SELECT metadata JSONB. Prompt/completion blobs in that column OOMed the
 # 2.5 GiB control workers when Policy Analytics hit three endpoints at once.
@@ -31,7 +33,6 @@ _POLICY_CODE_KEYS = ("policy_violations", "matched_policies", "matched_policy_co
 _RULE_NAME_KEYS = ("matched_rules", "matched_rule_names")
 _EXTRA_POLICY_KEYS = ("policy_violations", "matched_policies")
 _EXTRA_RULE_KEYS = ("matched_rules", "matched_rule_names", "matched_policies")
-_META_ITER_CHUNK = 2000
 
 
 def _json_key(name: str, source: str = "metadata") -> KeyTransform:
@@ -192,7 +193,8 @@ class PolicyAnalyticsView(APIView):
                 "agenticThreat": 0,
             }
 
-        def _tag_event(meta, bucket):
+        def _tag_event(meta, bucket, n=1):
+            count = int(n)
             codes = meta.get("owasp_codes")
             if codes is not None:
                 codes = [str(c).strip().upper() for c in codes if c]
@@ -202,17 +204,17 @@ class PolicyAnalyticsView(APIView):
             category = (meta.get("threat_category") or "").lower()
             source = meta.get("source", "")
             if "jailbreak" in category or "LLM04" in codes:
-                bucket["jailbreak"] += 1
+                bucket["jailbreak"] += count
             if "data" in category or "LLM06" in codes or meta.get("pii_detected"):
-                bucket["piiDetection"] += 1
+                bucket["piiDetection"] += count
             if "prompt" in category or "injection" in category or "LLM01" in codes:
-                bucket["promptInjection"] += 1
+                bucket["promptInjection"] += count
             if source == "mcp_scan" or any(c.startswith("MCP") for c in codes):
-                bucket["toolOverreach"] += 1
+                bucket["toolOverreach"] += count
             if source == "agentic_scan" or any(c.startswith("AGENTIC") for c in codes):
-                bucket["agenticThreat"] += 1
+                bucket["agenticThreat"] += count
             if "source" in category or "code" in category:
-                bucket["sourceCode"] += 1
+                bucket["sourceCode"] += count
 
         daily = defaultdict(lambda: {"total": 0, "blocked": 0, "redacted": 0, "monitored": 0})
         hour_buckets = defaultdict(_empty_cats)
@@ -220,28 +222,46 @@ class PolicyAnalyticsView(APIView):
         week_buckets: dict = defaultdict(_empty_cats)
         week_labels: dict = {}
         classify_cols = [f"_{k}" for k in _ANALYTICS_CLASSIFY_KEYS]
-        slim = _annotate_meta(events, _ANALYTICS_CLASSIFY_KEYS).values(
-            "created_at", "action", *classify_cols
+        for ev in (
+            events.annotate(day=TruncDate("created_at"))
+            .values("day", "action")
+            .annotate(n=Count("id"))
+        ):
+            d = str(ev["day"]) if ev.get("day") else None
+            if not d:
+                continue
+            n = int(ev.get("n") or 0)
+            daily[d]["total"] += n
+            if ev["action"] == ACTION_BLOCK:
+                daily[d]["blocked"] += n
+            elif ev["action"] == ACTION_REDACT:
+                daily[d]["redacted"] += n
+            elif ev["action"] == ACTION_MONITOR:
+                daily[d]["monitored"] += n
+
+        tagged = (
+            _annotate_meta(events, _ANALYTICS_CLASSIFY_KEYS)
+            .annotate(
+                hour=ExtractHour("created_at"),
+                day=TruncDate("created_at"),
+                week=TruncWeek("created_at"),
+            )
+            .values("hour", "day", "week", *classify_cols)
+            .annotate(n=Count("id"))
         )
-        for ev in slim.iterator(chunk_size=_META_ITER_CHUNK):
-            dt = ev.get("created_at")
-            d = str(dt.date()) if dt else None
-            if d:
-                daily[d]["total"] += 1
-                if ev["action"] == ACTION_BLOCK:
-                    daily[d]["blocked"] += 1
-                elif ev["action"] == ACTION_REDACT:
-                    daily[d]["redacted"] += 1
-                elif ev["action"] == ACTION_MONITOR:
-                    daily[d]["monitored"] += 1
+        for ev in tagged:
+            n = int(ev.get("n") or 0)
             meta = _meta_from_row(ev, _ANALYTICS_CLASSIFY_KEYS)
-            _tag_event(meta, hour_buckets[dt.hour if dt else 0])
+            _tag_event(meta, hour_buckets[ev.get("hour") if ev.get("hour") is not None else 0], n)
+            d = str(ev["day"]) if ev.get("day") else None
             if d:
-                _tag_event(meta, day_buckets[d])
-            if dt:
-                iso_key = dt.strftime("%G-W%V")
-                week_labels[iso_key] = str(dt.date() - timedelta(days=dt.weekday()))
-                _tag_event(meta, week_buckets[iso_key])
+                _tag_event(meta, day_buckets[d], n)
+            week = ev.get("week")
+            if week:
+                week_date = week.date() if hasattr(week, "date") else week
+                iso_key = week_date.strftime("%G-W%V")
+                week_labels[iso_key] = str(week_date)
+                _tag_event(meta, week_buckets[iso_key], n)
 
         effectiveness_trend = []
         for d in sorted(daily.keys()):
@@ -344,25 +364,26 @@ class TopViolatorsView(APIView):
         ep_policy_ids: dict = defaultdict(set)
         ep_metadata_codes: dict = defaultdict(set)
         ep_risk: dict = defaultdict(int)
-        ep_cols = ["endpoint_id", "policy_id", "_security_risk_score"]
+        ep_cols = ["endpoint_id", "policy_id"]
         ep_cols += [f"_{k}" for k in _POLICY_CODE_KEYS]
         ep_cols += [f"_extra_{k}" for k in _EXTRA_POLICY_KEYS]
-        ep_slim = (
+        ep_slim = annotate_numeric_float(
             _annotate_meta(
                 events.filter(endpoint_id__in=endpoint_ids),
                 _POLICY_CODE_KEYS,
                 extra_keys=_EXTRA_POLICY_KEYS,
-                risk=True,
-            ).values(*ep_cols)
-        )
-        for ev in ep_slim.iterator(chunk_size=_META_ITER_CHUNK):
+            ),
+            "security_risk_score",
+            "_risk",
+        ).values(*ep_cols).annotate(n=Count("id"), max_risk=Max("_risk"))
+        for ev in ep_slim:
             eid = ev["endpoint_id"]
             if ev["policy_id"]:
                 ep_policy_ids[eid].add(ev["policy_id"])
             ep_metadata_codes[eid].update(
                 metadata_policy_codes(_meta_from_row(ev, _POLICY_CODE_KEYS, extra_keys=_EXTRA_POLICY_KEYS))
             )
-            score = _risk_int(ev.get("_security_risk_score"))
+            score = _risk_int(ev.get("max_risk"))
             if score > ep_risk[eid]:
                 ep_risk[eid] = score
 
@@ -380,25 +401,26 @@ class TopViolatorsView(APIView):
         user_policy_ids: dict = defaultdict(set)
         user_metadata_codes: dict = defaultdict(set)
         user_risk: dict = defaultdict(int)
-        user_cols = ["user_id", "policy_id", "_security_risk_score"]
+        user_cols = ["user_id", "policy_id"]
         user_cols += [f"_{k}" for k in _POLICY_CODE_KEYS]
         user_cols += [f"_extra_{k}" for k in _EXTRA_POLICY_KEYS]
-        user_slim = (
+        user_slim = annotate_numeric_float(
             _annotate_meta(
                 events.filter(endpoint_id__isnull=True, user_id__in=user_ids),
                 _POLICY_CODE_KEYS,
                 extra_keys=_EXTRA_POLICY_KEYS,
-                risk=True,
-            ).values(*user_cols)
-        )
-        for ev in user_slim.iterator(chunk_size=_META_ITER_CHUNK):
+            ),
+            "security_risk_score",
+            "_risk",
+        ).values(*user_cols).annotate(n=Count("id"), max_risk=Max("_risk"))
+        for ev in user_slim:
             uid = ev["user_id"]
             if ev["policy_id"]:
                 user_policy_ids[uid].add(ev["policy_id"])
             user_metadata_codes[uid].update(
                 metadata_policy_codes(_meta_from_row(ev, _POLICY_CODE_KEYS, extra_keys=_EXTRA_POLICY_KEYS))
             )
-            score = _risk_int(ev.get("_security_risk_score"))
+            score = _risk_int(ev.get("max_risk"))
             if score > user_risk[uid]:
                 user_risk[uid] = score
 
@@ -466,9 +488,14 @@ def _aggregate_top_rules(events, *, limit: int) -> list[dict]:
     rule_keys = _RULE_NAME_KEYS + _POLICY_CODE_KEYS
     rule_cols = ["rule_id", "action"] + [f"_{k}" for k in rule_keys]
     rule_cols += [f"_extra_{k}" for k in _EXTRA_RULE_KEYS]
-    rule_slim = _annotate_meta(events, rule_keys, extra_keys=_EXTRA_RULE_KEYS).values(*rule_cols)
-    for ev in rule_slim.iterator(chunk_size=_META_ITER_CHUNK):
+    rule_slim = (
+        _annotate_meta(events, rule_keys, extra_keys=_EXTRA_RULE_KEYS)
+        .values(*rule_cols)
+        .annotate(n=Count("id"))
+    )
+    for ev in rule_slim:
         action = ev["action"]
+        n = int(ev.get("n") or 0)
         meta = _meta_from_row(ev, rule_keys, extra_keys=_EXTRA_RULE_KEYS)
 
         if ev["rule_id"]:
@@ -483,13 +510,13 @@ def _aggregate_top_rules(events, *, limit: int) -> list[dict]:
             if codes and not bucket["policy_code"]:
                 bucket["policy_code"] = codes[0]
 
-        bucket["triggered"] += 1
+        bucket["triggered"] += n
         if action == ACTION_BLOCK:
-            bucket["blocked"] += 1
+            bucket["blocked"] += n
         elif action == ACTION_REDACT:
-            bucket["redacted"] += 1
+            bucket["redacted"] += n
         elif action == ACTION_MONITOR:
-            bucket["monitored"] += 1
+            bucket["monitored"] += n
 
     rows: list[dict] = []
     for rule_id, stats in by_rule_id.items():

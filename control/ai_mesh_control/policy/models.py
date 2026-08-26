@@ -572,3 +572,9 @@ class MCPServerRuleState(models.Model):
 
 
 from policy.vector_models import VectorCollectionPolicy  # noqa: E402, F401
+from policy.analytics_rollup_models import (  # noqa: E402, F401
+    AnalyticsHourlyGroupFact,
+    AnalyticsHourlyRequestFact,
+    AnalyticsHourlyRowFact,
+    AnalyticsRollupWatermark,
+)

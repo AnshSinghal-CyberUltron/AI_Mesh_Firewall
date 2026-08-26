@@ -20,6 +20,11 @@ Why a re-export instead of a copy:
 from policy.tasks import (  # noqa: F401  (re-exported so Celery registers them)
     compile_policies_task,
     compile_vector_policies_task,
+    refresh_analytics_rollups_task,
 )
 
-__all__ = ["compile_policies_task", "compile_vector_policies_task"]
+__all__ = [
+    "compile_policies_task",
+    "compile_vector_policies_task",
+    "refresh_analytics_rollups_task",
+]

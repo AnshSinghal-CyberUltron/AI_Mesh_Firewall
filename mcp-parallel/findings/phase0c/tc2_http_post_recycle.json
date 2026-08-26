@@ -1,0 +1,357 @@
+{
+  "generated_at": "2026-08-26T09:32:10.650472+00:00",
+  "gate": "T-C2 live HTTP after ANALYTICS_SERVE_ROLLUPS=1",
+  "analytics_serve_rollups": "1",
+  "matrix_n": 20,
+  "matrix": [
+    {
+      "path": "/api/security/soc-kpis/?period=1h",
+      "status": 200,
+      "ms": 16.5,
+      "bytes": 696
+    },
+    {
+      "path": "/api/security/module-kpis/?period=1h",
+      "status": 200,
+      "ms": 7.7,
+      "bytes": 503
+    },
+    {
+      "path": "/api/security/attack-vector-trends/?period=1h",
+      "status": 200,
+      "ms": 7.5,
+      "bytes": 1600
+    },
+    {
+      "path": "/api/security/module-trends/?period=1h",
+      "status": 200,
+      "ms": 7.6,
+      "bytes": 11125
+    },
+    {
+      "path": "/api/security/soc-kpis/?period=6h",
+      "status": 200,
+      "ms": 14.6,
+      "bytes": 696
+    },
+    {
+      "path": "/api/security/module-kpis/?period=6h",
+      "status": 200,
+      "ms": 6.8,
+      "bytes": 503
+    },
+    {
+      "path": "/api/security/attack-vector-trends/?period=6h",
+      "status": 200,
+      "ms": 7.2,
+      "bytes": 1600
+    },
+    {
+      "path": "/api/security/module-trends/?period=6h",
+      "status": 200,
+      "ms": 7.4,
+      "bytes": 11125
+    },
+    {
+      "path": "/api/security/soc-kpis/?period=24h",
+      "status": 200,
+      "ms": 98.6,
+      "bytes": 697
+    },
+    {
+      "path": "/api/security/module-kpis/?period=24h",
+      "status": 200,
+      "ms": 12.3,
+      "bytes": 504
+    },
+    {
+      "path": "/api/security/attack-vector-trends/?period=24h",
+      "status": 200,
+      "ms": 6.8,
+      "bytes": 3076
+    },
+    {
+      "path": "/api/security/module-trends/?period=24h",
+      "status": 200,
+      "ms": 7.1,
+      "bytes": 21206
+    },
+    {
+      "path": "/api/security/soc-kpis/?period=7d",
+      "status": 200,
+      "ms": 36.7,
+      "bytes": 696
+    },
+    {
+      "path": "/api/security/module-kpis/?period=7d",
+      "status": 200,
+      "ms": 11.9,
+      "bytes": 503
+    },
+    {
+      "path": "/api/security/attack-vector-trends/?period=7d",
+      "status": 200,
+      "ms": 6.7,
+      "bytes": 5290
+    },
+    {
+      "path": "/api/security/module-trends/?period=7d",
+      "status": 200,
+      "ms": 7.3,
+      "bytes": 36325
+    },
+    {
+      "path": "/api/security/soc-kpis/?period=30d",
+      "status": 200,
+      "ms": 103.9,
+      "bytes": 831
+    },
+    {
+      "path": "/api/security/module-kpis/?period=30d",
+      "status": 200,
+      "ms": 24.7,
+      "bytes": 534
+    },
+    {
+      "path": "/api/security/attack-vector-trends/?period=30d",
+      "status": 200,
+      "ms": 8.1,
+      "bytes": 3828
+    },
+    {
+      "path": "/api/security/module-trends/?period=30d",
+      "status": 200,
+      "ms": 9.4,
+      "bytes": 26338
+    }
+  ],
+  "matrix_all_2xx": true,
+  "sequential_30d": {
+    "/api/security/soc-kpis/?period=30d": {
+      "n": 11,
+      "min_ms": 87.6,
+      "median_ms": 92.2,
+      "p99_ms": 191.1,
+      "max_ms": 191.1,
+      "all_2xx": true,
+      "status_hist": {
+        "200": 11
+      },
+      "ms": [
+        90.8,
+        191.1,
+        107.4,
+        96.8,
+        93.5,
+        90.8,
+        90.3,
+        93.2,
+        92.2,
+        90.9,
+        87.6
+      ]
+    },
+    "/api/security/module-kpis/?period=30d": {
+      "n": 11,
+      "min_ms": 24.0,
+      "median_ms": 24.6,
+      "p99_ms": 26.1,
+      "max_ms": 26.1,
+      "all_2xx": true,
+      "status_hist": {
+        "200": 11
+      },
+      "ms": [
+        24.9,
+        25.5,
+        24.5,
+        24.0,
+        24.2,
+        26.1,
+        24.5,
+        24.6,
+        24.2,
+        24.6,
+        25.1
+      ]
+    },
+    "/api/security/attack-vector-trends/?period=30d": {
+      "n": 11,
+      "min_ms": 7.3,
+      "median_ms": 7.7,
+      "p99_ms": 8.7,
+      "max_ms": 8.7,
+      "all_2xx": true,
+      "status_hist": {
+        "200": 11
+      },
+      "ms": [
+        7.3,
+        7.6,
+        7.7,
+        7.5,
+        8.7,
+        7.5,
+        8.1,
+        7.8,
+        7.5,
+        8.4,
+        7.8
+      ]
+    },
+    "/api/security/module-trends/?period=30d": {
+      "n": 11,
+      "min_ms": 7.9,
+      "median_ms": 8.3,
+      "p99_ms": 11.1,
+      "max_ms": 11.1,
+      "all_2xx": true,
+      "status_hist": {
+        "200": 11
+      },
+      "ms": [
+        8.3,
+        8.2,
+        8.4,
+        11.1,
+        8.1,
+        8.5,
+        8.5,
+        8.3,
+        8.2,
+        8.1,
+        7.9
+      ]
+    }
+  },
+  "all_p99_ms": {
+    "/api/security/soc-kpis/?period=30d": 191.1,
+    "/api/security/module-kpis/?period=30d": 26.1,
+    "/api/security/attack-vector-trends/?period=30d": 8.7,
+    "/api/security/module-trends/?period=30d": 11.1
+  },
+  "worst_p99_ms": 191.1,
+  "baseline_tch1_worst_p99_ms": 3717.4,
+  "cadence": {
+    "polls": 6,
+    "all_2xx": true,
+    "rows": [
+      {
+        "t": 0.1,
+        "batch": [
+          {
+            "path": "/api/security/module-kpis/?period=30d",
+            "status": 200,
+            "ms": 34.4,
+            "bytes": 534
+          },
+          {
+            "path": "/api/security/soc-kpis/?period=30d",
+            "status": 200,
+            "ms": 108.2,
+            "bytes": 831
+          }
+        ]
+      },
+      {
+        "t": 5.1,
+        "batch": [
+          {
+            "path": "/api/security/attack-vector-trends/?period=30d",
+            "status": 200,
+            "ms": 10.9,
+            "bytes": 3828
+          },
+          {
+            "path": "/api/security/module-trends/?period=30d",
+            "status": 200,
+            "ms": 11.7,
+            "bytes": 26338
+          }
+        ]
+      },
+      {
+        "t": 10.2,
+        "batch": [
+          {
+            "path": "/api/security/module-kpis/?period=30d",
+            "status": 200,
+            "ms": 37.1,
+            "bytes": 534
+          },
+          {
+            "path": "/api/security/soc-kpis/?period=30d",
+            "status": 200,
+            "ms": 108.2,
+            "bytes": 831
+          }
+        ]
+      },
+      {
+        "t": 15.2,
+        "batch": [
+          {
+            "path": "/api/security/attack-vector-trends/?period=30d",
+            "status": 200,
+            "ms": 10.7,
+            "bytes": 3828
+          },
+          {
+            "path": "/api/security/module-trends/?period=30d",
+            "status": 200,
+            "ms": 11.3,
+            "bytes": 26338
+          }
+        ]
+      },
+      {
+        "t": 20.4,
+        "batch": [
+          {
+            "path": "/api/security/module-kpis/?period=30d",
+            "status": 200,
+            "ms": 40.0,
+            "bytes": 534
+          },
+          {
+            "path": "/api/security/soc-kpis/?period=30d",
+            "status": 200,
+            "ms": 124.2,
+            "bytes": 831
+          }
+        ]
+      },
+      {
+        "t": 25.4,
+        "batch": [
+          {
+            "path": "/api/security/attack-vector-trends/?period=30d",
+            "status": 200,
+            "ms": 12.1,
+            "bytes": 3828
+          },
+          {
+            "path": "/api/security/module-trends/?period=30d",
+            "status": 200,
+            "ms": 12.3,
+            "bytes": 26338
+          }
+        ]
+      }
+    ]
+  },
+  "invalid_90d": {
+    "path": "/api/security/soc-kpis/?period=90d",
+    "status": 400,
+    "ms": 8.8,
+    "bytes": 92,
+    "snippet": "{\"detail\":\"Invalid period '90d'. Use one of: 1h, 24h, 30d, 6h, 7d.\",\"code\":\"invalid_period\"}"
+  },
+  "health": {
+    "path": "/api/health/",
+    "status": 200,
+    "ms": 4.5,
+    "bytes": 16
+  },
+  "ok": true
+}

@@ -1,0 +1,91 @@
+{
+  "live": {
+    "file": "/home/contact_cyberultron_com/AI_Mesh_Firewall/docker-compose.yml",
+    "sum_mib": 2560.0,
+    "host_ram_mib": 60259.64,
+    "cap_80pct_mib": 48207.71,
+    "ok": true,
+    "ratio": 0.0425,
+    "limits": [
+      [
+        "mem_limit: 2560m",
+        2560.0
+      ]
+    ]
+  },
+  "prod": {
+    "file": "/home/contact_cyberultron_com/AI_Mesh_Firewall/docker-compose.prod.yml",
+    "sum_mib": 24320.0,
+    "host_ram_mib": 60259.64,
+    "cap_80pct_mib": 48207.71,
+    "ok": true,
+    "ratio": 0.4036,
+    "limits": [
+      [
+        "memory: 2560M",
+        2560.0
+      ],
+      [
+        "memory: 256M",
+        256.0
+      ],
+      [
+        "memory: 1024M",
+        1024.0
+      ],
+      [
+        "memory: 512M",
+        512.0
+      ],
+      [
+        "memory: 1024M",
+        1024.0
+      ],
+      [
+        "memory: 512M",
+        512.0
+      ],
+      [
+        "memory: 2560M",
+        2560.0
+      ],
+      [
+        "memory: 12288M",
+        12288.0
+      ],
+      [
+        "memory: 1280M",
+        1280.0
+      ],
+      [
+        "memory: 384M",
+        384.0
+      ],
+      [
+        "memory: 256M",
+        256.0
+      ],
+      [
+        "memory: 256M",
+        256.0
+      ],
+      [
+        "memory: 768M",
+        768.0
+      ],
+      [
+        "memory: 256M",
+        256.0
+      ],
+      [
+        "memory: 256M",
+        256.0
+      ],
+      [
+        "memory: 128M",
+        128.0
+      ]
+    ]
+  },
+  "hardcoded_forbidden": true
+}

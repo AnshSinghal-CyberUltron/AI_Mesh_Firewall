@@ -93,6 +93,15 @@ set -- gunicorn main_app.asgi:application \
     --keep-alive "${GUNICORN_KEEPALIVE:-65}" \
     --forwarded-allow-ips "${GUNICORN_FORWARDED_ALLOW_IPS:-*}"
 
+# C-3: recycle workers after N requests as leak insurance. This is not an OOM fix —
+# recycling runs after a request completes; the OOM kill happens during one. SQL
+# pushdown (C-1′) is the OOM fix. GUNICORN_MAX_REQUESTS=0 disables recycling.
+if [ "${GUNICORN_MAX_REQUESTS:-2000}" != "0" ]; then
+    set -- "$@" \
+        --max-requests "${GUNICORN_MAX_REQUESTS:-2000}" \
+        --max-requests-jitter "${GUNICORN_MAX_REQUESTS_JITTER:-100}"
+fi
+
 if [ "${CONTROL_ENTRYPOINT_DRYRUN:-0}" = "1" ]; then
     echo "[control-entrypoint] DRYRUN would exec: $*" >&2
     exit 0

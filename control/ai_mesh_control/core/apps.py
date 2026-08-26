@@ -39,6 +39,7 @@ class CoreConfig(AppConfig):
         if not self._is_management_or_test():
             self._start_telemetry_drain()
             self._start_gateway_key_resync()
+            self._start_analytics_rollup_refresh()
             self._seed_simulator_default_key()
 
     @staticmethod
@@ -144,3 +145,42 @@ class CoreConfig(AppConfig):
         thread = threading.Thread(target=_drain_loop, daemon=True, name="telemetry-drain")
         thread.start()
         logger.info("Telemetry drain thread started (interval=%ss)", getattr(settings, "TELEMETRY_DRAIN_INTERVAL_SEC", 1.0))
+
+    @staticmethod
+    def _start_analytics_rollup_refresh() -> None:
+        """Hourly-fact refresh without requiring the workers-beat profile.
+
+        C-2 facts are batch-built. The default compose stack does not run
+        Celery beat, so control owns a daemon thread. Gunicorn workers all
+        start the loop; Redis SET NX (analytics:rollup_refresh) elects one
+        runner per interval. Disable with ANALYTICS_ROLLUP_REFRESH=0.
+        """
+        import threading
+        from policy.analytics_rollup_refresh import (
+            refresh_enabled,
+            refresh_interval_sec,
+            try_refresh_all_locked,
+        )
+
+        if not refresh_enabled():
+            logger.info("Analytics rollup refresh thread disabled")
+            return
+
+        interval_seconds = float(refresh_interval_sec())
+
+        def _refresh_loop() -> None:
+            time.sleep(45.0)
+            while True:
+                try:
+                    result = try_refresh_all_locked()
+                    logger.info("Analytics rollup refresh: %s", result)
+                except Exception:
+                    logger.warning("Analytics rollup refresh iteration failed", exc_info=True)
+                time.sleep(interval_seconds)
+
+        threading.Thread(
+            target=_refresh_loop, daemon=True, name="analytics-rollup-refresh"
+        ).start()
+        logger.info(
+            "Analytics rollup refresh thread started (interval=%ss)", interval_seconds
+        )

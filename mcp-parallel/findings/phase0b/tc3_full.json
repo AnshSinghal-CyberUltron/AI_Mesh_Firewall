@@ -1,0 +1,54 @@
+{
+  "note": "Recycling is leak insurance, not an OOM fix. SQL pushdown (C-1') is the OOM fix.",
+  "mode": "recycle",
+  "recycle": {
+    "ok": true,
+    "note": "Recycling is leak insurance, not an OOM fix. SQL pushdown (C-1') is the OOM fix.",
+    "before_cmdline": "/app/control/.venv/bin/python /app/control/.venv/bin/gunicorn main_app.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 3 --worker-connections 1000 --timeout 120 --graceful-timeout 30 --keep-alive 65 --forwarded-allow-ips * --max-requests 2000 --max-requests-jitter 100",
+    "drill_cmdline": "/app/control/.venv/bin/python /app/control/.venv/bin/gunicorn main_app.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 3 --worker-connections 1000 --timeout 120 --graceful-timeout 30 --keep-alive 65 --forwarded-allow-ips * --max-requests 30 --max-requests-jitter 0",
+    "max_requests": 30,
+    "jitter": 0,
+    "start_pids": [
+      14,
+      15,
+      16
+    ],
+    "end_pids": [
+      302,
+      340,
+      365
+    ],
+    "seen_pids": [
+      14,
+      15,
+      16,
+      302,
+      340,
+      365
+    ],
+    "births": [
+      302,
+      340,
+      365
+    ],
+    "n_start_workers": 3,
+    "n_births": 3,
+    "rounds": 23,
+    "handled_approx": 92,
+    "per_worker_handled_approx": 30,
+    "expected_recycles_per_worker": [
+      1,
+      1
+    ],
+    "expected_births_lo": 3,
+    "visible_5xx_after_retry": 0,
+    "extra_wave_5xx": 0,
+    "oom_kill_delta": 0,
+    "status_hist": {
+      "200": 116
+    },
+    "restored_cmdline": "/app/control/.venv/bin/python /app/control/.venv/bin/gunicorn main_app.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 3 --worker-connections 1000 --timeout 120 --graceful-timeout 30 --keep-alive 65 --forwarded-allow-ips * --max-requests 2000 --max-requests-jitter 100",
+    "restored_ok": true
+  },
+  "ok": true
+}

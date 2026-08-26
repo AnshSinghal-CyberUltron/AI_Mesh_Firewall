@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "tf3": {
+    "cold24Count": 4,
+    "after7Count": 4,
+    "aborted24Count": 2,
+    "aborted": [
+      {
+        "url": "http://127.0.0.1:8180/api/security/module-kpis/?period=24h",
+        "failure": "net::ERR_ABORTED"
+      },
+      {
+        "url": "http://127.0.0.1:8180/api/security/module-trends/?period=24h",
+        "failure": "net::ERR_ABORTED"
+      }
+    ],
+    "pass": true
+  },
+  "tf4": {
+    "peak": 2,
+    "overallPeak": 4,
+    "cap": 2,
+    "pass": true,
+    "startedCount": 8,
+    "urls": [
+      "http://127.0.0.1:8180/api/security/soc-kpis/?period=24h",
+      "http://127.0.0.1:8180/api/security/attack-vector-trends/?period=24h",
+      "http://127.0.0.1:8180/api/security/module-kpis/?period=24h",
+      "http://127.0.0.1:8180/api/security/module-trends/?period=24h",
+      "http://127.0.0.1:8180/api/security/soc-kpis/?period=7d",
+      "http://127.0.0.1:8180/api/security/attack-vector-trends/?period=7d",
+      "http://127.0.0.1:8180/api/security/module-kpis/?period=7d",
+      "http://127.0.0.1:8180/api/security/module-trends/?period=7d"
+    ]
+  },
+  "pageErrors": [],
+  "error": null
+}

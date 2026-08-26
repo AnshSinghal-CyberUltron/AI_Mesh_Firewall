@@ -131,3 +131,11 @@ def compile_vector_policies_task(trigger: str = "signal") -> bool:
         logger.error("Vector policy compilation task failed (Redis push unsuccessful)")
 
     return success
+
+
+@shared_task(name="policy.refresh_analytics_rollups")
+def refresh_analytics_rollups_task(hours: int | None = None) -> dict:
+    """Rebuild hourly analytics facts. Redis-locked; no-op if another runner holds the lock."""
+    from policy.analytics_rollup_refresh import try_refresh_all_locked
+
+    return try_refresh_all_locked(hours=hours)

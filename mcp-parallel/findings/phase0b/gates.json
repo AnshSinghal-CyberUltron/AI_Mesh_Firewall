@@ -1,0 +1,171 @@
+{
+  "generated_at": "2026-08-26T07:03:06.248438+00:00",
+  "scope": "Phase 0b P-gate pack from docs/plans/2026-08-25-FINAL-verification-and-platform-agnostic-scale-plan.md \u00a73+\u00a710+\u00a714. Not Phase 0c/1.",
+  "phase_0c_opened": false,
+  "phase_0c_reason": "11\u00d7 soc-kpis/?period=30d max=3678.2ms \u2264 5000ms (T-CH1 / 0c.1 not triggered)",
+  "live_control": {
+    "container": "ai_mesh_firewall-control-1",
+    "workers": 3,
+    "gunicorn_argv_has_max_requests_2000": true,
+    "gunicorn_argv_has_jitter_100": true,
+    "health": 200
+  },
+  "gates": {
+    "T-C1": {
+      "ok": true,
+      "evidence": "mcp-parallel/findings/phase0b/tc1.json",
+      "summary": {
+        "in_range_ok": true,
+        "reject_90d_ok": true,
+        "growth_mb": 0.47
+      }
+    },
+    "T-C1b": {
+      "ok": true,
+      "evidence": "mcp-parallel/findings/phase0b/tc1b.json",
+      "summary": {
+        "peak_bytes": 491003904,
+        "cap_70pct": 1879048192,
+        "oom_kill_delta": 0,
+        "all_200": true
+      }
+    },
+    "T-C3_soak": {
+      "ok": true,
+      "re_run_this_session": false,
+      "evidence": "mcp-parallel/findings/phase0b/tc3.json",
+      "summary": {
+        "duration_s": 3600,
+        "handled": 1420,
+        "status_200": 1420,
+        "oom_kill_delta": 0,
+        "rss_spread_kb": 572,
+        "n_births": 0
+      }
+    },
+    "T-C3_recycle": {
+      "ok": true,
+      "re_run_this_session": false,
+      "evidence": "mcp-parallel/findings/phase0b/tc3_full.json",
+      "summary": {
+        "n_births": 3,
+        "handled_200": 116,
+        "restored_ok": true
+      }
+    },
+    "T-C4": {
+      "ok": true,
+      "evidence": "mcp-parallel/findings/phase0b/tc4.json",
+      "summary": {
+        "live_sum_mib": 2560.0,
+        "host_ram_mib": 60259.64,
+        "prod_sum_mib": 24320.0,
+        "prod_ok_on_this_host": true,
+        "note": "Live compose only mem_limit control 2560m. Prod sum computed (not hardcoded). Prod over-commit vs smaller hosts is a known residual, not a 0b fail."
+      }
+    },
+    "T-C4b": {
+      "ok": true,
+      "evidence": "mcp-parallel/findings/phase0b/ob2_oc_tc4b.json",
+      "summary": {
+        "peak_worker_rss_mb": 164.95,
+        "DEFAULT_PER_WORKER_RSS_MB": 512,
+        "raise_constant": false,
+        "prior_soak_peak_mb": 172.73
+      }
+    },
+    "T-C7": {
+      "ok": true,
+      "evidence": "in-container Django policy.tests.test_analytics_projection_audit (51 tests OK including this file)",
+      "summary": "No .values(..., metadata) and no .iterator() in security/dashboard/analytics views."
+    },
+    "T-C9": {
+      "ok": true,
+      "evidence": "in-container Django test_soc_kpis_period.test_numeric_request_id_does_not_collapse_distinct_requests",
+      "summary": "Numeric request_id does not collapse distinct requests (standalone __row_<pk>)."
+    },
+    "T-F3": {
+      "ok": true,
+      "evidence": "mcp-parallel/findings/phase0b/tf34_frontend.json",
+      "summary": {
+        "cold24Count": 4,
+        "after7Count": 4,
+        "aborted24Count": 2,
+        "aborted": [
+          {
+            "url": "http://127.0.0.1:8180/api/security/module-kpis/?period=24h",
+            "failure": "net::ERR_ABORTED"
+          },
+          {
+            "url": "http://127.0.0.1:8180/api/security/module-trends/?period=24h",
+            "failure": "net::ERR_ABORTED"
+          }
+        ],
+        "pass": true
+      }
+    },
+    "T-F4": {
+      "ok": true,
+      "evidence": "mcp-parallel/findings/phase0b/tf34_frontend.json",
+      "summary": {
+        "peak24": 2,
+        "cap": 2
+      }
+    },
+    "0b.2_days_clamp": {
+      "ok": true,
+      "evidence": "mcp-parallel/findings/phase0b/ob2_oc_tc4b.json",
+      "summary": [
+        {
+          "path": "/api/dashboard/model-usage/",
+          "status_30": 200,
+          "ms_30": 734.7,
+          "bytes_30": 2194,
+          "status_365": 200,
+          "ms_365": 713.8,
+          "bytes_365": 2194,
+          "bodies_equal": true
+        },
+        {
+          "path": "/api/dashboard/risk-distribution/",
+          "status_30": 200,
+          "ms_30": 986.9,
+          "bytes_30": 155,
+          "status_365": 200,
+          "ms_365": 982.0,
+          "bytes_365": 155,
+          "bodies_equal": true
+        }
+      ]
+    },
+    "0c.1_p99_trigger": {
+      "ok": true,
+      "open_phase_0c": false,
+      "evidence": "mcp-parallel/findings/phase0b/ob2_oc_tc4b.json",
+      "max_ms": 3678.2
+    },
+    "live_edges": {
+      "ok": true,
+      "evidence": "mcp-parallel/findings/phase0b/live_edges.json"
+    },
+    "django_0b_suite": {
+      "ok": true,
+      "n": 51,
+      "keepdb": true,
+      "direct_postgres": true
+    },
+    "frontend_requestLifecycle_unit": {
+      "ok": true,
+      "n": 10
+    },
+    "tc3_math_unit": {
+      "ok": true,
+      "n": 8
+    },
+    "tc4_compose_unit": {
+      "ok": true,
+      "n": 4
+    }
+  },
+  "all_p_gates_ok": true
+}

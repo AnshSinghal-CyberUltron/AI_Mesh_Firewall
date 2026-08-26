@@ -1,0 +1,257 @@
+{
+  "ok": true,
+  "in_range_ok": true,
+  "reject_90d_ok": true,
+  "rss_ok": true,
+  "silent_24h": false,
+  "baseline_max_rss_kb": 175596,
+  "peak_max_rss_kb": 175636,
+  "growth_mb": 0.04,
+  "in_range": [
+    {
+      "path": "/api/security/soc-kpis/?period=1h",
+      "status": 200,
+      "bytes": 696,
+      "ms": 18.3,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/module-kpis/?period=1h",
+      "status": 200,
+      "bytes": 503,
+      "ms": 8.2,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/attack-vector-trends/?period=1h",
+      "status": 200,
+      "bytes": 1600,
+      "ms": 8.6,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/module-trends/?period=1h",
+      "status": 200,
+      "bytes": 11125,
+      "ms": 9.9,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/rag-pipeline-kpis/?period=1h",
+      "status": 200,
+      "bytes": 523,
+      "ms": 10.4,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/soc-kpis/?period=6h",
+      "status": 200,
+      "bytes": 696,
+      "ms": 16.6,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/module-kpis/?period=6h",
+      "status": 200,
+      "bytes": 503,
+      "ms": 9.2,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/attack-vector-trends/?period=6h",
+      "status": 200,
+      "bytes": 1600,
+      "ms": 8.5,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/module-trends/?period=6h",
+      "status": 200,
+      "bytes": 11125,
+      "ms": 8.7,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/rag-pipeline-kpis/?period=6h",
+      "status": 200,
+      "bytes": 523,
+      "ms": 9.2,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/soc-kpis/?period=24h",
+      "status": 200,
+      "bytes": 697,
+      "ms": 44.2,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/module-kpis/?period=24h",
+      "status": 200,
+      "bytes": 504,
+      "ms": 14.4,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/attack-vector-trends/?period=24h",
+      "status": 200,
+      "bytes": 3076,
+      "ms": 8.2,
+      "rss_max_kb": 175596
+    },
+    {
+      "path": "/api/security/module-trends/?period=24h",
+      "status": 200,
+      "bytes": 21206,
+      "ms": 9.6,
+      "rss_max_kb": 175600
+    },
+    {
+      "path": "/api/security/rag-pipeline-kpis/?period=24h",
+      "status": 200,
+      "bytes": 524,
+      "ms": 10.0,
+      "rss_max_kb": 175600
+    },
+    {
+      "path": "/api/security/soc-kpis/?period=7d",
+      "status": 200,
+      "bytes": 696,
+      "ms": 45.3,
+      "rss_max_kb": 175600
+    },
+    {
+      "path": "/api/security/module-kpis/?period=7d",
+      "status": 200,
+      "bytes": 503,
+      "ms": 13.5,
+      "rss_max_kb": 175600
+    },
+    {
+      "path": "/api/security/attack-vector-trends/?period=7d",
+      "status": 200,
+      "bytes": 5290,
+      "ms": 8.5,
+      "rss_max_kb": 175600
+    },
+    {
+      "path": "/api/security/module-trends/?period=7d",
+      "status": 200,
+      "bytes": 36325,
+      "ms": 9.2,
+      "rss_max_kb": 175600
+    },
+    {
+      "path": "/api/security/rag-pipeline-kpis/?period=7d",
+      "status": 200,
+      "bytes": 523,
+      "ms": 9.0,
+      "rss_max_kb": 175600
+    },
+    {
+      "path": "/api/security/soc-kpis/?period=30d",
+      "status": 200,
+      "bytes": 831,
+      "ms": 112.8,
+      "rss_max_kb": 175600
+    },
+    {
+      "path": "/api/security/module-kpis/?period=30d",
+      "status": 200,
+      "bytes": 534,
+      "ms": 29.6,
+      "rss_max_kb": 175612
+    },
+    {
+      "path": "/api/security/attack-vector-trends/?period=30d",
+      "status": 200,
+      "bytes": 3827,
+      "ms": 9.3,
+      "rss_max_kb": 175612
+    },
+    {
+      "path": "/api/security/module-trends/?period=30d",
+      "status": 200,
+      "bytes": 26337,
+      "ms": 9.7,
+      "rss_max_kb": 175612
+    },
+    {
+      "path": "/api/security/rag-pipeline-kpis/?period=30d",
+      "status": 200,
+      "bytes": 524,
+      "ms": 1142.1,
+      "rss_max_kb": 175612
+    },
+    {
+      "path": "/api/dashboard/model-usage/?days=30",
+      "status": 200,
+      "bytes": 2194,
+      "ms": 754.3,
+      "rss_max_kb": 175612
+    },
+    {
+      "path": "/api/dashboard/risk-distribution/?days=30",
+      "status": 200,
+      "bytes": 155,
+      "ms": 1004.7,
+      "rss_max_kb": 175632
+    },
+    {
+      "path": "/api/dashboard/model-usage/?days=365",
+      "status": 200,
+      "bytes": 2194,
+      "ms": 739.7,
+      "rss_max_kb": 175632
+    },
+    {
+      "path": "/api/dashboard/risk-distribution/?days=365",
+      "status": 200,
+      "bytes": 155,
+      "ms": 1026.1,
+      "rss_max_kb": 175636
+    }
+  ],
+  "rejects_90d": [
+    {
+      "path": "/api/security/soc-kpis/?period=90d",
+      "status": 400,
+      "bytes": 92,
+      "ms": 8.4,
+      "snippet": "{\"detail\":\"Invalid period '90d'. Use one of: 1h, 24h, 30d, 6h, 7d.\",\"code\":\"invalid_period\"}"
+    },
+    {
+      "path": "/api/security/module-kpis/?period=90d",
+      "status": 400,
+      "bytes": 92,
+      "ms": 7.0,
+      "snippet": "{\"detail\":\"Invalid period '90d'. Use one of: 1h, 24h, 30d, 6h, 7d.\",\"code\":\"invalid_period\"}"
+    },
+    {
+      "path": "/api/security/attack-vector-trends/?period=90d",
+      "status": 400,
+      "bytes": 92,
+      "ms": 6.1,
+      "snippet": "{\"detail\":\"Invalid period '90d'. Use one of: 1h, 24h, 30d, 6h, 7d.\",\"code\":\"invalid_period\"}"
+    },
+    {
+      "path": "/api/security/module-trends/?period=90d",
+      "status": 400,
+      "bytes": 92,
+      "ms": 6.3,
+      "snippet": "{\"detail\":\"Invalid period '90d'. Use one of: 1h, 24h, 30d, 6h, 7d.\",\"code\":\"invalid_period\"}"
+    },
+    {
+      "path": "/api/security/rag-pipeline-kpis/?period=90d",
+      "status": 400,
+      "bytes": 92,
+      "ms": 5.8,
+      "snippet": "{\"detail\":\"Invalid period '90d'. Use one of: 1h, 24h, 30d, 6h, 7d.\",\"code\":\"invalid_period\"}"
+    }
+  ],
+  "baseline_workers": {
+    "87": 169032,
+    "89": 175596,
+    "91": 169524
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "helper_clean": true,
+  "api_clean": true,
+  "helper_count": 0,
+  "total_threats": 0,
+  "canary_in_body": false,
+  "note": "live_tc8_canary.py inside control; superuser-no-org cannot see foreign tenant"
+}

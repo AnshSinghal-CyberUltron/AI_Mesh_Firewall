@@ -1,13 +1,16 @@
 {
   "ok": true,
-  "gate": "T-C6",
   "status": 504,
-  "dt_s": 5.012,
+  "dt_s": 5.011,
   "body": {
     "error": "query_timeout",
     "detail": "Analytics query exceeded statement_timeout",
     "code": "query_timeout"
   },
-  "worker_health": "{\"status\": \"ok\"}",
-  "note": "Admin GET /api/security/analytics-timeout-probe/ runs SELECT pg_sleep(6) on analytics alias after SET LOCAL statement_timeout=5000. ATOMIC_REQUESTS left off the analytics alias so a 504 does not COMMIT an aborted txn."
+  "timeout_ok": true,
+  "fast_enough": true,
+  "worker_live": true,
+  "health": "{\"status\": \"ok\"}",
+  "oom_killed": false,
+  "status_running": "running"
 }

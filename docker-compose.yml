@@ -145,6 +145,18 @@ services:
       TELEMETRY_DRAIN_BATCH_SIZE: ${TELEMETRY_DRAIN_BATCH_SIZE:-250}
       # Phase 0a C-4b: pin ASGI thread pool (entrypoint default is also 2).
       ASGI_THREADS: ${ASGI_THREADS:-2}
+      # Pin workers across recreate so the 16-core host cannot jump to 16 gunicorn
+      # processes (PERF-0002). Live 0b/0c stack runs 3.
+      CONTROL_WEB_CONCURRENCY: ${CONTROL_WEB_CONCURRENCY:-3}
+      # C-3 leak insurance (not an OOM fix). 0 disables. Recycle drill may pin 30/0.
+      GUNICORN_MAX_REQUESTS: ${GUNICORN_MAX_REQUESTS:-2000}
+      GUNICORN_MAX_REQUESTS_JITTER: ${GUNICORN_MAX_REQUESTS_JITTER:-100}
+      # Phase 0c C-2: serve 24h/7d/30d SOC/module/vector reads from hourly facts.
+      # Enabled after live T-C2 ×3 identity (2026-08-26). Override with 0 to force raw.
+      ANALYTICS_SERVE_ROLLUPS: ${ANALYTICS_SERVE_ROLLUPS:-1}
+      # Rebuild facts without workers-beat (Redis lock; default 15 min).
+      ANALYTICS_ROLLUP_REFRESH: ${ANALYTICS_ROLLUP_REFRESH:-1}
+      ANALYTICS_ROLLUP_REFRESH_SEC: ${ANALYTICS_ROLLUP_REFRESH_SEC:-900}
     depends_on:
       postgres: { condition: service_healthy }
       pgbouncer: { condition: service_healthy }

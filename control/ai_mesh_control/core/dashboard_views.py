@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import timedelta
 
 from django.http import HttpResponse
-from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
+from django.db.models import Avg, Case, CharField, Count, DurationField, ExpressionWrapper, F, FloatField, Q, Sum, Value, When
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -16,6 +16,8 @@ from core.models import Agent, Endpoint
 from policy.constants import ACTION_BLOCK, ACTION_REDACT
 from policy.models import ComplianceViolation, EnforcementEvent, Policy, Rule
 from policy.analytics_concurrency import AnalyticsConcurrencyMixin
+from policy.analytics_period import clamp_days
+from policy.analytics_sql import annotate_numeric_float, metadata_json, metadata_text
 from policy.security_views import OWASP_ALL_VECTORS, _enforcement_events_for_request
 try:
     from third_party_integrations.export_reporter import ExportReporter
@@ -127,21 +129,28 @@ class DashboardSummaryView(APIView):
         mttr_minutes = round(avg_duration.total_seconds() / 60, 1) if avg_duration else None
 
         # OWASP Coverage: average block rate across OWASP vectors that had detections (last 30 days)
-        owasp_events = events_30d.values("metadata", "action")
+        owasp_rows = (
+            events_30d.annotate(
+                _owasp_codes=metadata_json("owasp_codes"),
+                _owasp_code=metadata_text("owasp_code"),
+            )
+            .values("action", "_owasp_codes", "_owasp_code")
+            .annotate(n=Count("id"))
+        )
         by_code = defaultdict(lambda: {"detected": 0, "blocked": 0})
-        for ev in owasp_events:
-            meta = ev.get("metadata") or {}
-            codes = meta.get("owasp_codes")
+        for ev in owasp_rows:
+            n = int(ev.get("n") or 0)
+            codes = ev.get("_owasp_codes")
             if codes is None:
-                single = (meta.get("owasp_code") or "").strip().upper()
+                single = (ev.get("_owasp_code") or "").strip().upper()
                 codes = [single] if single else []
             else:
                 codes = [str(c).strip().upper() for c in codes if c]
             for code in codes:
                 if code and code in OWASP_ALL_VECTORS:
-                    by_code[code]["detected"] += 1
+                    by_code[code]["detected"] += n
                     if ev["action"] == ACTION_BLOCK:
-                        by_code[code]["blocked"] += 1
+                        by_code[code]["blocked"] += n
 
         coverages = []
         for code in OWASP_ALL_VECTORS:
@@ -207,7 +216,7 @@ class DashboardReportView(APIView):
         if fmt not in ("html",):
             return Response({"detail": "Unsupported export_format. Use export_format=html."}, status=400)
 
-        days = min(int(request.query_params.get("days", 30)), 365)
+        days = clamp_days(request.query_params.get("days"), default=30)
         org, endpoint_ids = _dashboard_org_context(request)
         since = timezone.now() - timedelta(days=days)
 
@@ -241,7 +250,24 @@ class DashboardReportView(APIView):
 
         # Lightweight highlights (avoid huge payloads).
         recent_events = list(
-            events_qs.order_by("-created_at").values("id", "action", "created_at", "endpoint_id", "user_id", "metadata")[:50]
+            events_qs.order_by("-created_at")
+            .annotate(
+                _model=metadata_text("model"),
+                _risk=metadata_text("security_risk_score"),
+                _category=metadata_text("threat_category"),
+                _owasp=metadata_text("owasp_code"),
+            )
+            .values(
+                "id",
+                "action",
+                "created_at",
+                "endpoint_id",
+                "user_id",
+                "_model",
+                "_risk",
+                "_category",
+                "_owasp",
+            )[:50]
         )
 
         reporter = ExportReporter()
@@ -269,7 +295,7 @@ class ComplianceSummaryView(APIView):
 
     def get(self, request):
         org, endpoint_ids = _dashboard_org_context(request)
-        days = min(int(request.query_params.get("days", 30)), 365)
+        days = clamp_days(request.query_params.get("days"), default=30)
         since = timezone.now() - timedelta(days=days)
 
         cv_qs = ComplianceViolation.objects.filter(created_at__gte=since)
@@ -417,33 +443,33 @@ class ModelUsageView(AnalyticsConcurrencyMixin, APIView):
 
     def get(self, request):
         org, endpoint_ids = _dashboard_org_context(request)
-        days = min(int(request.query_params.get("days", 30)), 365)
+        days = clamp_days(request.query_params.get("days"), default=30)
         since = timezone.now() - timedelta(days=days)
         events_qs = _enforcement_events_for_request(
             request, EnforcementEvent.objects.filter(created_at__gte=since)
-        ).values("metadata", "action")
-        events = events_qs
+        )
+        events_qs = events_qs.annotate(_model=metadata_text("model"))
+        events_qs = annotate_numeric_float(events_qs, "security_risk_score", "_risk")
+        grouped = events_qs.values("_model", "action").annotate(
+            n=Count("id"),
+            risk_sum=Sum("_risk", filter=Q(_risk_raw__regex=r"^-?[0-9]+(\.[0-9]+)?$")),
+            risk_n=Count("id", filter=Q(_risk_raw__regex=r"^-?[0-9]+(\.[0-9]+)?$")),
+        )
 
-        by_model = defaultdict(lambda: {"total": 0, "blocked": 0, "allowed": 0, "risk_scores": []})
+        by_model = defaultdict(lambda: {"total": 0, "blocked": 0, "allowed": 0, "risk_sum": 0.0, "risk_n": 0})
         from core.model_state_bootstrap import canonicalize_model_name_safe
-        for ev in events:
-            meta = ev.get("metadata") or {}
-            model = meta.get("model") or "Unknown"
+        for ev in grouped:
+            n = int(ev.get("n") or 0)
+            model = ev.get("_model") or "Unknown"
             model = str(model).strip() or "Unknown"
-            # P5c: collapse raw guard/upstream model ids to the public label so the
-            # model-usage breakdown never leaks bedrock/claude-haiku/gpt-oss ids.
             model = canonicalize_model_name_safe(model) or "Unknown"
-            by_model[model]["total"] += 1
+            by_model[model]["total"] += n
             if ev["action"] == ACTION_BLOCK:
-                by_model[model]["blocked"] += 1
+                by_model[model]["blocked"] += n
             else:
-                by_model[model]["allowed"] += 1
-            rs = meta.get("security_risk_score")
-            if rs is not None:
-                try:
-                    by_model[model]["risk_scores"].append(float(rs))
-                except (TypeError, ValueError):
-                    pass
+                by_model[model]["allowed"] += n
+            by_model[model]["risk_sum"] += float(ev.get("risk_sum") or 0.0)
+            by_model[model]["risk_n"] += int(ev.get("risk_n") or 0)
 
         results = []
         for model, data in sorted(by_model.items(), key=lambda x: -x[1]["total"]):
@@ -452,8 +478,8 @@ class ModelUsageView(AnalyticsConcurrencyMixin, APIView):
             allowed = data["allowed"]
             block_rate = round(blocked / total * 100, 2) if total else 0.0
             avg_risk = (
-                round(sum(data["risk_scores"]) / len(data["risk_scores"]), 1)
-                if data["risk_scores"] else 0.0
+                round(data["risk_sum"] / data["risk_n"], 1)
+                if data["risk_n"] else 0.0
             )
             if block_rate < 5:
                 health = "Healthy"
@@ -521,7 +547,7 @@ class AIServicesView(APIView):
         return Response(results)
 
 
-class RiskDistributionView(APIView):
+class RiskDistributionView(AnalyticsConcurrencyMixin, APIView):
     """
     GET /api/dashboard/risk-distribution/?days=30&buckets=default|fine
     Buckets EnforcementEvent by metadata.security_risk_score.
@@ -540,50 +566,55 @@ class RiskDistributionView(APIView):
 
     def get(self, request):
         org, endpoint_ids = _dashboard_org_context(request)
-        days = min(int(request.query_params.get("days", 30)), 365)
+        days = clamp_days(request.query_params.get("days"), default=30)
         buckets_mode = request.query_params.get("buckets", "default").lower()
         since = timezone.now() - timedelta(days=days)
-        events_qs = _enforcement_events_for_request(
-            request, EnforcementEvent.objects.filter(created_at__gte=since)
-        ).values("metadata")
-        events = events_qs
-
+        qs = annotate_numeric_float(
+            _enforcement_events_for_request(
+                request, EnforcementEvent.objects.filter(created_at__gte=since)
+            ),
+            "security_risk_score",
+            "_risk",
+        )
+        # One GROUP BY pass — multiple Count(filter=...) FILTER clauses each
+        # re-evaluated the regex CAST and exceeded the 5s analytics timeout.
         if buckets_mode == "fine":
-            fine_counts = [0] * len(self._FINE_BUCKETS)
-            for ev in events:
-                meta = ev.get("metadata") or {}
-                score = meta.get("security_risk_score")
-                try:
-                    s = float(score) if score is not None else 0.0
-                except (TypeError, ValueError):
-                    s = 0.0
-                s = max(0, min(100, s))
-                for i, (lo, hi, _, _) in enumerate(self._FINE_BUCKETS):
-                    if lo <= s <= hi:
-                        fine_counts[i] += 1
-                        break
+            whens = [
+                When(_risk__gte=lo, _risk__lte=hi, then=Value(label))
+                for lo, hi, label, _ in self._FINE_BUCKETS
+            ]
+            qs = qs.annotate(
+                _bucket=Case(*whens, default=Value("0-20"), output_field=CharField())
+            )
+            counts = {
+                row["_bucket"]: int(row["n"] or 0)
+                for row in qs.values("_bucket").annotate(n=Count("id"))
+            }
             results = [
-                {"name": f"{label}: {cnt}", "value": cnt, "color": color, "range": label}
-                for (_, _, label, color), cnt in zip(self._FINE_BUCKETS, fine_counts)
+                {
+                    "name": f"{label}: {counts.get(label, 0)}",
+                    "value": counts.get(label, 0),
+                    "color": color,
+                    "range": label,
+                }
+                for _, _, label, color in self._FINE_BUCKETS
             ]
         else:
-            low, medium, high = 0, 0, 0
-            for ev in events:
-                meta = ev.get("metadata") or {}
-                score = meta.get("security_risk_score")
-                try:
-                    s = float(score) if score is not None else 0.0
-                except (TypeError, ValueError):
-                    s = 0.0
-                if s <= 33:
-                    low += 1
-                elif s <= 66:
-                    medium += 1
-                else:
-                    high += 1
+            qs = qs.annotate(
+                _bucket=Case(
+                    When(_risk__lte=33, then=Value("low")),
+                    When(_risk__lte=66, then=Value("medium")),
+                    default=Value("high"),
+                    output_field=CharField(),
+                )
+            )
+            counts = {
+                row["_bucket"]: int(row["n"] or 0)
+                for row in qs.values("_bucket").annotate(n=Count("id"))
+            }
             results = [
-                {"name": "Low Risk", "value": low, "color": "#10b981"},
-                {"name": "Medium Risk", "value": medium, "color": "#f59e0b"},
-                {"name": "High Risk", "value": high, "color": "#ef4444"},
+                {"name": "Low Risk", "value": counts.get("low", 0), "color": "#10b981"},
+                {"name": "Medium Risk", "value": counts.get("medium", 0), "color": "#f59e0b"},
+                {"name": "High Risk", "value": counts.get("high", 0), "color": "#ef4444"},
             ]
         return Response(results)

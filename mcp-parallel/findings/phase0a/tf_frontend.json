@@ -5,7 +5,7 @@
     "analyticsGets": 0,
     "zero": true,
     "hits": [],
-    "hideAt": 1787718360595
+    "hideAt": 1787732773829
   },
   "tf2": {
     "extraAnalyticsGets": 0,
@@ -14,12 +14,12 @@
   },
   "tf5": {
     "aborted": true,
-    "ms": 29998,
+    "ms": 29999,
     "wellBefore300s": true,
     "failed": [
       {
         "url": "http://127.0.0.1:8180/api/security/soc-kpis/?period=24h",
-        "at": 29998,
+        "at": 29999,
         "failure": "net::ERR_ABORTED"
       }
     ]

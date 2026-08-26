@@ -58,6 +58,15 @@ class AnalyticsDbTimeoutTests(SimpleTestCase):
         self.assertIn("ASGI_THREADS=2", text)
         self.assertNotIn("ASGI_THREADS=8", text)
 
+    def test_entrypoint_sets_max_requests_with_jitter_as_leak_insurance(self):
+        text = (Path(__file__).resolve().parents[2] / "server-entrypoint.sh").read_text()
+        self.assertIn("--max-requests", text)
+        self.assertIn("--max-requests-jitter", text)
+        self.assertIn("not an oom fix", text.lower())
+        self.assertIn("${GUNICORN_MAX_REQUESTS:-2000}", text)
+        self.assertIn("${GUNICORN_MAX_REQUESTS_JITTER:-100}", text)
+        self.assertIn('GUNICORN_MAX_REQUESTS:-2000}" != "0"', text)
+
     def test_analytics_http_path_covers_security_and_dashboard(self):
         from main_app.analytics_db import is_analytics_http_path
 

@@ -62,6 +62,10 @@ app.conf.beat_schedule = {
         "task": "core.tasks.reconcile_routing_state",
         "schedule": float(os.environ.get("ROUTING_RECONCILE_INTERVAL_SEC", "120")),
     },
+    "refresh-analytics-rollups": {
+        "task": "policy.refresh_analytics_rollups",
+        "schedule": float(os.environ.get("ANALYTICS_ROLLUP_REFRESH_SEC", "900")),
+    },
 }
 
 

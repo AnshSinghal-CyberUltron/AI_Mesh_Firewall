@@ -8,8 +8,9 @@ from collections import defaultdict
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
+from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Max, Q
 from django.db.models.fields.json import KeyTextTransform, KeyTransform
+from django.db.models.functions import ExtractHour, TruncDate
 from django.utils import timezone
 
 # perf item 21b: the exact bounded set of metadata keys the firewall-module
@@ -32,6 +33,16 @@ from core.models import AGENT_TYPE_CHOICES, Agent, Endpoint
 from ai_mesh_shared.owasp_telemetry import is_owasp_enforced
 
 from policy.analytics_concurrency import AnalyticsConcurrencyMixin
+from policy.analytics_period import period_from_request, period_hours
+from policy.analytics_sql import (
+    annotate_escalation_level,
+    annotate_numeric_float,
+    bucket_index_expr,
+    metadata_json,
+    metadata_text,
+    soc_kpis_from_events,
+    trend_grid,
+)
 from policy.constants import ACTION_BLOCK, ACTION_FLAG, ACTION_MONITOR, ACTION_REDACT
 from policy.models import EnforcementEvent, Notification, Policy
 from policy.firewall_module_classifier import (
@@ -145,6 +156,25 @@ def _enforcement_events_for_request(request, base_queryset=None):
         # organization_id rather than reviving the joins here.
         qs = base_queryset.filter(organization=org)
     return qs.using(ANALYTICS_DB_ALIAS)
+
+
+def _rollup_org_id(request, period, since):
+    """Return org id when C-2 facts should serve this period, else None (raw path)."""
+    from auth.utils import get_request_organization
+    from policy.analytics_rollup import should_serve_rollup
+
+    org = get_request_organization(request)
+    oid = org.id if org is not None else None
+    if should_serve_rollup(period, oid, since):
+        return oid
+    return None
+
+
+def _analytics_response(payload, source: str):
+    """Mark whether gunicorn served C-2 facts or the raw GROUP BY path."""
+    resp = Response(payload)
+    resp["X-Analytics-Source"] = source
+    return resp
 
 
 def _event_organization_id(ev):
@@ -1140,51 +1170,72 @@ class AttackVectorTrendsView(AnalyticsConcurrencyMixin, APIView):
         ],
     )
     def get(self, request):
-        period = request.query_params.get("period", "24h").lower()
-        total_hours, bucket_minutes = self._PERIOD_MAP.get(period, (24, 60))
+        period, err = period_from_request(request)
+        if err is not None:
+            return err
 
-        now = timezone.now().replace(second=0, microsecond=0)
-        # align 'now' to the nearest bucket boundary
-        aligned_minute = (now.minute // bucket_minutes) * bucket_minutes
-        now = now.replace(minute=aligned_minute)
-        since = now - timedelta(hours=total_hours)
+        now, since, bucket_minutes, bucket_keys = trend_grid(period)
 
-        # Build the full ordered list of bucket start-times (all zeros initially)
         def _zero():
             return {"dataLeakage": 0, "goalHijacking": 0, "jailbreak": 0, "promptInjection": 0, "toolOverreach": 0}
 
-        buckets = {}
-        cursor = since
-        while cursor <= now:
-            buckets[cursor.isoformat()] = _zero()
-            cursor += timedelta(minutes=bucket_minutes)
+        buckets = {k: _zero() for k in bucket_keys}
 
-        # Place events into their buckets (org-scoped)
-        base_events = EnforcementEvent.objects.filter(created_at__gte=since).values("id", "created_at", "metadata")
-        events = list(_enforcement_events_for_request(request, base_events))
+        org_id = _rollup_org_id(request, period, since)
+        if org_id is not None:
+            from policy.analytics_rollup import fill_vector_buckets_from_rollup
 
-        for ev in events:
-            created = ev["created_at"]
-            if not created:
-                continue
-            # Bucket using the same grid as the scaffold (since + N * bucket_minutes)
-            delta_minutes = (created - since).total_seconds() / 60.0
-            bucket_index = int(delta_minutes // bucket_minutes)
-            if bucket_index < 0:
-                continue
-            bucket_start = since + timedelta(minutes=bucket_index * bucket_minutes)
-            if bucket_start > now:
-                bucket_start = now
-            bucket_key = bucket_start.isoformat()
-            if bucket_key not in buckets:
-                continue
-            vectors = _event_to_vectors_simple(ev)
-            for v in vectors:
-                if v in buckets[bucket_key]:
-                    buckets[bucket_key][v] += 1
+            fill_vector_buckets_from_rollup(
+                org_id, since, now, bucket_minutes, buckets, _event_to_vectors_simple
+            )
+        else:
+            events = _enforcement_events_for_request(
+                request, EnforcementEvent.objects.filter(created_at__gte=since)
+            )
+            grouped = (
+                events.annotate(_bidx=bucket_index_expr(since, bucket_minutes))
+                .annotate(
+                    _source=metadata_text("source"),
+                    _owasp_code=metadata_text("owasp_code"),
+                    _owasp_codes=metadata_json("owasp_codes"),
+                    _threat_category=metadata_text("threat_category"),
+                    _pii_detected=metadata_json("pii_detected"),
+                )
+                .values(
+                    "_bidx",
+                    "_source",
+                    "_owasp_code",
+                    "_owasp_codes",
+                    "_threat_category",
+                    "_pii_detected",
+                )
+                .annotate(n=Count("id"))
+            )
+            for row in grouped:
+                bidx = row.get("_bidx")
+                if bidx is None or bidx < 0:
+                    continue
+                bucket_start = since + timedelta(minutes=int(bidx) * bucket_minutes)
+                if bucket_start > now:
+                    bucket_start = now
+                bucket_key = bucket_start.isoformat()
+                if bucket_key not in buckets:
+                    continue
+                meta = {
+                    "source": row.get("_source") or "",
+                    "owasp_code": row.get("_owasp_code") or "",
+                    "owasp_codes": row.get("_owasp_codes"),
+                    "threat_category": row.get("_threat_category") or "",
+                    "pii_detected": row.get("_pii_detected"),
+                }
+                n = int(row.get("n") or 0)
+                vectors = _event_to_vectors_simple({"metadata": meta})
+                for v in vectors:
+                    if v in buckets[bucket_key]:
+                        buckets[bucket_key][v] += n
 
-        out = [{"time": k, **v} for k, v in sorted(buckets.items())]
-        return Response(out)
+        out = [{"time": k, **buckets[k]} for k in bucket_keys]
+        return _analytics_response(out, "rollup" if org_id is not None else "raw")
 
 
 def _get_owasp_codes(meta):
@@ -1253,131 +1304,32 @@ class SocKpisView(AnalyticsConcurrencyMixin, APIView):
     _HOURS_MAP = {"1h": 1, "6h": 6, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
 
     def get(self, request):
-        period = request.query_params.get("period", "24h").lower()
-        hours = self._HOURS_MAP.get(period, 24)
+        period, err = period_from_request(request)
+        if err is not None:
+            return err
+        hours = period_hours(period)
         since = timezone.now() - timedelta(hours=hours)
 
-        base_events = EnforcementEvent.objects.filter(created_at__gte=since)
-        events = _enforcement_events_for_request(request, base_events)
+        org_id = _rollup_org_id(request, period, since)
+        if org_id is not None:
+            from policy.analytics_rollup import soc_kpis_from_rollup
 
-        # PERF: fetch (action, metadata) ONCE and compute everything in a single
-        # Python pass. The previous code ran 3 separate COUNT queries + an
-        # action GROUP BY + pulled every row's metadata JSON TWICE (the
-        # critical-count loop and the latency loop each re-fetched all metadata),
-        # making this view CPU/IO-heavy on every poll. Mirrors ModuleKpisView.
-        from collections import Counter
+            k = soc_kpis_from_rollup(org_id, since)
+        else:
+            base_events = EnforcementEvent.objects.filter(created_at__gte=since)
+            events = _enforcement_events_for_request(request, base_events)
+            k = soc_kpis_from_events(events)
 
-        # perf item 19: pull ONLY the 3 metadata fields the metrics need
-        # (security_risk_score / latency_ms / request_id) via SQL KeyTextTransform,
-        # instead of hauling the whole metadata JSON per row. On 288k rows this cut
-        # the fetch 13.3s -> 0.7s (19x): far fewer bytes over the wire and no
-        # per-row JSON decode. Verified 0 value mismatches vs the old parse across
-        # all rows. The per-row loop below is unchanged — it just reads the
-        # pre-extracted scalars (metadata field types are uniform: risk/latency are
-        # JSON numbers, request_id a JSON string, so text extraction is faithful).
-        rows = list(
-            events.annotate(
-                _risk=KeyTextTransform("security_risk_score", "metadata"),
-                _lat=KeyTextTransform("latency_ms", "metadata"),
-                _rid=KeyTextTransform("request_id", "metadata"),
-            ).values("action", "_risk", "_lat", "_rid")
-        )
-        total = len(rows)
-        # ── Row-based metrics (UNCHANGED) ──
-        # blocked/redacted/critical/action_breakdown/latency are RAW enforcement-row
-        # counts. They are paired with total_threats (=row count) by the overview
-        # hero, the global action pie chart, the enterprise page and the health
-        # radar, so their semantics must NOT change here.
-        blocked = redacted = critical_count = 0
-        action_counts: Counter = Counter()
-        latency_buckets = {"0-50ms": 0, "50-100ms": 0, "100-250ms": 0, "250-500ms": 0, "500ms-1s": 0, "1s+": 0}
-        latency_sum = 0.0
-        # ── Request-scoped partition (module 1.1 "Unified gateway lane") ──
-        # A single gateway request emits MULTIPLE enforcement rows that all share one
-        # metadata.request_id (e.g. request + model_routed + output_guard, or just
-        # input_blocked, or — for a model-unavailable/failed request — model_routed
-        # plus a request(block) marker). The old "requests_inspected = count(event_type
-        # =='request')" both (a) UNDER-counted: streamed / blocked / failed /
-        # no-inference requests never emit an event_type='request' row, and (b) made
-        # the overview "Total events" (row count) look like it double-counted every
-        # routed request. Collapse to ONE counted request per request_id, classified
-        # block > redact > allow. Rows without a usable request_id are counted as
-        # their own standalone request so we never under-count.
-        req_bucket: dict = {}
-        req_critical: set = set()  # distinct requests with any high-risk (>=80) event
-        for idx, row in enumerate(rows):
-            action = row.get("action")
-            action_counts[action] += 1
-            if action == ACTION_BLOCK:
-                blocked += 1
-            elif action == ACTION_REDACT:
-                redacted += 1
-            rid_raw = row.get("_rid")
-            rid = rid_raw if isinstance(rid_raw, str) else None
-            risk_raw = row.get("_risk")
-            try:
-                risk = float(risk_raw) if risk_raw not in (None, "") else 0.0
-            except (TypeError, ValueError):
-                risk = 0.0
-            lat_raw = row.get("_lat")
-            try:
-                lat = float(lat_raw) if lat_raw not in (None, "") else 0.0
-            except (TypeError, ValueError):
-                lat = 0.0
-            if risk >= 80:
-                critical_count += 1
-            req_key = rid if (isinstance(rid, str) and len(rid.strip()) >= 8) else f"__row_{idx}"
-            if risk >= 80:
-                req_critical.add(req_key)
-            prev = req_bucket.get(req_key)
-            if action == ACTION_BLOCK:
-                req_bucket[req_key] = "block"
-            elif action == ACTION_REDACT:
-                if prev != "block":
-                    req_bucket[req_key] = "redact"
-            elif prev is None:
-                req_bucket[req_key] = "allow"
-            latency_sum += lat
-            if lat <= 50:
-                latency_buckets["0-50ms"] += 1
-            elif lat <= 100:
-                latency_buckets["50-100ms"] += 1
-            elif lat <= 250:
-                latency_buckets["100-250ms"] += 1
-            elif lat <= 500:
-                latency_buckets["250-500ms"] += 1
-            elif lat <= 1000:
-                latency_buckets["500ms-1s"] += 1
-            else:
-                latency_buckets["1s+"] += 1
-
-        # Request-scoped distinct counts (module 1.1). These form a clean partition:
-        # requests_inspected == requests_allowed + requests_redacted + requests_blocked.
-        requests_inspected = len(req_bucket)
-        requests_blocked = sum(1 for v in req_bucket.values() if v == "block")
-        requests_redacted = sum(1 for v in req_bucket.values() if v == "redact")
-        requests_allowed = requests_inspected - requests_blocked - requests_redacted
-        requests_critical = len(req_critical)
-
+        total = k["total"]
+        blocked = k["blocked"]
+        redacted = k["redacted"]
         block_rate = round(blocked / total * 100, 1) if total else 0
         redact_rate = round(redacted / total * 100, 1) if total else 0
         enforcement_rate = round((blocked + redacted) / total * 100, 1) if total else 0
-        action_breakdown = dict(action_counts)
-        latency_distribution = [{"range": k, "count": v} for k, v in latency_buckets.items()]
-        avg_latency_ms = round(latency_sum / total, 2) if total else 0
+        action_breakdown = k["action_breakdown"]
+        latency_distribution = [{"range": name, "count": v} for name, v in k["latency_buckets"].items()]
+        avg_latency_ms = round(k["latency_sum"] / total, 2) if total else 0
 
-        # MTTR: average time from creation to resolution for resolved events in the
-        # time window (cheap DB aggregate — no metadata, kept as its own query).
-        resolved = events.filter(incident_status="resolved", resolved_at__isnull=False)
-        avg_duration = resolved.annotate(
-            duration=ExpressionWrapper(
-                F("resolved_at") - F("created_at"),
-                output_field=DurationField(),
-            )
-        ).aggregate(avg=Avg("duration"))["avg"]
-        mttr_minutes = round(avg_duration.total_seconds() / 60, 1) if avg_duration else None
-
-        # ── Health score radar ──
         uptime_score = 95 if total > 0 else 0
         block_score = min(100, int(block_rate)) if total > 0 else 0
         scan_coverage = min(100, int(enforcement_rate)) if total > 0 else 0
@@ -1396,31 +1348,28 @@ class SocKpisView(AnalyticsConcurrencyMixin, APIView):
             {"metric": "Response Time", "value": response_score},
         ]
 
-        return Response(
+        return _analytics_response(
             {
                 "period": period,
                 "total_threats": total,
-                # Request-scoped (module 1.1 gateway lane): one count per distinct
-                # request, partitioned allowed/redacted/blocked. requests_inspected
-                # == requests_allowed + requests_redacted + requests_blocked.
-                "requests_inspected": requests_inspected,
-                "requests_allowed": requests_allowed,
-                "requests_blocked": requests_blocked,
-                "requests_redacted": requests_redacted,
-                "requests_critical": requests_critical,
-                # Row-based (overview / pie / enterprise / health) — unchanged.
+                "requests_inspected": k["requests_inspected"],
+                "requests_allowed": k["requests_allowed"],
+                "requests_blocked": k["requests_blocked"],
+                "requests_redacted": k["requests_redacted"],
+                "requests_critical": k["requests_critical"],
                 "blocked": blocked,
                 "redacted": redacted,
                 "block_rate": block_rate,
                 "redact_rate": redact_rate,
-                "critical_count": critical_count,
-                "mttr_minutes": mttr_minutes,
+                "critical_count": k["critical_count"],
+                "mttr_minutes": k["mttr_minutes"],
                 "enforcement_rate": enforcement_rate,
                 "action_breakdown": action_breakdown,
                 "latency_distribution": latency_distribution,
                 "health_radar": health_radar,
                 "avg_latency_ms": avg_latency_ms,
-            }
+            },
+            "rollup" if org_id is not None else "raw",
         )
 
 
@@ -1437,54 +1386,65 @@ class ModuleKpisView(AnalyticsConcurrencyMixin, APIView):
     _HOURS_MAP = {"1h": 1, "6h": 6, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
 
     def get(self, request):
-        period = request.query_params.get("period", "24h").lower()
-        hours = self._HOURS_MAP.get(period, 24)
+        period, err = period_from_request(request)
+        if err is not None:
+            return err
+        hours = period_hours(period)
         since = timezone.now() - timedelta(hours=hours)
 
-        base_events = EnforcementEvent.objects.filter(created_at__gte=since)
-        # perf: extract only the classifier's bounded field set (KeyTransform keeps
-        # native JSON types) instead of hauling the full metadata JSON per row, then
-        # reconstruct a partial meta dict that is identical for the classifier.
-        # Verified 0 mismatches / 237860 rows; ~4x faster fetch.
-        events = list(
-            _enforcement_events_for_request(request, base_events)
-            .annotate(**{f"_{f}": KeyTransform(f, "metadata") for f in _MODULE_META_FIELDS})
-            .values("action", *[f"_{f}" for f in _MODULE_META_FIELDS])
-        )
+        org_id = _rollup_org_id(request, period, since)
+        if org_id is not None:
+            from policy.analytics_rollup import module_kpis_from_rollup
 
-        modules = {
-            mid: {"total": 0, "blocked": 0, "redacted": 0, "flagged": 0, "critical": 0}
-            for mid in MODULE_IDS
-        }
-
-        for ev in events:
-            action = ev["action"]
-            meta = {f: ev[f"_{f}"] for f in _MODULE_META_FIELDS if ev[f"_{f}"] is not None}
-            source = meta.get("source", "")
-            risk_score = meta.get("security_risk_score", 0) or 0
-            is_blocked = action == ACTION_BLOCK
-            is_redacted = action == ACTION_REDACT
-            is_flagged = action == ACTION_FLAG
-            is_critical = risk_score >= CRITICAL_THRESHOLD
-
-            increment_bucket(
-                modules["1.1"],
-                is_blocked=is_blocked,
-                is_redacted=is_redacted,
-                is_flagged=is_flagged,
-                is_critical=is_critical,
+            modules = module_kpis_from_rollup(org_id, since)
+        else:
+            base_events = EnforcementEvent.objects.filter(created_at__gte=since)
+            grouped = (
+                _enforcement_events_for_request(request, base_events)
+                .annotate(**{f"_{f}": KeyTransform(f, "metadata") for f in _MODULE_META_FIELDS})
+                .values("action", *[f"_{f}" for f in _MODULE_META_FIELDS])
+                .annotate(n=Count("id"))
             )
 
-            for mid in specialty_modules_for_event(meta, source=source):
+            modules = {
+                mid: {"total": 0, "blocked": 0, "redacted": 0, "flagged": 0, "critical": 0}
+                for mid in MODULE_IDS
+            }
+
+            for ev in grouped:
+                n = int(ev.get("n") or 0)
+                action = ev["action"]
+                meta = {f: ev[f"_{f}"] for f in _MODULE_META_FIELDS if ev[f"_{f}"] is not None}
+                source = meta.get("source", "")
+                risk_score = meta.get("security_risk_score", 0) or 0
+                is_blocked = action == ACTION_BLOCK
+                is_redacted = action == ACTION_REDACT
+                is_flagged = action == ACTION_FLAG
+                is_critical = risk_score >= CRITICAL_THRESHOLD
+
                 increment_bucket(
-                    modules[mid],
+                    modules["1.1"],
                     is_blocked=is_blocked,
                     is_redacted=is_redacted,
                     is_flagged=is_flagged,
                     is_critical=is_critical,
+                    n=n,
                 )
 
-        return Response({"period": period, "modules": modules})
+                for mid in specialty_modules_for_event(meta, source=source):
+                    increment_bucket(
+                        modules[mid],
+                        is_blocked=is_blocked,
+                        is_redacted=is_redacted,
+                        is_flagged=is_flagged,
+                        is_critical=is_critical,
+                        n=n,
+                    )
+
+        return _analytics_response(
+            {"period": period, "modules": modules},
+            "rollup" if org_id is not None else "raw",
+        )
 
 
 class ModuleTrendsView(AnalyticsConcurrencyMixin, APIView):
@@ -1506,70 +1466,69 @@ class ModuleTrendsView(AnalyticsConcurrencyMixin, APIView):
     }
 
     def get(self, request):
-        period = request.query_params.get("period", "24h").lower()
-        total_hours, bucket_minutes = self._PERIOD_MAP.get(period, (24, 60))
+        period, err = period_from_request(request)
+        if err is not None:
+            return err
 
-        now = timezone.now().replace(second=0, microsecond=0)
-        aligned_minute = (now.minute // bucket_minutes) * bucket_minutes
-        now = now.replace(minute=aligned_minute)
-        since = now - timedelta(hours=total_hours)
-
-        bucket_keys = []
-        cursor = since
-        while cursor <= now:
-            bucket_keys.append(cursor.isoformat())
-            cursor += timedelta(minutes=bucket_minutes)
+        now, since, bucket_minutes, bucket_keys = trend_grid(period)
 
         module_buckets = {
             mid: {bk: empty_bucket() for bk in bucket_keys} for mid in MODULE_IDS
         }
 
-        base_events = EnforcementEvent.objects.filter(created_at__gte=since)
-        events = list(
-            _enforcement_events_for_request(request, base_events).values(
-                "created_at", "action", "metadata"
-            )
-        )
+        org_id = _rollup_org_id(request, period, since)
+        if org_id is not None:
+            from policy.analytics_rollup import fill_module_trends_from_rollup
 
-        for ev in events:
-            created = ev["created_at"]
-            if not created:
-                continue
-            delta_minutes = (created - since).total_seconds() / 60.0
-            bucket_index = int(delta_minutes // bucket_minutes)
-            if bucket_index < 0:
-                continue
-            bucket_start = since + timedelta(minutes=bucket_index * bucket_minutes)
-            if bucket_start > now:
-                bucket_start = now
-            bucket_key = bucket_start.isoformat()
-            if bucket_key not in module_buckets["1.1"]:
-                continue
-
-            meta = ev.get("metadata") or {}
-            source = meta.get("source", "")
-            risk_score = meta.get("security_risk_score", 0) or 0
-            is_blocked = ev["action"] == ACTION_BLOCK
-            is_redacted = ev["action"] == ACTION_REDACT
-            is_flagged = ev["action"] == ACTION_FLAG
-            is_critical = risk_score >= CRITICAL_THRESHOLD
-
-            increment_bucket(
-                module_buckets["1.1"][bucket_key],
-                is_blocked=is_blocked,
-                is_redacted=is_redacted,
-                is_flagged=is_flagged,
-                is_critical=is_critical,
+            fill_module_trends_from_rollup(org_id, since, now, bucket_minutes, module_buckets)
+        else:
+            base_events = EnforcementEvent.objects.filter(created_at__gte=since)
+            grouped = (
+                _enforcement_events_for_request(request, base_events)
+                .annotate(_bidx=bucket_index_expr(since, bucket_minutes))
+                .annotate(**{f"_{f}": KeyTransform(f, "metadata") for f in _MODULE_META_FIELDS})
+                .values("_bidx", "action", *[f"_{f}" for f in _MODULE_META_FIELDS])
+                .annotate(n=Count("id"))
             )
 
-            for mid in specialty_modules_for_event(meta, source=source):
+            for ev in grouped:
+                bidx = ev.get("_bidx")
+                if bidx is None or bidx < 0:
+                    continue
+                bucket_start = since + timedelta(minutes=int(bidx) * bucket_minutes)
+                if bucket_start > now:
+                    bucket_start = now
+                bucket_key = bucket_start.isoformat()
+                if bucket_key not in module_buckets["1.1"]:
+                    continue
+
+                n = int(ev.get("n") or 0)
+                meta = {f: ev[f"_{f}"] for f in _MODULE_META_FIELDS if ev[f"_{f}"] is not None}
+                source = meta.get("source", "")
+                risk_score = meta.get("security_risk_score", 0) or 0
+                is_blocked = ev["action"] == ACTION_BLOCK
+                is_redacted = ev["action"] == ACTION_REDACT
+                is_flagged = ev["action"] == ACTION_FLAG
+                is_critical = risk_score >= CRITICAL_THRESHOLD
+
                 increment_bucket(
-                    module_buckets[mid][bucket_key],
+                    module_buckets["1.1"][bucket_key],
                     is_blocked=is_blocked,
                     is_redacted=is_redacted,
                     is_flagged=is_flagged,
                     is_critical=is_critical,
+                    n=n,
                 )
+
+                for mid in specialty_modules_for_event(meta, source=source):
+                    increment_bucket(
+                        module_buckets[mid][bucket_key],
+                        is_blocked=is_blocked,
+                        is_redacted=is_redacted,
+                        is_flagged=is_flagged,
+                        is_critical=is_critical,
+                        n=n,
+                    )
 
         response = {
             "period": period,
@@ -1592,7 +1551,7 @@ class ModuleTrendsView(AnalyticsConcurrencyMixin, APIView):
                 }
                 response[mid].append(point)
 
-        return Response(response)
+        return _analytics_response(response, "rollup" if org_id is not None else "raw")
 
 
 class OwaspStatsView(APIView):
@@ -1612,11 +1571,16 @@ class OwaspStatsView(APIView):
 
         # Extract owasp fields in SQL — do not haul full metadata JSONB (OOM).
         by_code = defaultdict(lambda: {"detected": 0, "blocked": 0})
-        owasp_rows = events.annotate(
-            _owasp_codes=KeyTransform("owasp_codes", "metadata"),
-            _owasp_code=KeyTextTransform("owasp_code", "metadata"),
-        ).values("action", "_owasp_codes", "_owasp_code")
-        for ev in owasp_rows.iterator(chunk_size=2000):
+        owasp_rows = (
+            events.annotate(
+                _owasp_codes=KeyTransform("owasp_codes", "metadata"),
+                _owasp_code=KeyTextTransform("owasp_code", "metadata"),
+            )
+            .values("action", "_owasp_codes", "_owasp_code")
+            .annotate(n=Count("id"))
+        )
+        for ev in owasp_rows:
+            n = int(ev.get("n") or 0)
             codes = ev.get("_owasp_codes")
             if codes is None:
                 single = (ev.get("_owasp_code") or "").strip().upper()
@@ -1625,9 +1589,9 @@ class OwaspStatsView(APIView):
                 codes = [str(c).strip().upper() for c in codes if c]
             for code in codes:
                 if code and code in OWASP_ALL_VECTORS:
-                    by_code[code]["detected"] += 1
+                    by_code[code]["detected"] += n
                     if is_owasp_enforced(ev.get("action") or ""):
-                        by_code[code]["blocked"] += 1
+                        by_code[code]["blocked"] += n
 
         # Build list for each family with full vector names (OWASP LLM/MCP/Agentic Top 10)
         vector_names = {
@@ -1738,8 +1702,16 @@ class OwaspEventsView(APIView):
         # JSONField __contains for array containment is unreliable on SQLite per Django #31836).
         scan_cap = 2000
         matching_ids = []
-        for ev in qs_scoped.order_by("-created_at").values("id", "metadata")[:scan_cap]:
-            meta = ev.get("metadata") or {}
+        scanned = (
+            qs_scoped.order_by("-created_at")
+            .annotate(
+                _owasp_codes=KeyTransform("owasp_codes", "metadata"),
+                _owasp_code=KeyTextTransform("owasp_code", "metadata"),
+            )
+            .values("id", "_owasp_codes", "_owasp_code")[:scan_cap]
+        )
+        for ev in scanned:
+            meta = {"owasp_codes": ev.get("_owasp_codes"), "owasp_code": ev.get("_owasp_code")}
             codes = _get_owasp_codes(meta)
             if code in codes:
                 matching_ids.append(ev["id"])
@@ -1816,23 +1788,23 @@ class ModuleChartsView(APIView):
     _HOURS_MAP = {"1h": 1, "6h": 6, "24h": 24, "7d": 24 * 7, "30d": 24 * 30}
 
     def get(self, request, module_id: str):
-        period = request.query_params.get("period", "24h").lower()
-        hours = self._HOURS_MAP.get(period, 24)
+        period, err = period_from_request(request)
+        if err is not None:
+            return err
+        hours = period_hours(period)
         since = timezone.now() - timedelta(hours=hours)
 
         qs = EnforcementEvent.objects.filter(created_at__gte=since)
         qs = _enforcement_events_for_request(request, qs)
         qs = self._apply_module_filter(qs, module_id)
 
-        events = list(qs.values("action", "metadata", "created_at", "policy_id", "rule_id"))
-
         charts = [
-            self._build_event_timeline(events, since, hours),
-            self._build_threat_breakdown(events),
-            self._build_action_distribution(events),
-            self._build_risk_distribution(events),
-            self._build_latency_histogram(events),
-            self._build_model_routing(events),
+            self._build_event_timeline(qs, since, hours),
+            self._build_threat_breakdown(qs),
+            self._build_action_distribution(qs),
+            self._build_risk_distribution(qs),
+            self._build_latency_histogram(qs),
+            self._build_model_routing(qs),
         ]
 
         return Response({"module_id": module_id, "period": period, "charts": charts})
@@ -1842,7 +1814,7 @@ class ModuleChartsView(APIView):
             return qs
         return qs.filter(module_enforcement_q(module_id))
 
-    def _build_event_timeline(self, events: list, since, hours: int) -> dict:
+    def _build_event_timeline(self, qs, since, hours: int) -> dict:
         if hours <= 6:
             bucket_minutes = 15
         elif hours <= 24:
@@ -1860,35 +1832,43 @@ class ModuleChartsView(APIView):
             buckets[cursor.isoformat()] = {"time": label, "allowed": 0, "blocked": 0, "redacted": 0, "monitored": 0}
             cursor += timedelta(minutes=bucket_minutes)
 
-        for ev in events:
-            created = ev.get("created_at")
-            if not created:
+        grouped = (
+            qs.annotate(_bidx=bucket_index_expr(since, bucket_minutes))
+            .values("_bidx", "action")
+            .annotate(n=Count("id"))
+        )
+        for ev in grouped:
+            bidx = ev.get("_bidx")
+            if bidx is None or bidx < 0:
                 continue
-            delta = (created - since).total_seconds() / 60.0
-            idx = int(delta // bucket_minutes)
-            bucket_start = since + timedelta(minutes=idx * bucket_minutes)
+            bucket_start = since + timedelta(minutes=int(bidx) * bucket_minutes)
             key = bucket_start.isoformat()
-            if key in buckets:
-                action = ev.get("action", "allow")
-                if action == "block":
-                    buckets[key]["blocked"] += 1
-                elif action == "redact":
-                    buckets[key]["redacted"] += 1
-                elif action == "monitor":
-                    buckets[key]["monitored"] += 1
-                else:
-                    buckets[key]["allowed"] += 1
+            if key not in buckets:
+                continue
+            n = int(ev.get("n") or 0)
+            action = ev.get("action", "allow")
+            if action == "block":
+                buckets[key]["blocked"] += n
+            elif action == "redact":
+                buckets[key]["redacted"] += n
+            elif action == "monitor":
+                buckets[key]["monitored"] += n
+            else:
+                buckets[key]["allowed"] += n
 
         data = [v for _, v in sorted(buckets.items())]
         return {"key": "event_timeline", "title": "Event Timeline", "type": "area", "data": data}
 
-    def _build_threat_breakdown(self, events: list) -> dict:
+    def _build_threat_breakdown(self, qs) -> dict:
         counts: dict[str, int] = defaultdict(int)
-        for ev in events:
-            meta = ev.get("metadata") or {}
-            threat = meta.get("threat_category") or meta.get("threat_type") or ""
+        grouped = qs.annotate(
+            _threat_category=metadata_text("threat_category"),
+            _threat_type=metadata_text("threat_type"),
+        ).values("_threat_category", "_threat_type").annotate(n=Count("id"))
+        for ev in grouped:
+            threat = ev.get("_threat_category") or ev.get("_threat_type") or ""
             if threat:
-                counts[threat] += 1
+                counts[threat] += int(ev.get("n") or 0)
 
         data = []
         for i, (name, value) in enumerate(sorted(counts.items(), key=lambda x: -x[1])[:10]):
@@ -1898,36 +1878,23 @@ class ModuleChartsView(APIView):
 
         return {"key": "threat_breakdown", "title": "Threat Breakdown", "type": "pie", "data": data}
 
-    def _build_action_distribution(self, events: list) -> dict:
-        # L5: bucket actions to MATCH the §1.7 engine card's actionBucket semantics
-        # so the card and this chart reconcile (they previously diverged: the card
-        # folds flag/rewrite/redact into "Redacted" while this chart showed them as
-        # separate raw slices). block→Blocked; redact/rewrite/flag/alert/
-        # model_downgrade→Redacted (content modified); monitor/allow→Allowed.
+    def _build_action_distribution(self, qs) -> dict:
         _BUCKET = {
             "block": "Blocked",
             "redact": "Redacted", "rewrite": "Redacted", "flag": "Redacted",
             "alert": "Redacted", "model_downgrade": "Redacted",
-            # C-3: the live kill-switch model-downgrade action string is "reroute"
-            # (not "model_downgrade"), so the original mapping never fired and
-            # reroute interventions silently fell into the "Allowed" default —
-            # under-reporting firewall enforcement on the pie. A reroute IS an
-            # intervention (content/route modified) → Redacted bucket. "confirm"
-            # and "pass" are non-intervening → Allowed (explicit, not defaulted).
             "reroute": "Redacted",
             "monitor": "Allowed", "monitored": "Allowed", "allow": "Allowed", "allowed": "Allowed",
             "confirm": "Allowed", "pass": "Allowed",
         }
         bucket_counts: dict[str, int] = defaultdict(int)
         _unmapped: set = set()
-        for ev in events:
+        for ev in qs.values("action").annotate(n=Count("id")):
             _act = str(ev.get("action", "allow")).lower()
+            n = int(ev.get("n") or 0)
             if _act not in _BUCKET:
-                # C-3: surface unknown/corrupt action strings instead of silently
-                # folding them into Allowed (so new actions + ingestion artifacts
-                # like the 'XXXXXXXXXXXXXXXX' mask are observable, not hidden).
                 _unmapped.add(_act)
-            bucket_counts[_BUCKET.get(_act, "Allowed")] += 1
+            bucket_counts[_BUCKET.get(_act, "Allowed")] += n
         if _unmapped:
             logger.warning(
                 "action_distribution: %d unmapped action value(s) folded into Allowed: %s",
@@ -1941,21 +1908,24 @@ class ModuleChartsView(APIView):
         ]
         return {"key": "action_distribution", "title": "Action Distribution", "type": "pie", "data": data}
 
-    def _build_risk_distribution(self, events: list) -> dict:
+    def _build_risk_distribution(self, qs) -> dict:
         ranges = [(0, 20), (20, 40), (40, 60), (60, 80), (80, 100)]
-        buckets = {f"{lo}-{hi}": 0 for lo, hi in ranges}
-        for ev in events:
-            meta = ev.get("metadata") or {}
-            score = meta.get("security_risk_score", 0) or 0
-            for lo, hi in ranges:
-                if lo <= score < hi or (hi == 100 and score == 100):
-                    buckets[f"{lo}-{hi}"] += 1
-                    break
-
-        data = [{"range": k, "count": v} for k, v in buckets.items()]
+        scored = annotate_numeric_float(qs, "security_risk_score", "_risk")
+        agg = scored.aggregate(
+            **{
+                f"{lo}-{hi}": Count(
+                    "id",
+                    filter=(
+                        Q(_risk__gte=lo, _risk__lte=100) if hi == 100 else Q(_risk__gte=lo, _risk__lt=hi)
+                    ),
+                )
+                for lo, hi in ranges
+            }
+        )
+        data = [{"range": k, "count": int(agg.get(k) or 0)} for k, _ in ((f"{lo}-{hi}", None) for lo, hi in ranges)]
         return {"key": "risk_distribution", "title": "Risk Score Distribution", "type": "bar", "data": data}
 
-    def _build_latency_histogram(self, events: list) -> dict:
+    def _build_latency_histogram(self, qs) -> dict:
         ranges = [
             ("0-50ms", 0, 50),
             ("50-100ms", 50, 100),
@@ -1963,27 +1933,25 @@ class ModuleChartsView(APIView):
             ("200-500ms", 200, 500),
             ("500ms+", 500, 99999),
         ]
-        buckets = {label: 0 for label, _, _ in ranges}
-        for ev in events:
-            meta = ev.get("metadata") or {}
-            latency = meta.get("latency_ms", 0) or 0
-            for label, lo, hi in ranges:
-                if lo <= latency < hi:
-                    buckets[label] += 1
-                    break
-
-        data = [{"range": k, "count": v} for k, v in buckets.items()]
+        scored = annotate_numeric_float(qs, "latency_ms", "_lat")
+        filters = {
+            "0-50ms": Q(_lat__gte=0, _lat__lt=50),
+            "50-100ms": Q(_lat__gte=50, _lat__lt=100),
+            "100-200ms": Q(_lat__gte=100, _lat__lt=200),
+            "200-500ms": Q(_lat__gte=200, _lat__lt=500),
+            "500ms+": Q(_lat__gte=500),
+        }
+        agg = scored.aggregate(**{label: Count("id", filter=flt) for label, flt in filters.items()})
+        data = [{"range": label, "count": int(agg.get(label) or 0)} for label, _, _ in ranges]
         return {"key": "latency_histogram", "title": "Latency Distribution", "type": "bar", "data": data}
 
-    def _build_model_routing(self, events: list) -> dict:
+    def _build_model_routing(self, qs) -> dict:
         counts: dict[str, int] = defaultdict(int)
-        for ev in events:
-            meta = ev.get("metadata") or {}
-            # Canonicalize so reserved platform/guard/bedrock ids collapse into a
-            # single "zeroshield-model" slice rather than leaking the upstream id (R4).
-            model = _canonicalize_model_name(meta.get("model"))
+        grouped = qs.annotate(_model=metadata_text("model")).values("_model").annotate(n=Count("id"))
+        for ev in grouped:
+            model = _canonicalize_model_name(ev.get("_model"))
             if model:
-                counts[model] += 1
+                counts[model] += int(ev.get("n") or 0)
 
         data = []
         for i, (name, value) in enumerate(sorted(counts.items(), key=lambda x: -x[1])[:8]):
@@ -2006,13 +1974,31 @@ class ThreatSourcesView(APIView):
         limit = min(int(request.query_params.get("limit", 20)), 50)
         since = timezone.now() - timedelta(hours=hours)
 
-        base_qs = EnforcementEvent.objects.filter(created_at__gte=since).values(
-            "id", "endpoint_id", "user_id", "agent_id", "action", "created_at", "metadata"
+        base_qs = (
+            EnforcementEvent.objects.filter(created_at__gte=since)
+            .annotate(
+                _owasp_codes=metadata_json("owasp_codes"),
+                _owasp_code=metadata_text("owasp_code"),
+                _threat_category=metadata_text("threat_category"),
+            )
         )
-        events = list(_enforcement_events_for_request(request, base_qs))
+        base_qs = annotate_numeric_float(base_qs, "security_risk_score", "_risk")
+        grouped = (
+            _enforcement_events_for_request(request, base_qs)
+            .values(
+                "endpoint_id",
+                "user_id",
+                "agent_id",
+                "action",
+                "_owasp_codes",
+                "_owasp_code",
+                "_threat_category",
+            )
+            .annotate(n=Count("id"), last_seen=Max("created_at"), max_risk=Max("_risk"))
+        )
 
-        agent_ids = [ev["agent_id"] for ev in events if ev["agent_id"]]
-        endpoint_ids = [ev["endpoint_id"] for ev in events if ev["endpoint_id"]]
+        agent_ids = [ev["agent_id"] for ev in grouped if ev["agent_id"]]
+        endpoint_ids = [ev["endpoint_id"] for ev in grouped if ev["endpoint_id"]]
         agents = {a.id: a for a in Agent.objects.filter(pk__in=agent_ids).select_related("endpoint")}
         endpoints = {e.id: e for e in Endpoint.objects.filter(pk__in=endpoint_ids)}
 
@@ -2021,15 +2007,16 @@ class ThreatSourcesView(APIView):
             lambda: {"total": 0, "blocked": 0, "last_seen": None, "max_risk": 0, "source_id": None}
         )
 
-        for ev in events:
-            meta = ev.get("metadata") or {}
+        for ev in grouped:
+            meta = {
+                "owasp_codes": ev.get("_owasp_codes"),
+                "owasp_code": ev.get("_owasp_code"),
+                "threat_category": ev.get("_threat_category"),
+            }
             codes = _get_owasp_codes(meta)
             cat = meta.get("threat_category") or (codes[0] if codes else None) or "Policy"
-            risk = meta.get("security_risk_score")
-            try:
-                risk = float(risk) if risk is not None else 0.0
-            except (TypeError, ValueError):
-                risk = 0.0
+            risk = float(ev.get("max_risk") or 0.0)
+            n = int(ev.get("n") or 0)
 
             source_type = None
             label = None
@@ -2052,10 +2039,10 @@ class ThreatSourcesView(APIView):
                 label = "Unknown"
 
             group_key = (label, source_type, cat)
-            by_group[group_key]["total"] += 1
+            by_group[group_key]["total"] += n
             if ev["action"] == ACTION_BLOCK:
-                by_group[group_key]["blocked"] += 1
-            ts = ev.get("created_at")
+                by_group[group_key]["blocked"] += n
+            ts = ev.get("last_seen")
             if ts and (by_group[group_key]["last_seen"] is None or ts > by_group[group_key]["last_seen"]):
                 by_group[group_key]["last_seen"] = ts
             if risk > by_group[group_key]["max_risk"]:
@@ -2111,10 +2098,28 @@ class AttackGraphView(APIView):
         hours = min(int(request.query_params.get("hours", 168)), 720)
         since = timezone.now() - timedelta(hours=hours)
 
-        base_qs = EnforcementEvent.objects.filter(created_at__gte=since).values(
-            "id", "endpoint_id", "user_id", "agent_id", "metadata"
+        base_qs = (
+            EnforcementEvent.objects.filter(created_at__gte=since)
+            .annotate(
+                _model=metadata_text("model"),
+                _tools=metadata_json("tools_invoked"),
+                _data=metadata_json("data_accessed"),
+            )
         )
-        events = list(_enforcement_events_for_request(request, base_qs))
+        base_qs = annotate_numeric_float(base_qs, "security_risk_score", "_risk")
+        events = (
+            _enforcement_events_for_request(request, base_qs)
+            .values(
+                "endpoint_id",
+                "user_id",
+                "agent_id",
+                "_model",
+                "_tools",
+                "_data",
+                "_risk",
+            )
+            .annotate(n=Count("id"))
+        )
 
         endpoint_ids = [ev["endpoint_id"] for ev in events if ev["endpoint_id"]]
         agent_ids = [ev["agent_id"] for ev in events if ev["agent_id"]]
@@ -2134,12 +2139,14 @@ class AttackGraphView(APIView):
                 edges_set.add((fr, to))
 
         for ev in events:
-            meta = ev.get("metadata") or {}
-            risk = meta.get("security_risk_score") or 0
+            risk = ev.get("_risk") or 0
             try:
                 risk = int(float(risk))
             except (TypeError, ValueError):
                 risk = 0
+            model = ev.get("_model")
+            tools = ev.get("_tools") or []
+            data_list = ev.get("_data") or []
 
             user_id = ev.get("user_id")
             endpoint_id = ev.get("endpoint_id")
@@ -2165,14 +2172,14 @@ class AttackGraphView(APIView):
 
             # Canonicalize so a reserved platform/guard/bedrock id is never reflected
             # as a graph node label/id; it collapses into "zeroshield-model" (R4).
-            model = _canonicalize_model_name(meta.get("model"))
+            model = _canonicalize_model_name(ev.get("_model"))
             if model:
                 nid = f"model_{model}"
                 add_node(nid, model, "model", risk)
                 if user_node:
                     add_edge(user_node, nid)
 
-            tools = meta.get("tools_invoked") or []
+            tools = ev.get("_tools") or []
             if isinstance(tools, str):
                 tools = [tools] if tools else []
             for t in tools:
@@ -2183,7 +2190,7 @@ class AttackGraphView(APIView):
                     if user_node:
                         add_edge(user_node, nid)
 
-            data_list = meta.get("data_accessed") or []
+            data_list = ev.get("_data") or []
             if isinstance(data_list, str):
                 data_list = [data_list] if data_list else []
             for d in data_list:
@@ -2414,8 +2421,9 @@ class ResolveIncidentView(APIView):
 # ── User Blockage Policies Page APIs ─────────────────────────────────────────
 
 
-def _violation_tag_event(meta, bucket):
+def _violation_tag_event(meta, bucket, n=1):
     """Tag event into violation category buckets (for violation-categories endpoint)."""
+    count = int(n)
     codes = meta.get("owasp_codes")
     if codes is not None:
         codes = [str(c).strip().upper() for c in codes if c]
@@ -2425,17 +2433,17 @@ def _violation_tag_event(meta, bucket):
     category = (meta.get("threat_category") or "").lower()
     source = meta.get("source", "")
     if "jailbreak" in category or "LLM04" in codes:
-        bucket["jailbreak"] += 1
+        bucket["jailbreak"] += count
     if "data" in category or "LLM06" in codes or meta.get("pii_detected"):
-        bucket["piiDetection"] += 1
+        bucket["piiDetection"] += count
     if "prompt" in category or "injection" in category or "LLM01" in codes:
-        bucket["promptInjection"] += 1
+        bucket["promptInjection"] += count
     if source == "mcp_scan" or any(c.startswith("MCP") for c in codes):
-        bucket["toolOverreach"] += 1
+        bucket["toolOverreach"] += count
     if source == "agentic_scan" or any(c.startswith("AGENTIC") for c in codes):
-        bucket["agenticThreat"] += 1
+        bucket["agenticThreat"] += count
     if "source" in category or "code" in category:
-        bucket["sourceCode"] += 1
+        bucket["sourceCode"] += count
 
 
 class UserBlockageKpisView(APIView):
@@ -2446,11 +2454,11 @@ class UserBlockageKpisView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    _HOURS_MAP = {"24h": 24, "7d": 24 * 7, "30d": 24 * 30}
-
     def get(self, request):
-        period = request.query_params.get("period", "24h").lower()
-        hours = self._HOURS_MAP.get(period, 24)
+        period, err = period_from_request(request)
+        if err:
+            return err
+        hours = period_hours(period)
         since = timezone.now() - timedelta(hours=hours)
 
         from auth.utils import get_request_organization
@@ -2497,15 +2505,10 @@ class UserBlockageKpisView(APIView):
         avg_block_rate = round(blocked / total_events * 100, 1) if total_events else 0
 
         high_risk_ids = set()
-        # perf item 21: this 30-90d window only needs security_risk_score — extract
-        # it in SQL instead of hauling the full metadata JSON per row (same
-        # anti-pattern soc-kpis had). Output identical; verified.
-        for ev in events.annotate(
-            _risk=KeyTextTransform("security_risk_score", "metadata")
-        ).values("user_id", "agent_id", "_risk"):
-            score = ev.get("_risk")
+        risk_qs = annotate_numeric_float(events, "security_risk_score", "_risk")
+        for ev in risk_qs.values("user_id", "agent_id").annotate(max_risk=Max("_risk")):
             try:
-                s = float(score) if score is not None else 0.0
+                s = float(ev.get("max_risk") or 0.0)
             except (TypeError, ValueError):
                 s = 0.0
             if s >= 80:
@@ -2539,20 +2542,20 @@ class BlockageTrendView(APIView):
         days = min(int(request.query_params.get("days", 7)), 90)
         since = timezone.now() - timedelta(days=days)
 
-        base_qs = EnforcementEvent.objects.filter(created_at__gte=since).values("created_at", "action")
-        events_qs = _enforcement_events_for_request(request, base_qs)
+        events_qs = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
         daily = defaultdict(lambda: {"allowed": 0, "blocked": 0})
-        for ev in events_qs:
-            created_at = ev.get("created_at") if isinstance(ev, dict) else getattr(ev, "created_at", None)
-            d = created_at.date() if created_at else None
+        for ev in events_qs.annotate(day=TruncDate("created_at")).values("day", "action").annotate(n=Count("id")):
+            d = ev.get("day")
             if not d:
                 continue
             key = str(d)
-            action = ev.get("action") if isinstance(ev, dict) else getattr(ev, "action", None)
-            if action == ACTION_BLOCK:
-                daily[key]["blocked"] += 1
+            n = int(ev.get("n") or 0)
+            if ev.get("action") == ACTION_BLOCK:
+                daily[key]["blocked"] += n
             else:
-                daily[key]["allowed"] += 1
+                daily[key]["allowed"] += n
 
         all_days = [(since + timedelta(days=i)).date() for i in range(days + 1)]
         results = [
@@ -2573,16 +2576,16 @@ class UsagePatternsView(APIView):
         hours = min(int(request.query_params.get("hours", 24)), 168)
         since = timezone.now() - timedelta(hours=hours)
 
-        base_qs = EnforcementEvent.objects.filter(created_at__gte=since).values("created_at", "action")
-        events_qs = _enforcement_events_for_request(request, base_qs)
+        events_qs = _enforcement_events_for_request(
+            request, EnforcementEvent.objects.filter(created_at__gte=since)
+        )
         hour_buckets = defaultdict(lambda: {"totalAttempts": 0, "blocked": 0})
-        for ev in events_qs:
-            created_at = ev.get("created_at") if isinstance(ev, dict) else getattr(ev, "created_at", None)
-            h = created_at.hour if created_at is not None else 0
-            action = ev.get("action") if isinstance(ev, dict) else getattr(ev, "action", None)
-            hour_buckets[h]["totalAttempts"] += 1
-            if action == ACTION_BLOCK:
-                hour_buckets[h]["blocked"] += 1
+        for ev in events_qs.annotate(hour=ExtractHour("created_at")).values("hour", "action").annotate(n=Count("id")):
+            h = ev.get("hour") if ev.get("hour") is not None else 0
+            n = int(ev.get("n") or 0)
+            hour_buckets[h]["totalAttempts"] += n
+            if ev.get("action") == ACTION_BLOCK:
+                hour_buckets[h]["blocked"] += n
 
         results = [
             {
@@ -2617,12 +2620,31 @@ class ViolationCategoriesView(APIView):
         days = min(int(request.query_params.get("days", 30)), 90)
         since = timezone.now() - timedelta(days=days)
 
-        base_qs = EnforcementEvent.objects.filter(created_at__gte=since).values("metadata")
-        events_qs = _enforcement_events_for_request(request, base_qs)
+        base_qs = (
+            EnforcementEvent.objects.filter(created_at__gte=since)
+            .annotate(
+                _owasp_codes=metadata_json("owasp_codes"),
+                _owasp_code=metadata_text("owasp_code"),
+                _threat_category=metadata_text("threat_category"),
+                _source=metadata_text("source"),
+                _pii=metadata_json("pii_detected"),
+            )
+        )
+        grouped = (
+            _enforcement_events_for_request(request, base_qs)
+            .values("_owasp_codes", "_owasp_code", "_threat_category", "_source", "_pii")
+            .annotate(n=Count("id"))
+        )
         bucket = defaultdict(int)
-        for ev in events_qs:
-            meta = ev.get("metadata") if isinstance(ev, dict) else getattr(ev, "metadata", None)
-            _violation_tag_event(meta or {}, bucket)
+        for ev in grouped:
+            meta = {
+                "owasp_codes": ev.get("_owasp_codes"),
+                "owasp_code": ev.get("_owasp_code"),
+                "threat_category": ev.get("_threat_category"),
+                "source": ev.get("_source"),
+                "pii_detected": ev.get("_pii"),
+            }
+            _violation_tag_event(meta, bucket, n=int(ev.get("n") or 0))
 
         total = sum(bucket.values())
         results = []
@@ -2709,13 +2731,17 @@ class EnforcementActionStatsView(APIView):
         days = min(int(request.query_params.get("days", 30)), 90)
         since = timezone.now() - timedelta(days=days)
 
-        base_qs = EnforcementEvent.objects.filter(created_at__gte=since).values("action")
-        events_qs = _enforcement_events_for_request(request, base_qs)
+        base_qs = EnforcementEvent.objects.filter(created_at__gte=since)
+        events_qs = (
+            _enforcement_events_for_request(request, base_qs)
+            .values("action")
+            .annotate(n=Count("id"))
+        )
         by_action = defaultdict(int)
         for ev in events_qs:
-            a = (ev.get("action") if isinstance(ev, dict) else getattr(ev, "action", None) or "").lower()
+            a = (ev.get("action") or "").lower()
             if a in ("block", "redact", "monitor"):
-                by_action[a] += 1
+                by_action[a] += int(ev.get("n") or 0)
 
         total = sum(by_action.values())
         results = []
@@ -2750,10 +2776,27 @@ class UserBlockageStatsView(APIView):
 
         base_qs = (
             EnforcementEvent.objects.filter(created_at__gte=since)
-            .select_related("agent")
-            .values("user_id", "agent_id", "action", "created_at", "metadata")
+            .annotate(
+                _owasp_codes=metadata_json("owasp_codes"),
+                _owasp_code=metadata_text("owasp_code"),
+                _threat_category=metadata_text("threat_category"),
+                _pii=metadata_json("pii_detected"),
+            )
         )
-        events = list(_enforcement_events_for_request(request, base_qs))
+        base_qs = annotate_numeric_float(base_qs, "security_risk_score", "_risk")
+        grouped = (
+            _enforcement_events_for_request(request, base_qs)
+            .values(
+                "user_id",
+                "agent_id",
+                "action",
+                "_owasp_codes",
+                "_owasp_code",
+                "_threat_category",
+                "_pii",
+            )
+            .annotate(n=Count("id"), max_risk=Max("_risk"), last_at=Max("created_at"))
+        )
 
         by_key = defaultdict(
             lambda: {
@@ -2770,38 +2813,37 @@ class UserBlockageStatsView(APIView):
 
         user_ids = set()
         agent_ids = set()
-        for ev in events:
+        for ev in grouped:
             uid = ev.get("user_id")
             aid = ev.get("agent_id")
+            n = int(ev.get("n") or 0)
             key = f"user_{uid}" if uid is not None else (f"agent_{aid}" if aid else "unknown")
             if uid is not None:
                 user_ids.add(uid)
             if aid:
                 agent_ids.add(aid)
 
-            by_key[key]["total"] += 1
+            by_key[key]["total"] += n
             if ev["action"] == ACTION_BLOCK:
-                by_key[key]["blocked"] += 1
+                by_key[key]["blocked"] += n
             elif ev["action"] == ACTION_MONITOR:
-                by_key[key]["warnings"] += 1
+                by_key[key]["warnings"] += n
 
-            meta = ev.get("metadata") or {}
-            codes = meta.get("owasp_codes") or ([meta.get("owasp_code")] if meta.get("owasp_code") else [])
+            codes = ev.get("_owasp_codes") or ([ev.get("_owasp_code")] if ev.get("_owasp_code") else [])
             codes = [str(c).strip().upper() for c in codes if c]
-            cat = (meta.get("threat_category") or "").lower()
-            if "data" in cat or "LLM06" in codes or meta.get("pii_detected"):
-                by_key[key]["data_leakage"] += 1
+            cat = (ev.get("_threat_category") or "").lower()
+            if "data" in cat or "LLM06" in codes or ev.get("_pii"):
+                by_key[key]["data_leakage"] += n
             elif codes or cat:
-                by_key[key]["other"] += 1
+                by_key[key]["other"] += n
 
-            rs = meta.get("security_risk_score")
             try:
-                r = float(rs) if rs is not None else 0.0
+                r = float(ev.get("max_risk") or 0.0)
             except (TypeError, ValueError):
                 r = 0.0
             if r > by_key[key]["max_risk"]:
                 by_key[key]["max_risk"] = r
-            ts = ev.get("created_at")
+            ts = ev.get("last_at")
             if ts and (by_key[key]["last_at"] is None or ts > by_key[key]["last_at"]):
                 by_key[key]["last_at"] = ts
             if aid:
@@ -2860,75 +2902,73 @@ class RAGPipelineStageKpisView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
-    _HOURS_MAP = {"1h": 1, "6h": 6, "24h": 24, "7d": 168, "30d": 720}
 
     def get(self, request):
-        period = request.query_params.get("period", "24h")
-        hours = self._HOURS_MAP.get(period, 24)
+        period, err = period_from_request(request)
+        if err:
+            return err
+        hours = period_hours(period)
         since = timezone.now() - timedelta(hours=hours)
 
         qs = _enforcement_events_for_request(request)
-        qs = qs.filter(created_at__gte=since)
-
-        # perf item 21: extract only the 3 fields this view reads (event_type,
-        # pipeline_stage, latency_ms) in SQL instead of hauling the full metadata
-        # JSON per row (same anti-pattern as soc-kpis). Output identical; verified.
-        events = list(
-            qs.annotate(
-                _etype=KeyTextTransform("event_type", "metadata"),
-                _stage=KeyTextTransform("pipeline_stage", "metadata"),
-                _lat=KeyTextTransform("latency_ms", "metadata"),
-            ).values("action", "_etype", "_stage", "_lat")
-        )
+        qs = qs.filter(created_at__gte=since, metadata__event_type="rag_pipeline")
+        qs = qs.annotate(_stage=metadata_text("pipeline_stage"))
+        qs = annotate_numeric_float(qs, "latency_ms", "_lat")
+        qs = annotate_escalation_level(qs)
 
         stages = {
-            s: {"total": 0, "blocked": 0, "flagged": 0, "rewritten": 0, "allowed": 0, "avg_latency_ms": 0, "_latencies": []}
+            s: {"total": 0, "blocked": 0, "flagged": 0, "rewritten": 0, "allowed": 0, "avg_latency_ms": 0, "_lat_n": 0, "_lat_sum": 0.0}
             for s in ("query", "retriever", "ranker", "generator")
         }
 
-        for ev in events:
-            event_type = ev.get("_etype") or ""
-            if event_type != "rag_pipeline":
-                continue
+        for ev in qs.values("_stage", "action").annotate(
+            n=Count("id"),
+            lat_avg=Avg("_lat", filter=Q(_lat__gt=0)),
+            lat_n=Count("id", filter=Q(_lat__gt=0)),
+        ):
             stage = ev.get("_stage") or ""
             if stage not in stages:
                 continue
-            stages[stage]["total"] += 1
+            n = int(ev.get("n") or 0)
+            stages[stage]["total"] += n
             action = ev.get("action", "allow")
             if action == "block":
-                stages[stage]["blocked"] += 1
+                stages[stage]["blocked"] += n
             elif action == "flag":
-                stages[stage]["flagged"] += 1
+                stages[stage]["flagged"] += n
             elif action == "rewrite":
-                stages[stage]["rewritten"] += 1
+                stages[stage]["rewritten"] += n
             else:
-                stages[stage]["allowed"] += 1
-            _lat_raw = ev.get("_lat")
-            lat = float(_lat_raw) if _lat_raw not in (None, "") else 0.0
-            if lat:
-                stages[stage]["_latencies"].append(lat)
+                stages[stage]["allowed"] += n
+            lat_n = int(ev.get("lat_n") or 0)
+            lat_avg = ev.get("lat_avg")
+            if lat_n and lat_avg is not None:
+                stages[stage]["_lat_n"] += lat_n
+                stages[stage]["_lat_sum"] += float(lat_avg) * lat_n
 
         for stage_data in stages.values():
-            lats = stage_data.pop("_latencies")
-            stage_data["avg_latency_ms"] = round(sum(lats) / len(lats), 2) if lats else 0
+            lat_n = stage_data.pop("_lat_n")
+            lat_sum = stage_data.pop("_lat_sum")
+            stage_data["avg_latency_ms"] = round(lat_sum / lat_n, 2) if lat_n else 0
 
         funnel_retrieved = stages["retriever"]["total"]
         funnel_post_ranker = stages["ranker"]["total"] - stages["ranker"]["blocked"]
         funnel_post_generator = stages["generator"]["total"] - stages["generator"]["blocked"]
 
         escalation_dist = {"normal": 0, "elevated": 0, "strict": 0}
-        for ev in events:
-            meta = ev.get("metadata") or {}
-            if meta.get("event_type") != "rag_pipeline":
-                continue
-            extra = meta.get("extra", meta)
-            level = extra.get("escalation_level", 0)
+        for ev in qs.values("_esc").annotate(n=Count("id")):
+            n = int(ev.get("n") or 0)
+            raw = ev.get("_esc")
+            try:
+                level = int(float(raw))
+            except (TypeError, ValueError):
+                level = 2
             if level == 0:
-                escalation_dist["normal"] += 1
+                escalation_dist["normal"] += n
             elif level == 1:
-                escalation_dist["elevated"] += 1
+                escalation_dist["elevated"] += n
             else:
-                escalation_dist["strict"] += 1
+                escalation_dist["strict"] += n
 
         return Response({
             "stages": stages,
@@ -2952,30 +2992,53 @@ class RAGPipelineTraceView(APIView):
 
     def get(self, request, request_id: str):
         qs = _enforcement_events_for_request(request)
-        events = list(
-            qs.filter(
-                metadata__event_type="rag_pipeline",
-            )
-            .order_by("created_at")
-            .values("action", "metadata", "created_at")
+        qs = qs.filter(metadata__event_type="rag_pipeline").filter(
+            Q(metadata__request_id=request_id) | Q(metadata__extra__request_id=request_id)
+        )
+        qs = qs.annotate(
+            _stage=metadata_text("pipeline_stage"),
+            _threat=metadata_text("threat_type"),
+            _detail_top=metadata_text("detail"),
+            _detail_extra=KeyTextTransform("detail", KeyTransform("extra", "metadata")),
+            _risk=metadata_text("risk_score"),
+        )
+        qs = annotate_numeric_float(qs, "latency_ms", "_lat")
+        qs = annotate_escalation_level(qs)
+        events = qs.order_by("created_at").values(
+            "action",
+            "created_at",
+            "_stage",
+            "_threat",
+            "_lat",
+            "_esc",
+            "_detail_top",
+            "_detail_extra",
+            "_risk",
         )
 
         stages = []
         for ev in events:
-            meta = ev.get("metadata") or {}
-            extra = meta if isinstance(meta, dict) else {}
-            ev_request_id = extra.get("request_id", "") or extra.get("extra", {}).get("request_id", "")
-            if ev_request_id != request_id:
-                continue
+            try:
+                escalation_level = int(float(ev.get("_esc") or 0))
+            except (TypeError, ValueError):
+                escalation_level = 0
+            try:
+                latency_ms = float(ev.get("_lat") or 0)
+            except (TypeError, ValueError):
+                latency_ms = 0
+            try:
+                confidence = float(ev.get("_risk") or 0)
+            except (TypeError, ValueError):
+                confidence = 0
             stages.append({
-                "stage": meta.get("pipeline_stage", ""),
+                "stage": ev.get("_stage") or "",
                 "action": ev["action"],
-                "threat_type": meta.get("threat_type", ""),
-                "latency_ms": meta.get("latency_ms", 0),
-                "escalation_level": extra.get("escalation_level", 0),
+                "threat_type": ev.get("_threat") or "",
+                "latency_ms": latency_ms,
+                "escalation_level": escalation_level,
                 "timestamp": ev["created_at"].isoformat(),
-                "detail": extra.get("detail", ""),
-                "confidence": meta.get("risk_score", 0),
+                "detail": ev.get("_detail_extra") or ev.get("_detail_top") or "",
+                "confidence": confidence,
             })
 
         return Response({"request_id": request_id, "stages": stages})

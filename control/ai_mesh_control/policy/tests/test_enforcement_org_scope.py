@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory
 from rest_framework.test import APIClient
 
 from policy.constants import ACTION_BLOCK
 from policy.models import EnforcementEvent
 from policy.security_views import _enforcement_events_for_request
+from policy.tests.analytics_api_testcase import AnalyticsAPITestCase
 
 User = get_user_model()
 
 
-class EnforcementOrgScopeTests(TestCase):
+class EnforcementOrgScopeTests(AnalyticsAPITestCase):
     def setUp(self):
         from auth.models import Organization, UserProfile
 

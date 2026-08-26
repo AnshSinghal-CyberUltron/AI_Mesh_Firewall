@@ -18,7 +18,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { isDocumentHidden } from "../utils/requestLifecycle.js";
+import { isDocumentHidden, HEAVY_ANALYTICS_CONCURRENCY, ANALYTICS_DEDUPE_TTL_MS, mapWithConcurrency, isLiveGeneration } from "../utils/requestLifecycle.js";
 import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { useRealtimeNotifications } from "../hooks/useRealtimeNotifications";
 import { OWASPStatsPanel } from "../components/OWASPStatsPanel";
@@ -592,74 +592,101 @@ export function AIMeshFirewallOverview({ onTabChange }) {
   const intervalRef = useRef(null);
   const inFlightRef = useRef(false);
   const realtimeTimerRef = useRef(null);
+  const abortRef = useRef(null);
+  const lastFetchAtRef = useRef(0);
+  const fetchGenRef = useRef(0);
+  const lastFetchedPeriodRef = useRef(null);
 
   const fetchOverviewData = useCallback(async (showLoader = false) => {
-    if (inFlightRef.current) return; // single-flight: collapse overlapping refetches
+    if (!showLoader && inFlightRef.current) return;
+    if (
+      !showLoader &&
+      Date.now() - lastFetchAtRef.current < ANALYTICS_DEDUPE_TTL_MS
+    ) {
+      return;
+    }
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    const gen = fetchGenRef.current + 1;
+    fetchGenRef.current = gen;
     inFlightRef.current = true;
     if (showLoader) setLoading(true);
     setFetchError(null);
     try {
       const errors = [];
-      // Apply each endpoint's result to state AS SOON AS IT RESOLVES — do NOT batch
-      // behind Promise.allSettled. Otherwise the slowest/hanging endpoint blocks every
-      // KPI from rendering: module-trends is explicitly non-critical yet, when it stalls
-      // (slow query / backend pressure), it would keep the whole dashboard on "--".
-      const apply = async (promise, errorName, onData) => {
-        try {
-          const res = await promise;
-          if (res && res.ok) onData(await res.json());
-          else if (errorName) errors.push(errorName);
-        } catch {
-          if (errorName) errors.push(errorName);
-        }
-      };
-      // Critical endpoints — the dashboard's readiness gates on these three only.
-      const critical = [
-        apply(fetchWithAuth(`/api/security/soc-kpis/?period=${period}`), "SOC KPIs", setSocKpis),
-        apply(fetchWithAuth(`/api/security/attack-vector-trends/?period=${period}`), "Attack Trends", (d) => setAttackTrends(Array.isArray(d) ? d : [])),
-        apply(fetchWithAuth(`/api/security/module-kpis/?period=${period}`), "Module KPIs", setModuleKpis),
+      const jobs = [
+        { name: "SOC KPIs", url: `/api/security/soc-kpis/?period=${period}`, onData: setSocKpis },
+        { name: "Attack Trends", url: `/api/security/attack-vector-trends/?period=${period}`, onData: (d) => setAttackTrends(Array.isArray(d) ? d : []) },
+        { name: "Module KPIs", url: `/api/security/module-kpis/?period=${period}`, onData: setModuleKpis },
+        { name: "Module Trends", url: `/api/security/module-trends/?period=${period}`, onData: setModuleTrends },
       ];
-      // Non-critical: applies whenever it arrives; never blocks the dashboard.
-      (async () => {
-        try {
-          const res = await fetchWithAuth(`/api/security/module-trends/?period=${period}`);
-          if (res && res.ok) setModuleTrends(await res.json());
-          else console.warn("Module trends endpoint unavailable, using global chart data");
-        } catch {
-          console.warn("Module trends endpoint unavailable, using global chart data");
-        }
-      })();
+      await mapWithConcurrency(
+        jobs,
+        HEAVY_ANALYTICS_CONCURRENCY,
+        async (job, _i, signal) => {
+          try {
+            const res = await fetchWithAuth(job.url, { signal });
+            if (!isLiveGeneration(signal, gen, fetchGenRef.current)) {
+              const err = new Error("aborted");
+              err.name = "AbortError";
+              throw err;
+            }
+            if (res && res.ok) {
+              const data = await res.json();
+              if (!isLiveGeneration(signal, gen, fetchGenRef.current)) {
+                const err = new Error("aborted");
+                err.name = "AbortError";
+                throw err;
+              }
+              job.onData(data);
+            } else if (res) {
+              errors.push(`${job.name} (${res.status})`);
+            } else {
+              errors.push(job.name);
+            }
+          } catch (err) {
+            if (err?.name === "AbortError" || err?.name === "TimeoutError") throw err;
+            errors.push(job.name);
+          }
+        },
+        ac.signal,
+      );
 
-      await Promise.allSettled(critical);
-
+      if (!isLiveGeneration(ac.signal, gen, fetchGenRef.current)) return;
       if (errors.length > 0) {
         setFetchError(`Failed to load: ${errors.join(", ")}`);
         console.error(`Dashboard API errors: ${errors.join(", ")}`);
       }
 
       setLastUpdated(new Date());
+      lastFetchAtRef.current = Date.now();
+      lastFetchedPeriodRef.current = period;
     } catch (err) {
+      if (err?.name === "AbortError" || err?.name === "TimeoutError") return;
       setFetchError("Network error — unable to reach the backend");
       console.error("Dashboard fetch error:", err);
     } finally {
-      setLoading(false);
-      inFlightRef.current = false;
+      if (fetchGenRef.current === gen) {
+        setLoading(false);
+        inFlightRef.current = false;
+      }
     }
   }, [fetchWithAuth, period]);
 
-  const lastFetchedPeriodRef = useRef(null);
   useEffect(() => {
-    // M3: fetch the 4 analytics endpoints ONCE per actual `period` value — not on
-    // every effect re-run. React 18 StrictMode (and any incidental re-mount)
-    // otherwise re-fires the initial loader fetch, multiplying network requests
-    // per page load. The single-flight guard collapses CONCURRENT bursts, but a
-    // post-resolve re-mount slips through; this ref dedupes against the period.
+    if (realtimeTimerRef.current) {
+      clearTimeout(realtimeTimerRef.current);
+      realtimeTimerRef.current = null;
+    }
     if (lastFetchedPeriodRef.current !== period) {
-      lastFetchedPeriodRef.current = period;
+      inFlightRef.current = false;
       fetchOverviewData(true);
     }
     intervalRef.current = startVisibleInterval(() => fetchOverviewData(false), 10_000);
     return () => {
+      abortRef.current?.abort();
+      inFlightRef.current = false;
       if (typeof intervalRef.current === "function") intervalRef.current();
     };
   }, [fetchOverviewData, period]);

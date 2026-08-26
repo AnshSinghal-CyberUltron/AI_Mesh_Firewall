@@ -72,6 +72,15 @@ def fetch(token: str, path: str) -> dict:
             "ms": round((time.perf_counter() - t0) * 1000, 1),
             "snippet": snippet,
         }
+    except (urllib.error.URLError, ConnectionError, TimeoutError, OSError) as exc:
+        return {
+            "path": path,
+            "status": 0,
+            "bytes": 0,
+            "ms": round((time.perf_counter() - t0) * 1000, 1),
+            "error": type(exc).__name__,
+            "snippet": str(exc)[:200],
+        }
 
 
 def main() -> int:
@@ -85,6 +94,14 @@ def main() -> int:
             samples.append(int(_read("/sys/fs/cgroup/memory.current")))
             time.sleep(0.2)
 
+    def _oom_kill_count() -> int:
+        events = _read("/sys/fs/cgroup/memory.events")
+        for line in events.splitlines():
+            if line.startswith("oom_kill "):
+                return int(line.split()[1])
+        return 0
+
+    oom_kill_before = _oom_kill_count()
     token = login()
     baseline = int(_read("/sys/fs/cgroup/memory.current"))
     th = threading.Thread(target=sampler, daemon=True)
@@ -113,9 +130,13 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         inspect = {"error": str(exc)}
 
-    returned = all(r.get("status") for r in results)
+    oom_kill_after = _oom_kill_count()
+    oom_delta = oom_kill_after - oom_kill_before
+    # docker inspect OOMKilled stays true after a prior restart of this
+    # container; T-C1b must use the cgroup counter delta instead.
+    returned = all(200 <= int(r.get("status") or 0) < 300 for r in results)
     under_cap = peak < cap
-    ok = returned and under_cap and not oom and len(results) == 4
+    ok = returned and under_cap and oom_delta == 0 and len(results) == 4
     report = {
         "ok": ok,
         "mem_max": mem_max,
@@ -123,14 +144,17 @@ def main() -> int:
         "baseline": baseline,
         "peak": peak,
         "under_70pct": under_cap,
-        "oom_killed": oom,
+        "oom_killed_inspect": oom,
+        "oom_kill_before": oom_kill_before,
+        "oom_kill_after": oom_kill_after,
+        "oom_kill_delta": oom_delta,
         "results": results,
         "state": inspect,
     }
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w") as fh:
         json.dump(report, fh, indent=2)
-    print(json.dumps({k: report[k] for k in ("ok", "peak", "cap_70pct", "under_70pct", "oom_killed")}))
+    print(json.dumps({k: report[k] for k in ("ok", "peak", "cap_70pct", "under_70pct", "oom_kill_delta")}))
     print(json.dumps(results))
     return 0 if ok else 1
 
