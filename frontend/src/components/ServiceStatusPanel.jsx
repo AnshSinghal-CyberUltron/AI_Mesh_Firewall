@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useGatewayConfig } from "../hooks/useGatewayConfig";
 import { resolveGatewayHealthUrl } from "../utils/environmentUrls";
+import { startVisibleInterval } from "../utils/visiblePoll.js";
 
 const CHECK_INTERVAL = 30_000; // 30 seconds
 
@@ -181,10 +182,10 @@ export function ServiceStatusPanel() {
   useEffect(() => {
     mountedRef.current = true;
     runCheck();
-    intervalRef.current = setInterval(runCheck, CHECK_INTERVAL);
+    intervalRef.current = startVisibleInterval(runCheck, CHECK_INTERVAL);
     return () => {
       mountedRef.current = false;
-      clearInterval(intervalRef.current);
+      if (typeof intervalRef.current === "function") intervalRef.current();
     };
   }, [runCheck]);
 

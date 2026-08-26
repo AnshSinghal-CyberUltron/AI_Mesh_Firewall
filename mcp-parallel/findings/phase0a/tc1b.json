@@ -1,0 +1,19 @@
+{
+  "ok": false,
+  "gate": "T-C1b",
+  "honest": "FAIL without C-1'. Four concurrent 30d KPI hauls still OOM the 2560M control cgroup. statement_timeout does not stop Python materializing rows. Semaphore max 2/worker x 2 workers still allows four scans.",
+  "mem_max": 2684354560,
+  "cap_70pct": 1879048192,
+  "cgroup_memory_events_after": {
+    "oom": 4,
+    "oom_kill": 2
+  },
+  "docker_state_after": {
+    "Status": "running",
+    "OOMKilled": true,
+    "Health": "healthy"
+  },
+  "client_error": "http.client.RemoteDisconnected: Remote end closed connection without response",
+  "elapsed_s": 6.3,
+  "note": "Container restarted via restart policy; health returned 200 after respawn. Do not secretly implement C-1' in Phase 0a."
+}

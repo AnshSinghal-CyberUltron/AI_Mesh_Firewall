@@ -18,6 +18,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { isDocumentHidden } from "../utils/requestLifecycle.js";
+import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { useRealtimeNotifications } from "../hooks/useRealtimeNotifications";
 import { OWASPStatsPanel } from "../components/OWASPStatsPanel";
 import { PolicyAnalyticsPanel } from "../components/PolicyAnalyticsPanel";
@@ -656,8 +658,10 @@ export function AIMeshFirewallOverview({ onTabChange }) {
       lastFetchedPeriodRef.current = period;
       fetchOverviewData(true);
     }
-    intervalRef.current = setInterval(() => fetchOverviewData(false), 10_000);
-    return () => clearInterval(intervalRef.current);
+    intervalRef.current = startVisibleInterval(() => fetchOverviewData(false), 10_000);
+    return () => {
+      if (typeof intervalRef.current === "function") intervalRef.current();
+    };
   }, [fetchOverviewData, period]);
 
   // Real-time WebSocket: refresh on new enforcement events, but coalesce bursts
@@ -666,8 +670,12 @@ export function AIMeshFirewallOverview({ onTabChange }) {
   useRealtimeNotifications({
     enabled: true,
     onEnforcementEvent: useCallback(() => {
+      if (isDocumentHidden()) return;
       if (realtimeTimerRef.current) clearTimeout(realtimeTimerRef.current);
-      realtimeTimerRef.current = setTimeout(() => fetchOverviewData(false), 2000);
+      realtimeTimerRef.current = setTimeout(() => {
+        if (isDocumentHidden()) return;
+        fetchOverviewData(false);
+      }, 2000);
     }, [fetchOverviewData]),
   });
 

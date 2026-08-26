@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { composeAbortSignal, DEFAULT_FETCH_TIMEOUT_MS } from '../utils/requestLifecycle.js';
 
 const AuthContext = createContext(null);
 
@@ -235,17 +236,22 @@ export function AuthProvider({ children }) {
 
   const fetchWithAuth = useCallback(async (url, options = {}) => {
     const doFetch = (accessToken) => {
-      const headers = { ...options.headers };
+      const { timeoutMs = DEFAULT_FETCH_TIMEOUT_MS, signal: userSignal, headers: optHeaders, ...rest } = options;
+      const headers = { ...optHeaders };
       // Only set Content-Type for requests that send a body (POST/PUT/PATCH)
-      const method = (options.method || 'GET').toUpperCase();
-      const body = options.body;
+      const method = (rest.method || 'GET').toUpperCase();
+      const body = rest.body;
       const skipJsonContentType =
         body instanceof FormData || body instanceof URLSearchParams;
       if (!headers['Content-Type'] && ['POST', 'PUT', 'PATCH'].includes(method) && !skipJsonContentType) {
         headers['Content-Type'] = 'application/json';
       }
       if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-      return fetch(url, { ...options, headers });
+      return fetch(url, {
+        ...rest,
+        headers,
+        signal: composeAbortSignal(userSignal, timeoutMs),
+      });
     };
 
     // Idempotent methods are safe to retry on a transient NETWORK failure
@@ -255,6 +261,7 @@ export function AuthProvider({ children }) {
     // doesn't surface as a user-facing "network error". POST is NEVER retried
     // (non-idempotent → risks duplicate writes). HTTP error statuses are not
     // retried here — only an outright connection failure.
+    // Timeouts / AbortController must not be retried (would wait another 30s).
     const method = (options.method || 'GET').toUpperCase();
     const idempotent = ['GET', 'HEAD', 'PUT', 'DELETE'].includes(method);
     const doFetchResilient = async (accessToken) => {
@@ -265,9 +272,11 @@ export function AuthProvider({ children }) {
           return await doFetch(accessToken);
         } catch (err) {
           lastErr = err;
-          if (attempt < maxAttempts) {
-            await new Promise((r) => setTimeout(r, 250 * attempt));
+          const name = err && err.name;
+          if (name === 'AbortError' || name === 'TimeoutError' || attempt >= maxAttempts) {
+            throw err;
           }
+          await new Promise((r) => setTimeout(r, 250 * attempt));
         }
       }
       throw lastErr;

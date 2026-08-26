@@ -5,6 +5,7 @@ import {
   ChevronDown, ChevronUp, Clock, TrendingUp,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { InfoTooltip } from "./InfoTooltip";
 import { filterUserManagedModels } from "../constants/zeroshieldBrand";
 
@@ -129,11 +130,10 @@ export function ModelStatePanel() {
   // Auto-poll every 5 seconds
   useEffect(() => {
     if (!polling) return;
-    const id = setInterval(() => {
+    return startVisibleInterval(() => {
       fetchModelStates();
       fetchAuditLogs();
     }, 5000);
-    return () => clearInterval(id);
   }, [polling, fetchModelStates, fetchAuditLogs]);
 
   const handleIsolate = async (modelName) => {

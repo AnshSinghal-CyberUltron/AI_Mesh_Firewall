@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { BarChart3, RefreshCw, Loader2, Eye, AlertTriangle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { InfoTooltip } from "./InfoTooltip";
 import { SafeResponsiveChart } from "./SafeResponsiveChart";
 import { actionColor, OUTPUT_ACTION_COLORS } from "../constants/outputGuardColors";
@@ -171,8 +172,7 @@ export function OutputGuardrailCharts({ timeRange = "7d", moduleId = "1.7" }) {
 
   useEffect(() => { fetchCharts(); }, [fetchCharts]);
   useEffect(() => {
-    const id = setInterval(() => fetchCharts(true), 30_000);
-    return () => clearInterval(id);
+    return startVisibleInterval(() => fetchCharts(true), 30_000);
   }, [fetchCharts]);
 
   const byKey = (k) => charts.find((c) => c.key === k);

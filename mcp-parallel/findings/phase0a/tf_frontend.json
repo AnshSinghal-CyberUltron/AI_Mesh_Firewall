@@ -1,0 +1,29 @@
+{
+  "ok": true,
+  "tf1": {
+    "hiddenMs": 600000,
+    "analyticsGets": 0,
+    "zero": true,
+    "hits": [],
+    "hideAt": 1787718360595
+  },
+  "tf2": {
+    "extraAnalyticsGets": 0,
+    "bounded": true,
+    "urls": []
+  },
+  "tf5": {
+    "aborted": true,
+    "ms": 29998,
+    "wellBefore300s": true,
+    "failed": [
+      {
+        "url": "http://127.0.0.1:8180/api/security/soc-kpis/?period=24h",
+        "at": 29998,
+        "failure": "net::ERR_ABORTED"
+      }
+    ]
+  },
+  "pageErrors": [],
+  "error": null
+}

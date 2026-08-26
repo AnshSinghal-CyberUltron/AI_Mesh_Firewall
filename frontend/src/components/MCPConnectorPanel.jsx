@@ -33,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { toAbsoluteGatewayUrl, resolveMcpGatewayBaseUrl } from "../utils/environmentUrls";
 import { ServerTier2Manager } from "./ServerTier2Manager";
 import { ServerTier1Manager } from "./ServerTier1Manager";
@@ -1153,21 +1154,23 @@ function MCPConnectorPanelInner() {
 
       // BUG FIX (a): clear any previous poll before starting a new one.
       if (oauthPollRef.current) {
-        clearInterval(oauthPollRef.current);
+        if (typeof oauthPollRef.current === "function") oauthPollRef.current();
+        else clearInterval(oauthPollRef.current);
         oauthPollRef.current = null;
       }
 
       // Poll the org-scoped server detail until the callback stores the token.
+      // Phase 0a F-a: skip ticks while the tab is hidden.
       let elapsed = 0;
-      const interval = setInterval(async () => {
+      const stop = startVisibleInterval(async () => {
         elapsed += 3000;
         try {
           const r = await fetchWithAuth(`/api/mcp-connector/servers/${srv.id}/`);
           if (r.ok) {
             const s = await r.json();
             if (s.oauth_authorized) {
-              clearInterval(interval);
-              oauthPollRef.current = null; // BUG FIX (a): clear ref on success
+              stop();
+              oauthPollRef.current = null;
               setOauthBusy(null);
               if (!popup.closed) popup.close();
               await loadServers();
@@ -1182,13 +1185,13 @@ function MCPConnectorPanelInner() {
           }
         } catch (_) { /* transient — keep polling */ }
         if (elapsed >= 180000 || popup.closed) {
-          clearInterval(interval);
-          oauthPollRef.current = null; // BUG FIX (a): clear ref on timeout/close
+          stop();
+          oauthPollRef.current = null;
           setOauthBusy(null);
           await loadServers();
         }
       }, 3000);
-      oauthPollRef.current = interval; // BUG FIX (a): track for unmount cleanup
+      oauthPollRef.current = stop;
     } catch (e) {
       if (popup && !popup.closed) popup.close();
       setOauthBusy(null);
@@ -1201,7 +1204,8 @@ function MCPConnectorPanelInner() {
   useEffect(() => {
     return () => {
       if (oauthPollRef.current) {
-        clearInterval(oauthPollRef.current);
+        if (typeof oauthPollRef.current === "function") oauthPollRef.current();
+        else clearInterval(oauthPollRef.current);
         oauthPollRef.current = null;
       }
     };

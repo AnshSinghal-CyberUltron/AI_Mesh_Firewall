@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { isDocumentHidden } from "../utils/requestLifecycle.js";
+import { startVisibleInterval } from "../utils/visiblePoll.js";
 
 /**
  * Polls the backend `/api/health/` probe so status chrome (the header
@@ -66,11 +68,11 @@ export function useBackendHealth(intervalMs = 30000) {
       }
     };
 
-    check();
-    const timer = setInterval(check, intervalMs);
+    if (!isDocumentHidden()) check();
+    const stop = startVisibleInterval(check, intervalMs);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      stop();
     };
   }, [intervalMs]);
 

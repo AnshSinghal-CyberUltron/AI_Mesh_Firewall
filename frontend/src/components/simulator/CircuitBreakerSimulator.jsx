@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { AlertTriangle, RotateCcw, Zap, Activity, ShieldOff, TrendingUp } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { startVisibleInterval } from "../../utils/visiblePoll.js";
 import { useSimulatorEngine } from "../../hooks/useSimulatorEngine";
 import { SimulatorShell } from "./SimulatorShell";
 
@@ -44,8 +45,7 @@ export function CircuitBreakerSimulator() {
   // Auto-poll when circuit is open
   useEffect(() => {
     if (!polling) return;
-    const id = setInterval(loadState, 3000);
-    return () => clearInterval(id);
+    return startVisibleInterval(loadState, 3000);
   }, [polling, loadState]);
 
   const handleTrigger = async () => {

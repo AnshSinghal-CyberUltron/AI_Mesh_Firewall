@@ -3,6 +3,7 @@ import {
   Activity, AlertTriangle, MessageSquare, RotateCcw, ShieldOff, Zap,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { startVisibleInterval } from "../../utils/visiblePoll.js";
 import { useIsolationPlayground } from "../../hooks/useIsolationPlayground";
 import { useSimulatorGatewayModels } from "../../hooks/useSimulatorGatewayModels";
 import { useFirewallConfig } from "../../hooks/useFirewallConfig";
@@ -68,8 +69,7 @@ export function IsolationOpsSimulator() {
 
   useEffect(() => {
     if (!polling) return;
-    const id = setInterval(loadCbState, 3000);
-    return () => clearInterval(id);
+    return startVisibleInterval(loadCbState, 3000);
   }, [polling, loadCbState]);
 
   const handleLiveChat = async () => {

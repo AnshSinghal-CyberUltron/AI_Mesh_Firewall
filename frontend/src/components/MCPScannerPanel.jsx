@@ -9,6 +9,7 @@ import {
   getGatewayStorageKey,
   resolveGatewayBaseUrl,
 } from "../utils/environmentUrls";
+import { startVisibleInterval } from "../utils/visiblePoll.js";
 
 const GATEWAY_URL_KEY = getGatewayStorageKey();
 const POLL_INTERVAL_MS = 2000;
@@ -169,14 +170,15 @@ export function MCPScannerPanel() {
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
-      clearInterval(pollRef.current);
+      if (typeof pollRef.current === "function") pollRef.current();
+      else clearInterval(pollRef.current);
       pollRef.current = null;
     }
   }, []);
 
   const pollScan = useCallback((runId) => {
     stopPolling();
-    pollRef.current = setInterval(async () => {
+    pollRef.current = startVisibleInterval(async () => {
       try {
         const data = await gw(`/api/mcp/scan/${runId}`);
         if (data.ok) {

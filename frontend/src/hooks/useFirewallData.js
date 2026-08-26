@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
+import { isDocumentHidden } from "../utils/requestLifecycle.js";
+import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { useRealtimeNotifications } from "./useRealtimeNotifications";
 import { selectOutputGovernanceEvents } from "../utils/outputGovernanceFeed";
 
@@ -154,14 +156,17 @@ export function useFirewallData(moduleId, timeRange = "24h", { enabled = true } 
 
   useRealtimeNotifications({
     enabled,
-    onEnforcementEvent: () => fetchData({ background: true }),
+    onEnforcementEvent: () => {
+      if (isDocumentHidden()) return;
+      fetchData({ background: true });
+    },
   });
 
   // Polling fallback: refresh without clearing UI (avoids hero/table flicker).
+  // Phase 0a F-a: skip ticks while the tab is hidden (T-F1).
   useEffect(() => {
     if (!enabled) return undefined;
-    const id = setInterval(() => fetchData({ background: true }), 15000);
-    return () => clearInterval(id);
+    return startVisibleInterval(() => fetchData({ background: true }), 15000);
   }, [fetchData, enabled]);
 
   const metrics = buildMetrics(moduleId, socKpis, gatewayStats, threatFeedCount);

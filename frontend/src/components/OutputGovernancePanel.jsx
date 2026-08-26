@@ -4,6 +4,7 @@ import {
   Clock, Loader2, RefreshCw, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { InfoTooltip } from "./InfoTooltip";
 import { OutputPipelineTimeline } from "./OutputPipelineTimeline";
 import { TIME_RANGE_TO_HOURS } from "../hooks/useFirewallData";
@@ -164,8 +165,7 @@ export function OutputGovernancePanel({ timeRange = "24h" }) {
 
   useEffect(() => {
     if (!autoRefresh) return;
-    const id = setInterval(fetchEvents, POLL_INTERVAL);
-    return () => clearInterval(id);
+    return startVisibleInterval(fetchEvents, POLL_INTERVAL);
   }, [autoRefresh, fetchEvents]);
 
   const blocked = events.filter((e) => e.action === "block").length;

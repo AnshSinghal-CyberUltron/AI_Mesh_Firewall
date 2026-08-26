@@ -4,6 +4,7 @@ import {
   Key, FileWarning, Loader2, Activity, AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { InfoTooltip } from "./InfoTooltip";
 import { TIME_RANGE_TO_HOURS } from "../hooks/useFirewallData";
 import { normalizeCategory, OUTPUT_ACTION_COLORS } from "../constants/outputGuardColors";
@@ -125,8 +126,7 @@ export function OutputGuardrailEngineCard({ timeRange = "24h" }) {
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
   useEffect(() => {
-    const id = setInterval(fetchStats, 30_000);
-    return () => clearInterval(id);
+    return startVisibleInterval(fetchStats, 30_000);
   }, [fetchStats]);
 
   const engineActive = summary.total > 0;

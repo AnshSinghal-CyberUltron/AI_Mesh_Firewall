@@ -37,6 +37,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { InfoTooltip } from "./InfoTooltip";
 
 /* ────────────────── helpers ────────────────── */
@@ -428,17 +429,17 @@ export function MCPManagerPanel() {
     popup.location.href = authUrl;
 
     const redirectUri = `${window.location.origin}/oauth/callback`;
-    const poll = setInterval(async () => {
+    const stop = startVisibleInterval(async () => {
       try {
         if (popup.closed) {
-          clearInterval(poll);
+          stop();
           await loadServers();
           await connectServer(serverId);
           return;
         }
         const popupUrl = popup.location.href;
         if (popupUrl && popupUrl.startsWith(window.location.origin)) {
-          clearInterval(poll);
+          stop();
           const params = new URL(popupUrl).searchParams;
           const code = params.get("code");
           const state = params.get("state");

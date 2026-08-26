@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useGatewayConfig } from "./useGatewayConfig";
 import { useAuth } from "../context/AuthContext";
+import { isDocumentHidden } from "../utils/requestLifecycle.js";
+import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { resolveGatewayHealthUrl } from "../utils/environmentUrls";
 
 const HEALTH_POLL_INTERVAL = 15000;
@@ -164,9 +166,11 @@ export function useSimulatorEngine() {
   }, [gatewayUrl]);
 
   useEffect(() => {
-    checkHealth();
-    healthRef.current = setInterval(checkHealth, HEALTH_POLL_INTERVAL);
-    return () => clearInterval(healthRef.current);
+    if (!isDocumentHidden()) checkHealth();
+    healthRef.current = startVisibleInterval(checkHealth, HEALTH_POLL_INTERVAL);
+    return () => {
+      if (typeof healthRef.current === "function") healthRef.current();
+    };
   }, [checkHealth]);
 
   // Reload cached key when org context becomes available or changes.
