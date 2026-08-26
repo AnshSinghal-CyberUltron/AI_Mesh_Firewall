@@ -31,6 +31,7 @@ from rest_framework.views import APIView
 from core.models import AGENT_TYPE_CHOICES, Agent, Endpoint
 from ai_mesh_shared.owasp_telemetry import is_owasp_enforced
 
+from policy.analytics_concurrency import AnalyticsConcurrencyMixin
 from policy.constants import ACTION_BLOCK, ACTION_FLAG, ACTION_MONITOR, ACTION_REDACT
 from policy.models import EnforcementEvent, Notification, Policy
 from policy.firewall_module_classifier import (
@@ -117,29 +118,33 @@ OWASP_ALL_VECTORS = OWASP_LLM_VECTORS + OWASP_MCP_VECTORS + OWASP_AGENTIC_VECTOR
 def _enforcement_events_for_request(request, base_queryset=None):
     """
     Return EnforcementEvent queryset scoped to the request's organization.
-    - org is None and user is not superuser -> return .none()
-    - org is None and user is superuser -> return base_queryset unchanged
-    - org is set -> filter by endpoint_id in org, or agent's endpoint in org, or policy in org (when no endpoint/agent).
+
+    Phase 0a X-1: fail-closed. Missing org (including superuser-without-org)
+    always returns .none(). Explicit ?organization_id= on a platform operator
+    still resolves via get_request_organization and is scoped to that org.
+
+    Queries run on the analytics alias so C-7 SET LOCAL timeouts apply.
     """
     from auth.utils import get_request_organization
+    from main_app.analytics_db import ANALYTICS_DB_ALIAS
 
     org = get_request_organization(request)
     if base_queryset is None:
         base_queryset = EnforcementEvent.objects.all()
     if org is None:
-        if not getattr(request, "user", None) or not request.user.is_authenticated or not request.user.is_superuser:
-            return base_queryset.none()
-        return base_queryset
-    # perf item 20: scope by the direct organization FK only. The telemetry drain
-    # (and the evaluation path, `event_org_id = org.id`) set organization_id on every
-    # ingested event — verified 0 of 288k rows have a NULL organization — so the
-    # legacy fallback below matched ONLY `organization IS NULL` rows, deriving org via
-    # a SEPARATE Endpoint subquery + agent__endpoint / policy joins. It produced
-    # identical results (row sets verified identical, org=2: 109417 == 109417) while
-    # costing an extra query and three joins on EVERY call to this helper (used by
-    # ~31 SOC views). Dropped. If a NULL-org event is ever introduced, backfill its
-    # organization_id rather than reviving the joins here.
-    return base_queryset.filter(organization=org)
+        qs = base_queryset.none()
+    else:
+        # perf item 20: scope by the direct organization FK only. The telemetry drain
+        # (and the evaluation path, `event_org_id = org.id`) set organization_id on every
+        # ingested event — verified 0 of 288k rows have a NULL organization — so the
+        # legacy fallback below matched ONLY `organization IS NULL` rows, deriving org via
+        # a SEPARATE Endpoint subquery + agent__endpoint / policy joins. It produced
+        # identical results (row sets verified identical, org=2: 109417 == 109417) while
+        # costing an extra query and three joins on EVERY call to this helper (used by
+        # ~31 SOC views). Dropped. If a NULL-org event is ever introduced, backfill its
+        # organization_id rather than reviving the joins here.
+        qs = base_queryset.filter(organization=org)
+    return qs.using(ANALYTICS_DB_ALIAS)
 
 
 def _event_organization_id(ev):
@@ -1051,7 +1056,7 @@ class ThreatFeedEventDetailView(APIView):
         return Response(item)
 
 
-class AttackVectorTrendsView(APIView):
+class AttackVectorTrendsView(AnalyticsConcurrencyMixin, APIView):
     """
     GET /api/security/attack-vector-trends/
     Time-series counts by vector. Query params: period (1h, 24h, 7d, 30d; default 24h).
@@ -1237,7 +1242,7 @@ def _event_to_vectors_simple(ev):
     return vectors
 
 
-class SocKpisView(APIView):
+class SocKpisView(AnalyticsConcurrencyMixin, APIView):
     """
     GET /api/security/soc-kpis/?period=1h|24h|7d|30d
     Returns KPI counts for the SOC hero metric cards, scoped to the chosen time window.
@@ -1419,7 +1424,7 @@ class SocKpisView(APIView):
         )
 
 
-class ModuleKpisView(APIView):
+class ModuleKpisView(AnalyticsConcurrencyMixin, APIView):
     """
     GET /api/security/module-kpis/?period=1h|24h|7d|30d
     Returns per-module KPI breakdown for the AI Mesh Firewall overview.
@@ -1482,7 +1487,7 @@ class ModuleKpisView(APIView):
         return Response({"period": period, "modules": modules})
 
 
-class ModuleTrendsView(APIView):
+class ModuleTrendsView(AnalyticsConcurrencyMixin, APIView):
     """
     GET /api/security/module-trends/?period=1h|24h|7d|30d
     Returns per-module time-series data for SubModuleCard pressure curves.
