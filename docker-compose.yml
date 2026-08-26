@@ -143,6 +143,8 @@ services:
       TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-thread}
       TELEMETRY_DRAIN_INTERVAL_SEC: ${TELEMETRY_DRAIN_INTERVAL_SEC:-1.0}
       TELEMETRY_DRAIN_BATCH_SIZE: ${TELEMETRY_DRAIN_BATCH_SIZE:-250}
+      # Phase 0a C-4b: pin ASGI thread pool (entrypoint default is also 2).
+      ASGI_THREADS: ${ASGI_THREADS:-2}
     depends_on:
       postgres: { condition: service_healthy }
       pgbouncer: { condition: service_healthy }
@@ -153,6 +155,9 @@ services:
       timeout: 5s
       retries: 8
       start_period: 45s
+    # Phase 0a T-C6/T-C1b: match prod control cgroup (docker-compose.prod.yml 2560M).
+    mem_limit: 2560m
+    memswap_limit: 2560m
 
   workers:
     profiles: ["workers"]

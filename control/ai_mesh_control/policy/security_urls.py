@@ -11,6 +11,7 @@ from .review_views import (
     SecurityIncidentResolveView,
 )
 
+from .analytics_timeout_probe import AnalyticsTimeoutProbeView
 from .security_views import (
     AgentTypeStatsView,
     AttackCatalogView,
@@ -48,6 +49,11 @@ urlpatterns = [
     path("threat-sources/", ThreatSourcesView.as_view(), name="security-threat-sources"),
     path("attack-graph/", AttackGraphView.as_view(), name="security-attack-graph"),
     path("soc-kpis/", SocKpisView.as_view(), name="security-soc-kpis"),
+    path(
+        "analytics-timeout-probe/",
+        AnalyticsTimeoutProbeView.as_view(),
+        name="security-analytics-timeout-probe",
+    ),
     path("module-kpis/", ModuleKpisView.as_view(), name="security-module-kpis"),
     path("module-trends/", ModuleTrendsView.as_view(), name="security-module-trends"),
     path("module-charts/<str:module_id>/", ModuleChartsView.as_view(), name="security-module-charts"),

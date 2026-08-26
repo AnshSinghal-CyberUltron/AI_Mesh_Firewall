@@ -137,6 +137,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "main_app.analytics_timeout_middleware.AnalyticsTimeoutMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -240,6 +241,35 @@ else:
             },
         }
     }
+
+# Phase 0a C-7: dedicated analytics alias. Startup OPTIONS are belt-and-suspenders;
+# PgBouncer ignores them — AnalyticsTimeoutMiddleware SET LOCAL is authoritative.
+from copy import deepcopy  # noqa: E402
+from main_app.analytics_db import (  # noqa: E402
+    ANALYTICS_DB_ALIAS,
+    IDLE_IN_TX_MS,
+    STATEMENT_TIMEOUT_MS,
+)
+
+_analytics_url = os.environ.get("DATABASE_ANALYTICS_URL", "").strip()
+if DATABASES["default"].get("ENGINE") == "django.db.backends.postgresql":
+    DATABASES[ANALYTICS_DB_ALIAS] = postgres_database_from_url(
+        _analytics_url or _database_url,
+        conn_max_age=int(os.environ.get("POSTGRES_CONN_MAX_AGE", "60")),
+        disable_server_side_cursors_env=os.environ.get(
+            "DISABLE_SERVER_SIDE_CURSORS", ""
+        ),
+        statement_timeout_ms=STATEMENT_TIMEOUT_MS,
+        idle_in_tx_ms=IDLE_IN_TX_MS,
+    )
+    # Do NOT set ATOMIC_REQUESTS on this alias. Django would wrap every view in
+    # an analytics txn *inside* AnalyticsTimeoutMiddleware; DRF then swallows
+    # QueryCanceled into a Response and the inner atomic COMMITs an aborted
+    # connection → InternalError 500. Middleware atomic + SET LOCAL is the
+    # single transaction for analytics HTTP paths.
+else:
+    DATABASES[ANALYTICS_DB_ALIAS] = deepcopy(DATABASES["default"])
+DATABASES[ANALYTICS_DB_ALIAS]["TEST"] = {"MIRROR": "default"}
 
 _redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0").strip()
 _cache_backend = os.environ.get("DJANGO_CACHE_BACKEND", "redis").strip().lower()

@@ -31,6 +31,21 @@ class ExceptionHandlerDBTests(SimpleTestCase):
         resp = safe_exception_handler(InterfaceError("connection already closed"), _ctx())
         self.assertEqual(resp.status_code, 503)
 
+    def test_statement_timeout_is_504_query_timeout(self):
+        exc = OperationalError("canceling statement due to statement timeout")
+        resp = safe_exception_handler(exc, _ctx("/api/security/soc-kpis/"))
+        self.assertEqual(resp.status_code, 504)
+        self.assertEqual(resp.data["code"], "query_timeout")
+        self.assertEqual(resp.data["error"], "query_timeout")
+
+    def test_internal_error_statement_timeout_is_504(self):
+        from django.db import InternalError
+
+        exc = InternalError("canceling statement due to statement timeout")
+        resp = safe_exception_handler(exc, _ctx("/api/security/analytics-timeout-probe/"))
+        self.assertEqual(resp.status_code, 504)
+        self.assertEqual(resp.data["code"], "query_timeout")
+
     def test_value_error_still_400(self):
         resp = safe_exception_handler(ValueError("invalid literal for int()"), _ctx())
         self.assertEqual(resp.status_code, 400)

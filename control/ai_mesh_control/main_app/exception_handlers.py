@@ -11,9 +11,11 @@ Two goals:
 
 import logging
 
-from django.db import InterfaceError, OperationalError
+from django.db import InterfaceError, InternalError, OperationalError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
+
+from main_app.analytics_db import analytics_timeout_payload, is_statement_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,11 @@ def safe_exception_handler(exc, context):
     # view body — so it surfaces here on ANY endpoint (the MCP Observability tab
     # 500 was this). A 503 + Retry-After lets the client back off and retry instead
     # of showing a hard error; the pool recovers in seconds. (CP26)
-    if isinstance(exc, (OperationalError, InterfaceError)):
+    if is_statement_timeout(exc):
+        logger.warning("Analytics query timeout at %s: %s", path, exc)
+        return Response(analytics_timeout_payload(), status=504)
+
+    if isinstance(exc, (OperationalError, InterfaceError, InternalError)):
         logger.warning("Transient DB fault (%s) at %s: %s", type(exc).__name__, path, exc)
         resp = Response(
             {"detail": "Service temporarily unavailable, please retry.",

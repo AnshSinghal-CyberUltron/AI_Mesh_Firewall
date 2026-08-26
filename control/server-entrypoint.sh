@@ -63,14 +63,10 @@ fi
 # the resolved integer so gunicorn's own default matches --workers and is never "".
 export WEB_CONCURRENCY="$WORKERS"
 
-# Size the event-loop default thread-pool (sync offload) from the detector unless
-# pinned. main_app/asgi.py reads ASGI_THREADS per worker (P3 item 09).
-# Never export an empty string — Daphne does int(os.environ["ASGI_THREADS"]).
+# Phase 0a C-4b: pin the unset default to 2 (not the detector's asgi_threads).
+# An explicit ASGI_THREADS env still overrides. Never export an empty string.
 if [ -z "${ASGI_THREADS:-}" ]; then
-    ASGI_THREADS="$("$PYTHON_BIN" -m ai_mesh_shared.resource_budget --value asgi_threads 2>/dev/null || true)"
-fi
-if [ -z "${ASGI_THREADS:-}" ]; then
-    ASGI_THREADS=8
+    ASGI_THREADS=2
 fi
 export ASGI_THREADS
 

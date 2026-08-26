@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 from core.models import Agent, Endpoint
 from policy.constants import ACTION_BLOCK, ACTION_REDACT
 from policy.models import ComplianceViolation, EnforcementEvent, Policy, Rule
+from policy.analytics_concurrency import AnalyticsConcurrencyMixin
 from policy.security_views import OWASP_ALL_VECTORS, _enforcement_events_for_request
 try:
     from third_party_integrations.export_reporter import ExportReporter
@@ -406,7 +407,7 @@ def _model_to_provider(model_str):
     return "Other"
 
 
-class ModelUsageView(APIView):
+class ModelUsageView(AnalyticsConcurrencyMixin, APIView):
     """
     GET /api/dashboard/model-usage/?days=30
     Aggregates EnforcementEvent by metadata.model; returns per-model usage stats.
