@@ -131,13 +131,30 @@ class AnalyticsRollupTests(AnalyticsAPITestCase):
         self.assertEqual(off.status_code, 200)
         self.assertEqual(off["X-Analytics-Source"], "raw")
 
-    def test_stale_watermark_falls_back_to_raw(self):
-        self._event(1)
+    def test_stale_watermark_keeps_totals_exact_without_abandoning_facts(self):
+        """A stale watermark must lose no events -- and must not re-scan the window.
+
+        The old gate demanded ``covered_to >= hour_floor(now)`` and dropped the
+        whole rollup otherwise. Since ``covered_to`` is the refresh *timestamp*
+        and the refresh runs every 900s, that went false at the top of every
+        clock hour, sending all four Overview endpoints down the raw path for up
+        to a quarter of each hour -- which is how 30d requests reached the 5s
+        analytics deadline and surfaced as 504s.
+
+        Facts are now trimmed to the hours they actually cover and the remainder
+        is read from live events. This asserts the property the old test was
+        standing in for: with a two-hour-stale watermark AND an event recorded
+        after the last refresh, every endpoint still matches the raw oracle.
+        """
         from policy.analytics_rollup import refresh_org_rollups
         from policy.analytics_rollup_models import AnalyticsRollupWatermark
 
+        self._event(5)
+        self._event(3, action=ACTION_REDACT)
         refresh_org_rollups(self.org.id)
-        os.environ["ANALYTICS_SERVE_ROLLUPS"] = "1"
+        # Recorded after the rebuild: only the raw edge can account for it.
+        self._event(0, action=ACTION_BLOCK, owasp_code="LLM01")
+
         from main_app.analytics_db import ANALYTICS_DB_ALIAS
 
         stale = timezone.now() - timedelta(hours=2)
@@ -145,9 +162,62 @@ class AnalyticsRollupTests(AnalyticsAPITestCase):
             AnalyticsRollupWatermark.objects.using(alias).filter(
                 organization_id=self.org.id
             ).update(covered_to=stale)
-        resp = self.client.get("/api/security/soc-kpis/?period=24h")
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp["X-Analytics-Source"], "raw")
+
+        for period in ("24h", "7d", "30d"):
+            for endpoint in _ENDPOINTS:
+                url = endpoint.format(p=period)
+                os.environ["ANALYTICS_SERVE_ROLLUPS"] = "0"
+                raw = self.client.get(url)
+                os.environ["ANALYTICS_SERVE_ROLLUPS"] = "1"
+                rolled = self.client.get(url)
+                self.assertEqual(rolled.status_code, 200)
+                self.assertEqual(
+                    rolled.json(),
+                    raw.json(),
+                    msg=f"stale-watermark mismatch on {url}",
+                )
+                # Still served from facts: the point is not to fall back.
+                self.assertEqual(rolled["X-Analytics-Source"], "rollup", msg=url)
+
+    def test_partial_first_hour_of_lookback_is_materialised_whole(self):
+        """The oldest bucket must not lose the part of its hour before the lookback.
+
+        ``refresh_org_rollups`` advertises ``covered_from = hour_floor(now - hours)``
+        and every reader treats that hour as complete -- but the scan used to start
+        at the *unaligned* ``now - hours``. Everything in
+        ``[covered_from, now - hours)`` was then in neither the facts nor the raw
+        edge and vanished from the oldest bucket of the trend charts, which take
+        their window from ``trend_grid`` (hour-aligned) rather than from the
+        refresh instant. Measured at 59 lost events on a 200k-event corpus.
+        """
+        from unittest import mock
+
+        from policy.analytics_rollup import refresh_org_rollups
+
+        # Deliberately unaligned, so hour_floor(now - 24h) is strictly earlier
+        # than the lookback start and the partial region actually exists.
+        frozen = timezone.now().replace(minute=37, second=0, microsecond=0)
+        early = (frozen - timedelta(hours=24)).replace(minute=5)
+
+        ev = EnforcementEvent.objects.create(
+            organization=self.org,
+            action=ACTION_BLOCK,
+            metadata={"source": "security_scan", "threat_category": "prompt injection"},
+        )
+        EnforcementEvent.objects.filter(pk=ev.pk).update(created_at=early)
+
+        with mock.patch("django.utils.timezone.now", return_value=frozen):
+            refresh_org_rollups(self.org.id, hours=24)
+            url = "/api/security/attack-vector-trends/?period=24h"
+            os.environ["ANALYTICS_SERVE_ROLLUPS"] = "0"
+            raw = self.client.get(url).json()
+            os.environ["ANALYTICS_SERVE_ROLLUPS"] = "1"
+            rolled = self.client.get(url)
+
+        self.assertEqual(rolled["X-Analytics-Source"], "rollup")
+        self.assertEqual(rolled.json(), raw)
+        # The event is genuinely inside the charted window, not a no-op assert.
+        self.assertEqual(sum(b["promptInjection"] for b in raw), 1)
 
     def test_refresh_lock_skips_second_caller_and_respects_disable(self):
         from unittest import mock

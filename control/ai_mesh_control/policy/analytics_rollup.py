@@ -14,6 +14,8 @@ from django.utils import timezone
 from main_app.analytics_db import ANALYTICS_DB_ALIAS
 from policy.analytics_sql import (
     CRITICAL_THRESHOLD,
+    annotate_is_critical,
+    bucket_index_expr,
     annotate_numeric_float,
     annotate_request_key,
     soc_kpis_from_events,
@@ -27,9 +29,13 @@ from policy.firewall_module_classifier import (
 from policy.models import EnforcementEvent
 
 ROLLUP_PERIODS = frozenset({"24h", "7d", "30d"})
+# security_risk_score is DELIBERATELY absent from both key sets. The gateway
+# emits it as a continuous float, so including it in a GROUP BY produced one
+# group per event and made these "facts" a verbatim copy of the event stream
+# (measured: 199,882 group rows for 200,000 events). The derived `is_critical`
+# boolean carries everything any consumer reads from it.
 GROUP_META_FIELDS = (
     "source",
-    "security_risk_score",
     "event_type",
     "module",
     "module_id",
@@ -44,7 +50,6 @@ GROUP_META_FIELDS = (
 )
 MODULE_META_FIELDS = (
     "source",
-    "security_risk_score",
     "event_type",
     "module",
     "module_id",
@@ -92,20 +97,46 @@ def _facts_alias():
     )
 
 
-def org_rollup_covers(org_id: int, since) -> bool:
-    """Serve facts only if the lookback is covered AND the last complete hour was refreshed.
+def _covered_to(org_id: int):
+    """Instant this org's facts were last rebuilt to, or None if never."""
+    _, _, _, wm = _facts_alias()
+    return wm.filter(organization_id=org_id).values_list("covered_to", flat=True).first()
 
-    ``covered_from <= since`` alone stays true forever after one 30d refresh, so
-    events that landed after the last rebuild vanish once their hour is no longer
-    the live edge. Require ``covered_to >= hour_floor(now)`` so a stale watermark
-    falls back to raw until the next refresh.
+
+def org_rollup_covers(org_id: int, since) -> bool:
+    """Serve facts when they reach back far enough. Staleness is handled by trimming.
+
+    This used to also require ``covered_to >= hour_floor(now)``. Because
+    ``covered_to`` is the refresh *timestamp* and the refresh runs on an interval
+    (900s by default), that test went false the moment the clock crossed an hour
+    boundary and stayed false until the next refresh -- so for up to a quarter of
+    every hour all four Overview endpoints abandoned 30 days of facts and
+    re-scanned raw events, which is how 30d requests reached the 5s deadline.
+
+    Freshness is still honoured, but by ``_rollup_hour_bounds`` clamping the fact
+    window to the hours actually materialised and reading the remainder from raw
+    events. Nothing that landed after the last refresh is lost, and a stale
+    watermark now costs one extra hour of raw scan instead of the whole window.
     """
     _, _, _, wm = _facts_alias()
     row = wm.filter(organization_id=org_id).first()
     if row is None:
         return False
-    last_hour = _hour_floor(timezone.now())
-    return bool(row.covered_from <= since and row.covered_to >= last_hour)
+    return bool(row.covered_from <= since)
+
+
+def _rollup_hour_bounds(org_id: int, since, now):
+    """(first_full, last_hour) -- the hour range facts may answer for this org.
+
+    ``last_hour`` is the earlier of "the current hour" and "the hour the last
+    refresh completed in": events after ``covered_to`` are not in the facts yet,
+    so those hours must come from raw events.
+    """
+    first_full, last_hour = _split_rollup_window(since, now)
+    covered_to = _covered_to(org_id)
+    if covered_to is not None:
+        last_hour = min(last_hour, _hour_floor(covered_to))
+    return first_full, last_hour
 
 
 def should_serve_rollup(period: str, org_id, since) -> bool:
@@ -127,8 +158,16 @@ def refresh_org_rollups(org_id: int, hours: int = 24 * 30) -> None:
 
     now = timezone.now()
     since = now - timedelta(hours=max(int(hours), 1))
+    # Build from the HOUR FLOOR, not from the unaligned lookback. The watermark
+    # advertises `covered_from = _hour_floor(since)` and every reader treats each
+    # hour from there as complete -- but this scan used to start at `since`, so
+    # the first hour was materialised with only its tail. Events in
+    # [covered_from, since) were then in neither the facts nor the raw edge and
+    # simply vanished from the oldest bucket of every 30d chart.
     covered_from = _hour_floor(since)
-    events = EnforcementEvent.objects.filter(organization_id=org_id, created_at__gte=since)
+    events = EnforcementEvent.objects.filter(
+        organization_id=org_id, created_at__gte=covered_from
+    )
     qs = annotate_request_key(
         annotate_numeric_float(
             annotate_numeric_float(events, "security_risk_score", "_risk"),
@@ -199,11 +238,15 @@ def refresh_org_rollups(org_id: int, hours: int = 24 * 30) -> None:
 
         grouped = events.annotate(hour=TruncHour("created_at"))
         grouped = grouped.annotate(**{f"_{k}": KeyTransform(k, "metadata") for k in GROUP_META_FIELDS})
+        grouped = annotate_is_critical(grouped)
         grp_facts = []
-        for row in grouped.values("hour", "action", *[f"_{k}" for k in GROUP_META_FIELDS]).annotate(n=Count("id")):
+        for row in grouped.values(
+            "hour", "action", "_is_critical", *[f"_{k}" for k in GROUP_META_FIELDS]
+        ).annotate(n=Count("id")):
             if row["hour"] is None:
                 continue
             meta = {k: row[f"_{k}"] for k in GROUP_META_FIELDS if row[f"_{k}"] is not None}
+            meta["is_critical"] = bool(row["_is_critical"])
             grp_facts.append(
                 AnalyticsHourlyGroupFact(
                     organization_id=org_id,
@@ -327,7 +370,7 @@ def _merge_request_partition(org_id, first_full, last_hour, edge_events):
 
 def soc_kpis_from_rollup(org_id: int, since):
     now = timezone.now()
-    first_full, last_hour = _split_rollup_window(since, now)
+    first_full, last_hour = _rollup_hour_bounds(org_id, since, now)
     if first_full >= last_hour:
         events = EnforcementEvent.objects.using(ANALYTICS_DB_ALIAS).filter(
             organization_id=org_id, created_at__gte=since
@@ -402,18 +445,27 @@ def _iter_groups(org_id: int, since, hour_gte=None, hour_lt=None):
     return qs.values("hour", "action", "meta", "n")
 
 
+def _is_critical_meta(meta) -> bool:
+    """Prefer the stored boolean; fall back to the score for pre-upgrade rows.
+
+    Facts written before `is_critical` existed carry `security_risk_score`
+    instead, and they stay readable until the next refresh rewrites them.
+    """
+    if "is_critical" in meta:
+        return bool(meta["is_critical"])
+    try:
+        return float(meta.get("security_risk_score", 0) or 0) >= CRITICAL_THRESHOLD
+    except (TypeError, ValueError):
+        return False
+
+
 def _accumulate_module(modules, action, meta, n):
     source = meta.get("source", "")
-    risk_score = meta.get("security_risk_score", 0) or 0
-    try:
-        risk_score = float(risk_score)
-    except (TypeError, ValueError):
-        risk_score = 0.0
     kwargs = dict(
         is_blocked=action == ACTION_BLOCK,
         is_redacted=action == ACTION_REDACT,
         is_flagged=action == ACTION_FLAG,
-        is_critical=risk_score >= CRITICAL_THRESHOLD,
+        is_critical=_is_critical_meta(meta),
         n=n,
     )
     increment_bucket(modules["1.1"], **kwargs)
@@ -421,70 +473,113 @@ def _accumulate_module(modules, action, meta, n):
         increment_bucket(modules[mid], **kwargs)
 
 
+def _module_groups_from_events(events, extra_values=()):
+    """Group live events exactly as the group fact does, for edge/raw merges."""
+    grouped = (
+        annotate_is_critical(
+            events.annotate(**{f"_{f}": KeyTransform(f, "metadata") for f in MODULE_META_FIELDS})
+        )
+        .values("action", "_is_critical", *extra_values, *[f"_{f}" for f in MODULE_META_FIELDS])
+        .annotate(n=Count("id"))
+    )
+    for ev in grouped:
+        meta = {f: ev[f"_{f}"] for f in MODULE_META_FIELDS if ev[f"_{f}"] is not None}
+        meta["is_critical"] = bool(ev["_is_critical"])
+        row = {"action": ev["action"], "meta": meta, "n": int(ev.get("n") or 0)}
+        for key in extra_values:
+            row[key] = ev.get(key)
+        yield row
+
+
 def module_kpis_from_rollup(org_id: int, since) -> dict:
     now = timezone.now()
-    first_full, last_hour = _split_rollup_window(since, now)
+    first_full, last_hour = _rollup_hour_bounds(org_id, since, now)
     modules = {
         mid: {"total": 0, "blocked": 0, "redacted": 0, "flagged": 0, "critical": 0}
         for mid in MODULE_IDS
     }
+    # No complete materialised hour inside the window: everything is raw. Reading
+    # facts with no upper bound here would double-count against the edge below.
     if first_full >= last_hour:
-        hour_gte, hour_lt = since, None
-    else:
-        hour_gte, hour_lt = first_full, last_hour
-    for ev in _iter_groups(org_id, since, hour_gte=hour_gte, hour_lt=hour_lt):
+        for ev in _module_groups_from_events(
+            EnforcementEvent.objects.using(ANALYTICS_DB_ALIAS).filter(
+                organization_id=org_id, created_at__gte=since
+            )
+        ):
+            _accumulate_module(modules, ev["action"], ev["meta"], ev["n"])
+        return modules
+    for ev in _iter_groups(org_id, since, hour_gte=first_full, hour_lt=last_hour):
         _accumulate_module(modules, ev["action"], ev.get("meta") or {}, int(ev.get("n") or 0))
-    if first_full < last_hour:
-        grouped = (
-            _edge_events(org_id, since, first_full, last_hour)
-            .annotate(**{f"_{f}": KeyTransform(f, "metadata") for f in MODULE_META_FIELDS})
-            .values("action", *[f"_{f}" for f in MODULE_META_FIELDS])
-            .annotate(n=Count("id"))
-        )
-        for ev in grouped:
-            meta = {f: ev[f"_{f}"] for f in MODULE_META_FIELDS if ev[f"_{f}"] is not None}
-            _accumulate_module(modules, ev["action"], meta, int(ev.get("n") or 0))
+    for ev in _module_groups_from_events(
+        _edge_events(org_id, since, first_full, last_hour)
+    ):
+        _accumulate_module(modules, ev["action"], ev["meta"], ev["n"])
     return modules
 
 
+def _bucket_key_for(ts, since, now, bucket_minutes, keys):
+    """Bucket an instant onto the chart grid, or None if it falls outside it."""
+    if ts is None:
+        return None
+    bidx = int((ts - since).total_seconds() // (max(bucket_minutes, 1) * 60))
+    if bidx < 0:
+        return None
+    bucket_start = since + timedelta(minutes=bidx * bucket_minutes)
+    if bucket_start > now:
+        bucket_start = now
+    key = bucket_start.isoformat()
+    return key if key in keys else None
+
+
+def _trend_rows(org_id, since, now, bucket_minutes):
+    """Yield (bucket_instant, action, meta, n) from facts plus the raw edge.
+
+    Facts answer the materialised hours; the hours after the last refresh (and
+    the partial hour at the start of the window) come from live events. Before
+    this merge the fillers read facts with no upper bound and no edge at all, so
+    everything recorded since the last refresh was simply missing from the
+    trend lines.
+    """
+    first_full, last_hour = _rollup_hour_bounds(org_id, since, now)
+    if first_full < last_hour:
+        for ev in _iter_groups(org_id, since, hour_gte=first_full, hour_lt=last_hour):
+            yield ev.get("hour"), ev["action"], ev.get("meta") or {}, int(ev.get("n") or 0)
+        edge = _edge_events(org_id, since, first_full, last_hour)
+    else:
+        edge = EnforcementEvent.objects.using(ANALYTICS_DB_ALIAS).filter(
+            organization_id=org_id, created_at__gte=since
+        )
+    edge = edge.annotate(_bidx=bucket_index_expr(since, bucket_minutes))
+    for ev in _module_groups_from_events(edge, extra_values=("_bidx",)):
+        bidx = ev.get("_bidx")
+        if bidx is None or bidx < 0:
+            continue
+        yield (
+            since + timedelta(minutes=int(bidx) * bucket_minutes),
+            ev["action"],
+            ev["meta"],
+            ev["n"],
+        )
+
+
 def fill_vector_buckets_from_rollup(org_id, since, now, bucket_minutes, buckets, event_to_vectors):
-    for ev in _iter_groups(org_id, since):
-        hour = ev.get("hour")
-        if hour is None:
+    for ts, _action, meta, n in _trend_rows(org_id, since, now, bucket_minutes):
+        bucket_key = _bucket_key_for(ts, since, now, bucket_minutes, buckets)
+        if bucket_key is None:
             continue
-        bidx = int((hour - since).total_seconds() // (bucket_minutes * 60))
-        if bidx < 0:
-            continue
-        bucket_start = since + timedelta(minutes=bidx * bucket_minutes)
-        if bucket_start > now:
-            bucket_start = now
-        bucket_key = bucket_start.isoformat()
-        if bucket_key not in buckets:
-            continue
-        meta = ev.get("meta") or {}
-        n = int(ev.get("n") or 0)
         for v in event_to_vectors({"metadata": meta}):
             if v in buckets[bucket_key]:
                 buckets[bucket_key][v] += n
 
 
 def fill_module_trends_from_rollup(org_id, since, now, bucket_minutes, module_buckets):
-    for ev in _iter_groups(org_id, since):
-        hour = ev.get("hour")
-        if hour is None:
-            continue
-        bidx = int((hour - since).total_seconds() // (max(bucket_minutes, 1) * 60))
-        if bidx < 0:
-            continue
-        bucket_start = since + timedelta(minutes=bidx * bucket_minutes)
-        if bucket_start > now:
-            bucket_start = now
-        bucket_key = bucket_start.isoformat()
-        if bucket_key not in module_buckets["1.1"]:
+    for ts, action, meta, n in _trend_rows(org_id, since, now, bucket_minutes):
+        bucket_key = _bucket_key_for(ts, since, now, bucket_minutes, module_buckets["1.1"])
+        if bucket_key is None:
             continue
         _accumulate_module(
             {mid: module_buckets[mid][bucket_key] for mid in MODULE_IDS},
-            ev["action"],
-            ev.get("meta") or {},
-            int(ev.get("n") or 0),
+            action,
+            meta,
+            n,
         )

@@ -18,8 +18,12 @@ from django.utils import timezone
 # _norm_source) and ModuleKpisView read. Extracting only these via KeyTransform
 # (which preserves native JSON types — bools/numbers/strings) lets those views skip
 # hauling the full metadata JSON while staying byte-identical. Verified 0/237860.
+# security_risk_score is DELIBERATELY absent: the gateway emits it as a
+# continuous float, and grouping by it gave one group per event (the whole point
+# of this projection is fewer groups than rows). It is replaced by the derived
+# `_is_critical` boolean below, which is all any consumer reads it for.
 _MODULE_META_FIELDS = (
-    "source", "security_risk_score", "event_type", "module", "module_id",
+    "source", "event_type", "module", "module_id",
     "owasp_code", "threat_type", "is_audit_log", "is_isolation_event", "trigger_source",
 )
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, inline_serializer
@@ -36,6 +40,7 @@ from policy.analytics_concurrency import AnalyticsConcurrencyMixin
 from policy.analytics_period import period_from_request, period_hours
 from policy.analytics_sql import (
     annotate_escalation_level,
+    annotate_is_critical,
     annotate_numeric_float,
     bucket_index_expr,
     metadata_json,
@@ -1400,9 +1405,12 @@ class ModuleKpisView(AnalyticsConcurrencyMixin, APIView):
         else:
             base_events = EnforcementEvent.objects.filter(created_at__gte=since)
             grouped = (
-                _enforcement_events_for_request(request, base_events)
-                .annotate(**{f"_{f}": KeyTransform(f, "metadata") for f in _MODULE_META_FIELDS})
-                .values("action", *[f"_{f}" for f in _MODULE_META_FIELDS])
+                annotate_is_critical(
+                    _enforcement_events_for_request(request, base_events).annotate(
+                        **{f"_{f}": KeyTransform(f, "metadata") for f in _MODULE_META_FIELDS}
+                    )
+                )
+                .values("action", "_is_critical", *[f"_{f}" for f in _MODULE_META_FIELDS])
                 .annotate(n=Count("id"))
             )
 
@@ -1416,11 +1424,10 @@ class ModuleKpisView(AnalyticsConcurrencyMixin, APIView):
                 action = ev["action"]
                 meta = {f: ev[f"_{f}"] for f in _MODULE_META_FIELDS if ev[f"_{f}"] is not None}
                 source = meta.get("source", "")
-                risk_score = meta.get("security_risk_score", 0) or 0
                 is_blocked = action == ACTION_BLOCK
                 is_redacted = action == ACTION_REDACT
                 is_flagged = action == ACTION_FLAG
-                is_critical = risk_score >= CRITICAL_THRESHOLD
+                is_critical = bool(ev.get("_is_critical"))
 
                 increment_bucket(
                     modules["1.1"],
@@ -1484,10 +1491,14 @@ class ModuleTrendsView(AnalyticsConcurrencyMixin, APIView):
         else:
             base_events = EnforcementEvent.objects.filter(created_at__gte=since)
             grouped = (
-                _enforcement_events_for_request(request, base_events)
-                .annotate(_bidx=bucket_index_expr(since, bucket_minutes))
-                .annotate(**{f"_{f}": KeyTransform(f, "metadata") for f in _MODULE_META_FIELDS})
-                .values("_bidx", "action", *[f"_{f}" for f in _MODULE_META_FIELDS])
+                annotate_is_critical(
+                    _enforcement_events_for_request(request, base_events)
+                    .annotate(_bidx=bucket_index_expr(since, bucket_minutes))
+                    .annotate(
+                        **{f"_{f}": KeyTransform(f, "metadata") for f in _MODULE_META_FIELDS}
+                    )
+                )
+                .values("_bidx", "action", "_is_critical", *[f"_{f}" for f in _MODULE_META_FIELDS])
                 .annotate(n=Count("id"))
             )
 
@@ -1505,11 +1516,10 @@ class ModuleTrendsView(AnalyticsConcurrencyMixin, APIView):
                 n = int(ev.get("n") or 0)
                 meta = {f: ev[f"_{f}"] for f in _MODULE_META_FIELDS if ev[f"_{f}"] is not None}
                 source = meta.get("source", "")
-                risk_score = meta.get("security_risk_score", 0) or 0
                 is_blocked = ev["action"] == ACTION_BLOCK
                 is_redacted = ev["action"] == ACTION_REDACT
                 is_flagged = ev["action"] == ACTION_FLAG
-                is_critical = risk_score >= CRITICAL_THRESHOLD
+                is_critical = bool(ev.get("_is_critical"))
 
                 increment_bucket(
                     module_buckets["1.1"][bucket_key],
