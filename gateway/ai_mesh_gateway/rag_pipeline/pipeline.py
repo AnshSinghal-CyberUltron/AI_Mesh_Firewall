@@ -265,6 +265,13 @@ class RAGFirewallPipeline:
                 filtered_count=0,
                 scan_verdict={
                     "action": r_out.verdict.action,
+                    # StageVerdict carries threat_type and confidence, but this
+                    # boundary dropped both — so every downstream consumer (the
+                    # vector routes and the dashboard they feed) fell back to a
+                    # generic "rag_threat" at risk 0. Computed, then discarded one
+                    # line before it was needed.
+                    "threat_type": r_out.verdict.threat_type,
+                    "confidence": r_out.verdict.confidence,
                     # Kept as lists (never None): rag_orchestrator feeds
                     # anomalous_documents straight into RAGVerdict.anomalous_indices
                     # and main.py setdefaults flagged_documents. The not-run
@@ -326,6 +333,8 @@ class RAGFirewallPipeline:
                 filtered_count=r_out.total_retrieved - len(rank_out.ranked_documents),
                 scan_verdict={
                     "action": rank_out.verdict.action,
+                    "threat_type": rank_out.verdict.threat_type,
+                    "confidence": rank_out.verdict.confidence,
                     "flagged_documents": rank_out.flagged_indices,
                     "anomalous_documents": rank_out.anomalous_indices,
                     # RAG-05a: the LOWER distance tail, kept DISTINCT from
@@ -393,6 +402,8 @@ class RAGFirewallPipeline:
             filtered_count=r_out.total_retrieved - len(gen_out.safe_documents),
             scan_verdict={
                 "action": rank_out.verdict.action,
+                "threat_type": rank_out.verdict.threat_type,
+                "confidence": rank_out.verdict.confidence,
                 "flagged_documents": rank_out.flagged_indices,
                 "anomalous_documents": rank_out.anomalous_indices,
                 # RAG-05a: lower-tail near-duplicates — see the guardrails path
@@ -557,6 +568,13 @@ class RAGFirewallPipeline:
             filtered_count=total_retrieved,
             scan_verdict={
                 "action": last_stage.verdict.action if last_stage else "block",
+                # StageVerdict carries threat_type and confidence, but this
+                # boundary dropped both — so every downstream consumer (the
+                # vector routes and the dashboard they feed) fell back to a
+                # generic "rag_threat" at risk 0. Computed, then discarded one
+                # line before it was needed.
+                "threat_type": last_stage.verdict.threat_type if last_stage else "",
+                "confidence": last_stage.verdict.confidence if last_stage else 0.0,
                 # No flagged/anomalous keys here by design: emitting empty lists
                 # for a request that terminated before the ranker would assert a
                 # clean document scan that never happened. (RAG-19)
