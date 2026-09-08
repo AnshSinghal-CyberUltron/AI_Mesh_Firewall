@@ -6071,6 +6071,37 @@ async def startup():
     app.include_router(vector_router)
     LOG.info("Vector operations routes mounted at /v1/vector/*")
 
+    # Mounting the router is only half the wiring. vector_routes.py resolves its
+    # provider/pipeline/policy/redis handles from ITS OWN module-level globals,
+    # which stay None until startup hands over the singletons built above
+    # (CONFIG:5681, REDIS_CLIENT:5753, TELEMETRY:5767, POLICY_SYNC:5881,
+    # VECTOR_PROVIDER_SYNC:5922, RAG_PIPELINE:5965). Without this call every
+    # /v1/vector/* endpoint short-circuits — /query returns 400 no_provider for
+    # every org — which is exactly what production was doing while the org's
+    # Pinecone index sat configured and active but unreachable.
+    # inject_vector_globals only overwrites non-None values, so a singleton that
+    # was skipped by config (e.g. RAG_PIPELINE when the RAG stack is disabled)
+    # leaves its global untouched rather than clobbering it.
+    try:
+        from vector_routes import inject_vector_globals
+    except ImportError:
+        from .vector_routes import inject_vector_globals
+    inject_vector_globals(
+        rag_pipeline=RAG_PIPELINE,
+        vector_clients=VECTOR_CLIENTS,
+        vector_provider_sync=VECTOR_PROVIDER_SYNC,
+        telemetry=TELEMETRY,
+        policy_sync=POLICY_SYNC,
+        config=CONFIG,
+        redis_client=REDIS_CLIENT,
+    )
+    LOG.info(
+        "Vector operations globals injected (provider_sync=%s pipeline=%s clients=%s)",
+        VECTOR_PROVIDER_SYNC is not None,
+        RAG_PIPELINE is not None,
+        sorted(VECTOR_CLIENTS.keys()),
+    )
+
     # MCP Stdio & WebSocket adapter lifecycle
     try:
         from mcp_stdio_adapter import start_reaper as stdio_start_reaper

@@ -440,8 +440,8 @@ class DockerManager:
             # they deployed with gVisor but mis-set the env would otherwise get runc with
             # no signal (docs/mcp/BACKSTOP_FINDINGS.md: "silently degrading instead of
             # failing closed"). Warn ONCE (per manager) to avoid a line per create.
-            if not self._runtime_degraded_warned:
-                if not runtime:
+            if not runtime:
+                if not self._runtime_degraded_warned:
                     logger.warning(
                         "MCP sandboxes are starting WITHOUT a kernel-isolation runtime: "
                         "MCP_SANDBOX_RUNTIME is unset, so Docker uses the default 'runc' "
@@ -449,15 +449,31 @@ class DockerManager:
                         "MCP_SANDBOX_RUNTIME_REQUIRED=true for gVisor isolation in production."
                     )
                     self._runtime_degraded_warned = True
-                elif not self.runtime_available(runtime):
+                return None
+            if not self.runtime_available(runtime):
+                if not self._runtime_degraded_warned:
                     logger.warning(
                         "Configured MCP_SANDBOX_RUNTIME=%r is NOT available in this Docker "
-                        "daemon; sandbox creation will error or fall back to the default "
-                        "runtime. Install the runtime, or set MCP_SANDBOX_RUNTIME_REQUIRED="
-                        "true to fail closed instead of degrading.",
+                        "daemon; FALLING BACK to the daemon default runtime (shared host "
+                        "kernel, no gVisor isolation). Install the runtime, or set "
+                        "MCP_SANDBOX_RUNTIME_REQUIRED=true to fail closed instead of "
+                        "degrading.",
                         runtime,
                     )
                     self._runtime_degraded_warned = True
+                # Return None, NOT the unavailable name. Docker does not fall back
+                # on its own: handing it an unregistered runtime makes EVERY create
+                # fail with 400 "unknown or invalid runtime name: runsc", which is
+                # what took MCP tool execution down on the GCP aarch64 host (no
+                # gVisor installed) — every tools/call 500'd while the warning above
+                # claimed a fallback that never happened. Returning None uses the
+                # daemon default, which is exactly what runtime_required=false means.
+                #
+                # The availability probe also has to run on EVERY call, not only on
+                # the first: it previously sat inside the warn-once guard, so once
+                # the warning had fired the check was skipped and the bad runtime
+                # name was returned forever after.
+                return None
             return runtime
         if not runtime:
             logger.error(

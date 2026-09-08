@@ -389,44 +389,41 @@ async def _resolve_org_from_token(authorization: Optional[str]) -> Optional[dict
 
 async def _resolve_vector_provider_for_org(org_id: int) -> Optional[dict]:
     """
-    Fetch org's active vector provider config from Redis (org-scoped).
-    Returns {provider_type, connection_url, api_key, embedding_model, ...} or None.
+    Fetch org's active vector provider config. Returns the config dict or None.
 
-    The config is cached in Redis by the backend's VectorProviderConfig signals:
-      redis:vector:provider:{org_id}:{provider_type}  — full config dict
+    Resolution goes through VECTOR_PROVIDER_SYNC — the same in-memory cache the
+    gateway already keeps warm from Redis and refreshes over the
+    ``vector_provider_updates`` pub/sub channel.
+
+    This used to scan Redis directly for ``vector:provider:{org_id}:*``. Nothing
+    has ever written that pattern: the control plane's VectorProviderConfig
+    signal writes per-org COMPILED bundles under
+    ``vector:providers:compiled:{org_id}`` (RAG-16 split the old all-tenant key
+    to shrink credential blast radius), and vector_provider_sync.py reads
+    exactly those. So this function always found zero keys and every
+    /v1/vector/* request 400'd with no_provider even for orgs whose provider was
+    configured, active, and loading fine into the sync cache.
+
+    Reading through the sync keeps ONE source of truth and — unlike re-adding a
+    duplicate key — does not scatter a second plaintext copy of the provider and
+    embedding API keys across Redis.
     """
     if VECTOR_PROVIDER_SYNC is None:
         LOG.warning("Vector provider sync not initialized")
         return None
 
-    if REDIS_CLIENT is None:
-        LOG.warning("Redis client not available")
-        return None
-
     try:
-        # Fetch all active providers for this org
-        org_key_pattern = f"vector:provider:{org_id}:*"
-        keys = await REDIS_CLIENT.keys(org_key_pattern)
-
-        if not keys:
-            LOG.debug("No vector provider config found for org_id=%s", org_id)
+        providers = VECTOR_PROVIDER_SYNC.get_org_providers(org_id)
+        if not providers:
+            LOG.debug("No active vector provider config for org_id=%s", org_id)
             return None
-
-        # Return the first active provider (organizations typically have one)
-        for key in keys:
-            config_json = await REDIS_CLIENT.get(key)
-            if config_json:
-                config = json.loads(config_json)
-                if config.get("is_active"):
-                    LOG.debug(
-                        "Resolved vector provider for org=%s: type=%s",
-                        org_id,
-                        config.get("provider_type"),
-                    )
-                    return config
-
-        LOG.debug("No active vector provider config found for org_id=%s", org_id)
-        return None
+        config = providers[0]  # orgs typically have exactly one
+        LOG.debug(
+            "Resolved vector provider for org=%s: type=%s",
+            org_id,
+            config.get("provider_type"),
+        )
+        return config
     except Exception as exc:
         LOG.exception("Failed to resolve vector provider for org_id=%s: %s", org_id, exc)
         return None

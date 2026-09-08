@@ -242,14 +242,32 @@ class FakeConfigSync:
 
 
 class FakeProviderSync:
-    """Only needs to answer ``get_provider_config``; returning None makes the RAG
-    path fall back to the gateway-level VECTOR_CLIENTS dict (our fake)."""
+    """Models VectorProviderSync over an in-memory cache keyed ``{org}::{type}``.
+
+    ``get_org_providers`` used to be a hardcoded ``[]`` while the rig seeded fake
+    Redis keys ``vector:provider:{org}:pinecone``. Nothing in the product has
+    ever written that pattern — the control plane writes per-org COMPILED
+    bundles at ``vector:providers:compiled:{org}`` — but vector_routes resolved
+    providers by scanning exactly that phantom pattern. So this suite went green
+    against a contract production could not satisfy, while /v1/vector/* answered
+    400 no_provider for every real org. Resolution now goes through this object,
+    so the fake has to model the real one or the test proves nothing.
+
+    ``get_provider_config`` still answers None on purpose: that is what makes the
+    RAG path fall back to the gateway-level VECTOR_CLIENTS dict (our fake
+    backend) instead of constructing a live provider client.
+    """
+
+    def __init__(self, configs=None):
+        self._cache = dict(configs or {})
 
     def get_provider_config(self, *_a, **_kw):
         return None
 
-    def get_org_providers(self, *_a, **_kw):
-        return []
+    def get_org_providers(self, org_id, *_a, **_kw):
+        prefix = f"{org_id}::"
+        return [v for k, v in self._cache.items()
+                if k.startswith(prefix) and v.get("is_active")]
 
 
 # ── the rig ──────────────────────────────────────────────────────────────────
@@ -338,12 +356,15 @@ async def rig(monkeypatch):
     monkeypatch.setattr(vr, "CONFIG", dict(BASE_CONFIG))
     monkeypatch.setattr(vr, "TELEMETRY", None)
     monkeypatch.setattr(vr, "POLICY_SYNC", None)
-    for oid in (ORG_A_ID, ORG_B_ID):
-        await redis.set(
-            f"vector:provider:{oid}:pinecone",
-            json.dumps({"provider_type": "pinecone", "is_active": True,
-                        "embedding_model": "text-embedding-3-small"}),
-        )
+    # Providers come from the sync cache, the way production resolves them.
+    # (This used to seed redis "vector:provider:{oid}:pinecone" — a key the
+    # control plane never writes; see FakeProviderSync.)
+    _provider_cache = {
+        f"{oid}::pinecone": {"provider_type": "pinecone", "is_active": True,
+                             "embedding_model": "text-embedding-3-small"}
+        for oid in (ORG_A_ID, ORG_B_ID)
+    }
+    monkeypatch.setattr(vr, "VECTOR_PROVIDER_SYNC", FakeProviderSync(_provider_cache))
 
     http = httpx.AsyncClient(
         transport=httpx.ASGITransport(app=gm.app), base_url="http://testserver"

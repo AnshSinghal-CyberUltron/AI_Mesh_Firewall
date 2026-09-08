@@ -405,16 +405,27 @@ def test_resolve_runtime_warns_once_when_unset_and_not_required(caplog):
     assert len(warnings) == 1, "degraded-posture warning must fire exactly once"
 
 
-def test_resolve_runtime_warns_when_configured_but_unavailable(caplog):
-    """CHG-0143: an operator who set MCP_SANDBOX_RUNTIME=runsc but did not require it, on a
-    daemon where runsc is missing, is degrading silently today. Warn (do not raise — respect
-    the not-required contract) and still return the configured runtime."""
+def test_resolve_runtime_falls_back_when_configured_but_unavailable(caplog):
+    """An operator who set MCP_SANDBOX_RUNTIME=runsc without requiring it, on a daemon
+    where runsc is missing, must get a WARNING and the daemon default — not the missing
+    runtime name.
+
+    This asserted ``== "runsc"`` ("returned as-is") until production proved that contract
+    unshippable: handing Docker an unregistered runtime makes every create fail with
+    ``400 unknown or invalid runtime name: runsc``, so on the GCP aarch64 host (no gVisor)
+    EVERY MCP tools/call 500'd while the warning claimed a fallback that never happened.
+    Not-required means degrade-with-noise; returning None is what actually degrades.
+    Operators who need gVisor-or-nothing set MCP_SANDBOX_RUNTIME_REQUIRED=true, which
+    still raises (covered by test_resolve_runtime_raises_when_required_but_unavailable)."""
     client = _mock_client()
     client.info.return_value = {"Runtimes": {"runc": {}}}  # runsc NOT available
     config = SandboxDockerConfig(runtime="runsc", runtime_required=False)
     manager = DockerManager(client=client, config=config)
     with caplog.at_level(logging.WARNING, logger="sandbox.docker_manager"):
-        assert manager._resolve_runtime() == "runsc"  # returned as-is, no raise
+        assert manager._resolve_runtime() is None  # daemon default, no raise
+        # The probe must run on EVERY call, not just the first: it used to sit inside
+        # the warn-once guard, so after the first warning the bad name came back forever.
+        assert manager._resolve_runtime() is None
     assert any(
         r.levelno == logging.WARNING and "NOT available" in r.getMessage()
         for r in caplog.records
