@@ -283,7 +283,7 @@ export function buildModulePageData(moduleId, threatFeed = [], extras = {}) {
       ...summary,
       total: extras.threatFeedCount,
       blocked: num("block"),
-      redacted: num("redact"),
+      redacted: num("redact") + num("rewrite"),
       monitor: num("monitor"),
       flagged: num("flag"),
       allowed: num("monitor") + num("allow") + num("monitored") + num("pass"),
@@ -619,7 +619,13 @@ function summarizeEvents(events) {
   const critical = events.filter((event) => getRiskScore(event) >= 80).length;
   const total = events.length;
   const blocked = actions.block || 0;
-  const redacted = actions.redact || 0;
+  // A "rewrite" is the output guard sanitising a response — semantically the
+  // same as a redact ("sanitized instead of blocked") and a first-class action
+  // in the gateway (pipeline_trace keeps it distinct from redact on purpose).
+  // Counting only `redact` left every rewrite falling through to `allowed` in
+  // the subtraction below, so the output-guardrail page reported
+  // "Outputs redacted 0" while 18 responses had in fact been rewritten.
+  const redacted = (actions.redact || 0) + (actions.rewrite || 0);
   const flagged = actions.flag || 0;
   const monitor = actions.monitor || 0;
   const allowed = Math.max(0, total - blocked - redacted - flagged - monitor);

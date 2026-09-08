@@ -388,6 +388,40 @@ async def _resolve_org_from_token(authorization: Optional[str]) -> Optional[dict
         return None
 
 
+def _vector_event_metadata(collection_name="", provider_type="", namespace="", **extra):
+    """Build the nested ``metadata`` the control drain preserves verbatim.
+
+    The drain copies ``event["metadata"]`` into the stored ``metadata["extra"]``
+    and derives source/module from keys inside it (control core/tasks.py). Keys
+    placed at the TOP level of the emit have no slot in the drain's result dict
+    and are silently dropped — which is why the RAG + vector page read
+    "Collections touched 0 / Namespaces involved 0 / Busiest collection Unknown"
+    while 131 vector events sat in the table: collection_name was emitted, but
+    top-level, so it never survived the drain.
+
+    Both ``collection``/``namespace`` and the ``vector_``-prefixed aliases are
+    written because the dashboard accepts either.
+
+    ``module_id`` is set explicitly: the drain resolves the lane as
+    metadata.module -> metadata.module_id -> _SOURCE_TO_MODULE[source] ->
+    _EVENT_TYPE_TO_MODULE[event_type], and vector events default to
+    source="security_scan", which _SOURCE_TO_MODULE maps to "1.2" BEFORE the
+    event-type map is ever consulted — so they were filed under the wrong lane.
+    """
+    md = {
+        "collection": collection_name,
+        "collection_name": collection_name,
+        "vector_collection": collection_name,
+        "namespace": namespace,
+        "vector_namespace": namespace,
+        "provider_type": provider_type,
+        "module_id": "1.3",
+        "source": "vector_db",
+    }
+    md.update(extra)
+    return md
+
+
 async def _resolve_vector_provider_for_org(org_id: int) -> Optional[dict]:
     """
     Fetch org's active vector provider config. Returns the config dict or None.
@@ -664,11 +698,23 @@ async def query_vector_db(
                     "organization_id": org_id,
                     "org_id": org_id,
                     "user_id": user_id,
-                    "provider_type": provider_type,
-                    "collection_name": collection_name,
                     "firewall_action": rag_verdict.action,
                     "threat_type": rag_verdict.scan_verdict.get("threat_type", "rag_threat"),
+                    # Surface the scanner's OWN number; never invent one. Absent
+                    # -> 0, which is the pre-existing behaviour, not a regression.
+                    "risk_score": (
+                        rag_verdict.scan_verdict.get("risk_score")
+                        if rag_verdict.scan_verdict.get("risk_score") is not None
+                        else rag_verdict.scan_verdict.get("confidence", 0)
+                    ),
                     "status_code": 403,
+                    "metadata": _vector_event_metadata(
+                        collection_name=collection_name,
+                        provider_type=provider_type,
+                        namespace=project_id,
+                        threat_type=rag_verdict.scan_verdict.get("threat_type", "rag_threat"),
+                        firewall_action=rag_verdict.action,
+                    ),
                 })
             # ── SECURITY FIX: Don't expose detection details to client ──
             return JSONResponse(
@@ -692,10 +738,15 @@ async def query_vector_db(
                 "organization_id": org_id,
                 "org_id": org_id,
                 "user_id": user_id,
-                "provider_type": provider_type,
-                "collection_name": collection_name,
                 "firewall_action": rag_verdict.action,
                 "status_code": 200,
+                "metadata": _vector_event_metadata(
+                    collection_name=collection_name,
+                    provider_type=provider_type,
+                    namespace=project_id,
+                    firewall_action=rag_verdict.action,
+                    documents_returned=len(rag_verdict.documents or []),
+                ),
             })
 
         return JSONResponse(
@@ -1071,10 +1122,14 @@ async def upsert_vector_documents(
                         "organization_id": org_id,
                         "org_id": org_id,
                         "user_id": user_id,
-                        "provider_type": provider_type,
-                        "collection_name": collection_name,
                         "document_count": 0,
                         "status_code": 422,
+                        "metadata": _vector_event_metadata(
+                            collection_name=collection_name,
+                            provider_type=provider_type,
+                            namespace=project_id,
+                            document_count=0,
+                        ),
                     })
                 return JSONResponse(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -1110,10 +1165,14 @@ async def upsert_vector_documents(
                     "organization_id": org_id,
                     "org_id": org_id,
                     "user_id": user_id,
-                    "provider_type": provider_type,
-                    "collection_name": collection_name,
                     "document_count": count,
                     "status_code": 201,
+                    "metadata": _vector_event_metadata(
+                        collection_name=collection_name,
+                        provider_type=provider_type,
+                        namespace=project_id,
+                        document_count=count,
+                    ),
                 })
 
             return JSONResponse(
@@ -1276,6 +1335,11 @@ async def delete_vector_documents(
                     "user_id": user_id,
                     "document_count": len(doc_ids),
                     "status_code": 204,
+                    "metadata": _vector_event_metadata(
+                        collection_name=collection_name,
+                        namespace=project_id,
+                        document_count=len(doc_ids),
+                    ),
                 })
 
             return JSONResponse(status_code=status.HTTP_204_NO_CONTENT)

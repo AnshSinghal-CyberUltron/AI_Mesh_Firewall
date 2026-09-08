@@ -101,6 +101,18 @@ _SOURCE_TO_MODULE: dict[str, str] = {
     "policy": "1.6",
 }
 
+# The stored endpoint drives LogDetailPage and the evidence feed. It used to be a
+# ternary that special-cased rag_pipeline and labelled EVERYTHING else
+# "/v1/chat/completions" — so vector-plane events claimed to be chat requests.
+_EVENT_TYPE_TO_ENDPOINT: dict[str, str] = {
+    "rag_pipeline": "/v1/rag/query",
+    "vector_query": "/v1/vector/query",
+    "vector_upsert": "/v1/vector/upsert",
+    "vector_delete": "/v1/vector/delete",
+    "embedding_request": "/v1/embeddings",
+    "mcp_tool_call": "/v1/mcp/tools/call",
+}
+
 _EVENT_TYPE_TO_MODULE: dict[str, str] = {
     "rag_pipeline": "1.3",
     # /v1/vector/* is the same retrieval lane as rag_pipeline. Without these the
@@ -232,7 +244,7 @@ def _build_enforcement_metadata(event: dict) -> dict:
         "extra": event_metadata,
         # Enriched request-level fields for LogDetailPage
         "method": event.get("method", "POST"),
-        "endpoint": "/v1/rag/query" if event_type == "rag_pipeline" else "/v1/chat/completions",
+        "endpoint": _EVENT_TYPE_TO_ENDPOINT.get(event_type, "/v1/chat/completions"),
         "source_ip": event.get("source_ip", ""),
         "user_agent": event.get("user_agent", ""),
         "status_code": event.get("status_code", 200),
