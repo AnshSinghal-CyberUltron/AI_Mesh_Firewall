@@ -118,7 +118,10 @@ export function useIsolationPlayground() {
     let beOk = false;
 
     try {
-      const res = await fetch(resolveGatewayHealthUrl(gatewayUrl), { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(resolveGatewayHealthUrl(gatewayUrl), {
+        cache: "no-store",
+        signal: AbortSignal.timeout(5000),
+      });
       const data = await res.json().catch(() => null);
       gwOk = res.ok;
       setGatewayHealth(data);
@@ -127,7 +130,10 @@ export function useIsolationPlayground() {
     }
 
     try {
-      const res = await fetch("/api/health/", { signal: AbortSignal.timeout(5000) });
+      const res = await fetch("/api/health/", {
+        cache: "no-store",
+        signal: AbortSignal.timeout(5000),
+      });
       beOk = res.ok;
       setBackendHealth(beOk ? { status: "ok" } : null);
     } catch {

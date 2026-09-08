@@ -66,6 +66,23 @@ awk '
   END { exit found ? 0 : 1 }
 ' "${HTTP}" && die "HTTP default_server must NOT include require-edge-https.inc (ALB health)"
 
+# The edge in front of these vhosts is a GCP HTTP(S) load balancer, whose
+# proxies are NOT RFC1918. Drop these two ranges and every LB-forwarded request
+# scores $is_trusted_proxy=0, so require-edge-https.inc redirects the *https*
+# URL to itself and the SPA's /api/ calls die in the browser cache. The geo
+# block is the single source of truth for "this hop is the edge" — gate it.
+for cidr in '130.211.0.0/22' '35.191.0.0/16'; do
+  grep -qF "${cidr}" "${HTTP}" \
+    || die "nginx.conf geo \$is_trusted_proxy must trust GCP LB range ${cidr} (else :443 self-redirects)"
+done
+
+# 301 is sticky in browser caches; a self-redirect served once is served from
+# cache forever. Keep the cleartext gate on 302 in source, not just at runtime.
+grep -qE 'return[[:space:]]+301[[:space:]]+https://' "${EDGE_HTTPS}" \
+  && die "require-edge-https.inc must not 301 (browser-cached redirect loop); use 302"
+grep -qE 'return[[:space:]]+302[[:space:]]+https://\$host\$request_uri;' "${EDGE_HTTPS}" \
+  || die "require-edge-https.inc must 302 GET/HEAD to https://\$host\$request_uri"
+
 grep -q 'PROTO_HDR="X-Forwarded-Proto: https"' "${ROOT}/scripts/deploy-ec2.sh" \
   || die "deploy-ec2.sh named-host :80 probes must send X-Forwarded-Proto: https (ALB sim)"
 
@@ -228,12 +245,23 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
   sleep 0.2
 done
 
-# CWE-319: cleartext named-vhost GET /login must 301 to HTTPS; POST /api/auth
+# CWE-319: cleartext named-vhost GET /login must 302 to HTTPS; POST /api/auth
 # must 403 (not proxy). ALB-like requests send X-Forwarded-Proto: https from a
 # private address (docker bridge is RFC1918 → trusted in the geo map).
+#
+# 302, NOT 301. A 301 is cached by the browser per-URL and effectively forever.
+# When the geo block was missing the GCP LB ranges, HTTPS requests arriving from
+# 35.191.x looked untrusted and this redirect fired *on the https URL itself* —
+# a permanent redirect to self. Browsers pinned that loop for every /api/ URL
+# they happened to fetch during the window, so the SPA reported
+# "Failed to load: Attack Trends, SOC KPIs" long after the origin was fixed and
+# without a single request leaving the browser. 302 keeps a future misconfig
+# recoverable by reload instead of sticky.
 clear_login="$(curl -sI -H "Host: aimeshfirewall.zeroshield.ai" "http://127.0.0.1:18091/login")"
 echo "${clear_login}" | grep -qE '^HTTP/1\.[01] 301' \
-  || die "cleartext GET /login expected 301, got:"$'\n'"${clear_login}"
+  && die "cleartext GET /login must NOT 301 (sticky browser cache; use 302):"$'\n'"${clear_login}"
+echo "${clear_login}" | grep -qE '^HTTP/1\.[01] 302' \
+  || die "cleartext GET /login expected 302, got:"$'\n'"${clear_login}"
 echo "${clear_login}" | grep -qi '^location: https://aimeshfirewall.zeroshield.ai/login' \
   || die "cleartext GET /login missing Location https://…/login"$'\n'"${clear_login}"
 

@@ -241,13 +241,14 @@ _check_v1_proxy() {
     -H "Host: ${FH}" \
     -H "Content-Type: application/json" \
     -d '{"model":"auto","messages":[{"role":"user","content":"ping"}]}' || echo "000")"
-  [[ "${code}" != "405" && "${code}" != "000" && "${code}" != "403" && "${code}" != "301" ]] \
+  [[ "${code}" != "405" && "${code}" != "000" && "${code}" != "403" \
+     && "${code}" != "301" && "${code}" != "302" ]] \
     || die "nginx ${scheme} /v1/ still serves SPA or blocked cleartext (POST returned ${code})"
 }
 
 # Origin :80 named vhosts reject internet cleartext (CWE-319). Loopback is a
 # trusted hop but still needs X-Forwarded-Proto: https to match ALB TLS
-# termination. Without it GET 301s and POST 403s.
+# termination. Without it GET 302s and POST 403s.
 PROTO_HDR="X-Forwarded-Proto: https"
 curl -sf -H "Host: ${FH}" -H "${PROTO_HDR}" "http://127.0.0.1/" -o /dev/null \
   || die "nginx UI vhost failed (is port 80 published?)"

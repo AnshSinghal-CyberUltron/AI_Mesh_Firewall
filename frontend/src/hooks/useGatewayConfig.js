@@ -85,7 +85,7 @@ export function useGatewayConfig() {
 
     (async () => {
       try {
-        const res = await fetch("/api/gateways/public-url/");
+        const res = await fetch("/api/gateways/public-url/", { cache: "no-store" });
         const data = res.ok ? await res.json() : null;
         if (cancelled) return;
 

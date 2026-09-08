@@ -38,7 +38,10 @@ export function useBackendHealth(intervalMs = 30000) {
     const check = async () => {
       let outcome; // "ok" | "slow" | "down"
       try {
-        const res = await fetch("/api/health/", { signal: AbortSignal.timeout(5000) });
+        const res = await fetch("/api/health/", {
+          cache: "no-store",
+          signal: AbortSignal.timeout(5000),
+        });
         // Reachable but non-2xx = degraded (it answered), not unreachable.
         outcome = res.ok ? "ok" : "slow";
       } catch (err) {

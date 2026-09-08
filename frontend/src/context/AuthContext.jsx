@@ -114,7 +114,11 @@ async function refreshAccess() {
 
 async function fetchMe(access) {
   try {
+    // no-store for the same reason fetchWithAuth defaults to it: a cached
+    // redirect on this URL would answer from cache forever, and this is the
+    // call that decides whether the user is signed in at all.
     const res = await fetch('/api/auth/me/', {
+      cache: 'no-store',
       headers: { Authorization: `Bearer ${access}` },
       signal: AbortSignal.timeout(AUTH_REQUEST_TIMEOUT_MS),
     });
@@ -247,8 +251,14 @@ export function AuthProvider({ children }) {
         headers['Content-Type'] = 'application/json';
       }
       if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+      // Default no-store: a cached 301 from a brief origin HTTPS-redirect
+      // misconfig (GCP LB IPs not in geo) made GET /api/security/soc-kpis/ and
+      // /api/security/attack-vector-trends/ fail in the browser without ever
+      // reaching nginx, while /api/health/ (already no-store) and sibling
+      // module-kpis/module-trends (uncached URLs) still 200'd.
       return fetch(url, {
         ...rest,
+        cache: rest.cache ?? "no-store",
         headers,
         signal: composeAbortSignal(userSignal, timeoutMs),
       });

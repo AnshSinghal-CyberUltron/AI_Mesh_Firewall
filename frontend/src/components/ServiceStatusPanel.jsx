@@ -107,7 +107,7 @@ export function ServiceStatusPanel() {
 
     await Promise.allSettled([
       // Backend liveness
-      fetch("/api/health/", { signal: AbortSignal.timeout(5000) })
+      fetch("/api/health/", { cache: "no-store", signal: AbortSignal.timeout(5000) })
         .then((res) => {
           backendLatency = Date.now() - t0;
           if (res.ok) {
@@ -123,7 +123,7 @@ export function ServiceStatusPanel() {
         }),
 
       // Internal service probes (DB / Redis / Celery / RabbitMQ)
-      fetch("/api/health/services/", { signal: AbortSignal.timeout(8000) })
+      fetch("/api/health/services/", { cache: "no-store", signal: AbortSignal.timeout(8000) })
         .then(async (res) => {
           if (res.ok) {
             svcData = await res.json();
@@ -147,7 +147,7 @@ export function ServiceStatusPanel() {
           };
         }),
 
-      fetch(resolveGatewayHealthUrl(gatewayUrl), { signal: AbortSignal.timeout(5000) })
+      fetch(resolveGatewayHealthUrl(gatewayUrl), { cache: "no-store", signal: AbortSignal.timeout(5000) })
         .then(async (res) => {
           gatewayLatency = Date.now() - t0;
           if (res.ok) {
