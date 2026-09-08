@@ -1,0 +1,18 @@
+{
+  "attack": [
+    "prompt_injection",
+    "jailbreak",
+    "data_leakage",
+    "goal_hijacking",
+    "tool_overreach",
+    "sql_injection",
+    "command_injection",
+    "path_traversal",
+    "vector_injection",
+    "paraphrase"
+  ],
+  "benign": [
+    "developer_traffic",
+    "general_benign"
+  ]
+}
