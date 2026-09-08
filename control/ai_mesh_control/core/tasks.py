@@ -103,6 +103,13 @@ _SOURCE_TO_MODULE: dict[str, str] = {
 
 _EVENT_TYPE_TO_MODULE: dict[str, str] = {
     "rag_pipeline": "1.3",
+    # /v1/vector/* is the same retrieval lane as rag_pipeline. Without these the
+    # vector data plane's events fell through to the "1.1" default, so the
+    # RAG + vector operations page attributed none of its own traffic.
+    "vector_query": "1.3",
+    "vector_upsert": "1.3",
+    "vector_delete": "1.3",
+    "embedding_request": "1.3",
     "output_guard": "1.7",
     "output_scan": "1.7",
     "request": "1.1",

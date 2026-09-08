@@ -374,6 +374,7 @@ async def _resolve_org_from_token(authorization: Optional[str]) -> Optional[dict
             org_id = None
 
         return {
+            "organization_id": org_id,
             "org_id": org_id,
             "project_id": payload.get("project_id") or None,
             "user_id": payload.get("user_id"),
@@ -660,6 +661,7 @@ async def query_vector_db(
                 TELEMETRY.emit({
                     "event_type": "vector_query",
                     "action": "block",
+                    "organization_id": org_id,
                     "org_id": org_id,
                     "user_id": user_id,
                     "provider_type": provider_type,
@@ -687,6 +689,7 @@ async def query_vector_db(
             TELEMETRY.emit({
                 "event_type": "vector_query",
                 "action": "query",
+                "organization_id": org_id,
                 "org_id": org_id,
                 "user_id": user_id,
                 "provider_type": provider_type,
@@ -1065,6 +1068,7 @@ async def upsert_vector_documents(
                     TELEMETRY.emit({
                         "event_type": "vector_upsert",
                         "action": "block",
+                        "organization_id": org_id,
                         "org_id": org_id,
                         "user_id": user_id,
                         "provider_type": provider_type,
@@ -1103,6 +1107,7 @@ async def upsert_vector_documents(
                 TELEMETRY.emit({
                     "event_type": "vector_upsert",
                     "action": "upsert",
+                    "organization_id": org_id,
                     "org_id": org_id,
                     "user_id": user_id,
                     "provider_type": provider_type,
@@ -1266,6 +1271,7 @@ async def delete_vector_documents(
                 TELEMETRY.emit({
                     "event_type": "vector_delete",
                     "action": "delete",
+                    "organization_id": org_id,
                     "org_id": org_id,
                     "user_id": user_id,
                     "document_count": len(doc_ids),
