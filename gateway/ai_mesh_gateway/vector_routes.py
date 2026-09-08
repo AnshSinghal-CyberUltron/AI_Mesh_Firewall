@@ -649,6 +649,25 @@ async def query_vector_db(
                 "Query blocked for org=%s (reason logged server-side only)",
                 org_id,
             )
+            # A BLOCK is the event a SOC most needs, and this path used to return
+            # without emitting anything: allowed queries were recorded and blocked
+            # ones vanished, so the retrieval lane showed zero evidence for exactly
+            # the requests the firewall acted on. /v1/vector/upsert already emits on
+            # its all-blocked path; query was the outlier. Emitted BEFORE the return,
+            # and never carrying the detection reason — that stays server-side, which
+            # is what the response redaction below is protecting.
+            if TELEMETRY:
+                TELEMETRY.emit({
+                    "event_type": "vector_query",
+                    "action": "block",
+                    "org_id": org_id,
+                    "user_id": user_id,
+                    "provider_type": provider_type,
+                    "collection_name": collection_name,
+                    "firewall_action": rag_verdict.action,
+                    "threat_type": rag_verdict.scan_verdict.get("threat_type", "rag_threat"),
+                    "status_code": 403,
+                })
             # ── SECURITY FIX: Don't expose detection details to client ──
             return JSONResponse(
                 status_code=status.HTTP_403_FORBIDDEN,
