@@ -176,3 +176,43 @@ So the ordering that follows the evidence is:
    overhead that inflates every number above, streaming and non-streaming alike.
 4. **Task 7 (multi-pattern engine)** — only after task 2, and only if measurement still
    shows regex time dominating; the 1F profile put `re.search` at 0.042 s of 0.482 s.
+
+
+## Where this actually landed (2026-09-09)
+
+The plan's ordering assumed stage work was the lever. Measurement said otherwise, twice
+over: first that the tail was not in any single stage, then that **the gateway burned ~56 ms
+of CPU per request while tracing 8.2 ms of it** — and that the missing work was
+`redact_all`, called to build a pipeline_trace, *after* every stage timer had closed.
+
+| | at session start | now |
+|---|---:|---:|
+| firewall tax p50 | 8.2 ms | **7.5 ms** |
+| p90 | 51.6–56.8 ms | **10.0–11.2 ms** |
+| p99 | 103–158 ms | **26.4–40.8 ms** |
+| CPU per request | ~56 ms | **~27.3 ms** |
+| RPS at conc 16 | 26.6–27.1 | **29.7** |
+
+Non-streaming, 45 policies, block posture, Tier-2 off, 50-token answers, gateway 4 vCPU.
+
+**Still short of the goal**: p99 32.60 ms against a 20 ms bound — a 1.6× gap, from 7.5×.
+
+### What the plan should absorb
+
+- **G4.1 is dead code** — do not implement (`…-G4.1-deobfuscation-cache-targets-dead-code.md`).
+  Second Gate-4/Gate-0 item found aiming at code the policy-driven-detection work removed;
+  the rest of Gate 4 needs a reachability check before scheduling.
+- **G4.5 says ~17 synchronous PUBLISH per request. It is 7.0**, and `telemetry_ms` measures
+  **0.00** in this stack — telemetry was never on the critical path here.
+- **~426 RPS/vCPU is not achievable and was derived wrongly**: it divided a vCPU by the
+  *traced* per-request cost, which measurement showed was 15% of the real one. At the
+  current ~27.3 ms/request, one vCPU sustains **~37 RPS**.
+- **Gate 2 / Phase 2 (multi-pattern engine, rule budgets, Tier-2 gating) all target stage
+  time.** At 45 rules the nine stages are ~5 ms of a 7.5 ms tax. They matter at higher rule
+  counts, not here.
+
+### Still unmeasured
+
+**Streaming.** Every number above is non-streaming. Streaming first-token was 358–962 ms at
+task 1E, before any redaction work. `_redact_trace_text` runs on that path too, so tasks 8
+and 8b may help — but that is a guess until measured, and guesses have not fared well here.
