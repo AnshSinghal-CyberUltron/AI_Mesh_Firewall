@@ -128,7 +128,9 @@ def test_caller_block_does_not_scale_with_rule_count(monkeypatch):
         _rule(1000 + i, "regex", {"regex": rf"pattern{i}", "field": "prompt"}, "monitor")
         for i in range(200)
     ])]
-    pe.evaluate("nothing matches here", "", big)
+    # The text must contain each rule's required literal, or the prefilter skips every
+    # rule before the batch and nothing is submitted at all.
+    pe.evaluate(" ".join(f"pattern{i}" for i in range(200)), "", big)
     assert len(seen) == 1, f"expected ONE budgeted call for 200 rules, got {len(seen)}"
     assert seen[0] == pe._REGEX_MATCH_TIMEOUT_S
 
@@ -163,3 +165,104 @@ def test_tool_and_actor_filters_apply_before_the_batch(monkeypatch):
     ])]
     pe.evaluate("aaa bbb", "", bundle, tool_name="mine")
     assert submitted["n"] == 1, "the tool-filtered rule should not be batched"
+
+
+# ── Literal prefilter ────────────────────────────────────────────────────────
+
+PREFILTER_BUNDLE = [
+    _policy(40, "P-PF", [
+        _rule(401, "regex", {"regex": r"\bsk-[A-Za-z0-9]{20,}\b", "field": "prompt"}, "block"),
+        _rule(402, "regex", {"regex": r"-----BEGIN PRIVATE KEY-----", "field": "prompt"}, "block"),
+        _rule(403, "regex", {"regex": r"\b\d{3}-\d{2}-\d{4}\b", "field": "prompt"}, "redact"),
+    ]),
+]
+
+
+def test_prefilter_skips_only_rules_that_cannot_match(monkeypatch):
+    """A rule whose required literal is absent is skipped; the verdict is unchanged."""
+    submitted = {}
+    real = pe._search_many_with_budget
+
+    def spy(jobs):
+        jobs = list(jobs)
+        submitted["ids"] = {j[0] for j in jobs}
+        return real(jobs)
+
+    monkeypatch.setattr(pe, "_search_many_with_budget", spy)
+    # No "sk-" and no "-----begin private key-----": both literal rules are skippable.
+    # Rule 403 (SSN) has no literal requirement, so it must still be evaluated.
+    pe.evaluate("an ordinary sentence with no secrets in it", "", PREFILTER_BUNDLE)
+    ids_by_rule = {r["id"]: id(r) for p in PREFILTER_BUNDLE for r in p["rules"]}
+    assert ids_by_rule[401] not in submitted["ids"]
+    assert ids_by_rule[402] not in submitted["ids"]
+    assert ids_by_rule[403] in submitted["ids"], "a rule with no literal must still run"
+
+
+@pytest.mark.parametrize("text", [
+    "sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ123",
+    "-----BEGIN PRIVATE KEY-----",
+    "-----begin private key-----",          # prefilter is case-insensitive, like the regex
+    "ssn 123-45-6789",
+    "nothing here",
+    "SK-ABCDEFGHIJKLMNOPQRSTUVWXYZ123",     # uppercase literal
+])
+def test_prefilter_never_changes_the_verdict(text, monkeypatch):
+    with_pf = _snapshot(pe.evaluate(text, "", PREFILTER_BUNDLE))
+    monkeypatch.setattr(pe, "_required_literals", lambda _p: None)   # disable prefilter
+    without_pf = _snapshot(pe.evaluate(text, "", PREFILTER_BUNDLE))
+    assert with_pf == without_pf
+
+
+@pytest.mark.parametrize("pattern,expected_required", [
+    (r"\bsk-[A-Za-z0-9]{20,}\b",              True),   # top-level literal run
+    (r"-----BEGIN PRIVATE KEY-----",           True),
+    (r"(?:foo|bar)baz",                        True),   # literal after an alternation
+    (r"\d{3}-\d{2}-\d{4}",                    False),  # no literal run >= 3
+    (r"(?:alpha|beta)",                        True),   # every branch has a literal
+    (r"(?:alpha|\d+)",                         False),  # one branch is unfilterable
+    (r"(alpha)?beta",                          True),   # optional group ignored, beta required
+    (r"(alpha)?\d+",                           False),  # nothing is required
+])
+def test_literal_extraction_is_sound(pattern, expected_required):
+    got = pe._required_literals(pattern)
+    assert (got is not None) is expected_required, f"{pattern!r} -> {got!r}"
+
+
+def test_alternation_literals_are_a_union_not_a_pick():
+    """An earlier heuristic lifted ONE literal out of an alternation, which is unsound:
+    a match through the other branch would have been skipped."""
+    lits = pe._required_literals(r"(?:alpha|beta)")
+    assert lits == frozenset({"alpha", "beta"})
+    # and both must actually survive evaluation
+    b = [_policy(41, "P-ALT", [_rule(411, "regex", {"regex": r"(?:alpha|beta)",
+                                                    "field": "prompt"}, "monitor")])]
+    assert pe.evaluate("say beta please", "", b).matched_rule_ids == [411]
+    assert pe.evaluate("say alpha please", "", b).matched_rule_ids == [411]
+    assert pe.evaluate("say gamma please", "", b).matched_rule_ids == []
+
+
+def test_non_ascii_literals_do_not_enter_the_filter():
+    """Only the ASCII run is taken; the non-ASCII char breaks it. "stra" IS required by
+    "straße", so keeping it is sound — what must not happen is a non-ASCII char landing
+    in a literal that is then compared with a casefold the regex engine does not share."""
+    assert pe._required_literals(r"straße") == frozenset({"stra"})
+    assert all(lit.isascii() for lit in (pe._required_literals(r"ünbroken") or ()))
+
+
+def test_long_s_is_not_skipped():
+    """re.IGNORECASE matches 's' against 'ſ' (U+017F), but 'ſ'.lower() is 'ſ' — a
+    .lower()-based prefilter would SKIP a rule that genuinely matches. casefold maps
+    it to 's'. This is the case that decided lower() vs casefold()."""
+    import re as _re
+    assert _re.search("secret", "ſecret", _re.I), "premise: re matches long-s"
+    b = [_policy(42, "P-LONGS", [
+        _rule(421, "regex", {"regex": "secret", "field": "prompt"}, "block")])]
+    assert pe.evaluate("ſecret data", "", b).matched_rule_ids == [421]
+
+
+def test_sharp_s_overmatch_only_costs_a_wasted_scan():
+    """casefold maps 'ß' to 'ss' where re does NOT match — so the filter admits a rule
+    that cannot match. That is a wasted scan, never a missed detection."""
+    b = [_policy(43, "P-SHARP", [
+        _rule(431, "regex", {"regex": "class", "field": "prompt"}, "block")])]
+    assert pe.evaluate("claß", "", b).matched_rule_ids == []

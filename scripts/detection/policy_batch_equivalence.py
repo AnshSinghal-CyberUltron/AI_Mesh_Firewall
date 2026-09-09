@@ -105,18 +105,28 @@ def main() -> int:
     print(f"org={slug} policies={len(pols)} rules={rules} inputs={len(texts)}")
 
     real = pe._search_many_with_budget
+    real_lits = pe._required_literals
     divergences = 0
+
+    filt = sum(1 for p in pols for r in (p.get("rules") or [])
+               if r.get("rule_type") in ("regex", "pattern")
+               and pe._required_literals((r.get("condition") or {}).get("regex")
+                                         or (r.get("condition") or {}).get("pattern") or ""))
+    print(f"regex rules carrying a sound literal requirement: {filt}")
 
     for i, text in enumerate(texts):
         # A: batched (the new path)
         got_batched = snapshot(pe.evaluate(text, "", pols))
 
-        # B: force the fallback -> the ORIGINAL per-rule path, for every rule
+        # B: force the fallback -> the ORIGINAL per-rule path, for every rule,
+        #    AND disable the literal prefilter, so B is the pre-change behaviour end to end
         pe._search_many_with_budget = lambda *_a, **_k: None
+        pe._required_literals = lambda _p: None
         try:
             got_perrule = snapshot(pe.evaluate(text, "", pols))
         finally:
             pe._search_many_with_budget = real
+            pe._required_literals = real_lits
 
         if got_batched != got_perrule:
             divergences += 1
@@ -138,10 +148,12 @@ def main() -> int:
     for text in texts[:120]:
         a = snapshot(pe.evaluate("", text, pols))
         pe._search_many_with_budget = lambda *_a, **_k: None
+        pe._required_literals = lambda _p: None
         try:
             b = snapshot(pe.evaluate("", text, pols))
         finally:
             pe._search_many_with_budget = real
+            pe._required_literals = real_lits
         if a != b:
             divergences += 1
             print(f"DIVERGENCE on RESPONSE-side input: {text[:90]!r}")

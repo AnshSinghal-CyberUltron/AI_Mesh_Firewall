@@ -363,6 +363,93 @@ def _search_with_budget(compiled: re.Pattern, text: str) -> bool:
     return matched
 
 
+# ── Literal prefilter ────────────────────────────────────────────────────────
+# MEASURED at the driver's real 4096-char input: 90 compiled patterns cost 6714.9 us of
+# a 7249.8 us policy stage — the stage is 93% regex matching. 46 of the 92 regex rules
+# carry a literal that EVERY match must contain, and on benign traffic none of those
+# literals is present, so half the patterns are scanned for nothing.
+#
+# The filter must be SOUND: skipping a rule whose regex would have matched is a missed
+# detection, which is a security failure, not a performance regression. So literals are
+# extracted with `re`'s OWN PARSER rather than by pattern-scraping the source text — an
+# earlier heuristic (longest [A-Za-z0-9 _-]{4,} run) claimed 65 of 92 by happily lifting
+# literals out of alternation branches, where they are not required at all.
+try:  # 3.11+ moved sre_parse
+    import re._parser as _sre_parse  # noqa: PLC0415
+except ImportError:  # pragma: no cover
+    import sre_parse as _sre_parse  # type: ignore[no-redef]
+
+_PREFILTER_MIN_LEN = 3
+
+
+def _node_literals(seq) -> frozenset | None:
+    """Literals of which AT LEAST ONE must appear in any string matching ``seq``.
+
+    ``None`` means "no sound requirement" — the rule is then always evaluated.
+
+    Only constructs that are unconditionally traversed contribute:
+      * LITERAL runs at this level;
+      * SUBPATTERN — a group's body is always entered;
+      * MAX/MIN_REPEAT with min >= 1 — the body must appear at least once;
+      * BRANCH — every branch must yield a requirement, and the result is their UNION
+        (any one branch may be the one that matched). If a single branch is
+        unfilterable the whole alternation is.
+      * AT (\b, ^, $) is zero-width: it neither contributes nor blocks.
+    Everything else (IN, ANY, ASSERT, GROUPREF, min=0 repeats) yields None.
+    """
+    best = None
+    run: list[str] = []
+
+    def _flush(cur):
+        text = "".join(run)
+        run.clear()
+        if len(text) >= _PREFILTER_MIN_LEN:
+            cand = frozenset({text.casefold()})
+            if cur is None or min(map(len, cand)) > min(map(len, cur)):
+                return cand
+        return cur
+
+    for op, arg in seq:
+        name = op.name if hasattr(op, "name") else str(op)
+        if name == "LITERAL":
+            ch = chr(arg)
+            # ASCII only. A non-ASCII literal would have to survive re.IGNORECASE's
+            # Unicode folding exactly; refusing them removes that whole class of doubt.
+            if ch.isascii():
+                run.append(ch)
+            else:
+                best = _flush(best)
+            continue
+        best = _flush(best)
+        if name == "SUBPATTERN":
+            got = _node_literals(arg[-1])
+        elif name in ("MAX_REPEAT", "MIN_REPEAT"):
+            lo, _hi, body = arg
+            got = _node_literals(body) if lo >= 1 else None
+        elif name == "BRANCH":
+            _, branches = arg
+            parts = [_node_literals(b) for b in branches]
+            got = None if any(p is None for p in parts) else frozenset().union(*parts)
+        elif name == "AT":
+            continue
+        else:
+            got = None
+        if got is not None and (best is None or min(map(len, got)) > min(map(len, best))):
+            best = got
+    return _flush(best)
+
+
+@functools.lru_cache(maxsize=512)
+def _required_literals(pattern: str) -> frozenset | None:
+    """Cached ``_node_literals`` for a pattern source. None => always evaluate.
+
+    Literals are returned casefolded, to be tested against casefolded text."""
+    try:
+        return _node_literals(_sre_parse.parse(pattern, re.IGNORECASE))
+    except Exception:  # noqa: BLE001 — an unparseable pattern simply gets no filter
+        return None
+
+
 def _search_many_with_budget(jobs) -> dict | None:
     """Run MANY ``compiled.search(text)`` calls in ONE worker round-trip.
 
@@ -648,6 +735,11 @@ def evaluate(
     # they never used the worker and cost 1.20 us/rule.
     _verdicts: dict | None = None
     _batch_jobs = []
+    _prefiltered: dict = {}
+    # There are only three possible texts (prompt / response / both), so derive each at
+    # most once — and lower-case each at most once — instead of per rule.
+    _texts: dict[str, str] = {}
+    _lowered: dict[str, str] = {}
     for entry in compiled_policies:
         if not _policy_applies_to_actor(entry.get("policy", {}), actor):
             continue
@@ -665,17 +757,41 @@ def evaluate(
                 compiled = _compile_regex(pattern)
             except re.error:
                 continue
-            _batch_jobs.append((
-                id(rule),
-                compiled,
-                _get_text_to_check(prompt, response_text, condition.get("field", "both")),
-            ))
-    if _batch_jobs:
+            field_hint = condition.get("field", "both")
+            text = _texts.get(field_hint)
+            if text is None:
+                text = _texts[field_hint] = _get_text_to_check(
+                    prompt, response_text, field_hint
+                )
+            # LITERAL PREFILTER: if every string this pattern can match must contain one
+            # of these literals and none of them is in the text, the regex cannot match.
+            # Skipping is then not an approximation — it is the same answer, reached by a
+            # substring search instead of a backtracking scan.
+            lits = _required_literals(pattern)
+            if lits:
+                low = _lowered.get(field_hint)
+                if low is None:
+                    # casefold, NOT lower. re.IGNORECASE matches 's' against 'ſ'
+                    # (U+017F), and 'ſ'.lower() is 'ſ' — so a .lower() filter would
+                    # SKIP a rule the regex would have matched. 'ſ'.casefold() is 's'.
+                    # casefold's one disagreement in the other direction ('ß' -> 'ss',
+                    # which re does not match) only causes an unnecessary regex run.
+                    # Every discrepancy therefore errs toward running the rule.
+                    low = _lowered[field_hint] = text.casefold()
+                if not any(lit in low for lit in lits):
+                    _prefiltered[id(rule)] = False
+                    continue
+            _batch_jobs.append((id(rule), compiled, text))
+    if _batch_jobs or _prefiltered:
         # None => the batch blew its budget. Leaving _verdicts as None makes the decision
         # loop fall through to the ORIGINAL per-rule path for every rule, which is what
         # preserves "a later regex still runs normally after one has hung" — by reusing
-        # the code that already guarantees it rather than reimplementing it.
-        _verdicts = _search_many_with_budget(_batch_jobs)
+        # the code that already guarantees it rather than reimplementing it. The
+        # prefiltered verdicts are dropped with it, so the fallback re-derives every
+        # answer from the regexes themselves rather than trusting a partial map.
+        _verdicts = _search_many_with_budget(_batch_jobs) if _batch_jobs else {}
+        if _verdicts is not None and _prefiltered:
+            _verdicts.update(_prefiltered)
 
     # ── PASS 2: decide (unchanged order, lattice, hints and messages) ───────
     for entry in compiled_policies:
