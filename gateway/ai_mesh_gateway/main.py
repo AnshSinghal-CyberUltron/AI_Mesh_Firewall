@@ -2875,9 +2875,9 @@ def _return_scan_only_chat(
     }
     resp["pipeline_trace"] = _stamp_pipeline_trace_request_id(
         build_pipeline_trace(
-            prompt=_redact_trace_text(prompt),
-            forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
-            policy_redacted_prompt=_redact_trace_text(policy_redacted_prompt)
+            prompt=_trace_text(prompt),
+            forwarded_prompt=_trace_text(redacted_prompt or prompt),
+            policy_redacted_prompt=_trace_text(policy_redacted_prompt)
             if policy_redacted_prompt
             else "",
             policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
@@ -4077,8 +4077,8 @@ def _launch_chat_stream_response(
             if _rule_names:
                 _trace_zs["matched_rule_names"] = _rule_names
         _trace_kwargs = dict(
-            prompt=_redact_trace_text(_orig_prompt),
-            forwarded_prompt=_redact_trace_text(_fwd_prompt or _orig_prompt),
+            prompt=_trace_text(_orig_prompt),
+            forwarded_prompt=_trace_text(_fwd_prompt or _orig_prompt),
             policy_redacted_flag=_policy_acted,
             scanner_redaction_applied=_any_redaction,
             scan_verdict=scan_verdict,
@@ -4899,6 +4899,35 @@ def _resolve_success_metadata_from_verdict(
         reason = detail or "All security checks passed. No threats detected."
 
     return action, reason, threat_type, confidence, matched_patterns, detail
+
+
+def _trace_text(text) -> str:
+    """Redact text destined for the pipeline_trace — unless the mode will discard it.
+
+    MEASURED (py-spy, 121,169 samples): 78% of the gateway's on-CPU time is `redact_all`
+    and its transport decoders, reached from `_redact_trace_text` on four fields per
+    request while BUILDING the trace — after every stage timer has closed, which is why
+    it never appeared in any stage attribution. At the plan's own 8.19 ms per pass (G4.4),
+    four to six passes over a 3.5 KB prompt is 33-49 ms, matching the ~50 ms of untraced
+    CPU measured independently as `docker stats / RPS`.
+
+    In `metrics` mode the projection drops these very keys, so the value is unobservable:
+    the gateway was redacting kilobytes of text four to six times and discarding the
+    result. This is NOT redacting less — it is not redacting text that reaches no one.
+
+    Deliberately a SEPARATE helper rather than a change to `_redact_trace_text`, because
+    that function is also a detection predicate (`_redact_trace_text(raw) != raw` at the
+    `_policy_redaction_changed_text` site). Blanking it there would answer "nothing was
+    redacted" about text full of PII.
+    """
+    try:
+        from trace_projection import trace_mode  # noqa: PLC0415
+
+        if trace_mode() == "metrics":
+            return ""
+    except Exception:  # noqa: BLE001 — never break a response over a diagnostic
+        pass
+    return _redact_trace_text(text)
 
 
 def _redact_trace_text(text) -> str:
@@ -9254,9 +9283,9 @@ async def proxy_chat(
                     )
                     resp["pipeline_trace"] = _stamp_pipeline_trace_request_id(
                         build_pipeline_trace(
-                            prompt=_redact_trace_text(prompt),
-                            forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
-                            policy_redacted_prompt=_redact_trace_text(policy_redacted_prompt)
+                            prompt=_trace_text(prompt),
+                            forwarded_prompt=_trace_text(redacted_prompt or prompt),
+                            policy_redacted_prompt=_trace_text(policy_redacted_prompt)
                             if policy_redacted_prompt
                             else "",
                             policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
@@ -9266,7 +9295,7 @@ async def proxy_chat(
                             http_status=200,
                             scan_verdict=scan_verdict,
                             zeroshield=_zs_full,
-                            response_text=_redact_trace_text(_extract_response_from_completion(resp)),
+                            response_text=_trace_text(_extract_response_from_completion(resp)),
                             requested_model=body.get("model", ""),
                             output_scan_verdict=_out_verdict,
                             prompt_in_operator_masked=_trace_prompt_operator_masked(prompt),
@@ -11152,9 +11181,9 @@ async def proxy_chat(
             )
             llm_resp["pipeline_trace"] = _stamp_pipeline_trace_request_id(
                 build_pipeline_trace(
-                    prompt=_redact_trace_text(prompt),
-                    forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
-                    policy_redacted_prompt=_redact_trace_text(policy_redacted_prompt)
+                    prompt=_trace_text(prompt),
+                    forwarded_prompt=_trace_text(redacted_prompt or prompt),
+                    policy_redacted_prompt=_trace_text(policy_redacted_prompt)
                     if policy_redacted_prompt
                     else "",
                     policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
@@ -11166,7 +11195,7 @@ async def proxy_chat(
                     scan_verdict=scan_verdict,
                     route_metadata=route_metadata,
                     zeroshield=_zs_full,
-                    response_text=_redact_trace_text(response_text or ""),
+                    response_text=_trace_text(response_text or ""),
                     requested_model=(
                         (route_metadata or {}).get("original_model")
                         or body.get("model", "")

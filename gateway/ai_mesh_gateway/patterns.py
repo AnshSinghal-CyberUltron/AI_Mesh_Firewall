@@ -1771,13 +1771,34 @@ def _redact_obfuscated(original: str, result: str) -> str:
     return result
 
 
+@functools.lru_cache(maxsize=64)
+def _redact_all_cached(text: str) -> str:
+    """Memoised body of ``redact_all`` — task 8b.
+
+    MEASURED: `redact_all` is **78% of the gateway's on-CPU time** (py-spy, 121,169
+    samples), and the allow path redacts the SAME string twice per request:
+    `redacted_prompt` is None whenever no redaction fired, so
+    `forwarded_prompt=_trace_text(redacted_prompt or prompt)` re-does exactly the work
+    `prompt=_trace_text(prompt)` just did. The plan's G4.4 puts a pass at 8.19 ms p50.
+
+    SAFE TO SHARE ACROSS TENANTS because the output depends on NOTHING but the text — no
+    org config, no policy set, no request context. Two tenants sending identical bytes are
+    entitled to identical output. `redact_all_scoped` is deliberately NOT routed through
+    here: its result depends on `allowed_classes`, so a text-keyed cache would hand one
+    scope another scope's answer, mutating a class the operator chose not to mutate.
+
+    `maxsize` is small on purpose: the win is the intra-request duplicate, not long-lived
+    cross-request retention, which the tracker's G4.1 note flagged as a surface to avoid.
+    """
+    return _redact_obfuscated(text, _redact_all_raw(text))
+
+
 def redact_all(text: str) -> str:
     """Redact PII/secrets from ``text``, resistant to unicode/zero-width/homoglyph (G1) and
     base64/hex (G2) obfuscation. Runs the raw partial-masking pass, then masks any obfuscated
     or encoded PII/secret that survived. A no-op beyond the raw pass on plain ASCII, so the
     frozen golden cases and existing redaction outputs are unchanged."""
-    result = _redact_all_raw(text)
-    return _redact_obfuscated(text, result)
+    return _redact_all_cached(text)
 
 
 def redact_all_scoped(text: str, allowed_classes: set[str]) -> str:
