@@ -11,7 +11,7 @@ carry no new dependency. Task 7 (multi-pattern engine) lands only after task 2 i
 ## Tasks
 
 - [ ] 1. Docker end-to-end verification harness (R7) — **blocks every claim below**
-  - [ ] 1.1 `scripts/perf/e2e/token_stub.py` — upstream stub emitting N tokens at a set rate; exits non-zero if it would emit zero
+  - [x] 1.1 `scripts/perf/e2e/token_stub.py` — upstream stub emitting N tokens at a set rate; exits non-zero if it would emit zero
   - [ ] 1.2 `scripts/perf/e2e/compose.perf.yml` — gateway, control, postgres, redis, nginx, stub; pinned images
   - [ ] 1.3 `drive.py` — unique prompts, real HTTP, SSE parsing, streaming + non-streaming
   - [ ] 1.4 Assert `|wall − addon − model_output| < ε`; fail the run on residual p50 ≠ 0
