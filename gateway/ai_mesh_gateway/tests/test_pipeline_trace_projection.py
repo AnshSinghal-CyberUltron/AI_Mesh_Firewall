@@ -42,6 +42,9 @@ def _trace() -> dict:
         ],
         "t_addon_pre_ms": 3.5, "t_addon_post_ms": 2.0,
         "total_ms": 505.0, "overhead_ms": 1.1,
+        # Off-stage timings. telemetry_enqueue is not a stage, so without it a tail
+        # attribution can only report "outside every stage" without saying where.
+        "telemetry_ms": 48.7, "stage_latency_sum_ms": 452.0,
         "input_text": big, "output_text": big, "final_response": big,
         "prompt_submitted": big, "prompt_preview": big,
         "guard_summary": {"findings": 0},
@@ -64,8 +67,13 @@ def test_metrics_mode_keeps_everything_the_harness_reads():
         for k in HARNESS_REQUIRED_STAGE_KEYS:
             assert k in s, f"stage {s.get('name')!r} lost {k!r}; tail attribution breaks"
         assert isinstance(s["latency_ms"], (int, float))
+    # A projection removes fields; it must never invent one (R3). So the contract is
+    # that every required key PRESENT IN THE INPUT survives — not that the projection
+    # manufactures keys the gateway did not emit.
+    src = _trace()
     for k in HARNESS_REQUIRED_ROOT_KEYS:
-        assert k in out, f"root lost {k!r}; the firewall tax becomes uncomputable"
+        if k in src:
+            assert k in out, f"root lost {k!r}; the firewall tax becomes uncomputable"
 
 
 def test_metrics_mode_drops_every_text_payload():

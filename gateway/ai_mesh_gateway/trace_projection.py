@@ -24,6 +24,10 @@ import os
 HARNESS_REQUIRED_STAGE_KEYS = ("name", "action", "latency_ms")
 HARNESS_REQUIRED_ROOT_KEYS = (
     "t_addon_pre_ms", "t_addon_post_ms", "total_ms", "overhead_ms",
+    # Off-stage timings: the firewall tax reconciles as
+    # wall = stage_sum + telemetry_enqueue + overhead, and telemetry_enqueue is not a
+    # stage. Without it a tail attribution can only say "outside every stage".
+    "telemetry_ms", "stage_latency_sum_ms",
 )
 
 # Kept because they are small and are what makes a trace diagnostically useful.
