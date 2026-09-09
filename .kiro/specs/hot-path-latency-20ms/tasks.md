@@ -13,9 +13,9 @@ carry no new dependency. Task 7 (multi-pattern engine) lands only after task 2 i
 - [ ] 1. Docker end-to-end verification harness (R7) — **blocks every claim below**
   - [x] 1.1 `scripts/perf/e2e/token_stub.py` — upstream stub emitting N tokens at a set rate; exits non-zero if it would emit zero
   - [x] 1.2 `scripts/perf/e2e/compose.perf.yml` — overlay on docker-compose.yml; six services healthy
-  - [ ] 1.3 `drive.py` — unique prompts, real HTTP, SSE parsing, streaming + non-streaming
-  - [ ] 1.4 Assert `|wall − addon − model_output| < ε`; fail the run on residual p50 ≠ 0
-  - [ ] 1.5 Distinguish *skipped* from *fast*: a 0 ms stage without `ran=false` fails the run
+  - [x] 1.3 `drive.py` — unique prompts, real HTTP, SSE parsing, streaming + non-streaming
+  - [x] 1.4 Assert `|wall − addon − model_output| < ε`; fail the run on residual p50 ≠ 0
+  - [x] 1.5 Distinguish *skipped* from *fast*: a 0 ms stage without `ran=false` fails the run
   - [ ] 1.6 `sweep.py` — rule count × prompt band × posture matrix
   - [ ] 1.7 `report.py` — p50/p90/p99, RPS, per-container CPU, commit SHA, host CPU model
   - [ ] 1.8 Record the **pre-change baseline** matrix to `docs/perf/evidence/`
@@ -31,6 +31,12 @@ carry no new dependency. Task 7 (multi-pattern engine) lands only after task 2 i
   - [ ] 2.6 ReDoS test: pathological pattern still returns within budget, still treated as no-match
   - [ ] 2.7 Re-run the task-1 matrix; assert **≥8×** at 512 ch and **≥2×** at 4,096 ch
   - _Requirements: 2.1–2.5, 3a_
+
+- [ ] 1A. **NEW — streaming `model_output` attribution defect (blocks all streaming claims)**
+  - [ ] 1A.1 `model_output` is 0 ms on streams while 200 tokens are emitted, so the tax absorbs provider time (2,638 ms p50 reported)
+  - [ ] 1A.2 Same class as `addon = TTFT`; the anchor was fixed, attribution was not
+  - [ ] 1A.3 Fix attribution, then re-enable streaming measurement
+  - _Evidence: docs/perf/evidence/2026-09-09-e2e-baseline.md §3_
 
 - [ ] 3. Detection equivalence gate (R9) — run against tasks 2, 5, 6, 7
   - [ ] 3.1 Wire the G0.2 posture-scoring harness into CI as a before/after gate

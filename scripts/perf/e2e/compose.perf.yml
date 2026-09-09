@@ -41,6 +41,16 @@ services:
   # replaces the base list rather than appending to it.
   control:
     env_file: !override ["scripts/perf/e2e/perf.env"]
+    environment:
+      # MUST match the gateway's key exactly. Control SIGNS the compiled bundle;
+      # the gateway VERIFIES it. If control's key is empty (the same
+      # `environment:` > `env_file:` precedence trap as F3) it emits an unsigned
+      # bundle and the gateway correctly refuses it:
+      #   CRITICAL REFUSING policy bundle ... unsigned or its signature is invalid
+      # ...while /health still reports ok with policy_count 0 — a silent
+      # no-detection state.
+      POLICY_SIGNING_KEY: "perf-harness-signing-key-not-a-secret"
+      DJANGO_SECRET_KEY: "perf-harness-not-a-secret-do-not-deploy"
 
   gateway:
     env_file: !override ["scripts/perf/e2e/perf.env"]
