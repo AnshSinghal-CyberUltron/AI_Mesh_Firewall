@@ -12,13 +12,14 @@ carry no new dependency. Task 7 (multi-pattern engine) lands only after task 2 i
 
 - [ ] 1. Docker end-to-end verification harness (R7) — **blocks every claim below**
   - [x] 1.1 `scripts/perf/e2e/token_stub.py` — upstream stub emitting N tokens at a set rate; exits non-zero if it would emit zero
-  - [ ] 1.2 `scripts/perf/e2e/compose.perf.yml` — gateway, control, postgres, redis, nginx, stub; pinned images
+  - [x] 1.2 `scripts/perf/e2e/compose.perf.yml` — overlay on docker-compose.yml; six services healthy
   - [ ] 1.3 `drive.py` — unique prompts, real HTTP, SSE parsing, streaming + non-streaming
   - [ ] 1.4 Assert `|wall − addon − model_output| < ε`; fail the run on residual p50 ≠ 0
   - [ ] 1.5 Distinguish *skipped* from *fast*: a 0 ms stage without `ran=false` fails the run
   - [ ] 1.6 `sweep.py` — rule count × prompt band × posture matrix
   - [ ] 1.7 `report.py` — p50/p90/p99, RPS, per-container CPU, commit SHA, host CPU model
   - [ ] 1.8 Record the **pre-change baseline** matrix to `docs/perf/evidence/`
+    - [ ] 1.8a **PREREQUISITE**: seed policy packages — `policy_count: 0` today means Tier-1 costs ~0 and the matrix would measure nothing (finding F2)
   - _Requirements: 7.1–7.8, 10.2_
 
 - [ ] 2. Change 1 — one thread per evaluation, not per regex (R2)
