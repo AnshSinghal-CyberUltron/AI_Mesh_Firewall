@@ -1383,21 +1383,39 @@ def _mcp_redact_result_on_detect_enabled() -> bool:
     """E12: whether a secret/PII detected in a tool RESULT force-redacts the
     result even when the resolved scan_action defaults to "tag"/"monitor".
 
-    Prefers the live gateway CONFIG (populated from ``load_config``); falls back
-    to reading the env var directly so the gate still resolves in unit tests /
-    early startup before ``main.CONFIG`` is set. Default ON. Mirrors
-    ``_mcp_block_on_credential_enabled`` exactly.
+    policy-driven-detection R1/R5/R6 (task 7.4): this force-redaction floor was a
+    DEFAULT-ON driver — it made a detection fire (mask a tool RESULT) under the
+    server default ``tag`` posture with NO enabled policy authored for it, i.e. a
+    built-in mandatory detection. Under the policy-driven model that is removed:
+    the floor is now EFFECTIVE-DEFAULT OFF, so it no longer forces default
+    detection. Redaction of an MCP result happens only when a matched ENABLED
+    policy Rule's action is ``redact`` (applied in the orchestrator's POLICY lane,
+    with its own fail-closed guards) or the operator explicitly opts the floor
+    back on (config ``mcp_redact_result_on_detect`` / env
+    ``GATEWAY_MCP_REDACT_RESULT_ON_DETECT``).
+
+    Prefers the live gateway CONFIG (populated from ``load_config``); falls back to
+    the env var so the gate still resolves in unit tests / early startup before
+    ``main.CONFIG`` is set. Absent / unparseable -> OFF (fail toward no default
+    detection). The fail-closed byte-truth / no-op-scrub guards (CHG-0003/0004/
+    0005/0046/0047) inside the floor are UNCHANGED — they only apply when the floor
+    actually runs (operator opted in, or an enabled-policy redact drives it).
     """
+    def _coerce(v) -> bool:
+        if isinstance(v, str):
+            return v.strip().lower() in ("1", "true", "yes", "on")
+        return bool(v)
+
     try:
         gateway_main = _gateway_app_module()
 
         cfg = getattr(gateway_main, "CONFIG", None)
         if isinstance(cfg, dict) and "mcp_redact_result_on_detect" in cfg:
-            return bool(cfg.get("mcp_redact_result_on_detect"))
+            return _coerce(cfg.get("mcp_redact_result_on_detect"))
     except Exception:
         pass
-    return os.environ.get("GATEWAY_MCP_REDACT_RESULT_ON_DETECT", "true").lower() in (
-        "true", "1", "yes",
+    return os.environ.get("GATEWAY_MCP_REDACT_RESULT_ON_DETECT", "").strip().lower() in (
+        "true", "1", "yes", "on",
     )
 
 

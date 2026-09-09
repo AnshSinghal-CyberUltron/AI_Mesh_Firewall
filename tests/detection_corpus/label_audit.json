@@ -1,0 +1,306 @@
+{
+  "seed": "detection-corpus-label-audit-v1",
+  "total": 748,
+  "sample": [
+    {
+      "id": "ben-general_benign-0133",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-path_traversal-0013",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-developer_traffic-0071",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-prompt_injection-0041",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-developer_traffic-0059",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-vector_injection-0013",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0317",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-tool_overreach-0010",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0297",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0296",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0065",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-jailbreak-0006",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0313",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-prompt_injection-0050",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-developer_traffic-0025",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0315",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0123",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-sql_injection-0014",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-path_traversal-0021",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-paraphrase-0005",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0279",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0095",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-prompt_injection-0053",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-goal_hijacking-0006",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-prompt_injection-0001",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0117",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0193",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-developer_traffic-0020",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0238",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-vector_injection-0014",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0204",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-command_injection-0024",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-prompt_injection-0042",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-command_injection-0014",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0000",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0236",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0343",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0073",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0085",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-prompt_injection-0015",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0244",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-goal_hijacking-0011",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0154",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-data_leakage-0015",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0119",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-sql_injection-0001",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-tool_overreach-0003",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0233",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0212",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-developer_traffic-0066",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-jailbreak-0022",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-tool_overreach-0009",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-developer_traffic-0050",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-prompt_injection-0008",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-tool_overreach-0011",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-developer_traffic-0034",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0042",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0028",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0250",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-data_leakage-0005",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-sql_injection-0006",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0256",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0124",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-goal_hijacking-0007",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0150",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-jailbreak-0037",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-sql_injection-0009",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-goal_hijacking-0000",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0286",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-vector_injection-0010",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-jailbreak-0000",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0127",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-paraphrase-0006",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "ben-general_benign-0048",
+      "result": "confirmed-correct"
+    },
+    {
+      "id": "mal-sql_injection-0013",
+      "result": "confirmed-correct"
+    }
+  ]
+}

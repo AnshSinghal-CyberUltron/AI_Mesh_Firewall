@@ -26,10 +26,34 @@ build and blocks cutover.
 from __future__ import annotations
 
 import json
+import os
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+
+
+# policy-driven-detection cutover (task 9): the MCP built-in default detectors (the Tier-1
+# PRESET pass) are now EFFECTIVE-DEFAULT OFF (``_mcp_default_detection_enabled``), so a
+# zero-enabled-policy org is passthrough. This diff-gate PROVES the seeded detector policies
+# reproduce the LIVE PRESET verdict byte-for-byte before the preset is retired — that parity
+# is only testable when the preset actually runs. The preset MACHINERY is retained and
+# reachable via the explicit opt-in env (``GATEWAY_MCP_DEFAULT_DETECTION``), so the LIVE lane
+# of every parity case enables it for the duration of the scan; the seeded lane (observe-only
+# posture) is unaffected — its policy rules enforce regardless of the preset. This is NOT a
+# built-in default firing in the Zero_Policy_State: it is an explicit opt-in the test sets.
+@contextmanager
+def _builtin_presets_enabled():
+    prev = os.environ.get("GATEWAY_MCP_DEFAULT_DETECTION")
+    os.environ["GATEWAY_MCP_DEFAULT_DETECTION"] = "true"
+    try:
+        yield
+    finally:
+        if prev is None:
+            os.environ.pop("GATEWAY_MCP_DEFAULT_DETECTION", None)
+        else:
+            os.environ["GATEWAY_MCP_DEFAULT_DETECTION"] = prev
 
 _GW = Path(__file__).resolve().parents[1]
 if str(_GW) not in sys.path:
@@ -173,11 +197,14 @@ def _observe_controls():
 async def _run(payload, *, rules, enforcement, effective_controls, direction, tool, enabled_info=None):
     orig = orch._get_policy_sync
     orch._get_policy_sync = lambda: _FakePolicySync(rules)
+    # policy-driven-detection cutover (task 9): explicitly opt the built-in PRESET pass back on so
+    # the LIVE lane (rules=[]) reproduces the pre-cutover posture verdict this gate compares against.
     try:
-        return await orch.scan_mcp_payload(
-            payload, scan_direction=direction, enforcement=enforcement,
-            effective_controls=effective_controls, tool_name=tool, enabled_info=enabled_info,
-            org_slug="o", server_slug="s", actor=None)
+        with _builtin_presets_enabled():
+            return await orch.scan_mcp_payload(
+                payload, scan_direction=direction, enforcement=enforcement,
+                effective_controls=effective_controls, tool_name=tool, enabled_info=enabled_info,
+                org_slug="o", server_slug="s", actor=None)
     finally:
         orch._get_policy_sync = orig
 
@@ -759,7 +786,13 @@ async def _run_tier2(payload, *, verdict=None, boom=False, tier2_action="inherit
             effective_controls=_tier2_controls(tier2_action, strict_mode=strict_mode,
                                                direction=direction),
             tool_name="anyTool",
-            enabled_info={"mcp_policy_only_enforcement": flag} if flag is not None else None,
+            # policy-driven-detection cutover (task 9): MCP Tier-2 is now opt-in, model-only
+            # (``mcp_tier2_enabled`` effective-default OFF). These OC cases exercise the Tier-2
+            # VERDICT machinery, so they explicitly opt the org into Tier-2.
+            enabled_info=(
+                {"mcp_policy_only_enforcement": flag, "mcp_tier2_enabled": True}
+                if flag is not None else {"mcp_tier2_enabled": True}
+            ),
             org_slug="o", server_slug="s", actor=None)
     finally:
         orch._get_policy_sync, orch._get_input_scanner = orig_ps, orig_sc
@@ -859,7 +892,10 @@ async def _run_ctrls(payload, *, verdict, effective_controls, direction, flag=Tr
         return await orch.scan_mcp_payload(
             payload, scan_direction=direction, enforcement="tag",
             effective_controls=effective_controls, tool_name="anyTool",
-            enabled_info={"mcp_policy_only_enforcement": flag}, org_slug="o", server_slug="s", actor=None)
+            # policy-driven-detection cutover (task 9): opt into the (now default-OFF) Tier-2 lane
+            # so the Tier-1-disabled/Tier-2-enabled cases exercise the Tier-2 verdict path.
+            enabled_info={"mcp_policy_only_enforcement": flag, "mcp_tier2_enabled": True},
+            org_slug="o", server_slug="s", actor=None)
     finally:
         orch._get_policy_sync, orch._get_input_scanner = orig_ps, orig_sc
 

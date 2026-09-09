@@ -187,6 +187,14 @@ def _apply_stubs() -> None:
     gm.INPUT_SCANNER = InputScanner(thread_pool_size=2)
     gm.AGENT_ID = None
     gm.POLICY_SYNC = None
+    # policy-driven-detection cutover (task 7.1 / task 9): the STREAMING output guard now runs
+    # ONLY when the org has an enabled Tier-1 pipeline output policy OR opt-in Tier-2 is on
+    # (``_streaming_output_detection_active``); a zero-policy org is Passthrough and the stream
+    # leg never reaches the guard. This suite verifies the RETAINED output-guard MACHINERY
+    # (per-detector actions, stream/non-stream parity, fail-closed floor), so stub the activation
+    # to True to represent an org with an enabled output policy — Tier-2 stays OFF (no Bedrock),
+    # detection is driven by the config-resolved per-detector actions exactly as before.
+    gm._streaming_output_detection_active = lambda org_slug, org_config: True
     gm.RATE_LIMITER = None
     gm.CIRCUIT_BREAKER = None
     gm.REDIS_CLIENT = None

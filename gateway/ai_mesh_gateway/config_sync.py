@@ -51,12 +51,18 @@ LOG_LEVEL_MAP: dict[str, int] = {
 # Known keys mirror control-plane ``FirewallConfig.build_gateway_payload()``
 # plus the gateway-local keys from ``config.load_config()``. Unknown keys
 # pass through unchanged (forward compatibility with newer control planes).
+# policy-driven-detection task 6.1: the legacy default-on scan toggles
+# (``input_scan_enabled`` / ``output_scan_enabled`` / ``scan_block_on_injection``
+# / ``scan_block_on_pii``) are REMOVED as detection drivers. They are dropped from
+# ``_BOOL_KEYS`` so a control plane that still ships them is not recognised as a
+# typed detection flag; an unknown key still passes through unchanged (forward
+# compatibility) but never gates/enables detection on the gateway (Requirement 5.4).
 _BOOL_KEYS = (
-    "firewall_enabled", "rate_limit_enabled", "input_scan_enabled",
-    "scan_block_on_pii", "scan_block_on_injection", "deep_scan_enabled",
+    "firewall_enabled", "rate_limit_enabled",
+    "deep_scan_enabled",
     "tier2_fail_closed_enabled", "tier2_input_fail_closed", "tier2_stream_hold_enabled",
     "tier2_enabled", "mcp_tier2_enabled", "tier2_strict",
-    "model_isolation_enabled", "routing_enabled", "output_scan_enabled",
+    "model_isolation_enabled", "routing_enabled",
     "hallucination_flag_enabled", "output_pii_enabled",
     "output_credential_enabled", "output_ip_leakage_enabled",
     "output_policy_enabled", "output_incident_logging_enabled",
@@ -99,6 +105,65 @@ CONFIG_KEY_TYPES: dict[str, tuple[type, ...]] = {
 
 # Keys where ``null`` is a meaningful tri-state value ("no per-org opinion").
 _NULLABLE_KEYS: frozenset[str] = frozenset({"tier2_enabled", "mcp_tier2_enabled"})
+
+
+def resolve_tier2_enabled(value: Any) -> bool:
+    """Resolve the nullable tri-state ``tier2_enabled`` to its EFFECTIVE value.
+
+    policy-driven-detection R3.2/R3.7: Tier-2 (the semantic model scan) is
+    **opt-in per org, default OFF**. The stored config value is a tri-state:
+
+        * ``True``            -> Tier-2 runs (explicit opt-in).
+        * ``False``           -> Tier-2 does not run (explicit opt-out).
+        * ``None`` / absent   -> Tier-2 does not run (no per-org opinion resolves
+          to OFF — "fail toward no Tier-2 detection", R3.7).
+
+    Only ``value is True`` resolves ON; every other value — ``None``, ``False``,
+    or any non-bool an old/stale control plane might carry — resolves to
+    ``False``. This resolves the EFFECTIVE value only; the RAW tri-state stored
+    in the org config is preserved (callers should read the raw value for
+    sync/round-trip and call this helper only to decide whether Tier-2 runs).
+    """
+    return value is True
+
+
+def resolve_mcp_tier2_enabled(value: Any) -> bool:
+    """Resolve the nullable tri-state ``mcp_tier2_enabled`` to its EFFECTIVE value.
+
+    policy-driven-detection R6.1/R6.3 (task 7.4): the MCP surface honors the same
+    opt-in, model-only, **default-OFF** Tier-2 model as the chat path. The stored
+    ``mcp_tier2_enabled`` value is a tri-state (``_NULLABLE_KEYS``):
+
+        * ``True``            -> MCP Tier-2 runs (explicit per-org opt-in).
+        * ``False``           -> MCP Tier-2 does not run (explicit opt-out).
+        * ``None`` / absent   -> MCP Tier-2 does not run (no per-org opinion resolves
+          to OFF — "fail toward no Tier-2 detection", consistent with R3.7 / the
+          chat-path ``resolve_tier2_enabled``).
+
+    Only ``value is True`` resolves ON; every other value (``None``, ``False``, or
+    any stale non-bool) resolves ``False``. Mirrors ``resolve_tier2_enabled`` exactly
+    for the MCP surface so the two surfaces share one tri-state semantics.
+    """
+    return value is True
+
+
+def resolve_rag_tier2_enabled(value: Any) -> bool:
+    """Resolve the RAG-surface Tier-2 toggle to its EFFECTIVE value (default OFF).
+
+    policy-driven-detection R6.1/R6.3 (task 7.2): the RAG Detection_Surface
+    (``/v1/rag`` ingest + query) honours the SAME opt-in, model-only Tier-2 model
+    as the chat path — the semantic Bedrock guard scan runs on RAG documents /
+    queries ONLY when the operator explicitly switched ``rag_tier2_enabled`` on.
+
+    Mirrors ``resolve_tier2_enabled``: only ``value is True`` resolves ON; every
+    other value — ``None`` / absent (no per-org opinion), ``False``, or any
+    non-bool a stale control plane might carry — resolves to ``False``
+    ("fail toward no Tier-2 detection" when the value cannot be resolved).
+    ``rag_tier2_enabled`` is stored as a strict bool today (default False), but
+    this resolver is written tri-state-safe so an absent / ``None`` / stale value
+    is still effective-OFF, matching the chat-path resolver's contract exactly.
+    """
+    return value is True
 
 
 def _value_type_ok(key: str, value: Any) -> bool:
@@ -506,10 +571,9 @@ class ConfigSync:
 
         LOG.debug(
             "Applied firewall config: firewall_enabled=%s, enforcement_mode=%s, "
-            "input_scan_enabled=%s, rate_limit_enabled=%s",
+            "rate_limit_enabled=%s",
             self._config.get("firewall_enabled"),
             self._config.get("enforcement_mode"),
-            self._config.get("input_scan_enabled"),
             self._config.get("rate_limit_enabled"),
         )
 

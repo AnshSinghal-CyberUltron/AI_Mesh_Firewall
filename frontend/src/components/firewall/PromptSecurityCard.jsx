@@ -5,12 +5,19 @@ import { ConfigSwitch } from "./primitives/ConfigSwitch";
 import { NumberStepper } from "./primitives/NumberStepper";
 import { ThresholdSlider } from "./primitives/ThresholdSlider";
 import { Select } from "../ui/Select";
+import { Tier2ScanControl } from "./Tier2ScanControl";
 import { ZEROSHIELD_TIER2_LABEL } from "../../constants/zeroshieldBrand";
 
 export function PromptSecurityCard({ config, onPatch, index }) {
   return (
     <SectionCard id="prompt-security" title="Prompt Security & Injection Protection" icon={Lock} index={index}>
       <div className="space-y-3">
+        {/*
+          Tier-2 opt-in toggle (policy-driven-detection Req 3). Self-contained:
+          reflects the backend tier2_enabled tri-state and PUTs the change
+          immediately (partial PUT), independent of the batched Save button.
+        */}
+        <Tier2ScanControl />
         <FieldRow
           label="Jailbreak Detection"
           hint="Detect and block prompt injection attempts"

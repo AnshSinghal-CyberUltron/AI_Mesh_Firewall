@@ -191,10 +191,72 @@ def _effective_control(effective: dict[str, Any], tier: str, scan_direction: str
     return effective.get(key) or {}
 
 
-def _org_tier2_allowed(enabled_info: dict[str, Any] | None) -> bool | None:
-    if not enabled_info:
-        return None
-    return enabled_info.get("mcp_tier2_enabled")
+def _resolve_mcp_tier2_enabled(value: Any) -> bool:
+    """Resolve the nullable tri-state ``mcp_tier2_enabled`` to its EFFECTIVE value.
+
+    policy-driven-detection R6.1/R6.3 (task 7.4): MCP Tier-2 (the semantic model
+    scan) is opt-in, model-only, and **effective-default OFF** — mirroring the
+    chat-path ``config_sync.resolve_tier2_enabled`` tri-state. ``None`` / absent
+    (no per-org opinion) and any stale non-bool resolve to OFF ("fail toward no
+    Tier-2 detection"); only an explicit ``True`` turns Tier-2 on. Imported from
+    ``config_sync`` (single source), with an identical inline fallback so a
+    ``config_sync`` import hiccup can never silently flip the default ON.
+    """
+    try:
+        from config_sync import resolve_mcp_tier2_enabled  # type: ignore
+        return resolve_mcp_tier2_enabled(value)
+    except Exception:
+        try:
+            from ai_mesh_gateway.config_sync import resolve_mcp_tier2_enabled  # type: ignore
+            return resolve_mcp_tier2_enabled(value)
+        except Exception:
+            return value is True
+
+
+def _org_tier2_allowed(enabled_info: dict[str, Any] | None) -> bool:
+    """EFFECTIVE MCP Tier-2 gate (task 7.4): default OFF.
+
+    Was a raw tri-state pass-through (``None``/absent -> the caller only skipped on
+    an explicit ``False``, so an absent value LET Tier-2 run whenever the tier2
+    scan-control was enabled — a default-on driver). Now resolves via
+    ``_resolve_mcp_tier2_enabled``: absent / ``None`` / ``False`` / stale -> OFF;
+    only an explicit ``True`` -> ON. The caller runs Tier-2 iff this is True.
+    """
+    return _resolve_mcp_tier2_enabled((enabled_info or {}).get("mcp_tier2_enabled"))
+
+
+def _mcp_default_detection_enabled() -> bool:
+    """policy-driven-detection R1/R6 (task 7.4): whether the BUILT-IN default Tier-1
+    detectors (the preset ``_scan_text_tier1`` pass — injection / PII / secret /
+    credential / IP-leak / encoded-exfil / render-leak neutralization) run on the MCP
+    surface WITHOUT being authored as an enabled policy rule.
+
+    EFFECTIVE-DEFAULT OFF (mirrors the chat-path cutover): Tier-1 on the MCP surface is
+    ``policy_engine`` (the ``_mcp_policy_pass`` POLICY lane) ONLY. The built-in preset
+    library is no longer a mandatory/default scanner — a zero-enabled-policy org is
+    passthrough on MCP tool args + results. Resolves from the live gateway CONFIG
+    (``mcp_default_detection_enabled``) with an env fallback
+    (``GATEWAY_MCP_DEFAULT_DETECTION``) so the gate is reachable in unit tests / early
+    startup; absent / unparseable -> OFF (fail toward no default detection).
+
+    NOTE: this gates ONLY the *default/built-in* preset detection. It does NOT touch the
+    POLICY lane (an enabled policy still runs + redacts/blocks with its own fail-closed
+    guards), per-actor authz / allowlist gating, field-RBAC redaction, or the caller-side
+    E12 result-floor (separately gated by ``_mcp_redact_result_on_detect_enabled`` —
+    itself effective-default OFF at cutover).
+    """
+    import sys
+
+    for mod_name in ("ai_mesh_gateway.main", "main"):
+        mod = sys.modules.get(mod_name)
+        if mod is None:
+            continue
+        cfg = getattr(mod, "CONFIG", None)
+        if isinstance(cfg, dict) and "mcp_default_detection_enabled" in cfg:
+            return _coerce_flag(cfg.get("mcp_default_detection_enabled"))
+    return os.environ.get("GATEWAY_MCP_DEFAULT_DETECTION", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
 
 
 def _build_mcp_context(
@@ -1472,10 +1534,36 @@ async def scan_mcp_payload(
     scanner = _get_input_scanner()
     tier1_blocked = False
 
+    # policy-driven-detection R1/R6 (task 7.4): the built-in PRESET default detectors
+    # (injection / PII / secret / credential / IP-leak / encoded-exfil / render-leak) run
+    # ONLY when built-in default detection is explicitly enabled. Effective-default OFF ->
+    # MCP Tier-1 is the POLICY lane (enabled policies) ONLY, so a zero-enabled-policy org
+    # is passthrough on MCP tool args + results. The POLICY lane above already ran (enabled
+    # policies + their fail-closed redaction), and per-actor authz / field-RBAC are
+    # unaffected — this gates ONLY the mandatory/default preset scan.
+    # The preset pass is DISABLED as built-in DETECTION CONTENT (``include_presets`` is
+    # threaded from the gate), but the target LOOP still runs whenever Tier-1 is enabled —
+    # this KEEPS the fail-closed no-op-scrub / byte-truth guard (CHG-0047) reachable on any
+    # redaction that IS produced (an enabled-policy write-back or an operator who re-enables
+    # presets). With ``_run_presets`` False, ``_scan_text_tier1`` short-circuits its preset
+    # branch (returns the text unchanged, no findings), so a zero-policy org is passthrough
+    # yet the guard is never removed from the pipeline.
+    _run_presets = _mcp_default_detection_enabled()
+    if _tier1_enabled and not _run_presets:
+        result.scan_trace.append(
+            {
+                "scan_stage": "tier1_presets_skipped",
+                "tier": "tier1",
+                "direction": scan_direction,
+                "reason": "mcp_default_detection_off",
+            }
+        )
     for text, setter, path_label in (targets if _tier1_enabled else []):
         if not text:
             continue
         # PRESET pass only — the POLICY lane already ran once on the full payload above.
+        # ``include_presets`` is the task-7.4 default-detection gate: False -> the built-in
+        # detectors do not run (policy-only Tier-1); True -> the operator opted them back in.
         new_text, findings, blocked, rfields = await _scan_text_tier1(
             text,
             scan_direction=scan_direction,
@@ -1486,7 +1574,7 @@ async def scan_mcp_payload(
             tool_name=tool_name,
             actor=actor,
             include_policies=False,
-            include_presets=True,
+            include_presets=_run_presets,
         )
         for _rf in rfields:
             if _rf not in field_redaction_union:
@@ -1561,8 +1649,14 @@ async def scan_mcp_payload(
     if not tier2_ctrl.get("enabled", False):
         return _finalize_output(mutable if result_redacted else payload), result
 
+    # policy-driven-detection R6.1/R6.3 (task 7.4): MCP Tier-2 is opt-in, model-only,
+    # EFFECTIVE-DEFAULT OFF. ``_org_tier2_allowed`` now resolves the nullable tri-state
+    # ``mcp_tier2_enabled`` (absent / None / False / stale -> OFF; only explicit True ->
+    # ON), mirroring the chat-path ``resolve_tier2_enabled``. Skip the Tier-2 model scan
+    # unless the org explicitly opted in — so a zero-opinion org never runs Tier-2 even
+    # if the tier2 scan-control row is enabled (the prior default-on driver).
     org_override = _org_tier2_allowed(enabled_info)
-    if org_override is False:
+    if not org_override:
         result.scan_trace.append(
             {"scan_stage": "tier2_skipped", "tier": "tier2", "reason": "org_mcp_tier2_disabled"}
         )

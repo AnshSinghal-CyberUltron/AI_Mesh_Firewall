@@ -1,0 +1,194 @@
+---
+inclusion: fileMatch
+fileMatchPattern: ['gateway/ai_mesh_gateway/main.py', 'gateway/ai_mesh_gateway/enforcement.py', 'gateway/ai_mesh_gateway/secure_streaming.py', 'gateway/ai_mesh_gateway/output_guard.py', 'gateway/ai_mesh_gateway/scanner.py', 'gateway/ai_mesh_gateway/pipeline_trace.py', 'docs/pipeline/**']
+---
+
+# Pipeline Consolidate + Fix + FREEZE — changelog protocol (Cursor mirror)
+
+The pipeline lane consolidates, fixes, and freezes the chat pipeline code paths in
+`gateway/ai_mesh_gateway/main.py` (13036 lines). Every pipeline change MUST be logged
+to **all four memories in the same commit**:
+
+1. Ruflo — `memory store --namespace pipeline/changes --key "<PIPELINE-id>" --value "…"`.
+2. Claude — one-line pointer in repo-root `AGENTS.md` (*Pipeline changelog* section).
+3. Cursor — an entry appended to THIS file (`.cursor/rules/pipeline-changelog.mdc`).
+4. Canonical — the full entry in `docs/pipeline/CHANGELOG.md` (source of truth).
+
+Minimum fields per entry: change-id · date · files · WHAT · WHY · NOW DOES · VERIFY.
+
+Hard rules: one `PIPELINE-NNNN` per logical change (never reuse an id); commit small;
+stage narrowly (the worktree/index is SHARED across sessions — never `git add -A`);
+rebase from `main` often. Pipeline changes MUST NOT break the gateway test gate
+(`cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests -q`).
+
+## Changelog entries (newest last)
+
+- PIPELINE-0001 (2026-07-03) — docs/pipeline/PATHS.md: complete enumeration of every chat
+  code path (4 sub-paths + firewall-disabled + responses-delegate), 6 fail-open sites,
+  stage sequences documented.
+- PIPELINE-0002 (2026-07-03) — docs/pipeline/DIVERGENCES.md: full divergence analysis across
+  all 4 sub-paths. 8 divergences documented with severity + line refs. Highest risk: D-05
+  (output guard fail-open on exception, Path B), D-06 (streaming skips reasoning_content/
+  tool_calls scanning). Streaming vs non-streaming enforcement matrix. Fail-open sites
+  cataloged with evidence. Cross-referenced to the known input_scan BLOCK + model_output
+  7710ms leak.
+- PIPELINE-0003 (2026-07-03) — docs/pipeline/CANONICAL.md: ONE canonical pipeline, ONE
+  enforcement authority. 7-stage pipeline (pre→policy→input_scan→enforcement→routing→model
+  →output_guard→finalize). Two entry points: resolve_and_enforce() (input) + enforce_output()
+  (output), both returning frozen PipelineDecision. Fail-closed contract (degraded→redact,
+  exception→block). Fixes D-05/D-06/D-18. Migration map: ~250-line inline enforcement →
+  single call; proxy_chat ~4000→~2000 LOC. Mermaid sequence diagram.
+- PIPELINE-0004 (2026-07-03) — enforcement.py + main.py: canonical enforcement authority
+  IMPLEMENTED. PipelineDecision frozen dataclass + resolve_and_enforce() (input) +
+  enforce_output() (output). Input block wired (~L6435-6691). D-05 FIX: output guard
+  exception → fail-CLOSED block (was fail-open return None). 30 new tests. Gate: 1824 passed.
+- PIPELINE-0005 (2026-07-03) — BLOCK SHORT-CIRCUIT VERIFIED: 6 input-side block returns
+  (threat_intel L5324, keyword L5983, backend_scan L6106, policy L6220, scanner L6603,
+  unmaskable_PII L6745) ALL precede ALL model calls across all 4 paths (A/B/C/D). Structural
+  source proof + pipeline_trace model-skip verification + enforcement authority terminal-block
+  contract. 24 new tests. Gate: 24 + 30 + 1851 full suite passed.
+- PIPELINE-0006 (2026-07-03) — DEGRADED SCANNER FAILS CLOSED: enforcement.py +
+  main.py. tier2_degraded + PII/secrets detected in scan text → REDACT (or BLOCK if
+  unmaskable), never raw to model. Clean prompt under degraded → monitor only. Closes D-02
+  fail-open. 19 new tests. Gate: 19 + 54 + 1870 full suite passed.
+- PIPELINE-0008 (2026-07-03) — LEAK VERIFIED FIXED: PII NEVER reaches model on block;
+  original input_scan BLOCK + model_output 7710ms signature structurally impossible.
+  resolve_and_enforce → is_terminal_block → short-circuit return BEFORE all model calls.
+  build_pipeline_trace blocked_stage=input_scan → model_input/model_output skip, content="".
+  redact_all byte-removes SSN+email+AWS key; degraded+PII → redact or block (never raw).
+  LIVE verified: SSN+email+key → HTTP 403, model_input=skip, model_output=skip, 9.7ms
+  total (no 7710ms LLM call). 26 new tests in test_pipeline_leak_verification.py.
+  Gate: 26 targeted + 1920 full suite passed.
+- PIPELINE-0009 (2026-07-03) — Policy REDACTS PII/PCI/PHI before input_scan (B-POL fix):
+  main.py _policy_check_cached. ROOT CAUSE: evaluate() returns action="block" when both
+  redact+block rules co-match (MAX precedence); redaction_hints were only applied when
+  action=="redact" → silently discarded on block → hard block without masking. FIX: when
+  action="block"+hints, apply redaction FIRST, re-evaluate block rules on masked text; if no
+  block rule still matches → downgrade to "redact" + return masked prompt (input_scan sees
+  clean). Compile+push path verified correct. 18 new tests in test_pipeline_policy_redact.py.
+  Gate: 18 targeted + 1948 full gateway suite passed.
+- PIPELINE-0007 (2026-07-03) — ONE authoritative final_action + blocked_by: main.py.
+  _build_safe_block_response accepts blocked_by param (single-writer from _build_block_response,
+  no double-resolution); removed redundant pipeline_stage from 403 JSON. Non-streaming +
+  streaming trace final_action now sourced from PipelineDecision.action (not ad-hoc zeroshield
+  or hardcoded "allow"). _launch_chat_stream_response gains input_action param. No double-block
+  in trace stages. 20 new tests. Gate: 20 + 1894 full suite passed.
+- PIPELINE-0010 (2026-07-03) — resolve_enforcement REDACT mapping: enforcement.py.
+  Monitor-posture downgrade now preserves REDACT when scanner rec=redact and redaction IS
+  possible; unmaskable PII (redaction_possible=False) fail-closed BLOCK overrides monitor
+  posture. Two bugs: (1) policy=block+mode!=block lost data-protection redaction at
+  resolve_enforcement level; (2) unmaskable PII under non-block mode forwarded raw (honesty
+  check missed is_terminal_block). 17 new tests. Gate: 28 targeted + 1965 full suite passed.
+- PIPELINE-0011 (2026-07-03) — TIER-1 FP FIXED (L3): plain-text PII with unrelated
+  markup (bold/entity/emphasis) no longer classified as "Markdown/HTML-obfuscated" → redact
+  (not block). Root cause: G33/G53/G76 obfuscation detectors compared decoded-variant
+  detections against "raw" detections from detect_*/detect_secrets, but those functions
+  internally canonicalize (strip ZWC, fold fullwidth), so (a) a plain SSN near **bold** was
+  wrongly classified as obfuscated, and (b) a ZWC-interleaved credential was wrongly filtered
+  OUT of the obfuscation list. Fix: use _*_core variants (no canonicalization) for the
+  plain-text filter in scanner.py (G33+G53) + mcp_scan_orchestrator.py (G76). 17 new tests.
+  Gate: 17 targeted + 2000 full suite passed.
+
+- PIPELINE-0015 (2026-07-03) — LATENCY RECONCILED (P5 item 15 / L8): removed fake
+  `_latency()` defaults; skipped stages (incl. blocked `model_output`) → `latency_ms=0`;
+  `total_latency_ms = stage_latency_sum_ms + overhead_ms`. Added `PipelineStageTimer` +
+  `finalize_stage_metrics()`; `proxy_chat` wires perf_counter per stage. 5 new tests.
+  Gate: 2039 gateway passed.
+- PIPELINE-0014 (2026-07-03) — OUTPUT REDACT BYTE-VERIFIED (P4 item 14): enforce_output() gains
+  redaction_possible + pii_detection_enabled; maskable block→redact; noop→block fail-closed.
+  Connected sync output block + _apply_output_guard_nonstream wired through enforce_output();
+  byte-check after sanitize blocks when bytes unchanged. 15 new tests. Gate: 2029 passed.
+  Evidence: pipeline-p14-output-redact/.
+- PIPELINE-0013 (2026-07-03) — OUTPUT GUARD MODEL-ONLY (L6/L7): whitespace-only completion
+  treated as empty (normalize_output_scan_text + _model_output_scan_text); inspect() allow
+  on empty; sync_pre_llm runs guard before pipeline_trace + threads output_scan_verdict;
+  output_guardrail detail no longer echoes input-side zs.reason; streaming normalizes before
+  inspect. 12 new tests. Gate: 2022 full suite. Evidence: pipeline-p13-output-guard-model-only/.
+- PIPELINE-0012 (2026-07-03) — PRE-MASKED SMART-MASK PII REDACTS (not block): G53 stripped `***`
+  from partial masks → false obfuscated_pii; B1 noop guard blocked already-masked bytes as
+  unmaskable; scan_block_on_pii=false downgraded redact→allow. FIX: smart-mask PII patterns,
+  {1,2} emphasis cap, G53 smart-mask skip, B1 noop exemption, redact eligibility on smart-mask
+  text, pipeline_trace input_scan=redact on intentional noop. LIVE input_scan REDACT + masked
+  prompt forwarded. 7 new tests. Gate: 2009 full suite. Evidence: pipeline-p12-live-proof.json.
+- PIPELINE-0016 (2026-07-03) — FRONTEND LATENCY+TTFT (P5-16): UI Duration/total wired to
+  pipeline_trace.total_latency_ms (PIPELINE-0015), not meta.latency_ms=0. resolveTotalLatencyMs/
+  resolveTtftMs in pipelineTrace.js; LogDetailPage+liveGateway+charts fixed; SSE terminal trace
+  frame captured; stream build_stream_trace_frame reconciles total+ttft_ms; simulator shows TTFT.
+  Browser: Scan Detail Duration 13607.1ms (not 0). 5 FE + 1 GW tests. Gate: lint+build green.
+  Evidence mcp-parallel/findings/pipeline-p16-frontend-latency-ttft/.
+- PIPELINE-0018 (2026-07-03) — LATENCY PARITY E2E (P5-18): backend total_latency_ms == UI Duration
+  within 0.1ms; parsePipelineDurationMs + Playwright gate; event 295909 delta=0. Evidence
+  pipeline-p18-latency-parity/.
+- PIPELINE-0017 (2026-07-03) — LATENCY BREAKDOWN+HINTS (P5-17): pipeline_trace.latency_breakdown
+  (dominant stage, by_stage, hints[]) + stream recompute; LogDetailPage breakdown table +
+  reduction hint cards; pipelineTrace resolveLatencyHints + legacy fallback. 8 GW + 5 FE tests.
+  Browser: 14860.9ms slow event → model_output hint visible. Evidence pipeline-p17-latency-hints/.
+- PIPELINE-0019 (2026-07-03) — BLOCKED-EVENT PIPELINE TRACE (P6-19/L9): telemetry input_blocked/
+  output_guard omitted metadata.pipeline_trace. FIX: _build_blocked_pipeline_trace +
+  _REQUEST_PIPELINE_CTX + _enrich_blocked_event_pipeline_trace in _emit_telemetry; policy/check
+  explicit trace. +4 tests. Gate: 2059 passed.
+- PIPELINE-0020 (2026-07-03) — PER-STAGE WHY TRANSPARENCY (P6-20): pipeline_trace stages now
+  carry matched_policies/rules, guard_reason, tier, confidence, decision_source, prompt_in/out
+  (redacted-safe) on every stage via STAGE_TRANSPARENCY_KEYS + normalize_stage_transparency;
+  policy/auth/rate_limit/model stages enriched; StageTimeline renders policy WHY block. +5 tests.
+  Gate: 2064 GW + lint/build green.
+- PIPELINE-0021 (2026-07-03) — ROUTING DECISION TRANSPARENCY (P6-21): model_routing stage +
+  trace root expose requested/selected/routed model, route_destination (LLM/RAG/Vector DB/MCP),
+  routing_reason, decision_source, decision_factors[], weights{}, policy_summary, score,
+  candidate_count, fallback_chain, evaluator_model; adjudicator guard_reason composes factors/
+  weights; LogDetailPage RoutingDecisionCard + StageTimeline routing fields; resolveRoutingDecision
+  FE helper. +3 GW routing tests + 1 transparency + 1 FE test. Gate: 2067 GW + lint/build green.
+- PIPELINE-0022 (2026-07-03) — TRACE-ROOT INPUT/OUTPUT (P6-22): pipeline_trace root adds
+  final_action, input_text, prompt_submitted, output_text/final_response, output_withheld +
+  output_withheld_reason, input_was_redacted + input_text_before/after (redacted-safe);
+  main.py telemetry threads input_text/output_text; LogDetailPage Input/Output panels via
+  resolvePipelineInputOutput (blocked withheld banner; redact before/after). +4 GW + 2 FE tests;
+  pipeline_p22_input_output_verify.mjs. Gate: gateway + lint/build green.
+- PIPELINE-0023 (2026-07-03) — EVENT CONFLATION FIX (P6-23/L10): proxy_chat honoured client
+  X-Request-ID as canonical request_id → concurrent pinned-header calls collided and threat-feed
+  sibling merge mixed prompts. FIX: _bind_gateway_request_id mints fresh zs-* per request (client
+  header → client_correlation_id only); _stamp_pipeline_trace_request_id; telemetry request_id +
+  pipeline_request_id; control _pipeline_io_fingerprint mismatch guard on sibling merge;
+  LogDetailPage trace-scoped I/O (no prompt_lineage bleed). +5 tests test_pipeline_request_id_conflation.py.
+  Gate: full gateway green.
+- PIPELINE-0024 (2026-07-03) — PIPELINE-TRACE VIEW UI (P6-24): LogDetailPage + StageTimeline
+  impeccable revamp (CHART_PALETTE, equal-height metrics, responsive grid, touch targets, testIds,
+  CollapsibleSection a11y); StageTimeline responsive popover + detail grid. Playwright gate
+  pipeline_p24_trace_view_verify.mjs 8/8 @1440/1024/768/375 light/dark. detect clean; lint+build green.
+  Evidence mcp-parallel/findings/pipeline-p24-trace-view/.
+- PIPELINE-0025 (2026-07-03) — FULL HISTORY BROWSER GATE (P6-25): Playwright gate
+  pipeline_p25_full_history_verify.mjs verifies blocked+redact+allow Scan Detail events render
+  full pipeline stages, latency parity (±0.1ms), routing card (allow), withheld banner (block),
+  redact stage reason + output (redact). Optional Attack Simulator trigger when feed lacks samples.
+  pipelineP25Pass:true; 0 console errors. Evidence mcp-parallel/findings/pipeline-p25/.
+- PIPELINE-0026 (2026-07-03) — CISO 100-RULE PACKAGE DESIGN (P7-26): docs/policies/CISO_100.md
+  exactly 100 rules (CISO-001..100) table: id/name/category/action/severity/priority/detection/
+  positive+negative fixtures. OWASP LLM01-10, GDPR-PII, PCI-DSS, HIPAA-PHI, secrets, IP exfil,
+  jailbreak, toxicity, unauthorized advice, brand, finance/healthcare/legal sector packs. CISO-020
+  negative fixture = PIPELINE-0012 smart-mask redact-not-block. Design-only (seed = item 27).
+  VERIFY: grep -c '^| CISO-' docs/policies/CISO_100.md → 100.
+- PIPELINE-0027 (2026-07-03) — CISO 100-RULE PACKAGE SEED (P7-27): ciso_rules_data.py +
+  ciso_policy_catalog.py + ciso_seed.py + seed_ciso_policy_package command + tests. One policy
+  CISO_PKG_<org> with 100 regex/keyword rules (semantic → keyword phrases); idempotent
+  ciso_rule_id; compile+push POLICY_SYNC. LIVE zeroshield: 100 seeded, Redis v310, 264 rules in
+  bundle. VERIFY: test_ciso_policy_package 7 passed; seed_ciso_policy_package --org-slug zeroshield.
+- PIPELINE-0029 (2026-07-06) — OUTPUTVERDICT JSON 500 FIX: main.py _strip_internal_completion_keys
+  pops _pipeline_output_scan_verdict before client JSONResponse; _resolve_pipeline_blocked_by
+  output_blocked→output_guardrail; liveGateway output_guardrail_ms + honest 500 labeling. +2 GW +2 FE
+  tests. VERIFY: pytest + npm test:unit; gateway rebuild.
+- PIPELINE-0030 (2026-07-06) — SCAN 296170 FIX: output-guard smart-mask noop probes reasoning channel
+  (main.py _output_redact_redaction_possible + proxy_chat redaction_possible); pipeline_trace
+  output_guard block keeps operator output_text preview; simulatorRoutingPreferences respects org
+  routing_enabled (Attack+Isolation); remove bare 120b from _canonicalize_model_name tokens;
+  LogDetailPage withheld preview. north-mini = llm_router inactive-model remap (documented).
+  +tests GW/FE/control. VERIFY: pytest pre_masked+trace_io; gateway+control rebuild; live repro.
+- PIPELINE-0028 (2026-07-06) — OUTPUT SMART-MASK PARITY + REASONING + ROUTING PIN: main.py
+  _output_redact_redaction_possible (PIPELINE-0012 output parity on both redact paths) +
+  _maybe_promote_reasoning_to_content (reasoning→content when blank, env default on);
+  pipeline_trace policy hint for pre-masked prompts; liveGateway pinnedModelRoutingPreferences +
+  SSE reasoning_content; Attack/Isolation simulators enable_routing:false. +5 tests
+  test_pipeline_pre_masked_redact.py. VERIFY: gateway pytest gate.
+- PIPELINE-0031 (2026-07-15) — AUTO-ROUTING BIAS FIX: soft sensitivity fallback (no 403);
+  ROUTING_ADJUDICATOR_ALWAYS=true + weight-extreme deterministic lock; differentiate_routing_catalog
+  + Redis sync; score_tie/sensitivity_fallback/remapped_from transparency; remap prefers
+  highest-scored active. VERIFY: 14 GW routing tests; live suite cost→north-mini risk→gpt-5.2.

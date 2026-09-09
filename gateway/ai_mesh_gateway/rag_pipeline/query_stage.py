@@ -210,9 +210,24 @@ class QueryStage:
             # ``or``/``bool()`` would silently re-enable a stage the operator
             # disabled. Default stays OFF (FirewallConfig.rag_tier2_enabled
             # default=False) — Tier-2 runs only when the operator switches it on.
-            _t2 = inp.policy.get("rag_tier2_enabled", None)
+            # policy-driven-detection R6.1/R6.3 (task 7.2): resolve the RAG Tier-2
+            # toggle through the shared single-source resolver so this surface uses
+            # the SAME effective-OFF-by-default rule as the chat + ingest paths
+            # (absent / None / any stale non-True value ⇒ Tier-2 does not run —
+            # "fail toward no Tier-2 detection"). Behaviour-identical to the prior
+            # ``_t2 is True`` gate for the current strict-bool config; the resolver
+            # is the tri-state-safe single source of truth.
+            try:
+                try:
+                    from config_sync import resolve_rag_tier2_enabled
+                except ImportError:
+                    from gateway.ai_mesh_gateway.config_sync import resolve_rag_tier2_enabled
+            except ImportError:
+                def resolve_rag_tier2_enabled(value):  # type: ignore[misc]
+                    return value is True
+            _t2 = resolve_rag_tier2_enabled(inp.policy.get("rag_tier2_enabled"))
             _scan_t2 = getattr(self._scanner, "scan_prompt_with_tier2", None)
-            if _t2 is True and callable(_scan_t2):
+            if _t2 and callable(_scan_t2):
                 verdict = await _scan_t2(
                     inp.query_text,
                     is_rag=True,

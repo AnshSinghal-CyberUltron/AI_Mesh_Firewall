@@ -52,6 +52,25 @@ async def _scan_one(i: int):
     return i, blob, (canary_secret in blob), (canary_email in blob), (canary_ip in blob)
 
 
+# __PDD_PRESET_FIXTURE__
+
+# policy-driven-detection cutover (task 9): the MCP built-in default detectors (the Tier-1
+# PRESET pass) are now EFFECTIVE-DEFAULT OFF (mcp_scan_orchestrator._mcp_default_detection_enabled)
+# so a zero-enabled-policy org is passthrough. This module exercises the RETAINED preset
+# DETECTION MACHINERY (redaction / fail-closed byte-truth / exfil-defang / authz / audit), which
+# stays reachable via the explicit opt-in env. Enable it for this module so those invariants are
+# still tested. The default-OFF (Zero_Policy_State passthrough) contract is asserted by the
+# dedicated test_policy_driven_* modules, not weakened here.
+import os as _os_pdd
+
+
+@pytest.fixture(autouse=True)
+def _enable_builtin_mcp_presets(monkeypatch):
+    monkeypatch.setenv("GATEWAY_MCP_DEFAULT_DETECTION", "true")
+    monkeypatch.setenv("GATEWAY_MCP_REDACT_RESULT_ON_DETECT", "true")
+    yield
+
+
 @pytest.mark.asyncio
 async def test_concurrent_scans_no_leak_no_cross_contamination():
     results = await asyncio.gather(*[_scan_one(i) for i in range(_N)])

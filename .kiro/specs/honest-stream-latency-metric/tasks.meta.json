@@ -1,0 +1,96 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Scaffold the streaming-latency test module and injectable clock harness": [
+      {
+        "executionId": "82954caa-29f9-4f36-b4f2-2bf41f0b4612",
+        "chatSessionId": "sess_bd1f044f-a3c3-4175-af0a-5378dcbbdb7b",
+        "timestamp": 1788789429312
+      },
+      {
+        "executionId": "82954caa-29f9-4f36-b4f2-2bf41f0b4612",
+        "chatSessionId": "sess_bd1f044f-a3c3-4175-af0a-5378dcbbdb7b",
+        "timestamp": 1788789731202
+      }
+    ],
+    "2.1 Invert the `elapsed_ms` anchoring in `build_stream_trace_frame`": [
+      {
+        "executionId": "4cc227a3-33dd-4ca3-8c7b-5a57d641bdfb",
+        "chatSessionId": "sess_e7a61d76-302b-460e-9a79-110bd5fc9685",
+        "timestamp": 1788789789023
+      },
+      {
+        "executionId": "4cc227a3-33dd-4ca3-8c7b-5a57d641bdfb",
+        "chatSessionId": "sess_e7a61d76-302b-460e-9a79-110bd5fc9685",
+        "timestamp": 1788789909077
+      }
+    ],
+    "2.2 Recompute the addon split from the re-anchored total": [
+      {
+        "executionId": "4cc227a3-33dd-4ca3-8c7b-5a57d641bdfb",
+        "chatSessionId": "sess_e7a61d76-302b-460e-9a79-110bd5fc9685",
+        "timestamp": 1788789915379
+      },
+      {
+        "executionId": "4cc227a3-33dd-4ca3-8c7b-5a57d641bdfb",
+        "chatSessionId": "sess_e7a61d76-302b-460e-9a79-110bd5fc9685",
+        "timestamp": 1788790257865
+      }
+    ],
+    "2.3 Write property tests for the timing algebra": [
+      {
+        "executionId": "324d2440-18ae-43a2-ad75-725f3ae0ed0e",
+        "chatSessionId": "sess_33cf49ff-b87b-4bf7-8416-70bb29fee0d7",
+        "timestamp": 1788790308396
+      },
+      {
+        "executionId": "324d2440-18ae-43a2-ad75-725f3ae0ed0e",
+        "chatSessionId": "sess_33cf49ff-b87b-4bf7-8416-70bb29fee0d7",
+        "timestamp": 1788790778334
+      }
+    ],
+    "2.4 Write the Requirement 8 synthetic-timing acceptance test": [
+      {
+        "executionId": "324d2440-18ae-43a2-ad75-725f3ae0ed0e",
+        "chatSessionId": "sess_33cf49ff-b87b-4bf7-8416-70bb29fee0d7",
+        "timestamp": 1788790309294
+      },
+      {
+        "executionId": "324d2440-18ae-43a2-ad75-725f3ae0ed0e",
+        "chatSessionId": "sess_33cf49ff-b87b-4bf7-8416-70bb29fee0d7",
+        "timestamp": 1788790779576
+      }
+    ],
+    "2.5 Write edge / fail-safe and shape unit tests": [
+      {
+        "executionId": "324d2440-18ae-43a2-ad75-725f3ae0ed0e",
+        "chatSessionId": "sess_33cf49ff-b87b-4bf7-8416-70bb29fee0d7",
+        "timestamp": 1788790310386
+      },
+      {
+        "executionId": "324d2440-18ae-43a2-ad75-725f3ae0ed0e",
+        "chatSessionId": "sess_33cf49ff-b87b-4bf7-8416-70bb29fee0d7",
+        "timestamp": 1788790780751
+      }
+    ],
+    "2. Re-anchor streaming total on the request-accept epoch and recompute the addon split": [
+      {
+        "executionId": "324d2440-18ae-43a2-ad75-725f3ae0ed0e",
+        "chatSessionId": "sess_33cf49ff-b87b-4bf7-8416-70bb29fee0d7",
+        "timestamp": 1788790782479
+      }
+    ],
+    "3. Full-suite gate": [
+      {
+        "executionId": "324d2440-18ae-43a2-ad75-725f3ae0ed0e",
+        "chatSessionId": "sess_33cf49ff-b87b-4bf7-8416-70bb29fee0d7",
+        "timestamp": 1788790791834
+      },
+      {
+        "executionId": "324d2440-18ae-43a2-ad75-725f3ae0ed0e",
+        "chatSessionId": "sess_33cf49ff-b87b-4bf7-8416-70bb29fee0d7",
+        "timestamp": 1788791278030
+      }
+    ]
+  }
+}

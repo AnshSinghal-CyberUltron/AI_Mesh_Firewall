@@ -103,10 +103,14 @@ def load_config():
     auth_enabled = get_env("GATEWAY_AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
     policy_cache_enabled = get_env("GATEWAY_POLICY_CACHE_ENABLED", "true").lower() in ("true", "1", "yes")
     policy_cache_require_loaded = get_env("GATEWAY_POLICY_CACHE_REQUIRE_LOADED", "true").lower() in ("true", "1", "yes")
-    input_scan_enabled = get_env("GATEWAY_INPUT_SCAN_ENABLED", "true").lower() in ("true", "1", "yes")
-    output_scan_enabled = get_env("GATEWAY_OUTPUT_SCAN_ENABLED", "true").lower() in ("true", "1", "yes")
-    scan_block_on_injection = get_env("GATEWAY_SCAN_BLOCK_ON_INJECTION", "true").lower() in ("true", "1", "yes")
-    scan_block_on_pii = get_env("GATEWAY_SCAN_BLOCK_ON_PII", "false").lower() in ("true", "1", "yes")
+    # policy-driven-detection task 6.1: the legacy default-on scan toggles
+    # (``input_scan_enabled`` / ``output_scan_enabled`` / ``scan_block_on_injection``
+    # / ``scan_block_on_pii``) are REMOVED as detection drivers. Tier-1 detection is
+    # now driven SOLELY by the org's enabled policy set (Requirement 5.1/5.2), and
+    # ``firewall_enabled`` remains a suppression-only master bypass (it may never
+    # CAUSE detection). These keys are intentionally NOT emitted into the gateway
+    # config; a stale value arriving from an old control plane is ignored for the
+    # purpose of enabling detection (Requirement 5.4), not treated as an error.
     # E12: OPT-IN hard-block of a credential/secret detected in MCP tool ARGUMENTS
     # (outbound to the MCP server). STRICTLY-WHAT-THE-OPERATOR-SELECTED (2026-07-22,
     # commit 005a6ffa): DEFAULT OFF. This was a built-in floor that ESCALATED a
@@ -123,11 +127,15 @@ def load_config():
     mcp_block_on_credential = get_env("GATEWAY_MCP_BLOCK_ON_CREDENTIAL", "false").lower() in ("true", "1", "yes")
     # E12: force-REDACT an MCP tool RESULT (outbound back to the LLM/client) when
     # the output scan DETECTS a secret/credential or PII but the resolved
-    # scan_action defaults to "tag"/"monitor" (detect-but-allow). Symmetric to
-    # mcp_block_on_credential for tool ARGUMENTS: without this, a secret/PII in a
-    # tool RESULT egresses RAW under the safe default. Redact (mask), never block.
-    # Default ON; a per-tool MCPScanControl set to "monitor" still wins (observe-only).
-    mcp_redact_result_on_detect = get_env("GATEWAY_MCP_REDACT_RESULT_ON_DETECT", "true").lower() in ("true", "1", "yes")
+    # scan_action defaults to "tag"/"monitor" (detect-but-allow).
+    # policy-driven-detection R1/R5/R6 (task 7.4): this was a DEFAULT-ON detection
+    # DRIVER — it forced a mask on a tool RESULT under the safe ``tag`` default with
+    # NO enabled policy authored for it (built-in mandatory detection). Under the
+    # policy-driven model detection is enabled-policy-only, so this floor is now
+    # EFFECTIVE-DEFAULT OFF: an MCP result is redacted only when a matched ENABLED
+    # policy Rule's action is ``redact`` (orchestrator POLICY lane) — this floor no
+    # longer forces default detection. An operator can opt it back on per deploy/org.
+    mcp_redact_result_on_detect = get_env("GATEWAY_MCP_REDACT_RESULT_ON_DETECT", "false").lower() in ("true", "1", "yes")
     tier2_fail_closed_enabled = get_env("GATEWAY_TIER2_FAIL_CLOSED_ENABLED", "true").lower() in ("true", "1", "yes")
     # When a Tier-2 INPUT scan returns a degraded/unparseable verdict (the case
     # reached by prompts that evade Tier-1 signatures), block instead of
@@ -277,10 +285,9 @@ def load_config():
         "auth_enabled": auth_enabled,
         "policy_cache_enabled": policy_cache_enabled,
         "policy_cache_require_loaded": policy_cache_require_loaded,
-        "input_scan_enabled": input_scan_enabled,
-        "output_scan_enabled": output_scan_enabled,
-        "scan_block_on_injection": scan_block_on_injection,
-        "scan_block_on_pii": scan_block_on_pii,
+        # policy-driven-detection task 6.1: legacy scan toggles removed as
+        # detection drivers (input_scan_enabled / output_scan_enabled /
+        # scan_block_on_injection / scan_block_on_pii). Not emitted here.
         "mcp_block_on_credential": mcp_block_on_credential,
         "mcp_redact_result_on_detect": mcp_redact_result_on_detect,
         "tier2_fail_closed_enabled": tier2_fail_closed_enabled,
@@ -342,3 +349,47 @@ def load_config():
         "rag_relevance_threshold": rag_relevance_threshold,
         "prompt_rewrite_threshold": prompt_rewrite_threshold,
     }
+
+
+# policy-driven-detection R3.2/R3.7: re-export the single-source tri-state
+# resolver so callers reaching for ``config.resolve_tier2_enabled`` and
+# ``config_sync.resolve_tier2_enabled`` get the SAME function (Tier-2 is
+# opt-in, default OFF; ``None``/absent -> False, ``True`` -> True, else False).
+# Guarded so a config_sync import hiccup can never break ``load_config``.
+try:  # pragma: no cover - trivial re-export wiring
+    from .config_sync import resolve_tier2_enabled  # noqa: F401
+except ImportError:  # pragma: no cover
+    try:
+        from config_sync import resolve_tier2_enabled  # type: ignore[no-redef]  # noqa: F401
+    except ImportError:
+        def resolve_tier2_enabled(value):  # type: ignore[misc]
+            """Fallback resolver (identical rule) if config_sync is unavailable."""
+            return value is True
+
+# policy-driven-detection R6.1/R6.3 (task 7.2): same single-source re-export for
+# the RAG-surface Tier-2 resolver, so ``config.resolve_rag_tier2_enabled`` and
+# ``config_sync.resolve_rag_tier2_enabled`` are the SAME function (RAG Tier-2 is
+# opt-in, effective default OFF; ``None``/absent -> False, ``True`` -> True).
+try:  # pragma: no cover - trivial re-export wiring
+    from .config_sync import resolve_rag_tier2_enabled  # noqa: F401
+except ImportError:  # pragma: no cover
+    try:
+        from config_sync import resolve_rag_tier2_enabled  # type: ignore[no-redef]  # noqa: F401
+    except ImportError:
+        def resolve_rag_tier2_enabled(value):  # type: ignore[misc]
+            """Fallback resolver (identical rule) if config_sync is unavailable."""
+            return value is True
+
+# policy-driven-detection R6.1/R6.3 (task 7.4): same single-source re-export for
+# the MCP-surface Tier-2 resolver, so ``config.resolve_mcp_tier2_enabled`` and
+# ``config_sync.resolve_mcp_tier2_enabled`` are the SAME function (MCP Tier-2 is
+# opt-in, model-only, effective default OFF; ``None``/absent -> False, ``True`` -> True).
+try:  # pragma: no cover - trivial re-export wiring
+    from .config_sync import resolve_mcp_tier2_enabled  # noqa: F401
+except ImportError:  # pragma: no cover
+    try:
+        from config_sync import resolve_mcp_tier2_enabled  # type: ignore[no-redef]  # noqa: F401
+    except ImportError:
+        def resolve_mcp_tier2_enabled(value):  # type: ignore[misc]
+            """Fallback resolver (identical rule) if config_sync is unavailable."""
+            return value is True

@@ -23,12 +23,20 @@ from scanner import InputScanner
 _SCANNER = InputScanner()
 
 
+# policy-driven-detection cutover (task 9): the automatic built-in default scan was REMOVED
+# from the LIVE ``_scan_prompt_sync`` (task 3.1) — it now returns a neutral ``ScanVerdict()``
+# (a zero-policy org is passthrough). The obfuscation-FP CLASSIFICATION mechanics these tests
+# lock (PIPELINE-0011/0012: plain PII near unrelated emphasis/entities redacts and is NOT
+# mislabelled obfuscated; genuinely-obfuscated PII/secret still blocks) are RETAINED in the
+# reference body ``_scan_prompt_sync_disabled_builtin_default``. Drive the tests through that
+# retained executor so they keep exercising the FP logic without asserting a built-in default
+# fires on the live policy-only path (Zero_Policy_State).
 def _verdict(text: str) -> str:
-    return _SCANNER._scan_prompt_sync(text, False, None).action
+    return _SCANNER._scan_prompt_sync_disabled_builtin_default(text, False, None).action
 
 
 def _threat(text: str) -> str:
-    return _SCANNER._scan_prompt_sync(text, False, None).threat_type
+    return _SCANNER._scan_prompt_sync_disabled_builtin_default(text, False, None).threat_type
 
 
 # ── A: PLAIN PII + unrelated emphasis → redact, NOT block/obfuscated ──

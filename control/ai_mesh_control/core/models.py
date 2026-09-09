@@ -1156,7 +1156,10 @@ class FirewallConfig(models.Model):
     )
 
     # -- §1.7 Generator-Level Output Guardrails: per-detector control --
-    # Master switch is `response_filtering_enabled` (output_scan_enabled). Each
+    # Master switch is `response_filtering_enabled`. (It was previously also emitted
+    # to the gateway as the legacy `output_scan_enabled` detection driver; that key
+    # was removed from build_gateway_payload() in policy-driven-detection task 6.2 —
+    # the field is retained ONLY as this §1.7 output-guardrail master switch.) Each
     # detector below has an independent enable toggle and an action selector so
     # operators have full control over the output path. The hallucination detector
     # reuses `factuality_check_enabled` (enable) and `hallucination_grounding_threshold`.
@@ -1389,14 +1392,28 @@ class FirewallConfig(models.Model):
             "requests_per_minute": self.requests_per_minute,
             "burst_limit": self.burst_limit,
             "org_tpm_limit": self.org_tpm_limit,  # 1.1c: gateway consumes this for the org-wide TPM ceiling
-            "input_scan_enabled": self.content_filtering_enabled,
-            "scan_block_on_pii": self.pii_detection_enabled,
+            # policy-driven-detection task 6.2 (mirrors gateway task 6.1): the legacy
+            # default-on scan toggles (``input_scan_enabled`` / ``scan_block_on_pii`` /
+            # ``scan_block_on_injection`` / ``output_scan_enabled``) are NO LONGER emitted
+            # into the gateway firewall-config payload. They were detection DRIVERS that
+            # forced the built-in pattern library to run in the zero-policy state; the
+            # gateway removed them as drivers in task 6.1 (config.py no longer emits them,
+            # config_sync no longer types them as _BOOL_KEYS), so the control plane must
+            # stop serializing them so an operator no longer sets a "default input scan"
+            # switch that implies built-in detection (Requirement 5.3). The backing model
+            # FIELDS (content_filtering_enabled / pii_detection_enabled /
+            # jailbreak_detection_enabled / response_filtering_enabled) are RETAINED — they
+            # still drive compliance frameworks (core/compliance.py) and the §1.7 output
+            # guardrail master switch — so no DB column is dropped; only these four gateway
+            # payload keys are de-serialized (Tier-1 detection is now gated solely on the
+            # enabled policy set).
             "toxicity_threshold": self.toxicity_threshold,
             "blocked_keywords": blocked_kw,
             "model_isolation_enabled": self.model_isolation_enabled,
             "allowed_models": allowed_mdl,
             "litellm_default_model": self.default_model,
-            "scan_block_on_injection": self.jailbreak_detection_enabled,
+            # policy-driven-detection task 6.2: ``scan_block_on_injection`` removed as a
+            # gateway detection driver (see the block above; backing field retained).
             "deep_scan_enabled": self.semantic_analysis_enabled,
             "tier2_fail_closed_enabled": self.tier2_fail_closed_enabled,
             "tier2_execution_mode": self.tier2_execution_mode,
@@ -1413,7 +1430,9 @@ class FirewallConfig(models.Model):
             # enforcement input (presets observe-only, seeded policies enforce).
             "mcp_policy_only_enforcement": self.mcp_policy_only_enforcement,
             "prompt_injection_threshold": self.prompt_injection_threshold,
-            "output_scan_enabled": self.response_filtering_enabled,
+            # policy-driven-detection task 6.2: ``output_scan_enabled`` removed as a gateway
+            # detection driver (see the block above; response_filtering_enabled retained as
+            # the §1.7 output-guardrail master switch).
             "hallucination_flag_enabled": self.factuality_check_enabled,
             # Phase 1 D_G10: gateway reads these to choose lex / sem / hybrid.
             "hallucination_grounding_mode": self.hallucination_grounding_mode,
