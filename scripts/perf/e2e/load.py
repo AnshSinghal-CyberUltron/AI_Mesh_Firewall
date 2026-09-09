@@ -126,8 +126,12 @@ def one_request(url, key, model, prompt_chars, max_tokens, timeout, stream):
                 except json.JSONDecodeError:
                     pass
     addon = None
+    stages: dict[str, float] = {}
     if trace:
-        names = {s.get("name") for s in (trace.get("stages") or []) if isinstance(s, dict)}
+        for st in (trace.get("stages") or []):
+            if isinstance(st, dict) and st.get("name"):
+                stages[st["name"]] = float(st.get("latency_ms") or 0.0)
+        names = set(stages)
         nine = all(n in names for n in STAGES)
         # THE FIREWALL TAX: T_total - T_upstream. This, not wall, is what the <20 ms
         # SLO refers to. Wall includes the provider's generation - 3 s of deliberate
@@ -137,7 +141,7 @@ def one_request(url, key, model, prompt_chars, max_tokens, timeout, stream):
         addon = (float(trace.get("t_addon_pre_ms") or 0.0)
                  + float(trace.get("t_addon_post_ms") or 0.0))
     return {"ok": True, "ms": ms, "ttft": ttft, "addon": addon, "nine": nine,
-            "trace_seen": trace is not None}
+            "stages": stages, "trace_seen": trace is not None}
 
 
 def run_level(a, conc: int) -> dict:
@@ -194,6 +198,7 @@ def run_level(a, conc: int) -> dict:
         "lat_missing": lat_missing,
         "wall_p50": pct([r["ms"] for r in ok], .50),
         "ok_n": len(ok),
+        "samples": ok,
         "nine_all": all(r.get("nine") for r in ok) if ok else False,
         "nine_missing": sum(1 for r in ok if not r.get("nine")),
     }
@@ -260,6 +265,37 @@ def main() -> int:
                 break
         else:
             over = 0
+
+    # TAIL ATTRIBUTION. A p99 six times p50 at 0.42 vCPU is not contention for a
+    # resource — something stalls on SOME requests. Rather than guess which (I already
+    # named thread churn once and was wrong), ask the slow requests directly: for the
+    # worst decile by firewall tax, which stage differs from the median cohort?
+    worst = max(rows, key=lambda r: r["p99"])
+    ok = [r for r in worst.get("samples", []) if r.get("stages")]
+    if ok and a.latency_metric == "addon":
+        ok.sort(key=lambda r: r.get("addon") or 0.0)
+        cut = max(1, len(ok) // 10)
+        slow, mid = ok[-cut:], ok[len(ok) // 4: 3 * len(ok) // 4]
+        if mid:
+            print(f"\nTAIL ATTRIBUTION at concurrency {worst['conc']} "
+                  f"(slowest {len(slow)} vs median {len(mid)} of {len(ok)} samples)")
+            print(f"{'stage':<20}{'median ms':>11}{'tail ms':>10}{'delta':>10}")
+            deltas = []
+            for name in STAGES:
+                m = statistics.median([r["stages"].get(name, 0.0) for r in mid])
+                t = statistics.median([r["stages"].get(name, 0.0) for r in slow])
+                deltas.append((t - m, name, m, t))
+            for d, name, m, t in sorted(deltas, reverse=True):
+                flag = "  <== dominates the tail" if d == max(x[0] for x in deltas) and d > 1 else ""
+                print(f"{name:<20}{m:>11.2f}{t:>10.2f}{d:>+10.2f}{flag}")
+            m_add = statistics.median([r["addon"] or 0.0 for r in mid])
+            t_add = statistics.median([r["addon"] or 0.0 for r in slow])
+            acc = sum(d for d, _, _, _ in deltas)
+            print(f"{'firewall tax total':<20}{m_add:>11.2f}{t_add:>10.2f}{t_add-m_add:>+10.2f}")
+            print(f"  stage deltas account for {acc:+.2f} ms of the {t_add-m_add:+.2f} ms "
+                  f"tail excess ({100*acc/(t_add-m_add) if t_add != m_add else 0:.0f}%)"
+                  + ("" if abs(acc - (t_add - m_add)) < 0.5 * max(1e-9, abs(t_add - m_add))
+                     else "  <== UNATTRIBUTED: the time is NOT inside any stage"))
 
     admissible = [r for r in rows if r["p99"] <= a.p99_bound_ms
                   and r["nine_all"] and r["err_rate"] <= 0.005]
