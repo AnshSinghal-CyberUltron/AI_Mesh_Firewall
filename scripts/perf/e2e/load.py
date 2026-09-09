@@ -165,7 +165,8 @@ def one_request(url, key, model, prompt_chars, max_tokens, timeout, stream):
                  # and telemetry_enqueue is NOT a stage. Without it the attribution
                  # can only say "outside every stage" without saying where.
                  "telemetry_ms": float(trace.get("telemetry_ms") or 0.0),
-                 "stage_latency_sum_ms": float(trace.get("stage_latency_sum_ms") or 0.0)}
+                 "stage_latency_sum_ms": float(trace.get("stage_latency_sum_ms") or 0.0),
+                 "gc_pause_ms": float(trace.get("gc_pause_ms") or 0.0)}
     return {"ok": True, "ms": ms, "ttft": ttft, "addon": addon, "nine": nine,
             "stages": stages, "roots": roots, "trace_seen": trace is not None}
 
@@ -402,7 +403,7 @@ def main() -> int:
             # Root-level timing the gateway computes for itself.
             print(f"{'-- root timing --':<20}")
             for rk in ("t_addon_pre_ms", "t_addon_post_ms", "overhead_ms",
-                       "telemetry_ms", "stage_latency_sum_ms"):
+                       "telemetry_ms", "stage_latency_sum_ms", "gc_pause_ms"):
                 rm = statistics.median([(r.get("roots") or {}).get(rk, 0.0) for r in mid])
                 rt = statistics.median([(r.get("roots") or {}).get(rk, 0.0) for r in slow])
                 print(f"{rk:<20}{rm:>11.2f}{rt:>10.2f}{rt-rm:>+10.2f}")

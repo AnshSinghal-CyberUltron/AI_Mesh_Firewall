@@ -27,7 +27,7 @@ HARNESS_REQUIRED_ROOT_KEYS = (
     # Off-stage timings: the firewall tax reconciles as
     # wall = stage_sum + telemetry_enqueue + overhead, and telemetry_enqueue is not a
     # stage. Without it a tail attribution can only say "outside every stage".
-    "telemetry_ms", "stage_latency_sum_ms",
+    "telemetry_ms", "stage_latency_sum_ms", "gc_pause_ms",
 )
 
 # Kept because they are small and are what makes a trace diagnostically useful.

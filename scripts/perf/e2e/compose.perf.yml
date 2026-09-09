@@ -107,6 +107,12 @@ services:
       #    text that is 98% of the bytes. MEASURED: 35,572 B -> 684 B, 52x.
       GATEWAY_PIPELINE_TRACE_MODE: "${PERF_TRACE_MODE:-full}"
 
+      # ── Task 7: GC pause attribution. The tail excess lands on a DIFFERENT stage
+      #    nearly every request and is sized independently of that stage's work — the
+      #    shape of the interpreter stopping. This records real pause durations from
+      #    gc.callbacks so the question is measured, not reasoned about. Off by default.
+      GATEWAY_GC_INSTRUMENTATION: "${PERF_GC_INSTRUMENTATION:-0}"
+
       PYTHONUNBUFFERED: "1"
     deploy:
       resources:

@@ -5709,6 +5709,16 @@ async def _telemetry_loop():
 
 @app.on_event("startup")
 async def startup():
+    # Task 7: register the GC pause observer when GATEWAY_GC_INSTRUMENTATION is set.
+    # Off by default — a diagnostic that always runs is a permanent cost for an
+    # occasional question. Idempotent, and it cannot raise.
+    try:
+        from gc_monitor import init as _gc_init  # noqa: PLC0415
+
+        if _gc_init():
+            LOG.info("GC pause instrumentation enabled (gc.callbacks)")
+    except Exception:  # noqa: BLE001
+        pass
     global CONFIG, CONFIG_SYNC, LLM_ROUTER, POLICY_SYNC, RATE_LIMITER, INPUT_SCANNER
     global VECTOR_POLICY_SYNC, VECTOR_CLIENTS, CONTEXT_GUARD, VECTOR_PROVIDER_SYNC
     global REDIS_CLIENT, TELEMETRY, OUTPUT_GUARD, CIRCUIT_BREAKER
@@ -6408,6 +6418,18 @@ async def proxy_chat(
         "upstream_ms": 0.0,
         "telemetry_enqueue_ms": 0.0,
     }
+    # Task 7: capture the process-lifetime GC pause counter now, so the pause time that
+    # elapses DURING this request is a subtraction of two monotonic readings rather than
+    # a residual. None when GATEWAY_GC_INSTRUMENTATION is off, and then nothing is
+    # surfaced. See gc_monitor.
+    try:
+        from gc_monitor import mark as _gc_mark  # noqa: PLC0415
+
+        _m = _gc_mark()
+        if _m is not None:
+            stage_metrics["gc_pause_mark"] = _m
+    except Exception:  # noqa: BLE001 — a diagnostic must never break a request
+        pass
     _REQUEST_PIPELINE_CTX.set({
         "stage_metrics": stage_metrics,
         "prompt": "",

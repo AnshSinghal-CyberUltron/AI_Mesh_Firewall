@@ -285,6 +285,14 @@ def attach_offstage_timings(trace: dict, stage_metrics: dict | None) -> dict:
             v = stage_metrics.get(src)
             if v is not None:
                 trace[dst] = round(float(v), 2)
+        # Task 7: GC pause time that elapsed during THIS request.
+        mark = stage_metrics.get("gc_pause_mark")
+        if mark is not None:
+            from gc_monitor import pause_ms_since  # noqa: PLC0415
+
+            gp = pause_ms_since(float(mark))
+            if gp is not None:
+                trace["gc_pause_ms"] = gp
     except Exception:  # noqa: BLE001 — diagnostics must never break a response
         pass
     return trace
