@@ -125,10 +125,18 @@ def one_request(url, key, model, prompt_chars, max_tokens, timeout, stream):
                     trace = json.loads(frame[6:].strip()).get("pipeline_trace")
                 except json.JSONDecodeError:
                     pass
+    addon = None
     if trace:
         names = {s.get("name") for s in (trace.get("stages") or []) if isinstance(s, dict)}
         nine = all(n in names for n in STAGES)
-    return {"ok": True, "ms": ms, "ttft": ttft, "nine": nine,
+        # THE FIREWALL TAX: T_total - T_upstream. This, not wall, is what the <20 ms
+        # SLO refers to. Wall includes the provider's generation - 3 s of deliberate
+        # stub pacing here, seconds of real generation in production - so bounding
+        # capacity on wall would refuse every run for a reason that has nothing to do
+        # with the gateway.
+        addon = (float(trace.get("t_addon_pre_ms") or 0.0)
+                 + float(trace.get("t_addon_post_ms") or 0.0))
+    return {"ok": True, "ms": ms, "ttft": ttft, "addon": addon, "nine": nine,
             "trace_seen": trace is not None}
 
 
@@ -167,8 +175,8 @@ def run_level(a, conc: int) -> dict:
     client_cpu = (time.process_time() - cpu0)
 
     ok = [r for r in results if r["ok"]]
-    # For streams the bound is on TTFT (see one_request); for non-streams, on wall.
-    key = "ttft" if a.stream else "ms"
+    # Which latency the bound applies to — see --latency-metric.
+    key = a.latency_metric
     lat = [r[key] for r in ok if r.get(key) is not None]
     # If TTFT capture missed (a frame boundary splitting the marker, say), `lat` would
     # be EMPTY, pct() would return 0.0, and a 0 ms p99 would sail past any bound — a
@@ -184,6 +192,7 @@ def run_level(a, conc: int) -> dict:
         "gw_cpu": sampler.mean(a.gateway_container),
         "client_cpu_cores": client_cpu / elapsed if elapsed > 0 else 0.0,
         "lat_missing": lat_missing,
+        "wall_p50": pct([r["ms"] for r in ok], .50),
         "ok_n": len(ok),
         "nine_all": all(r.get("nine") for r in ok) if ok else False,
         "nine_missing": sum(1 for r in ok if not r.get("nine")),
@@ -201,8 +210,12 @@ def main() -> int:
     ap.add_argument("--timeout", type=float, default=120.0)
     ap.add_argument("--warmup-s", type=float, default=5.0)
     ap.add_argument("--window-s", type=float, default=20.0)
-    ap.add_argument("--p99-bound-ms", type=float, default=20.0,
-                    help="bound on wall for non-stream, on TTFT for --stream")
+    ap.add_argument("--p99-bound-ms", type=float, default=20.0)
+    ap.add_argument("--latency-metric", choices=("addon", "wall", "ttft"), default="addon",
+                    help="addon = the FIREWALL TAX (t_addon_pre + t_addon_post), the "
+                         "quantity the <20 ms SLO names and the default. wall includes "
+                         "the provider's generation and so measures the upstream. ttft "
+                         "is the meaningful bound for streaming.")
     ap.add_argument("--concurrency", default="1,2,4,8,16,32,64")
     ap.add_argument("--containers",
                     default="aimeshperf-gateway-1,aimeshperf-control-1,"
@@ -214,16 +227,17 @@ def main() -> int:
 
     levels = [int(x) for x in a.concurrency.split(",")]
     rows, fails = [], []
-    metric = "ttft" if a.stream else "wall"
+    metric = a.latency_metric
     print(f"latency bound applies to: {metric} (p99 <= {a.p99_bound_ms} ms)")
     print(f"{'conc':>5}{'rps':>10}{'p50':>9}{'p90':>9}{'p99':>9}"
-          f"{'gw_cpu%':>9}{'cli_cores':>11}{'err%':>7}  9stage")
+          f"{'wall_p50':>10}{'gw_cpu%':>9}{'cli_cores':>11}{'err%':>7}  9stage")
     over = 0
     for c in levels:
         r = run_level(a, c)
         rows.append(r)
         print(f"{r['conc']:>5}{r['rps']:>10.1f}{r['p50']:>9.2f}{r['p90']:>9.2f}"
-              f"{r['p99']:>9.2f}{r['gw_cpu']:>9.1f}{r['client_cpu_cores']:>11.2f}"
+              f"{r['p99']:>9.2f}{r['wall_p50']:>10.1f}{r['gw_cpu']:>9.1f}"
+              f"{r['client_cpu_cores']:>11.2f}"
               f"{100*r['err_rate']:>7.2f}  {'yes' if r['nine_all'] else 'NO'}")
         if not r["nine_all"]:
             fails.append(f"conc {c}: {r['nine_missing']} of {r['n']} samples did not run "
