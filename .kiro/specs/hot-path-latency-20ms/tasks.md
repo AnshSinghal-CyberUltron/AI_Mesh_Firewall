@@ -10,7 +10,8 @@ carry no new dependency. Task 7 (multi-pattern engine) lands only after task 2 i
 
 ## Tasks
 
-- [ ] 1. Docker end-to-end verification harness (R7) — **blocks every claim below**
+- [x] 1. Docker end-to-end verification harness (R7) — built; five bring-up blockers cleared;
+      produced the project's first real end-to-end nine-stage measurement
   - [x] 1.1 `scripts/perf/e2e/token_stub.py` — upstream stub emitting N tokens at a set rate; exits non-zero if it would emit zero
   - [x] 1.2 `scripts/perf/e2e/compose.perf.yml` — overlay on docker-compose.yml; six services healthy
   - [x] 1.3 `drive.py` — unique prompts, real HTTP, SSE parsing, streaming + non-streaming
@@ -37,7 +38,17 @@ carry no new dependency. Task 7 (multi-pattern engine) lands only after task 2 i
   - [x] 1C.5 **Throughput fix, not latency fix** — added wall clock only 150→~120-145 ms because guard work was already concurrent with generation
   - _Evidence: docs/perf/evidence/2026-09-09-1C-flush-fix-result.md_
 
-- [ ] 1D. **NEW — locate the remaining ~120-145 ms of added streaming latency**
+- [x] 1D. **Located it — and it was not where the metric pointed.** The added time is at
+      the HEAD (1393–3098 ms to first token), not the ~140 ms tail. Cause: an
+      unconditional 512-byte retention composed with a 64-CHUNK flush trigger.
+      _Evidence: docs/perf/evidence/2026-09-09-1D-streaming-head-latency.md_
+- [x] 1E. **Fixed it** — content-derived retention + byte-denominated flush trigger.
+      First token 3.2–4.0× sooner; 748 + 2244 documents byte-identical.
+      _Spec: .kiro/specs/stream-first-token-latency/ · Evidence: …-1E-stream-first-token-fix.md_
+- [x] 1F. **Per-guard-pass fixed cost** — canonicalisation was 67% of a scan and called
+      `unicodedata.category` twice per character. ASCII identity fast path (generated,
+      not hand-written) + 3×→1× cache. 1.4–1.7×, output byte-identical over every code
+      point <0x2000. _Spec: .kiro/specs/canonicalisation-hot-path/_
   - [ ] 1D.1 It is NOT the output guard (now 24.9 ms concurrent), NOT Tier-1 (0.10 ms), NOT the policy engine (0.20 ms)
   - [ ] 1D.2 Non-streaming is 15.2 ms p50 while streaming adds ~140 ms — the gap is stream machinery, not scanning
   - [ ] 1D.3 Instrument the stream path end to end and attribute the gap before optimising anything
@@ -141,3 +152,27 @@ carry no new dependency. Task 7 (multi-pattern engine) lands only after task 2 i
               └── 3 (equivalence gate, runs against 2/5/6/7)
                                                               10 (max RPS) ── 11 (publish SLO)
 ```
+
+
+## Re-prioritised from measurement (2026-09-09)
+
+The original order assumed the policy engine was the hot path. Measurement moved it:
+
+| path | measured now | target | gap |
+|---|---:|---:|---|
+| non-streaming p50 | **15.2 ms** | <20 ms | **meets it** (stub upstream, 45 rules) |
+| streaming first token | **358–962 ms** | <20 ms | ~20–50× |
+| policy engine @45 rules | 0.20 ms | — | not the bottleneck at this rule count |
+| policy engine @264 rules | 17.06 ms | — | becomes dominant only at scale |
+
+So the ordering that follows the evidence is:
+
+1. **Task 10 (max RPS/vCPU, measured)** — the only unmeasured half of the promise, and
+   the one place where a claim is currently unsupported rather than merely short.
+2. **Task 2 (thread-per-regex)** — `_run_with_timeout` starts a thread then joins it, so
+   it is serial: 0.0586 ms of the 0.065 ms/rule slope is pure thread overhead. Biggest
+   single win at high rule counts, and it is the prerequisite framing for task 7.
+3. **Tasks 5/6 (log shipping, pipeline trace off the allow path)** — fixed per-request
+   overhead that inflates every number above, streaming and non-streaming alike.
+4. **Task 7 (multi-pattern engine)** — only after task 2, and only if measurement still
+   shows regex time dominating; the 1F profile put `re.search` at 0.042 s of 0.482 s.

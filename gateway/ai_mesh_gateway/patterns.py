@@ -103,6 +103,70 @@ _SMALLCAP_MAP = {
 }
 
 
+def _canon_char(ch: str) -> str | None:
+    """Canonical replacement for ONE character, or ``None`` if it should be dropped.
+
+    This is the per-character body of ``_canonicalize_with_map``, factored out so the
+    ASCII fast-path table below can be GENERATED from it rather than hand-written. A
+    hand-written table would be free to drift from these rules; a generated one changes
+    whenever they do.
+    """
+    cp = ord(ch)
+    # G18: Unicode Tag block "ASCII smuggling". TAG SPACE..TAG TILDE
+    # (U+E0020..U+E007E) mirror printable ASCII 0x20..0x7E but are category Cf, so
+    # the drop below would silently REMOVE them — hiding tag-encoded PII/secrets
+    # from detection while the original tag bytes still egress (LLMs decode them).
+    # DECODE the printable mirror back to ASCII here (BEFORE the Cf-drop). It is a
+    # 1->1 position-preserving substitution, so index_map[k]=i still masks the
+    # match back onto the original tag bytes. Tag controls (U+E0000/E0001/E007F)
+    # are also Cf and fall through to the drop below.
+    if 0xE0020 <= cp <= 0xE007E:
+        return chr(cp - 0xE0000)
+    cat = unicodedata.category(ch)
+    if cat in ("Cf", "Mn", "Me"):                 # invisibles / combining marks -> drop
+        return None
+    if cat == "Cc" and ch not in "\t\n\r":         # control chars -> drop (keep whitespace)
+        return None
+    nc = unicodedata.normalize("NFKC", ch)
+    if len(nc) == 1:
+        ch2 = nc                                   # keep 1->1 compat folds (fullwidth/math/circled)
+    else:
+        # G101: a DECORATED single alphanumeric has a MULTI-char NFKC that the 1->1 guard
+        # skipped — parenthesized letter ⒤ -> "(i)", parenthesized digit ⑵ -> "(2)", full-stop
+        # digit ⒈ -> "1." — so it evaded detect_pii/detect_secrets (a parenthesized-digit SSN
+        # went UNdetected; the scanner's richer deobfuscation caught the injection side, but the
+        # PII/secret path relies on this canon). Fold to the lone alnum char (still 1->1, so the
+        # index map still masks back onto the original char). Ligatures / fractions / "No."-type
+        # symbols (>1 alnum: ﬁ->"fi", ½->"1⁄2", №->"No") are LEFT untouched. FP-safe: fires only
+        # when the canonical form is a real PII/secret/injection pattern.
+        _alnums = [c for c in nc if c.isalnum()]
+        ch2 = _alnums[0] if len(_alnums) == 1 else ch
+    if ch2 in _DASH_CHARS:
+        ch2 = "-"
+    elif unicodedata.category(ch2) == "Zs":
+        ch2 = " "
+    elif ch2 in _CONFUSABLE_MAP:
+        ch2 = _CONFUSABLE_MAP[ch2]
+    elif ch2 in _SMALLCAP_MAP:            # G21: small-caps -> ASCII (1->1)
+        ch2 = _SMALLCAP_MAP[ch2]
+    return ch2
+
+
+# ASCII code points that ``_canon_char`` maps to THEMSELVES. Generated from the rules
+# above at import, so it cannot disagree with them. Task 1F: canonicalisation was 67% of
+# a guard pass (0.324 s of 0.482 s over 100 scans of 525 chars) and called
+# ``unicodedata.category`` twice per character in a pure-Python loop. For plain ASCII —
+# nearly all LLM output — every one of those calls is a no-op.
+_ASCII_IDENTITY = frozenset(
+    c for c in map(chr, range(128)) if _canon_char(c) == c
+)
+# Whole-string test in C. A Python ``all(c in set for c in text)`` would still pay
+# per-character interpreter overhead, which is the cost being removed.
+_ASCII_IDENTITY_RE = re.compile(
+    "[" + "".join(re.escape(c) for c in sorted(_ASCII_IDENTITY)) + "]*\\Z"
+)
+
+
 def _canonicalize_with_map(text: str):
     """Return ``(canonical_text, index_map)`` using only 1->1 subs and 1->0 removals.
 
@@ -112,56 +176,32 @@ def _canonicalize_with_map(text: str):
     if not text:
         return "", []
     src = text[:_CANON_MAX_LEN]
+    # Fast path: every character is ASCII that canonicalises to itself, so the canonical
+    # form IS the input and the map is the identity. No Python-level loop, no unicodedata.
+    if _ASCII_IDENTITY_RE.match(src) is not None:
+        return src, list(range(len(src)))
     out_chars: List[str] = []
     idx_map: List[int] = []
     for i, ch in enumerate(src):
-        cp = ord(ch)
-        # G18: Unicode Tag block "ASCII smuggling". TAG SPACE..TAG TILDE
-        # (U+E0020..U+E007E) mirror printable ASCII 0x20..0x7E but are category Cf, so
-        # the drop below would silently REMOVE them — hiding tag-encoded PII/secrets
-        # from detection while the original tag bytes still egress (LLMs decode them).
-        # DECODE the printable mirror back to ASCII here (BEFORE the Cf-drop). It is a
-        # 1->1 position-preserving substitution, so index_map[k]=i still masks the
-        # match back onto the original tag bytes. Tag controls (U+E0000/E0001/E007F)
-        # are also Cf and fall through to the drop below.
-        if 0xE0020 <= cp <= 0xE007E:
-            out_chars.append(chr(cp - 0xE0000))
-            idx_map.append(i)
+        ch2 = _canon_char(ch)
+        if ch2 is None:
             continue
-        cat = unicodedata.category(ch)
-        if cat in ("Cf", "Mn", "Me"):                 # invisibles / combining marks -> drop
-            continue
-        if cat == "Cc" and ch not in "\t\n\r":         # control chars -> drop (keep whitespace)
-            continue
-        nc = unicodedata.normalize("NFKC", ch)
-        if len(nc) == 1:
-            ch2 = nc                                   # keep 1->1 compat folds (fullwidth/math/circled)
-        else:
-            # G101: a DECORATED single alphanumeric has a MULTI-char NFKC that the 1->1 guard
-            # skipped — parenthesized letter ⒤ -> "(i)", parenthesized digit ⑵ -> "(2)", full-stop
-            # digit ⒈ -> "1." — so it evaded detect_pii/detect_secrets (a parenthesized-digit SSN
-            # went UNdetected; the scanner's richer deobfuscation caught the injection side, but the
-            # PII/secret path relies on this canon). Fold to the lone alnum char (still 1->1, so the
-            # index map still masks back onto the original char). Ligatures / fractions / "No."-type
-            # symbols (>1 alnum: ﬁ->"fi", ½->"1⁄2", №->"No") are LEFT untouched. FP-safe: fires only
-            # when the canonical form is a real PII/secret/injection pattern.
-            _alnums = [c for c in nc if c.isalnum()]
-            ch2 = _alnums[0] if len(_alnums) == 1 else ch
-        if ch2 in _DASH_CHARS:
-            ch2 = "-"
-        elif unicodedata.category(ch2) == "Zs":
-            ch2 = " "
-        elif ch2 in _CONFUSABLE_MAP:
-            ch2 = _CONFUSABLE_MAP[ch2]
-        elif ch2 in _SMALLCAP_MAP:            # G21: small-caps -> ASCII (1->1)
-            ch2 = _SMALLCAP_MAP[ch2]
         out_chars.append(ch2)
         idx_map.append(i)
     return "".join(out_chars), idx_map
 
 
+@functools.lru_cache(maxsize=32)
 def canonicalize_for_detection(text: str) -> str:
-    """Public canonical form for obfuscation-resistant matching (no index map)."""
+    """Public canonical form for obfuscation-resistant matching (no index map).
+
+    Cached: `scan_output` canonicalises the SAME text three times (detect_pii,
+    detect_secrets, and one more site) — measured 300 calls per 100 scans. Strings are
+    immutable and hashable so memoisation is sound, and `maxsize` bounds memory so a
+    stream of distinct texts cannot grow it without limit. `_canonicalize_with_map` is
+    deliberately NOT cached: it returns a mutable list, and handing the same list to two
+    callers would be a sharing hazard.
+    """
     return _canonicalize_with_map(text)[0]
 
 
