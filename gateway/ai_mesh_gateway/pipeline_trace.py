@@ -758,13 +758,58 @@ def _round_ms(value: Any, default: float = 0.0) -> float:
     return round(n, 1)
 
 
+# Bounded trace redaction. `redact_all` is linear at ~1.2 us/char, and _truncate used to
+# redact the WHOLE text before keeping `limit` characters — so the cost of a diagnostic
+# artefact grew without bound with prompt length (4 KB -> 2.67 ms, 32 KB -> ~21 ms) while
+# only the first 1200 characters were ever kept. Measured, it was 39.6% of firewall CPU:
+# more than the policy engine spends deciding anything.
+_REDACT_WINDOW_OVERLAP = 256    # every whitespace-containing pattern is far shorter
+_REDACT_WINDOW_HARD_CAP = 4096  # never hunt further than this for a whitespace boundary
+
+
+def _redaction_window(text: str, limit: int) -> str:
+    r"""Smallest prefix whose redaction yields the same first ``limit`` characters.
+
+    Redacting after truncating would be unsound: a secret cut in half may no longer match
+    its own pattern, leaving the visible half in the trace. That is why the original code
+    redacted everything, and it is the property this must keep.
+
+    The window therefore ends at WHITESPACE, which is what makes a prefix sufficient.
+    Auditing the redaction patterns for unbounded length splits them cleanly:
+
+      * unbounded patterns match a whitespace-FREE run — ``xox[baprs]-[0-9A-Za-z-]{10,}``,
+        ``glpat-[A-Za-z0-9_-]{20,}``, ``(?:mongodb|postgres|...)://[^\s]{10,}``. Such a run
+        cannot straddle a cut placed at whitespace.
+      * patterns that contain whitespace are short and bounded — SSN ~11 chars, phone ~14,
+        card ~19, ``-----BEGIN PRIVATE KEY-----`` ~30 (the pattern matches the HEADER, not
+        the key body). All fit inside OVERLAP.
+      * ``LABEL<ws>SECRET`` shapes (``Bearer\s+[A-Za-z0-9_\-.]{20,}``, ``password\s*[:=]``)
+        are the interesting case: if the cut lands between label and token the match fails,
+        but what stays visible is the LABEL, not the secret. The token is whitespace-free, so
+        it lies wholly on one side — masked inside the window, discarded beyond it.
+
+    RESIDUAL RISK: a single whitespace-free run longer than HARD_CAP that spans the cut ends
+    the window mid-run, so a pattern matching that run is missed. Bounded, named, and tunable
+    by HARD_CAP. The run must SPAN the cut — a long token entirely before ``limit`` is inside
+    the window and masked normally.
+    """
+    cut = limit + _REDACT_WINDOW_OVERLAP
+    if len(text) <= cut:
+        return text
+    end = min(len(text), cut + _REDACT_WINDOW_HARD_CAP)
+    j = cut
+    while j < end and not text[j].isspace():
+        j += 1
+    return text[:j]
+
+
 def _truncate(text: str, limit: int = 1200) -> str:
     raw = (text or "").strip()
     # Redact PII/secrets BEFORE truncating so raw PII is never persisted/echoed in
     # the trace (R17). No-op on benign text; fail-open if the redactor is missing.
     if raw and _redact_all is not None:
         try:
-            raw = _redact_all(raw)
+            raw = _redact_all(_redaction_window(raw, limit))
         except Exception:
             pass
     if len(raw) <= limit:
