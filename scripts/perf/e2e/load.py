@@ -36,6 +36,13 @@ STAGES = ("auth", "rate_limit", "policy", "input_scan", "kill_switch",
           "model_routing", "model_input", "model_output", "output_guardrail")
 
 
+def _tally(items) -> str:
+    counts: dict[str, int] = {}
+    for i in items:
+        counts[str(i)] = counts.get(str(i), 0) + 1
+    return ", ".join(f"{k}x{v}" for k, v in sorted(counts.items(), key=lambda kv: -kv[1])[:4])
+
+
 def pct(v, q):
     if not v:
         return 0.0
@@ -108,8 +115,12 @@ def one_request(url, key, model, prompt_chars, max_tokens, timeout, stream):
                     raw += chunk
                     if ttft is None and b'"content"' in chunk:
                         ttft = (time.perf_counter() - t0) * 1000
+    except urllib.error.HTTPError as e:
+        # Record the STATUS, not just the exception name. "93% errors" with no code is
+        # undiagnosable; "93% were 429" names the cause immediately.
+        return {"ok": False, "err": f"HTTP {e.code}", "ms": (time.perf_counter() - t0) * 1000}
     except Exception as e:                      # noqa: BLE001
-        return {"ok": False, "err": f"{type(e).__name__}", "ms": (time.perf_counter() - t0) * 1000}
+        return {"ok": False, "err": type(e).__name__, "ms": (time.perf_counter() - t0) * 1000}
     ms = (time.perf_counter() - t0) * 1000
     trace, nine = None, False
     if not stream:
@@ -214,6 +225,7 @@ def run_level(a, conc: int) -> dict:
         "wall_p50": pct([r["ms"] for r in ok], .50),
         "ok_n": len(ok),
         "samples": ok,
+        "err_kinds": _tally([r.get("err") for r in results if not r["ok"]]),
         "nine_all": all(r.get("nine") for r in ok) if ok else False,
         "nine_missing": sum(1 for r in ok if not r.get("nine")),
     }
@@ -257,6 +269,8 @@ def main() -> int:
                          "with the observed spread. At ~550 samples a run's p99 rests on "
                          "about 5 observations and swings 100-151 ms on an unchanged "
                          "build; a single run cannot resolve anything smaller than that.")
+    ap.add_argument("--settle-s", type=float, default=8.0,
+                    help="pause between repeats so one run does not poison the next")
     ap.add_argument("--latency-metric", choices=("addon", "wall", "ttft"), default="addon",
                     help="addon = the FIREWALL TAX (t_addon_pre + t_addon_post), the "
                          "quantity the <20 ms SLO names and the default. wall includes "
@@ -283,7 +297,14 @@ def main() -> int:
           f"{'wall_p50':>10}{'gw_cpu%':>9}{'cli_cores':>11}{'err%':>7}  9stage")
     over = 0
     for c in levels:
-        reps = [run_level(a, c) for _ in range(max(1, a.repeat))]
+        reps = []
+        for _i in range(max(1, a.repeat)):
+            if _i:
+                # Let the rate limiter's window and any connection churn settle. Without
+                # this, back-to-back repeats poisoned each other: a --repeat 3 run
+                # produced 93% errors that a single run did not.
+                time.sleep(a.settle_s)
+            reps.append(run_level(a, c))
         # Report the MEDIAN run, and carry the spread so a reader can see whether a
         # difference is resolvable. Reporting the best run would be cherry-picking;
         # reporting one run and calling a 28% difference a result is what this option
@@ -310,8 +331,9 @@ def main() -> int:
                          f"{r['ok_n']} successful requests. An empty latency list "
                          f"reports p99 = 0.00 and would PASS the bound silently.")
         if r["err_rate"] > 0.005:
-            fails.append(f"conc {c}: error rate {100*r['err_rate']:.2f}% > 0.5% — a fast "
-                         f"5xx is not throughput (R6)")
+            fails.append(f"conc {c}: error rate {100*r['err_rate']:.2f}% > 0.5% "
+                         f"[{r.get('err_kinds') or 'unknown'}] — a fast 5xx is not "
+                         f"throughput (R6)")
         if r["client_cpu_cores"] > 0.8 * c:
             fails.append(f"conc {c}: driver used {r['client_cpu_cores']:.2f} cores for {c} "
                          f"workers — the LOAD GENERATOR is the bottleneck, not the "
@@ -343,6 +365,37 @@ def main() -> int:
                 m = statistics.median([r["stages"].get(name, 0.0) for r in mid])
                 t = statistics.median([r["stages"].get(name, 0.0) for r in slow])
                 deltas.append((t - m, name, m, t))
+
+            # PER-REQUEST attribution. Taking each stage's median across tail requests
+            # INDEPENDENTLY hides the real shape: if request A is slow in `policy` and
+            # request B in `auth`, every per-stage median stays low while every request
+            # has one slow stage. That is exactly what happened here — per-stage deltas
+            # summed to +2.20 ms while stage_latency_sum_ms rose +45.40 ms on the same
+            # run. The sum of medians is not the median of the sum.
+            #
+            # So ask each slow request which stage was ITS outlier, and count.
+            base = {n: statistics.median([r["stages"].get(n, 0.0) for r in mid])
+                    for n in STAGES}
+            culprits: dict[str, int] = {}
+            excess: dict[str, float] = {}
+            for r in slow:
+                worst_n, worst_d = None, 0.0
+                for n in STAGES:
+                    d = r["stages"].get(n, 0.0) - base[n]
+                    if d > worst_d:
+                        worst_n, worst_d = n, d
+                if worst_n:
+                    culprits[worst_n] = culprits.get(worst_n, 0) + 1
+                    excess[worst_n] = excess.get(worst_n, 0.0) + worst_d
+            if culprits:
+                print(f"\n{'PER-REQUEST: which stage was THIS request-s outlier?':<52}")
+                print(f"{'stage':<20}{'requests':>10}{'share':>8}{'mean excess ms':>16}")
+                for n, c in sorted(culprits.items(), key=lambda kv: -kv[1]):
+                    print(f"{n:<20}{c:>10}{100*c/len(slow):>7.0f}%{excess[n]/c:>16.2f}")
+                unexplained = len(slow) - sum(culprits.values())
+                if unexplained:
+                    print(f"{'(no stage above median)':<20}{unexplained:>10}"
+                          f"{100*unexplained/len(slow):>7.0f}%")
             for d, name, m, t in sorted(deltas, reverse=True):
                 flag = "  <== dominates the tail" if d == max(x[0] for x in deltas) and d > 1 else ""
                 print(f"{name:<20}{m:>11.2f}{t:>10.2f}{d:>+10.2f}{flag}")
