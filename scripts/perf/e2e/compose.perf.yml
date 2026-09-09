@@ -70,6 +70,8 @@ services:
 
       GATEWAY_LOADTEST_STUB_LLM: "1"
       GATEWAY_LOADTEST_STUB_DURATION_S: "${PERF_STUB_DURATION_S:-2}"   # MUST be > 0
+      # Empty = CPython default (5 ms). See .kiro/specs/gil-switch-interval/.
+      GATEWAY_GIL_SWITCH_INTERVAL_S: "${PERF_GIL_SWITCH_S:-}"
       GATEWAY_LOADTEST_STUB_TOK_PER_S: "${PERF_STUB_TOK_PER_S:-100}"   # clamped [30,100]
 
       # ── Posture under test. Swept by sweep.py; defaults are the contracted

@@ -5749,6 +5749,24 @@ async def startup():
     except Exception:  # noqa: BLE001
         pass
 
+    # GIL switch interval. CPython's default is 5 ms: a thread that wants the GIL while
+    # another holds it waits a FULL switch interval before the holder is even ASKED to
+    # yield. The chat path crosses thread boundaries repeatedly (11 asyncio.to_thread
+    # sites here, the scanner's run_in_executor, the policy engine's regex worker), and
+    # each crossing is two GIL acquisitions. Three or four 5 ms waits is 15-20 ms — the
+    # size of the unexplained p99 stall that lands on a different stage every run.
+    #
+    # Unset/empty keeps CPython's default, i.e. today's behaviour exactly, so this ships
+    # dark and reverts by configuration rather than by deploy.
+    try:
+        _switch_s = os.environ.get("GATEWAY_GIL_SWITCH_INTERVAL_S", "").strip()
+        if _switch_s:
+            import sys as _sys  # noqa: PLC0415
+            _sys.setswitchinterval(float(_switch_s))
+            LOG.info("GIL switch interval set to %s s (default 0.005)", _switch_s)
+    except Exception:  # noqa: BLE001 — a tuning knob must never block startup
+        pass
+
     # Task 7: build the multi-pattern prefilter HERE, not lazily on first use.
     # MEASURED: the Hyperscan database takes 326 ms to compile (56 patterns), once per
     # process. Built lazily it lands on the FIRST REQUEST through each fresh worker - a
