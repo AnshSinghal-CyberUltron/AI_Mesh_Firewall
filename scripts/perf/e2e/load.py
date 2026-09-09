@@ -253,6 +253,44 @@ def assert_host_idle() -> str | None:
             f"are contaminated") if busy else None
 
 
+def assert_stub_duration(expect_s: float, container: str) -> str | None:
+    """R7: refuse to compare runs whose upstream pacing differs.
+
+    ``GATEWAY_LOADTEST_STUB_DURATION_S`` defaults to 2 in compose.perf.yml, so ANY
+    ``docker compose up`` performed without ``PERF_STUB_DURATION_S`` exported silently
+    resets the stub from 0.5 s to 2 s. Every latency figure then shifts — model_output
+    quadruples, RPS collapses, contention changes — and two runs that look like a
+    before/after are measuring different systems.
+
+    This has now confounded two comparisons in this project. Reading the container's own
+    environment catches it in milliseconds, BEFORE a six-minute run is spent, instead of
+    being inferred afterwards from a suspicious model_output median.
+
+    Returns None if it matches (or cannot be checked), else a refusal string.
+    """
+    try:
+        out = subprocess.run(
+            ["docker", "exec", container, "printenv", "GATEWAY_LOADTEST_STUB_DURATION_S"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception:  # noqa: BLE001 — not every deployment is docker; do not block
+        return None
+    if out.returncode != 0:
+        return None
+    raw = (out.stdout or "").strip()
+    try:
+        actual = float(raw)
+    except ValueError:
+        return None
+    if abs(actual - expect_s) > 1e-6:
+        return (f"gateway stub duration is {actual}s but --expect-stub-s says "
+                f"{expect_s}s. Recreating the container without PERF_STUB_DURATION_S "
+                f"exported resets it to compose's default of 2. Re-create with "
+                f"PERF_STUB_DURATION_S={expect_s} and re-run; any comparison against a "
+                f"run at a different stub duration is void (R7).")
+    return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default="http://127.0.0.1:8300/v1/chat/completions")
@@ -265,6 +303,9 @@ def main() -> int:
     ap.add_argument("--warmup-s", type=float, default=5.0)
     ap.add_argument("--window-s", type=float, default=20.0)
     ap.add_argument("--p99-bound-ms", type=float, default=20.0)
+    ap.add_argument("--expect-stub-s", type=float, default=None,
+                    help="Refuse to run unless the gateway's stub duration equals this "
+                         "(R7). Prevents comparing runs paced differently upstream.")
     ap.add_argument("--repeat", type=int, default=1,
                     help="repeat each concurrency level N times and report the MEDIAN "
                          "with the observed spread. At ~550 samples a run's p99 rests on "
@@ -285,6 +326,12 @@ def main() -> int:
     ap.add_argument("--cpu-limit", type=float, default=4.0,
                     help="the gateway's `cpus` limit — the RPS/vCPU denominator")
     a = ap.parse_args()
+
+    if a.expect_stub_s is not None:
+        stub_refusal = assert_stub_duration(a.expect_stub_s, a.gateway_container)
+        if stub_refusal:
+            print("REFUSING TO RUN:\n  - " + stub_refusal)
+            return 1
 
     warn = assert_host_idle()
     if warn:
