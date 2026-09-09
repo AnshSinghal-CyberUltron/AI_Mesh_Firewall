@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import sys
 import time
@@ -69,12 +70,20 @@ def post(url: str, key: str, body: dict, timeout: float):
 
 
 def post_stream(url: str, key: str, body: dict, timeout: float):
-    """Drive a streaming completion; return (wall_ms, ttft_ms, tokens, trace)."""
+    """Drive a streaming completion.
+
+    Returns (wall_ms, ttft_ms, t_last_content_ms, tokens, trace).
+
+    `t_last_content_ms` is what splits ADDED WALL CLOCK into a HEAD and a TAIL.
+    Without it a fixed cost is invisible: `wall - model_output` is one number and
+    cannot say whether the caller waited before the first token or after the last.
+    """
     req = urllib.request.Request(
         url, data=json.dumps({**body, "stream": True}).encode(),
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
     t0 = time.perf_counter()
     ttft = None
+    t_last = None
     tokens = 0
     trace = None
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -97,10 +106,12 @@ def post_stream(url: str, key: str, body: dict, timeout: float):
                     trace = d["pipeline_trace"]
                 for ch in d.get("choices") or []:
                     if (ch.get("delta") or {}).get("content"):
+                        now = (time.perf_counter() - t0) * 1000
                         if ttft is None:
-                            ttft = (time.perf_counter() - t0) * 1000
+                            ttft = now
+                        t_last = now
                         tokens += 1
-    return (time.perf_counter() - t0) * 1000, ttft, tokens, trace
+    return (time.perf_counter() - t0) * 1000, ttft, t_last, tokens, trace
 
 
 def stages_of(trace: dict) -> dict[str, float]:
@@ -120,6 +131,10 @@ def main() -> int:
     ap.add_argument("--warmup", type=int, default=3)
     ap.add_argument("--prompt-chars", type=int, default=4096)
     ap.add_argument("--stream", action="store_true")
+    # Caps the stub's answer length (llm_router._stub_token_count honours
+    # body.max_tokens). Lets one command sweep answer length without restarting
+    # the container to change GATEWAY_LOADTEST_STUB_DURATION_S.
+    ap.add_argument("--max-tokens", type=int, default=0)
     ap.add_argument("--timeout", type=float, default=120.0)
     ap.add_argument("--epsilon-ms", type=float, default=25.0,
                     help="reconciliation tolerance |total - (sum stages + overhead)|")
@@ -137,13 +152,16 @@ def main() -> int:
             fails.append("prompt nonce repeated — prompts are not unique (R7.2)")
         seen.add(nonce)
         body = {"model": a.model, "messages": [{"role": "user", "content": prompt}]}
+        if a.max_tokens > 0:
+            body["max_tokens"] = a.max_tokens
         try:
             if a.stream:
-                wall, ttft, tokens, trace = post_stream(a.url, a.key, body, a.timeout)
+                wall, ttft, t_last, tokens, trace = post_stream(a.url, a.key, body, a.timeout)
                 payload = None
             else:
                 body["stream"] = False
                 wall, payload = post(a.url, a.key, body, a.timeout)
+                t_last = None
                 trace = payload.get("pipeline_trace")
                 tokens = int(((payload.get("usage") or {}).get("completion_tokens")) or 0)
                 ttft = None
@@ -164,7 +182,7 @@ def main() -> int:
         pre = float(trace.get("t_addon_pre_ms") or 0.0)
         post_ms = float(trace.get("t_addon_post_ms") or 0.0)
         rows.append({
-            "wall_ms": wall, "ttft_ms": ttft, "tokens": tokens,
+            "wall_ms": wall, "ttft_ms": ttft, "t_last_ms": t_last, "tokens": tokens,
             "total_ms": float(trace.get("total_latency_ms") or 0.0),
             "sum_ms": float(trace.get("stage_latency_sum_ms") or 0.0),
             "overhead_ms": float(trace.get("overhead_ms") or 0.0),
@@ -236,6 +254,32 @@ def main() -> int:
         print(f"{'guard_accum (overlap)':<22}{_pct([r['addon_post_ms'] for r in rows],.5):>10.2f}"
               f"{_pct([r['addon_post_ms'] for r in rows],.9):>10.2f}"
               f"{_pct([r['addon_post_ms'] for r in rows],.99):>10.2f}   <- concurrent, NOT added latency")
+
+        # WHERE the added time sits. ADDED is one number and cannot distinguish a
+        # slow start from a slow finish; these two can. HEAD is everything before
+        # the caller sees a first token (pre-flight stages + upstream TTFT + any
+        # gateway hold-back). TAIL is everything after the last content token
+        # (terminal flush of the retained lookahead, final scan, telemetry, close).
+        tl = [r for r in rows if r.get("t_last_ms") is not None and r["ttft_ms"] is not None]
+        if tl:
+            head = [r["ttft_ms"] for r in tl]
+            tail = [r["wall_ms"] - r["t_last_ms"] for r in tl]
+            span = [r["t_last_ms"] - r["ttft_ms"] for r in tl]
+            print(f"{'  HEAD (to 1st token)':<22}{_pct(head,.5):>10.2f}{_pct(head,.9):>10.2f}"
+                  f"{_pct(head,.99):>10.2f}   <- pre-flight + upstream TTFT + hold-back")
+            print(f"{'  TAIL (after last)':<22}{_pct(tail,.5):>10.2f}{_pct(tail,.9):>10.2f}"
+                  f"{_pct(tail,.99):>10.2f}   <- terminal flush + finalise + close")
+            print(f"{'  token span':<22}{_pct(span,.5):>10.2f}{_pct(span,.9):>10.2f}"
+                  f"{_pct(span,.99):>10.2f}   <- 1st..last token (upstream-paced)")
+            ntok = _pct([float(r["tokens"]) for r in tl], .5)
+            if ntok > 1:
+                # The stub paces at PERF_STUB_TOK_PER_S; the span it OWES is
+                # (n-1)/rate. Anything above that is stretch the gateway added
+                # mid-stream rather than at either end.
+                rate = float(os.environ.get("PERF_STUB_TOK_PER_S", "100"))
+                owed = (ntok - 1) * 1000.0 / rate
+                print(f"{'  span stretch':<22}{_pct(span,.5) - owed:>10.2f}"
+                      f"{'':>10}{'':>10}   <- span - (n-1)/rate; upstream owes {owed:.0f} ms")
         if _pct(added, 0.5) < 0:
             fails.append("wall < model_output — provider time exceeds the whole request; "
                          "attribution is broken")
