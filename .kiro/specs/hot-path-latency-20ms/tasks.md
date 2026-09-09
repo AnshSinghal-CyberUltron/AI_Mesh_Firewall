@@ -22,10 +22,19 @@ carry no new dependency. Task 7 (multi-pattern engine) lands only after task 2 i
     - [ ] 1.8a **PREREQUISITE**: seed policy packages — `policy_count: 0` today means Tier-1 costs ~0 and the matrix would measure nothing (finding F2)
   - _Requirements: 7.1–7.8, 10.2_
 
-- [ ] 1B. **NEW — revisit optimisation order against measured evidence (before task 2)**
-  - [ ] 1B.1 Output guard dominates BOTH modes (8.30 ms non-stream, 446.80 ms concurrent on stream); Tier-1 is 0.10 ms
-  - [ ] 1B.2 Non-streaming already breaches 20 ms at p90 (20.50) / p99 (20.60)
-  - [ ] 1B.3 Confirm task 2 (policy-engine threads) is still the right first lever, or re-sequence to the output guard
+- [x] 1B. **Optimisation order re-checked — task 2 is NOT the first lever**
+  - [x] 1B.1 Output guard dominates both modes: 8.30 ms non-stream, 454.6 ms concurrent on a 200-token stream. `input_scan` is 0.10 ms, `policy` 0.20 ms
+  - [x] 1B.2 Non-streaming breaches 20 ms at p90 (20.50) / p99 (20.60)
+  - [x] 1B.3 **Guard cost is super-linear, a ≈ 1.9** (100/200/300 tok ⇒ 112.5/454.6/793.2 ms). Mechanism: `⌈n/64⌉` flushes (`max_buffer_chunks=64`, `:285`) × `inspect(full_text)` over the **cumulative** buffer (`:329`)
+  - [x] 1B.4 Added latency looks flat (~150 ms) only because guard work overlaps generation; the curves cross at **≈1,200 tokens**. The CPU cost is never hidden and caps RPS
+  - _Evidence: docs/perf/evidence/2026-09-09-output-guard-superlinear.md_
+
+- [ ] 1C. **NEW — output-guard incremental scanning (re-sequenced to FIRST)**
+  - [ ] 1C.1 Scan the new delta + retained lookahead instead of the cumulative buffer — O(n²) → O(n)
+  - [ ] 1C.2 Preserve the secret-anchor / lookahead semantics that exist to catch secrets split across flushes
+  - [ ] 1C.3 Byte-identical verdicts vs cumulative scanning across the G0.1 corpus
+  - [ ] 1C.4 Re-measure the 100/200/300-token curve; assert the exponent falls to ≈1.0
+  - [ ] 1C.5 Review `max_buffer_chunks=64` — aggressive for token-sized deltas; coalescing also serves the egress lever
 
 - [ ] 2. Change 1 — one thread per evaluation, not per regex (R2)
   - [ ] 2.1 Property test **first**: for any rule set × any text, new verdict ≡ current verdict (byte-identical)
