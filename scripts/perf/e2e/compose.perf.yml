@@ -53,6 +53,12 @@ services:
       DJANGO_SECRET_KEY: "perf-harness-not-a-secret-do-not-deploy"
 
   gateway:
+    # py-spy attaches with ptrace to find where wall time goes inside the request
+    # handler. Diagnostic only: it grants no network or filesystem reach and does not
+    # alter scheduling, so a profiled run and a measured run stay comparable. This
+    # overlay is the measurement harness, never production.
+    cap_add:
+      - SYS_PTRACE
     env_file: !override ["scripts/perf/e2e/perf.env"]
     environment:
       # ── Upstream: in-gateway stub so T_upstream is controlled and the firewall

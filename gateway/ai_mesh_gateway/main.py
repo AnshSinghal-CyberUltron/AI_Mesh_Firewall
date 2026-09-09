@@ -5775,10 +5775,16 @@ async def startup():
     # accepts traffic moves that cost where it belongs.
     # No-ops in ~0 ms when hyperscan is absent, which is the current container.
     try:
-        from patterns import _build_prefilter, _PREFILTER_KEYS  # noqa: PLC0415
+        import patterns as _patterns  # noqa: PLC0415
 
-        if _build_prefilter() is not None:
-            LOG.info("Multi-pattern prefilter ready (%d patterns)", len(_PREFILTER_KEYS))
+        # Read _PREFILTER_KEYS off the MODULE, after the build. `from patterns import
+        # _PREFILTER_KEYS` binds the name by VALUE at import time — before
+        # _build_prefilter() populates it — so the old form logged "ready (0 patterns)"
+        # however many it had actually compiled. A startup line that misreports whether
+        # an optimisation is live is how an inert component stays invisible.
+        if _patterns._build_prefilter() is not None:
+            LOG.info("Multi-pattern prefilter ready (%d patterns)",
+                     len(_patterns._PREFILTER_KEYS))
     except Exception:  # noqa: BLE001 — an optimisation must never block startup
         pass
     global CONFIG, CONFIG_SYNC, LLM_ROUTER, POLICY_SYNC, RATE_LIMITER, INPUT_SCANNER
