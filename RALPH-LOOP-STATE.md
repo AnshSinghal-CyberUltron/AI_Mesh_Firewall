@@ -28,11 +28,23 @@
 | `honest-stream-latency-metric` (G1) | 6/6 ✅ |
 | `policy-driven-detection` | 3 done / 6 open (4,5,6,7,8,10) |
 | `command-injection-fp-fix` (G0.3) | **re-scoped** — targets dead code; folded into policy-driven-detection task 5 |
-| `hot-path-latency-20ms` | **NEW — requirements in progress** |
+| `hot-path-latency-20ms` | requirements + design + tasks written; **0/11 executed** |
 
 ## Iteration log
 
-- **1** — Created worktree + `dev/perf-9stage`; replicated ansh WIP (`a83d113f`). Measured the policy-engine cost curve. Proved G0.3 targets dead code and re-scoped it (`ce4e8a64`). Opened `hot-path-latency-20ms`.
+- **1** — Created worktree + `dev/perf-9stage`; replicated ansh WIP (`a83d113f`). Measured the
+  policy-engine cost curve and isolated the mechanism (`Thread` create+join = **0.0586 ms**, which is
+  the entire 0.065 ms/rule slope). Proved G0.3 targets dead code and re-scoped it onto task-5
+  re-homing (`ce4e8a64`). Wrote `hot-path-latency-20ms` requirements → design → tasks. **Corrected my
+  own R2 by measurement**: a flat ≥3× from thread removal is false — it is 12.1× at 512 chars but
+  only 2.4× at 4,096 chars, and the residual 10.43 ms there is real regex work needing a
+  multi-pattern engine. Evidence: `docs/perf/evidence/2026-09-09-policy-engine-baseline.md`.
+
+## Next action (iteration 2)
+
+Start **task 1 — the Docker E2E harness**. It blocks every latency claim. Begin with 1.1
+(`token_stub.py`) and 1.2 (`compose.perf.yml`), then 1.8 to capture the pre-change baseline matrix.
+Do **not** start task 2 before task 1.8 has a recorded baseline — there would be no denominator.
 
 ## Completion promise — NOT yet true
 
