@@ -22,6 +22,11 @@ carry no new dependency. Task 7 (multi-pattern engine) lands only after task 2 i
     - [ ] 1.8a **PREREQUISITE**: seed policy packages — `policy_count: 0` today means Tier-1 costs ~0 and the matrix would measure nothing (finding F2)
   - _Requirements: 7.1–7.8, 10.2_
 
+- [ ] 1B. **NEW — revisit optimisation order against measured evidence (before task 2)**
+  - [ ] 1B.1 Output guard dominates BOTH modes (8.30 ms non-stream, 446.80 ms concurrent on stream); Tier-1 is 0.10 ms
+  - [ ] 1B.2 Non-streaming already breaches 20 ms at p90 (20.50) / p99 (20.60)
+  - [ ] 1B.3 Confirm task 2 (policy-engine threads) is still the right first lever, or re-sequence to the output guard
+
 - [ ] 2. Change 1 — one thread per evaluation, not per regex (R2)
   - [ ] 2.1 Property test **first**: for any rule set × any text, new verdict ≡ current verdict (byte-identical)
   - [ ] 2.2 Add `_run_evaluation_with_deadline`; move the boundary from per-rule to per-evaluation
@@ -32,10 +37,11 @@ carry no new dependency. Task 7 (multi-pattern engine) lands only after task 2 i
   - [ ] 2.7 Re-run the task-1 matrix; assert **≥8×** at 512 ch and **≥2×** at 4,096 ch
   - _Requirements: 2.1–2.5, 3a_
 
-- [ ] 1A. **NEW — streaming `model_output` attribution defect (blocks all streaming claims)**
-  - [ ] 1A.1 `model_output` is 0 ms on streams while 200 tokens are emitted, so the tax absorbs provider time (2,638 ms p50 reported)
-  - [ ] 1A.2 Same class as `addon = TTFT`; the anchor was fixed, attribution was not
-  - [ ] 1A.3 Fix attribution, then re-enable streaming measurement
+- [x] 1A. **Streaming attribution — RESOLVED**
+  - [x] 1A.1 Root cause: the loadtest-stub branch returns before `_track_chunk`, so `first_token_ts` stayed 0 and `model_output_ms` was never set. **Stub-path artifact, not a demonstrated production defect** (a real provider goes through `_track_chunk`)
+  - [x] 1A.2 Fix: stub branch records `first_token_ts` on its first content frame
+  - [x] 1A.3 Additive reconciliation is invalid on streams — `output_guardrail` is concurrent with `model_output`. Driver now reports ADDED WALL CLOCK (`wall − model_output`) separately from `guard_accum`
+  - [x] 1A.4 Measured: streaming **148.89 ms p50 added**, non-streaming **15.20 ms p50** — streaming is ~10× worse and is the real target
   - _Evidence: docs/perf/evidence/2026-09-09-e2e-baseline.md §3_
 
 - [ ] 3. Detection equivalence gate (R9) — run against tasks 2, 5, 6, 7

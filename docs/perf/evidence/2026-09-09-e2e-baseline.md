@@ -101,3 +101,68 @@ docker exec -i aimeshperf-control-1 sh -c 'cd /app/control && ./.venv/bin/python
   < scripts/perf/e2e/bootstrap_org.py          # prints PERF_API_KEY=...
 python scripts/perf/e2e/drive.py --key $PERF_API_KEY --n 20 --prompt-chars 4096
 ```
+
+---
+
+# Task 1A resolved — streaming is measurable, and it is ~10× worse
+
+## Root cause (corrects §3)
+
+§3 called this "the same class as `addon = TTFT`" and implied a production hole. **That
+characterisation was too strong.** The root cause is specific to the *stub* path:
+
+`_rebuilt_stream_trace` (`stream_orchestration.py:682`) sets `model_output_ms` only when
+
+```python
+if metrics.ttft_ms > 0 and metrics.duration_ms > metrics.ttft_ms:
+```
+
+`first_token_ts` is set by `_track_chunk` in `llm_router.acompletion_stream` — but the loadtest-stub
+branch `return`s **before** `_track_chunk` is wired, and `loadtest_stub_stream` is a plain generator
+with no access to `local_metrics`. So on the stub path `ttft_ms` stayed 0, `model_output_ms` was never
+set, and the tax absorbed the whole generation.
+
+A **real provider** goes through `_track_chunk`, so the production path is very likely unaffected.
+This was a harness artifact. Recording the over-call so the correction is on the record.
+
+## Fix
+
+`llm_router.py` — the stub branch now records `first_token_ts` on its first content frame, exactly as
+`_track_chunk` does for a real provider. Six lines, with the reasoning inline.
+
+## Second finding: stages OVERLAP on streams, so additive reconciliation is invalid
+
+After the fix, `model_output` populated (2,589 ms) but reconciliation failed with a **407 ms residual**
+against a 25 ms epsilon — on data whose individual stage values were correct.
+
+`output_guardrail` scans each chunk **while the provider is still generating**, so its time is
+concurrent with `model_output`. Summing them double-counts. The additive invariant holds for
+non-streaming and is simply wrong for streaming; applying it there rejects good data.
+
+The driver now splits the two quantities:
+
+| quantity | meaning |
+|---|---|
+| **ADDED WALL CLOCK** = `wall − model_output` | what the caller actually waited beyond generation — **the honest streaming tax** |
+| `guard_accum` = `addon_post` | accumulated guard `inspect()` time; **concurrent work, not added latency** |
+
+## Measured, both modes passing (exit 0)
+
+| mode | metric | p50 | p90 | p99 |
+|---|---|---:|---:|---:|
+| non-streaming | firewall tax | **15.20** | **20.50** | **20.60** |
+| streaming | **added wall clock** | **148.89** | 151.50 | 151.75 |
+| streaming | guard_accum (concurrent) | 446.80 | 464.60 | 469.50 |
+
+## What this changes
+
+1. **Streaming is ~10× worse than non-streaming** — 148.89 ms vs 15.20 ms added. Streaming is the
+   default for chat, so **this is the real optimisation target**, not the non-stream path.
+2. **Non-streaming already breaches 20 ms at p90** (20.50) and p99 (20.60). The p50 headline of
+   15.20 ms is inside target; the tail is not.
+3. The 8.30 ms non-stream `output_guardrail` and the 446.80 ms streaming `guard_accum` are the same
+   control priced differently: per-chunk scanning over ~200 tokens costs far more than one pass over
+   the finished answer.
+4. Earlier plan work assumed the classifier and Tier-1 dominate. **On this tree, with Tier-1 a
+   passthrough and Tier-2 off, the output guard dominates both modes.** The optimisation order in
+   `tasks.md` should be revisited against this evidence before task 2 starts.

@@ -215,10 +215,35 @@ def main() -> int:
                 f"total - model_output, so provider time is being attributed to the gateway "
                 f"and the reported tax ({_pct([r['addon_ms'] for r in rows], .5):.1f} ms p50) "
                 f"is NOT the gateway's. Refusing to report it.")
-    resid = [abs(r["total_ms"] - (r["sum_ms"] + r["overhead_ms"])) for r in rows]
-    if _pct(resid, 0.5) > a.epsilon_ms:
-        fails.append(f"reconciliation residual p50 {_pct(resid,0.5):.2f} ms exceeds "
-                     f"epsilon {a.epsilon_ms} ms (R7.3)")
+    # RECONCILIATION — additive only when stages are actually sequential.
+    #
+    # Non-stream: stages run one after another, so total == sum(stages) + overhead.
+    #
+    # Stream: they do NOT. `output_guardrail` scans each chunk WHILE the provider is
+    # still generating, so its time is CONCURRENT with `model_output`. Summing them
+    # double-counts and the residual is meaningless — measured 407 ms against a
+    # 25 ms epsilon on a run whose stage values were individually correct.
+    # Applying the additive check to streams would reject good data.
+    #
+    # The honest streaming quantity is the ADDED WALL CLOCK: what the caller waited
+    # beyond the provider's own generation. Overlapped guard time is reported
+    # separately as `guard_accum` because it is work done, not latency added.
+    if a.stream:
+        added = [r["wall_ms"] - r["stages"].get("model_output", 0.0) for r in rows]
+        print(f"\n{'streaming-specific':<22}{'p50':>10}{'p90':>10}{'p99':>10}")
+        print(f"{'ADDED WALL CLOCK':<22}{_pct(added,.5):>10.2f}{_pct(added,.9):>10.2f}"
+              f"{_pct(added,.99):>10.2f}   <- wall - model_output")
+        print(f"{'guard_accum (overlap)':<22}{_pct([r['addon_post_ms'] for r in rows],.5):>10.2f}"
+              f"{_pct([r['addon_post_ms'] for r in rows],.9):>10.2f}"
+              f"{_pct([r['addon_post_ms'] for r in rows],.99):>10.2f}   <- concurrent, NOT added latency")
+        if _pct(added, 0.5) < 0:
+            fails.append("wall < model_output — provider time exceeds the whole request; "
+                         "attribution is broken")
+    else:
+        resid = [abs(r["total_ms"] - (r["sum_ms"] + r["overhead_ms"])) for r in rows]
+        if _pct(resid, 0.5) > a.epsilon_ms:
+            fails.append(f"reconciliation residual p50 {_pct(resid,0.5):.2f} ms exceeds "
+                         f"epsilon {a.epsilon_ms} ms (R7.3)")
 
     # ── Report ──────────────────────────────────────────────────────────────
     mode = "STREAM" if a.stream else "NON-STREAM"
@@ -240,7 +265,8 @@ def main() -> int:
         print(f"{name:<22}{p50:>10.2f}{100*p50/tot:>8.1f}%")
 
     print(f"\ntokens/sample p50: {_pct([float(r['tokens']) for r in rows], .5):.0f}")
-    print(f"reconciliation residual p50: {_pct(resid,.5):.3f} ms (epsilon {a.epsilon_ms})")
+    if not a.stream:
+        print(f"reconciliation residual p50: {_pct(resid,.5):.3f} ms (epsilon {a.epsilon_ms})")
 
     if a.json_out:
         with open(a.json_out, "w") as fh:

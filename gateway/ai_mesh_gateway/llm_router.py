@@ -1516,7 +1516,20 @@ class LLMRouter:
         body = self._apply_redaction(body, redacted_content, redaction_hints)
         if loadtest_stub_llm_enabled():
             _warn_stub_llm_once()
+            # The stub must record first_token_ts exactly as _track_chunk does for a
+            # real provider. Without it metrics.ttft_ms stays 0, so the guard in
+            # _rebuilt_stream_trace (stream_orchestration.py:682) —
+            #     if metrics.ttft_ms > 0 and metrics.duration_ms > metrics.ttft_ms
+            # — never fires, model_output_ms is never set, and the firewall tax
+            # (total - model_output) absorbs the whole generation. Measured before
+            # this fix: 200 tokens emitted, model_output 0.00 ms, "tax" 2,638 ms.
+            _stub_first_token = False
             async for frame in loadtest_stub_stream(body):
+                if not _stub_first_token and frame.startswith("data: "):
+                    _p = frame[6:].strip()
+                    if _p and _p != "[DONE]" and '"content"' in _p:
+                        local_metrics.first_token_ts = time.perf_counter()
+                        _stub_first_token = True
                 yield frame
             return
         allowlist = self._pop_inference_allowlist(body)
