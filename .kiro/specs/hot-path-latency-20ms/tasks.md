@@ -29,12 +29,18 @@ carry no new dependency. Task 7 (multi-pattern engine) lands only after task 2 i
   - [x] 1B.4 Added latency looks flat (~150 ms) only because guard work overlaps generation; the curves cross at **≈1,200 tokens**. The CPU cost is never hidden and caps RPS
   - _Evidence: docs/perf/evidence/2026-09-09-output-guard-superlinear.md_
 
-- [ ] 1C. **NEW — output-guard incremental scanning (re-sequenced to FIRST)**
-  - [ ] 1C.1 Scan the new delta + retained lookahead instead of the cumulative buffer — O(n²) → O(n)
-  - [ ] 1C.2 Preserve the secret-anchor / lookahead semantics that exist to catch secrets split across flushes
-  - [ ] 1C.3 Byte-identical verdicts vs cumulative scanning across the G0.1 corpus
-  - [ ] 1C.4 Re-measure the 100/200/300-token curve; assert the exponent falls to ≈1.0
-  - [ ] 1C.5 Review `max_buffer_chunks=64` — aggressive for token-sized deltas; coalescing also serves the egress lever
+- [x] 1C. **Flush trigger fixed — 31.9× less guard CPU**
+  - [x] 1C.1 Diagnosis corrected: the scan window was already bounded (~525 chars). The bug was flush COUNT — a 512-byte lookahead is 75–88 token-sized chunks, exceeding `max_buffer_chunks=64`, so the queue never dropped below the limit and every chunk flushed
+  - [x] 1C.2 Fix counts chunks **since the last flush**, so it changes only when a flush fires, never what is scanned. Lookahead / secret anchor / open-media holdback preserved
+  - [x] 1C.3 Test-first: `test_stream_flush_per_token.py` (3 tests) — 152 vs 1 guard passes for identical bytes
+  - [x] 1C.4 Re-measured: 112.5→6.70, 454.6→18.10, 793.2→24.90 ms; curve now linear
+  - [x] 1C.5 **Throughput fix, not latency fix** — added wall clock only 150→~120-145 ms because guard work was already concurrent with generation
+  - _Evidence: docs/perf/evidence/2026-09-09-1C-flush-fix-result.md_
+
+- [ ] 1D. **NEW — locate the remaining ~120-145 ms of added streaming latency**
+  - [ ] 1D.1 It is NOT the output guard (now 24.9 ms concurrent), NOT Tier-1 (0.10 ms), NOT the policy engine (0.20 ms)
+  - [ ] 1D.2 Non-streaming is 15.2 ms p50 while streaming adds ~140 ms — the gap is stream machinery, not scanning
+  - [ ] 1D.3 Instrument the stream path end to end and attribute the gap before optimising anything
 
 - [ ] 2. Change 1 — one thread per evaluation, not per regex (R2)
   - [ ] 2.1 Property test **first**: for any rule set × any text, new verdict ≡ current verdict (byte-identical)

@@ -197,6 +197,14 @@ class SecureStreamingResponse:
         self._content_buffer: list[str] = []
         self._content_buffer_len: int = 0
         self._chunk_queue: list[tuple[str, str]] = []
+        # Chunks appended SINCE the last flush. The flush trigger must count these,
+        # not total queue depth: `_release_with_lookahead_tail` deliberately retains
+        # a trailing STREAM_LOOKAHEAD_BYTES window, which for token-sized deltas
+        # (~6 bytes) is 75-88 chunks — more than `max_buffer_chunks` (64). Keying the
+        # trigger off `len(self._chunk_queue)` therefore left the queue permanently
+        # at the limit and flushed on EVERY subsequent chunk (measured: 237 guard
+        # passes for a 300-token answer, ~3.2 ms each).
+        self._chunks_since_flush: int = 0
         self._stream_blocked: bool = False
         self._last_flush_reason: FlushReason | None = None
         # E14 long-secret split fix: a "secret-in-progress" anchor carried across
@@ -282,13 +290,14 @@ class SecureStreamingResponse:
                     yield raw_sse
                     continue
 
-                if len(self._chunk_queue) >= self._max_buffer_chunks:
+                if self._chunks_since_flush >= self._max_buffer_chunks:
                     async for flushed in self._flush_buffer(FlushReason.BUFFER_LIMIT):
                         yield flushed
                     if self._stream_blocked:
                         break
 
                 self._chunk_queue.append((raw_sse, content_delta))
+                self._chunks_since_flush += 1
                 self._content_buffer.append(content_delta)
                 self._content_buffer_len += len(content_delta.encode("utf-8"))
 
@@ -325,6 +334,10 @@ class SecureStreamingResponse:
         if not self._chunk_queue:
             return
         self._last_flush_reason = reason
+        # A flush has occurred: restart the new-chunk count. Retained lookahead
+        # chunks are deliberately NOT counted — they have already been scanned and
+        # are held only so a value split across the boundary can re-anchor.
+        self._chunks_since_flush = 0
 
         full_text = "".join(self._content_buffer)
         try:
