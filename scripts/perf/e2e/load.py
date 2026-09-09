@@ -409,12 +409,23 @@ def main() -> int:
 
             m_add = statistics.median([r["addon"] or 0.0 for r in mid])
             t_add = statistics.median([r["addon"] or 0.0 for r in slow])
-            acc = sum(d for d, _, _, _ in deltas)
-            print(f"{'firewall tax total':<20}{m_add:>11.2f}{t_add:>10.2f}{t_add-m_add:>+10.2f}")
-            print(f"  stage deltas account for {acc:+.2f} ms of the {t_add-m_add:+.2f} ms "
-                  f"tail excess ({100*acc/(t_add-m_add) if t_add != m_add else 0:.0f}%)"
-                  + ("" if abs(acc - (t_add - m_add)) < 0.5 * max(1e-9, abs(t_add - m_add))
-                     else "  <== UNATTRIBUTED: the time is NOT inside any stage"))
+            print(f"{'firewall tax total':<20}{m_add:>11.2f}{t_add:>10.2f}"
+                  f"{t_add-m_add:>+10.2f}")
+            # Attribute using the PER-REQUEST stage sum, not the sum of per-stage
+            # medians. The latter reported "3% — outside every stage" for several
+            # iterations while the per-request sum showed +45 ms INSIDE them: a stall
+            # landing on a DIFFERENT stage each request leaves every per-stage median
+            # flat. See docs/perf/evidence/2026-09-09-CORRECTION-attribution-method-was-wrong.md
+            m_sum = statistics.median([(r.get("roots") or {}).get("stage_latency_sum_ms", 0.0)
+                                       for r in mid])
+            t_sum = statistics.median([(r.get("roots") or {}).get("stage_latency_sum_ms", 0.0)
+                                       for r in slow])
+            acc, span = t_sum - m_sum, t_add - m_add
+            print(f"  per-request stage sum accounts for {acc:+.2f} ms of the {span:+.2f} ms "
+                  f"tail excess ({100*acc/span if span else 0:.0f}%)")
+            naive = sum(d for d, _, _, _ in deltas)
+            print(f"  (sum of per-stage medians would say only {naive:+.2f} ms — that gap "
+                  f"IS the stall moving between stages)")
 
     admissible = [r for r in rows if r["p99"] <= a.p99_bound_ms
                   and r["nine_all"] and r["err_rate"] <= 0.005]
