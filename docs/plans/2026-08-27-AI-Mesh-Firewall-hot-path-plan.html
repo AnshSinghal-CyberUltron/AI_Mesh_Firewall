@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI Mesh Firewall — Evidence-Based Hot-Path, Detection & Capacity Plan</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  @page { size: A4 portrait; margin: 16mm 14mm; }
+  :root{
+    --ink:#16181d; --ink-2:#3f4650; --ink-3:#6b7280; --rule:#d8dce2;
+    --surface:#ffffff; --surface-2:#f6f7f9;
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+    --critical:#d03b3b; --good:#0ca30c; --warning:#fab219;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family:"Helvetica Neue",Helvetica,"DejaVu Sans",Arial,sans-serif;
+    color:var(--ink); background:var(--surface);
+    font-size:9.6pt; line-height:1.5; margin:0;
+  }
+  h1{font-size:23pt;line-height:1.15;margin:0 0 6px;letter-spacing:-0.4px}
+  h2{font-size:14pt;margin:0 0 10px;padding-bottom:5px;border-bottom:2px solid var(--ink);letter-spacing:-0.2px}
+  h3{font-size:11pt;margin:16px 0 6px;color:var(--ink)}
+  h4{font-size:9.6pt;margin:12px 0 4px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.6px}
+  p{margin:0 0 8px}
+  .page{page-break-after:always}
+  .page:last-child{page-break-after:auto}
+  .nobreak{page-break-inside:avoid}
+  .sub{color:var(--ink-3);font-size:9pt}
+  .lede{font-size:11pt;line-height:1.5;color:var(--ink-2);margin:0 0 14px}
+  table{width:100%;border-collapse:collapse;margin:8px 0 12px;font-size:8.6pt}
+  th{text-align:left;font-weight:600;border-bottom:1.5px solid var(--ink);padding:5px 7px;vertical-align:bottom}
+  td{border-bottom:1px solid var(--rule);padding:5px 7px;vertical-align:top}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+  tr.tot td{border-top:1.5px solid var(--ink);border-bottom:none;font-weight:600}
+  code,.mono{font-family:"DejaVu Sans Mono",Menlo,Consolas,monospace;font-size:8.1pt;background:var(--surface-2);padding:1px 3px;border-radius:2px}
+  .tag{display:inline-block;font-family:"DejaVu Sans Mono",monospace;font-size:7pt;font-weight:700;
+       padding:1px 4px;border-radius:2px;border:1px solid var(--rule);color:var(--ink-3);background:var(--surface-2)}
+  .verdict{border:2px solid var(--critical);border-radius:5px;padding:12px 14px;margin:14px 0;background:#fdf5f5}
+  .verdict h3{margin:0 0 5px;color:var(--critical);font-size:12pt}
+  .callout{border-left:3px solid var(--s1);background:var(--surface-2);padding:9px 12px;margin:10px 0;border-radius:0 3px 3px 0}
+  .callout.warn{border-left-color:var(--critical);background:#fdf5f5}
+  .callout.ok{border-left-color:var(--good);background:#f3faf3}
+  .hero{display:flex;gap:10px;margin:14px 0}
+  .stat{flex:1;border:1px solid var(--rule);border-radius:5px;padding:10px;background:var(--surface-2)}
+  .stat .v{font-size:19pt;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+  .stat .l{font-size:7.6pt;color:var(--ink-3);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+  .stat.bad .v{color:var(--critical)}
+  .stat.good .v{color:var(--good)}
+  figure{margin:12px 0;page-break-inside:avoid}
+  figcaption{font-size:8.2pt;color:var(--ink-3);margin-top:5px}
+  .mermaid{background:var(--surface);margin:6px 0}
+  .legend{display:flex;gap:16px;font-size:8.2pt;margin:6px 0 2px;color:var(--ink-2)}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  .meta{font-size:8.2pt;color:var(--ink-3);border-top:1px solid var(--rule);padding-top:8px;margin-top:16px}
+  ol,ul{margin:0 0 8px;padding-left:18px}
+  li{margin-bottom:3px}
+  .two{display:flex;gap:16px}
+  .two>div{flex:1}
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="page">
+  <p class="sub" style="letter-spacing:1.4px;text-transform:uppercase;font-size:8pt">AI Mesh Firewall · ZeroShield</p>
+  <h1>Evidence-Based Hot-Path,<br>Detection &amp; Capacity Plan</h1>
+  <p class="lede" style="margin-top:10px">What the firewall actually costs, what it actually detects, and what $5,000&nbsp;/&nbsp;month actually buys — measured, not derived.</p>
+
+  <div class="hero">
+    <div class="stat good"><div class="v">≈5.9 ms</div><div class="l">p50 added latency, ≤1,024 tok, in-process L4 GPU — 74% derived, not measured</div></div>
+    <div class="stat"><div class="v">590–1,064</div><div class="l">RPS on $5k/mo — bound by GPU quota, not budget</div></div>
+    <div class="stat bad"><div class="v">1.99%</div><div class="l">Per-request false-positive rate, never previously stated</div></div>
+  </div>
+
+  <div class="callout ok">
+    <strong>Verdict changed 2026-08-29.</strong> All architectural constraints were removed (GPU/CPU/RAM open, budget unchanged). That lifted the GPU prohibition — which was a signed lock, not an evidence-based conclusion. <strong>≤12 ms is reachable</strong> with the classifier in-process on an L4 node. The CPU-only analysis below remains correct and is why.
+  </div>
+
+  <div class="verdict">
+    <h3>On CPU only: NOT ACHIEVABLE — over-determined three ways</h3>
+    <table style="margin:8px 0 0">
+      <tr><th>Constraint</th><th class="n">Measured</th><th class="n">Budget</th><th class="n">Over by</th></tr>
+      <tr><td>Semantic classifier — PG2-22M INT8 ONNX, seq 512</td><td class="n">159.2 ms</td><td class="n">5 ms</td><td class="n"><strong>32×</strong></td></tr>
+      <tr><td>Tier-1, verdict-identical rewrite, 1024-token band</td><td class="n">63.4 ms</td><td class="n">0.50 ms</td><td class="n"><strong>127×</strong></td></tr>
+      <tr><td>Cost of 100k RPS, coalesced SSE, best case</td><td class="n">$309,620/mo</td><td class="n">$5,000/mo</td><td class="n"><strong>62×</strong></td></tr>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <strong>And the finding that neither hardware nor budget fixes:</strong> the deterministic layer was never measured. It detects <strong>0 of 10</strong> paraphrased injections while hard-blocking <strong>5 of 5</strong> benign prompts containing inline code.
+  </div>
+
+  <h4>Evidence base</h4>
+  <p>18 agents across two workflows — 7 evidence agents, 1 synthesis, 5 adversarial reviewers (CLAUDE.md Phase&nbsp;3), 1 devil's advocate (Phase&nbsp;4), 3 capacity/removal agents, 1 adjudicator. ~4.1&nbsp;M subagent tokens, 1,178 tool calls.</p>
+
+  <div class="meta">
+    <strong>Provenance tags used throughout.</strong>
+    <span class="tag">M</span> measured this session ·
+    <span class="tag">R</span> repo bench corpus ·
+    <span class="tag">V</span> vendor-published, URL + date ·
+    <span class="tag">I</span> independent third party ·
+    <span class="tag">D</span> derived arithmetic, assumptions stated ·
+    <span class="tag">NF</span> searched, not found.<br>
+    2026-08-27 · branch <code>ansh</code> · PLAN ONLY — no code, config, or infrastructure change is authorised by this document.
+  </div>
+</section>
+
+<!-- ============ THE FINDING ============ -->
+<section class="page">
+  <h2>1 · The finding that matters</h2>
+  <p class="lede">The plan was about to recommend shipping Tier-1-only as the default posture and certifying 12 ms for it. Nobody had ever measured what Tier-1-only detects.</p>
+
+  <p>Measured against the real <code>InputScanner._scan_prompt_sync</code> at HEAD:</p>
+
+  <table class="nobreak">
+    <tr><th>Probe</th><th class="n">Result</th><th>Meaning</th></tr>
+    <tr><td>Bare English prompt injections, same family as the shipped regexes</td><td class="n"><strong style="color:var(--critical)">3 / 10</strong></td><td>detected</td></tr>
+    <tr><td>The same injections paraphrased with disjoint trigger vocabulary</td><td class="n"><strong style="color:var(--critical)">0 / 10</strong></td><td>detected</td></tr>
+    <tr><td>Benign prompts containing inline-backtick code</td><td class="n"><strong style="color:var(--critical)">5 / 5</strong></td><td>hard-blocked, confidence 1.00</td></tr>
+    <tr><td>Ordinary agentic tool descriptions</td><td class="n"><strong style="color:var(--critical)">3 / 12</strong></td><td>hard-blocked, confidence 1.00</td></tr>
+  </table>
+
+  <div class="callout warn">
+    <strong>Root cause.</strong> <code>ATTACK_PATTERNS["command_injection"]</code> contains the literal pattern <code>r"`[^`]+`"</code> — <strong>any backtick pair</strong>. <code>command_injection</code> and <code>data_leakage</code> are excluded from the explanatory carve-out (<code>scanner.py:104</code>, tested at <code>:1201</code>), so the block is terminal at <code>:1212-1219</code>, tier_1, and never reaches Tier-2.
+  </div>
+
+  <p><strong>The recommended default posture is near-blind on the primary threat and hostile to ordinary developer traffic, simultaneously.</strong></p>
+
+  <h3>This inverts the project</h3>
+  <p>It is not "12 ms vs 119 ms." It is: <em>the product's detection value lives almost entirely in the layer that costs 100× the SLO, and the layer that fits the SLO has never been measured and does not work.</em></p>
+
+  <h3>Consequence for the Tier-1 rewrite</h3>
+  <p>A verdict-identical rewrite is <em>achievable</em> — 0 verdict diffs across 44 <code>_scan_prompt_sync</code> inputs, 1,432 <code>_segment_token</code> tokens, 28 <code>_fuzzy_scan</code> inputs <span class="tag">M</span>. It is a 32× win. <strong>But byte-identical verdicts is now the wrong goal:</strong> it is a gate that faithfully preserves a detector measured at 0/10 paraphrase recall and 5/5 false-positive on inline code.</p>
+
+  <table class="nobreak">
+    <tr><th>Tier-1 option</th><th class="n">Cost @1024 tok</th><th>Verdicts</th></tr>
+    <tr><td>Verdict-identical rewrite</td><td class="n">63.4 ms <span class="tag">M</span></td><td>preserved — <em>including the defects</em></td></tr>
+    <tr><td>Change the detector</td><td class="n">floor 0.34–0.54 ms <span class="tag">M</span></td><td>different — must be scored against a corpus that does not yet exist</td></tr>
+  </table>
+
+  <p>You cannot choose between these without a detection corpus. That is <strong>Gate&nbsp;0</strong>.</p>
+
+  <div class="callout warn">
+    <strong>The instrument is also broken.</strong> <code>ttft_ms</code> and <code>duration_ms</code> both derive from <code>provider_start_ts</code> (<code>pipeline_trace.py:120-131</code>); <code>total_latency_ms = duration</code> (<code>:738,:778</code>); the bench computes <code>addon = total − model_output</code>. <strong>Therefore addon = TTFT.</strong> On streaming requests the benchmark measures the customer's model, not the firewall — so the 12 ms gate passes unconditionally and Phase&nbsp;1's "stop and revise" gate cannot fire.
+  </div>
+</section>
+
+<!-- ============ LATENCY EVIDENCE ============ -->
+<section class="page">
+  <h2>2 · Measured latency vs budget</h2>
+  <p class="lede">Every bar is measured in-process against the real modules. The budget column is what the superseded plans assumed.</p>
+
+  <figure class="nobreak">
+    <div class="legend">
+      <span><i style="background:var(--s1)"></i>Budgeted <span class="tag">D</span></span>
+      <span><i style="background:var(--s2)"></i>Measured <span class="tag">M</span></span>
+      <span><i style="background:var(--s3)"></i>Target design <span class="tag">M</span></span>
+    </div>
+    <svg id="latchart" viewBox="0 0 760 400" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Budget versus measured latency per stage, log scale">
+      <style>#latchart text{paint-order:stroke;stroke:#ffffff;stroke-width:3px;stroke-linejoin:round}</style>
+      <!-- grid -->
+      <g stroke="var(--rule)" stroke-width="1">
+        <line x1="200" y1="30" x2="200" y2="330"/>
+        <line x1="311" y1="30" x2="311" y2="330"/>
+        <line x1="422" y1="30" x2="422" y2="330"/>
+        <line x1="533" y1="30" x2="533" y2="330"/>
+        <line x1="644" y1="30" x2="644" y2="330"/>
+      </g>
+      <g font-size="9" fill="var(--ink-3)" text-anchor="middle">
+        <text x="200" y="346">0.1 ms</text><text x="311" y="346">1 ms</text>
+        <text x="422" y="346">10 ms</text><text x="533" y="346">100 ms</text>
+        <text x="644" y="346">1,000 ms</text>
+      </g>
+      <text x="422" y="366" font-size="8.5" fill="var(--ink-3)" text-anchor="middle">logarithmic scale</text>
+
+      <!-- Row 1: T1 input scan -->
+      <text x="192" y="52" font-size="9.5" fill="var(--ink)" text-anchor="end" font-weight="600">Tier-1 input scan</text>
+      <rect x="200" y="42" width="77.7" height="11" rx="3" fill="var(--s1)"/>
+      <text x="283" y="51" font-size="8.2" fill="var(--ink-2)">0.50 budget</text>
+      <rect x="200" y="56" width="311.3" height="11" rx="3" fill="var(--s2)"/>
+      <text x="517" y="65" font-size="8.2" fill="var(--ink-2)">63.4 rewritten</text>
+      <rect x="200" y="70" width="478.8" height="11" rx="3" fill="var(--s2)" opacity="0.45"/>
+      <text x="684" y="79" font-size="8.2" fill="var(--ink-2)">2,038.9 today</text>
+
+      <!-- Row 2: T2 classify -->
+      <text x="192" y="112" font-size="9.5" fill="var(--ink)" text-anchor="end" font-weight="600">Tier-2 classify (512 tok)</text>
+      <rect x="200" y="102" width="188.8" height="11" rx="3" fill="var(--s1)"/>
+      <text x="408" y="111" font-size="8.2" fill="var(--ink-2)">5.0 budget</text>
+      <rect x="200" y="116" width="355.8" height="11" rx="3" fill="var(--s2)"/>
+      <text x="561" y="125" font-size="8.2" fill="var(--ink-2)">159.2 measured — 32× over</text>
+
+      <!-- Row 3: non-classifier -->
+      <text x="192" y="172" font-size="9.5" fill="var(--ink)" text-anchor="end" font-weight="600">All non-classifier stages</text>
+      <rect x="200" y="162" width="153.3" height="11" rx="3" fill="var(--s1)"/>
+      <text x="359" y="171" font-size="8.2" fill="var(--ink-2)">2.40 budget</text>
+      <rect x="200" y="176" width="282.7" height="11" rx="3" fill="var(--s2)"/>
+      <text x="488" y="185" font-size="8.2" fill="var(--ink-2)">≥35 today</text>
+      <rect x="200" y="190" width="22.7" height="11" rx="3" fill="var(--s3)"/>
+      <text x="228" y="199" font-size="8.2" fill="var(--ink-2)">0.16 target design</text>
+
+      <!-- Row 4: redact_all -->
+      <text x="192" y="232" font-size="9.5" fill="var(--ink)" text-anchor="end" font-weight="600">redact_all — ONE pass</text>
+      <text x="200" y="226" font-size="8.2" fill="var(--critical)" font-weight="600">no budget line existed</text>
+      <rect x="200" y="230" width="212.6" height="11" rx="3" fill="var(--s2)"/>
+      <text x="418" y="239" font-size="8.2" fill="var(--ink-2)">8.19 p50 / 18.05 p99 — and the request runs 4–20 of them</text>
+
+      <!-- Row 5: middleware -->
+      <text x="192" y="278" font-size="9.5" fill="var(--ink)" text-anchor="end" font-weight="600">4× ASGI middleware</text>
+      <text x="200" y="272" font-size="8.2" fill="var(--critical)" font-weight="600">no budget line existed</text>
+      <rect x="200" y="276" width="111.1" height="11" rx="3" fill="var(--s2)"/>
+      <text x="317" y="285" font-size="8.2" fill="var(--ink-2)">1.00 p50 / 4.70 p99 — before one line of firewall logic</text>
+
+      <!-- 12ms marker -->
+      <line x1="401" y1="30" x2="401" y2="330" stroke="var(--critical)" stroke-width="2" stroke-dasharray="5 3"/>
+      <text x="405" y="322" font-size="8.5" fill="var(--critical)" font-weight="700">12 ms SLO</text>
+    </svg>
+    <figcaption>Measured on Intel Xeon Platinum 8581C, Python 3.12.13 (matching the gateway Dockerfile), 1024-token band. <strong>Nothing here was measured on the target ARM SKU</strong> — every millisecond is x86.</figcaption>
+  </figure>
+
+  <h3>Why the classifier cannot be rescued</h3>
+  <table class="nobreak">
+    <tr><th>Cause</th><th>Evidence</th></tr>
+    <tr><td>The model is <strong>12 layers, not 6</strong></td><td>R2's spec was wrong; every downstream estimate inherited it <span class="tag">M</span></td></tr>
+    <tr><td><strong>Batch-4 is net negative</strong> at the optimal thread count (0.92× at 8 threads)</td><td>The apparent 1.49× win exists only at 16 threads — compensation for wasting cores on one small graph <span class="tag">M</span></td></tr>
+    <tr><td><strong>INT8 does not help</strong> — 1.27× over FP32, and 1.73× <em>slower</em> at batch-4</td><td>ONNX Runtime's fusion optimiser's <code>MODEL_TYPES</code> dict has <strong>no <code>deberta</code> entry</strong> → no fused Attention → no <code>QAttention</code>. Architectural, not a tuning knob <span class="tag">V</span></td></tr>
+    <tr><td>Two costs never budgeted</td><td>SentencePiece tokenisation 4.3 ms/512 tok; and a 16-core host <strong>cannot supply the FLOPs for even 85 RPS</strong> at 1024 tokens <span class="tag">M</span></td></tr>
+  </table>
+
+  <div class="callout"><strong>Useful for the real design:</strong> 8 threads (= physical cores) is optimal; <strong>16 threads is 25% slower with 2.4× worse p99</strong>. SMT actively harms this workload — the cliff must be re-found on Axion.</div>
+</section>
+
+<!-- ============ THE FAILED ALTERNATIVE ============ -->
+<section class="page">
+  <h2>3 · The embedding + trained-head alternative — and why it fails</h2>
+  <p class="lede">A static embedding with a trained classifier head looked like the escape route: ~500× cheaper than a transformer, with published precedent (NemoGuard-JailbreakDetect, F1 0.9601, is a classifier head over embeddings — not a transformer judge). The devil's advocate trained the head that nobody else had trained.</p>
+
+  <table class="nobreak">
+    <tr><th>Window</th><th class="n">≈ tokens</th><th class="n">AUC same-family</th><th class="n">AUC disjoint-vocab</th><th class="n">Recall @1% FPR</th></tr>
+    <tr><td>16 words</td><td class="n">~21</td><td class="n">0.9995</td><td class="n">0.9498</td><td class="n">0.377</td></tr>
+    <tr><td>48 words</td><td class="n">~62</td><td class="n">0.9566</td><td class="n">0.7708</td><td class="n">0.060</td></tr>
+    <tr class="tot"><td><strong>200 words (deployed)</strong></td><td class="n">~260</td><td class="n">0.7397</td><td class="n"><strong style="color:var(--critical)">0.6017</strong></td><td class="n"><strong style="color:var(--critical)">0.028</strong></td></tr>
+  </table>
+
+  <div class="callout warn">
+    <strong>AUC 0.60, recall 2.8% at the deployed window.</strong> The mechanism is <strong>dilution</strong>, not order-invariance — it works at 21 tokens and collapses at 260. And the arithmetic that kills it outright: <strong>51 windows × 1% per-window FPR = 40% per-request FPR.</strong>
+  </div>
+
+  <p>Cost was never this design's problem (~1.5–2 ms at the band). <strong>The multiple-comparisons FPR budget is.</strong> A cost-only gate admitted it; a quality gate excludes it. This is why <em>L2 must name a model class with a GFLOP-per-window entry gate <strong>and</strong> a published recall floor, evaluated at the deployed window size with a per-request FPR budget.</em></p>
+
+  <h3>The lever that was never evaluated</h3>
+  <div class="callout warn">
+    <strong>GPU was rejected using an AWS price in a GCP-locked plan.</strong> <span class="tag">NF</span> — no GCP accelerator rate appears anywhere in the bill of materials. GCP <code>asia-south1</code> has <code>nvidia-l4</code> in zones a/b/c with on-demand quota 8, and <code>g2-standard-4</code> machine types. This is the <em>only</em> lever that closes the classifier gap outright, and it has never been priced on the correct list.
+  </div>
+</section>
+
+<!-- ============ SYSTEM CONTEXT ============ -->
+<section class="page">
+  <h2>4 · System context</h2>
+  <p class="lede">Two products, two edges. The chat path and the operator console must never share an edge.</p>
+
+  <figure class="nobreak">
+    <pre class="mermaid">
+graph LR
+  SDK["Tenant SDK / API client"] --> EDGE["Chat edge<br/>TLS, SSE, no buffering"]
+  EDGE --> MESH["AI Mesh Firewall<br/>9-stage pipeline"]
+  MESH --> BYOK["Tenant BYOK model<br/>outside the SLO"]
+  MESH -.->|"tenant-owned<br/>outside the SLO"| VDB["Tenant vector store"]
+  OP["Operator browser"] --> CDN["CDN — SPA only"]
+  CDN --> ALB["Console edge"]
+  ALB --> CTL["Control plane"]
+  CTL --> SQL[("Control OLTP")]
+  MESH -.->|async, never awaited| BUS["Audit bus"]
+    </pre>
+    <figcaption>The contract boundary is <strong>who owns the endpoint</strong>. Tenant-owned round trips — the BYOK model and the tenant's vector store — sit outside the latency contract on the same principle.</figcaption>
+  </figure>
+
+  <h3>The per-path contract</h3>
+  <p>All four paths meet a 12 ms tax <strong>in a Tier-1-only posture</strong> — the posture Gate 0 must first prove is worth shipping.</p>
+
+  <table>
+    <tr><th>Path</th><th class="n">Firewall tax, target posture</th><th>Note</th></tr>
+    <tr><td>Chat</td><td class="n">2.39 ms</td><td>a sum of <em>unbuilt targets</em> mis-tagged as measured; honest range <strong>3.0–5.5 ms p50</strong>, p99 unestablished</td></tr>
+    <tr><td>MCP</td><td class="n">1.5–3.5 ms</td><td>inherits the chat scanner</td></tr>
+    <tr><td>RAG</td><td class="n">0.5–0.6 ms</td><td>wall clock is <strong>≥124 ms and never lower</strong> — Pinecone has no in-region endpoint</td></tr>
+    <tr><td>Vector</td><td class="n">0.7 ms</td><td>—</td></tr>
+  </table>
+
+  <div class="callout">
+    <strong>The contract, stated exactly:</strong> "≤ X ms of firewall tax + N declared tenant round trips, N ≤ 2." Today N = 3 on Pinecone — <strong>and the third one is ours.</strong>
+  </div>
+
+  <div class="callout ok">
+    <strong>The useful collapse:</strong> requiring the SLO on all four paths does not multiply the problem by four — <strong>it collapses it to one</strong>, because all four share the scanner. That one question has a measured answer, and it is currently <em>no</em>.
+  </div>
+</section>
+
+<!-- ============ PIPELINE SEQUENCE ============ -->
+<section class="page">
+  <h2>5 · The nine-stage pipeline, with measured cost</h2>
+
+  <figure class="nobreak">
+    <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as SDK client
+  participant E as Edge
+  participant G as Gateway process
+  participant K as Cache
+  participant M as BYOK model
+  participant B as Audit bus
+  C->>E: POST /v1/chat/completions
+  E->>G: keepalive upstream
+  Note over G: 4x ASGI middleware — 1.00 ms p50, unbudgeted
+  G->>K: auth lookup — 0.128 ms today, RAM cache in target
+  G->>G: kill-switch and model state — snapshot, 50 ms staleness
+  G->>K: rate limit — one EVALSHA
+  G->>G: policy — precompiled bundle
+  G->>G: Tier-1 scan — 2038.9 ms today, 63.4 ms rewritten
+  G->>G: Tier-2 classify — 159.2 ms measured, budget was 5
+  G->>G: model routing from RAM
+  G->>M: redacted prompt
+  M-->>G: token stream
+  G->>G: output Tier-1 per chunk, classifier at DONE
+  G-->>C: SSE — coalesce writes, 11.6x egress lever
+  G->>B: put_nowait, never awaited
+    </pre>
+    <figcaption>Stage costs are measured in-process <span class="tag">M</span>. The two stages with no budget line at all — ASGI middleware and tokenisation — are among the largest.</figcaption>
+  </figure>
+
+  <h3>Gateway process — component view</h3>
+  <figure class="nobreak">
+    <pre class="mermaid">
+classDiagram
+  class GatewayProcess {
+    modular monolith
+    no internal RPC
+    16 workers, no shared memory
+  }
+  class AuthCache { RAM, epoch-keyed }
+  class AdmitSnapshot { 50 ms TTL + push invalidation }
+  class PolicyBundle { precompiled, per-org isolation }
+  class Tier1Scanner { Hyperscan relaxed-superset + RapidFuzz prefilter }
+  class Tier2Classifier { UNRESOLVED — pending Gate 0 and Gate 5 }
+  class RateLimiter { local GCRA + one EVALSHA }
+  class OutputGuard { per-chunk T1 + classifier at DONE }
+  class AuditRing { bounded, drop-counted }
+  GatewayProcess *-- AuthCache
+  GatewayProcess *-- AdmitSnapshot
+  GatewayProcess *-- PolicyBundle
+  GatewayProcess *-- Tier1Scanner
+  GatewayProcess *-- Tier2Classifier
+  GatewayProcess *-- RateLimiter
+  GatewayProcess *-- OutputGuard
+  GatewayProcess *-- AuditRing
+    </pre>
+    <figcaption><strong>Per-worker state lies at scale.</strong> <code>compute_sizing(16.0, 64 GiB) → workers=16</code> with no shared memory <span class="tag">M</span> — so a breaker configured at <code>MIN_CALLS=5</code> is effectively 80. Every cache line in the tracker carries a "worker-count multiplier applied? Y/N" column.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ COST ============ -->
+<section class="page">
+  <h2>6 · Cost — egress dominates, compute does not</h2>
+  <p class="lede">Egress plus load-balancer data processing is <strong>94.6%</strong> of the best realistic case at 100k RPS. Compute is <strong>5.1%</strong>.</p>
+
+  <figure class="nobreak">
+    <div class="legend">
+      <span><i style="background:var(--s2)"></i>Per-token SSE (today's wire shape)</span>
+      <span><i style="background:var(--s1)"></i>Coalesced ×16</span>
+      <span><i style="background:var(--s3)"></i>Coalesced + gzip <span class="tag">D</span></span>
+    </div>
+    <svg viewBox="0 0 760 440" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Monthly cost versus requests per second, log-log">
+      <g stroke="var(--rule)" stroke-width="1">
+        <line x1="80" y1="400" x2="700" y2="400"/>
+        <line x1="80" y1="300" x2="700" y2="300"/>
+        <line x1="80" y1="200" x2="700" y2="200"/>
+        <line x1="80" y1="100" x2="700" y2="100"/>
+        <line x1="80" y1="60" x2="80" y2="400"/>
+        <line x1="380" y1="60" x2="380" y2="400" stroke-dasharray="2 3"/>
+        <line x1="680" y1="60" x2="680" y2="400" stroke-dasharray="2 3"/>
+      </g>
+      <g font-size="9" fill="var(--ink-3)" text-anchor="end">
+        <text x="74" y="403">$1k</text><text x="74" y="303">$10k</text>
+        <text x="74" y="203">$100k</text><text x="74" y="103">$1M</text>
+      </g>
+      <g font-size="9" fill="var(--ink-3)" text-anchor="middle">
+        <text x="80" y="418">1k RPS</text><text x="380" y="418">10k</text>
+        <text x="590" y="418">50k</text><text x="680" y="418">100k</text>
+      </g>
+
+      <!-- budget line -->
+      <line x1="80" y1="330" x2="700" y2="330" stroke="var(--critical)" stroke-width="2" stroke-dasharray="6 3"/>
+      <text x="704" y="333" font-size="8.5" fill="var(--critical)" font-weight="700">$5k/mo</text>
+
+      <!-- per-token -->
+      <polyline points="80,277 380,180 590,110 680,80" fill="none" stroke="var(--s2)" stroke-width="2.5"/>
+      <g fill="var(--s2)"><circle cx="80" cy="277" r="4.5"/><circle cx="380" cy="180" r="4.5"/><circle cx="590" cy="110" r="4.5"/><circle cx="680" cy="80" r="4.5"/></g>
+      <text x="672" y="70" font-size="8.6" fill="var(--ink-2)" text-anchor="end" font-weight="600">$1.59M</text>
+
+      <!-- coalesced -->
+      <polyline points="80,331 380,249 590,181 680,151" fill="none" stroke="var(--s1)" stroke-width="2.5"/>
+      <g fill="var(--s1)"><circle cx="80" cy="331" r="4.5"/><circle cx="380" cy="249" r="4.5"/><circle cx="590" cy="181" r="4.5"/><circle cx="680" cy="151" r="4.5"/></g>
+      <text x="672" y="142" font-size="8.6" fill="var(--ink-2)" text-anchor="end" font-weight="600">$310k</text>
+
+      <!-- gzip -->
+      <polyline points="80,345 380,272 590,205 680,175" fill="none" stroke="var(--s3)" stroke-width="2.5"/>
+      <g fill="var(--s3)"><circle cx="80" cy="345" r="4.5"/><circle cx="380" cy="272" r="4.5"/><circle cx="590" cy="205" r="4.5"/><circle cx="680" cy="175" r="4.5"/></g>
+      <text x="672" y="192" font-size="8.6" fill="var(--ink-2)" text-anchor="end" font-weight="600">$178k</text>
+
+      <!-- the intersection -->
+      <circle cx="80" cy="331" r="9" fill="none" stroke="var(--critical)" stroke-width="2"/>
+      <text x="95" y="358" font-size="9" fill="var(--critical)" font-weight="700">$5k buys ≈1,000 RPS</text>
+      <text x="95" y="370" font-size="8.4" fill="var(--ink-3)">with SSE coalescing ×16 · $4,866/mo</text>
+    </svg>
+    <figcaption>Assumptions: <code>c4a-highcpu-16</code> 1-yr CUD, ≤60% CPU, ×1.5 AZ, min 3 hosts HA, no Cloud NAT, Premium Tier egress to Asia, 70% streaming, 400-token answers, 250 RPS/vCPU, no Cloud Armor, no Cloud Logging at request rate. The gzip series is <span class="tag">D</span>, not measured.</figcaption>
+  </figure>
+
+  <div class="callout">
+    <strong>The reframe.</strong> Making the code faster buys nothing. <strong>Making it emit fewer bytes buys 11.6×.</strong> Both are code changes — but they are different code, and only one of them was in the old plan.
+  </div>
+
+  <h3>The highest-return single fix</h3>
+  <p>The terminal SSE frame carries the full <code>pipeline_trace</code>: <strong>41,424 bytes, with 21 copies of the prompt and 7 of the response</strong>, on every <em>allowed</em> request, streamed and non-streamed, with no config flag. <code>_scrub_trace_for_client</code> (<code>main.py:723</code>) is called from <strong>exactly one place</strong> — <code>:955</code>, the blocked path. This is <strong>24% of the entire $5k budget today</strong>.</p>
+
+  <h3>The number nobody agrees on</h3>
+  <table>
+    <tr><th>Source</th><th class="n">RPS/vCPU</th><th class="n">Per 16-vCPU host</th><th>Tag</th></tr>
+    <tr><td>MASTER D4's 12-host cell for 100k</td><td class="n">520</td><td class="n">8,320</td><td><strong style="color:var(--critical)">no support anywhere — strike it</strong></td></tr>
+    <tr><td>MASTER D4's stated header</td><td class="n">250</td><td class="n">4,000</td><td><span class="tag">D</span></td></tr>
+    <tr><td>Synthesis planning band</td><td class="n">9–25</td><td class="n">150–400</td><td><span class="tag">D</span></td></tr>
+    <tr><td>FLOP wall, PG2-22M @1024 tok</td><td class="n">0.68</td><td class="n">10.8</td><td><span class="tag">D</span> from <span class="tag">M</span></td></tr>
+    <tr class="tot"><td>Today, measured, @1024 tok</td><td class="n">0.3</td><td class="n">~5</td><td><span class="tag">R</span></td></tr>
+  </table>
+  <p class="sub">A 1,700× spread on the second-largest bill line. <strong>N ≈ 85 RPS/host is a 32–64-token number</strong>; at the 1024-token band today's host does ~5 RPS.</p>
+</section>
+
+<!-- ============ COMPETITIVE ============ -->
+<section class="page">
+  <h2>7 · Competitive positioning</h2>
+  <p class="lede">Every published gateway benchmark is inflated by methodology. Knowing exactly how is what makes an honest claim possible.</p>
+
+  <table>
+    <tr><th>Gateway</th><th>Published</th><th>The caveat that matters</th></tr>
+    <tr><td>TrueFoundry</td><td>+3–5 ms <em>(blog)</em></td><td><strong>+7 ms in the docs, +12 ms with tracing</strong>; 350 RPS/vCPU; mock upstream; <strong>auth + routing only, zero security scanning</strong></td></tr>
+    <tr><td>Kong</td><td>96k RPS, p99 9.75 ms</td><td>16 vCPU; <em>"no policies, like caching or API key based authentication, were configured"</em></td></tr>
+    <tr><td>LiteLLM Rust</td><td>0.05 ms</td><td><em>"no logging callbacks, spend tracking, or persistence enabled"</em></td></tr>
+    <tr><td>Bifrost</td><td>11 µs</td><td><em>"excludes upstream response time"</em></td></tr>
+    <tr><td>Envoy AI Gateway</td><td><span class="tag">NF</span></td><td>no published data-plane benchmark exists</td></tr>
+  </table>
+
+  <div class="callout warn">
+    <strong>The finding that governs every comparison:</strong> <em>"None of the published overhead numbers are measured with streaming on."</em> Kong's own documentation states streaming cannot combine with response-phase plugins at all.
+  </div>
+
+  <p><strong>The defensible claim is therefore not RPS parity. It is latency parity while running a security pipeline none of them run, measured with streaming on</strong> — which requires fixing the instrument first.</p>
+
+  <h3>Capacity, as three separate claims</h3>
+  <table>
+    <tr><th>Claim</th><th>Statement</th><th>Status</th></tr>
+    <tr><td><strong>C-A</strong> design ceiling</td><td>No fixed bottleneck below 100k RPS; every tier scales horizontally with a named binding constraint</td><td>achievable as a design property</td></tr>
+    <tr><td><strong>C-B</strong> provisioned N</td><td>What $5,000/mo actually buys, measured, with HA</td><td><strong>≈1,000 RPS</strong> with coalescing ($4,866/mo). ~122 RPS as the code stands. In-flight is never binding at this budget.</td></tr>
+    <tr><td><strong>C-C</strong> competitive parity</td><td>Added latency comparable to industry AI gateways</td><td>blocked on the instrument</td></tr>
+  </table>
+</section>
+
+<!-- ============ GATES ============ -->
+<section class="page">
+  <h2>8 · Execution — gates and dependencies</h2>
+
+  <figure class="nobreak">
+    <pre class="mermaid">
+graph TD
+  G0["Gate 0 — Measure detection<br/>BLOCKS EVERY POSTURE DECISION"]
+  G1["Gate 1 — Fix the instrument<br/>BLOCKS ALL MEASUREMENT"]
+  G5["Gate 5 — Price the GPU<br/>on the correct cloud"]
+  G2["Gate 2 — Live defects<br/>independent, ship as ready"]
+  G4["Gate 4 — Zero-dependency wins<br/>10x, verdict-neutral"]
+  G3["Gate 3 — Restate the budget"]
+  P2["Phase 2 — Engine<br/>T1 fork decision"]
+  P3["Phase 3 — Zero Bedrock<br/>T5 before T9, T11 before T16"]
+  P4["Phase 4 — Fleet<br/>bake-off on the real SKU"]
+  G0 --> P2
+  G1 --> P2
+  G5 --> P2
+  P2 --> P3 --> P4
+  G1 --> G4
+  G4 --> P4
+  G3 --> P4
+  G2 -.->|independent| P4
+    </pre>
+    <figcaption><strong>The single most important sequencing rule:</strong> Gate 1 before any measurement, Gate 0 before any posture decision. Reversing either produces a confident, published, wrong answer — the failure mode this corpus caught twice already.</figcaption>
+  </figure>
+
+  <h3>Live defects — not performance work</h3>
+  <table>
+    <tr><th>ID</th><th>Defect</th><th>Why it is severe</th></tr>
+    <tr><td><strong>S-1</strong></td><td><code>PolicySync</code> partial cold start</td><td>A subset of tenants is <strong>unenforced forever</strong>, <code>/health</code> green, no reconciliation. Workers × nodes = independent scans, each able to stop at a different point.</td></tr>
+    <tr><td><strong>S-2</strong></td><td>Cross-tenant config inheritance</td><td><code>build_redis_key()</code> returns <code>firewall:config:default</code> when org-less, so an un-synced tenant <strong>inherits the platform-default posture</strong>. The fix exists and was applied to MCP but not to chat.</td></tr>
+    <tr><td><strong>S-3</strong></td><td><code>--worker-connections</code> silently inert</td><td>No admission control anywhere. Raising <code>timeoutSec</code> first converts a routine upstream stall into a metastable failure.</td></tr>
+    <tr><td><strong>S-4</strong></td><td><code>scan_degraded</code> dead on the output path</td><td>On breaker-OPEN, streams ship Tier-1-only, fail-open, <strong>while telemetry attests they were scanned</strong>. A false attestation in a compliance record.</td></tr>
+    <tr><td><strong>S-5</strong></td><td>Streaming "block" is a truncation</td><td>260 of 800 characters delivered, then an error frame. An operator who selected block did not get one.</td></tr>
+    <tr><td><strong>S-6</strong></td><td>Telemetry drops evidence</td><td>Whole batch discarded on Redis error — <strong>precisely during the failures the plan expects</strong>.</td></tr>
+  </table>
+
+  <h3>Zero-Bedrock ordering — two laws</h3>
+  <figure class="nobreak">
+    <pre class="mermaid">
+graph LR
+  T1["T1-T4 land replacements<br/>shadow-collect verdicts"] --> T5["T5 fail-closed<br/>equivalence fixture"]
+  T5 -->|HARD GATE| T9["T9 input Tier-2 cutover<br/>canary org first"]
+  T9 --> T10["T10 MCP<br/>inherits T9, no files change"]
+  T9 --> T11["T11 delete engines"]
+  T11 -->|MUST FOLLOW| T16["T16 IAM + VPC endpoint"]
+    </pre>
+    <figcaption><strong>T5 before T9</strong> — never remove the only fail-closed control without proving its replacement. <strong>T11 before T16</strong> — revoking IAM while code still calls Bedrock converts a fail-open path into a per-request <code>AccessDeniedException</code> storm.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ BEST ACHIEVABLE ============ -->
+<section class="page">
+  <h2>10 · Best achievable — all constraints removed</h2>
+  <p class="lede">5 proof agents → assembler → independent verifier. The audit returned <strong>15 confirmed, 4 overstated, 3 invalid</strong>. This is the post-audit position.</p>
+
+  <table class="nobreak">
+    <tr><th>Prompt band — stated in <em>tokens</em>, as it must be</th><th class="n">windows</th><th class="n">p50 added</th><th class="n">tag</th></tr>
+    <tr><td>≤ 512 tok</td><td class="n">1</td><td class="n"><strong>≈ 4.1 ms</strong></td><td class="n"><span class="tag">D</span></td></tr>
+    <tr><td>≤ 1,024 tok</td><td class="n">2</td><td class="n"><strong>≈ 5.9 ms</strong></td><td class="n"><span class="tag">D</span></td></tr>
+    <tr><td>10,000-char deployed cap, prose</td><td class="n">4</td><td class="n">≈ 10.8 ms</td><td class="n"><span class="tag">D</span></td></tr>
+    <tr><td>10,000-char deployed cap, markdown / code</td><td class="n">7</td><td class="n">≈ 17.2 ms</td><td class="n"><span class="tag">D</span></td></tr>
+  </table>
+  <p class="sub">p99 <strong>18.3 ms</strong> at 1,064 RPS; <strong>13.3 ms</strong> at 400 RPS <span class="tag">D</span> queue-simulated. Convergence band on the 2-window p50: <strong>5.4–6.9 ms</strong>. <strong>74% of the p50 has never been measured on any GPU we control.</strong></p>
+
+  <h3>The architectural unlock</h3>
+  <div class="callout ok">
+    <strong>G2 bundles the GPU and the vCPUs in one VM</strong> <span class="tag">M</span> — confirmed three ways. So the classifier runs <strong>in-process with zero network hop</strong>. Every alternative topology starts at <strong>≥16.1 ms RTT</strong>, which is exactly the hop tax MASTER D1 said a 12 ms budget cannot absorb. <strong>The GPU decision does not pay that tax — it dissolves it.</strong>
+  </div>
+
+  <p><strong>4 × <code>g2-standard-24</code></strong> in asia-south1, zones a/b/c, 3-year CUD — 96 vCPU + <strong>8 × NVIDIA L4</strong>.</p>
+
+  <div class="callout warn">
+    <strong>The runtime is not a tuning knob.</strong> ORT 1.29.0's <code>MODEL_TYPES</code> has no <code>deberta</code>, <strong>and fusion is a graph-level pass applied <em>before</em> execution-provider assignment</strong> <span class="tag">M</span> — so the ORT CUDA EP would run <em>the same unfused graph</em> on the GPU. Native TensorRT is mandatory, served by Triton with both GPUs behind <strong>one shared queue</strong> (worth <strong>8 ms of p99</strong> versus 8 single-GPU nodes, at identical price).
+  </div>
+
+  <h3>Tier-1 rebuilt — all measured</h3>
+  <table class="nobreak">
+    <tr><th>Change</th><th class="n">From</th><th class="n">To</th></tr>
+    <tr><td>One Hyperscan relaxed-superset gate over all 174 patterns</td><td class="n">21.97 ms</td><td class="n"><strong>0.160 ms</strong></td></tr>
+    <tr><td>Native segmentation</td><td class="n">14.72 ms</td><td class="n"><strong>0.434 ms</strong></td></tr>
+    <tr><td>Dictionary admission filter (<code>DICT \ D_seg</code>)</td><td class="n">—</td><td class="n">16.6× less DP work, <strong>0.00% recall loss by construction</strong></td></tr>
+    <tr><td>Injection patterns <strong>demoted from block to signal</strong></td><td class="n">—</td><td class="n">fixes the measured 5/5, 7/7, 3/12 false positives</td></tr>
+  </table>
+
+  <h3>The RPS ladder — binding constraint named at each rung</h3>
+  <table class="nobreak">
+    <tr><th>Posture</th><th class="n">Fleet RPS</th><th>Binding constraint</th></tr>
+    <tr><td><strong>A</strong> — 100% semantic coverage</td><td class="n"><strong>1,064</strong></td><td><code>NVIDIA_L4_GPUS = 8</code> quota <span class="tag">M</span> — <strong>not the budget</strong></td></tr>
+    <tr><td><strong>A′</strong> — quota raised to 14 L4</td><td class="n">1,862</td><td>budget, at $1.82/RPS-mo of GPU</td></tr>
+    <tr><td><strong>B</strong> — risk-gated coverage ≥26%</td><td class="n">4,151</td><td>egress + LB</td></tr>
+    <tr><td><strong>C</strong> — deterministic only</td><td class="n">7,200–9,400</td><td>egress + LB, <em>contingent on an un-load-tested rewrite</em></td></tr>
+    <tr><td><strong>D</strong> — BYOK provider out of region</td><td class="n">1,731</td><td>egress — prompt leg becomes 65%</td></tr>
+  </table>
+
+  <div class="callout">
+    <strong>The cost correction that moved the answer.</strong> Linearising the old $4.866/RPS-month put this design at 346–511 RPS. With the trace frame deleted, SSE coalesced, gzip applied and the provider in-region, the <em>marginal</em> cost is <strong>$0.449/RPS-month</strong> — a <strong>10.8× correction</strong>. Egress stops binding until ~4,150 RPS, so the GPU quota binds first. CPU never binds: 26,592 RPS of CPU capacity against 1,064 of GPU.
+  </div>
+</section>
+
+<!-- ============ AUDIT ============ -->
+<section class="page">
+  <h2>11 · What the audit invalidated</h2>
+  <p class="lede">The verifier's job was to audit the proof ledger, not redo the analysis. It found no GPU number mis-tagged as measured — but three claims did not survive.</p>
+
+  <h3>I1 · "$1,262 unspent, nothing left to buy" — INVALID</h3>
+  <p>A hot-path BOM presented as a total BOM. <strong>Cloud Logging is unpriced</strong> — and its price page was sitting in the assembler's own evidence directory.</p>
+  <table class="nobreak">
+    <tr><th>Missing line</th><th>Evidence it is real</th><th class="n">Cost at 1,064 RPS</th></tr>
+    <tr><td><strong>Cloud Logging</strong></td><td>$0.50/GiB <span class="tag">V</span></td><td class="n">200 B/req → $232 · <strong>1 KiB → $1,290</strong></td></tr>
+    <tr><td>MongoDB (live telemetry sink)</td><td>13 refs + <code>motor</code> driver, in compose</td><td class="n"><span class="tag">NF</span></td></tr>
+    <tr><td>ChromaDB, persistent disks, Artifact Registry, Monitoring</td><td>in compose / required</td><td class="n"><span class="tag">NF</span></td></tr>
+  </table>
+  <div class="callout warn">At 2.758 billion requests/month, <strong>a security firewall must retain a per-request verdict record.</strong> At a realistic 1 KiB audit line, Cloud Logging alone is <strong>$1,290/mo — more than the entire declared headroom — putting the plan at ~$5,028 and over budget at its own recommended operating point.</strong> Avoidable via Log Router exclusions or a GCS sink at $0.02/GiB, but that is a decision to be <em>made and stated</em>, not omitted.</div>
+
+  <h3>I2 · No per-request FPR — the biggest finding</h3>
+  <p>The design quotes PG2-22M's <strong>88.7% recall @ 1% FPR</strong> <span class="tag">V</span>. That operating point is <strong>per 512-token window</strong>, and Meta's own model card prescribes an OR over segments. So per-request FPR = 1 − 0.99<sup>W</sup>:</p>
+  <table class="nobreak">
+    <tr><th class="n">windows</th><th class="n">per-request FPR</th><th class="n">false ENFORCE-blocks/s @1,064 RPS</th></tr>
+    <tr><td class="n">1</td><td class="n">1.00%</td><td class="n">10.6</td></tr>
+    <tr><td class="n"><strong>2 — the headline band</strong></td><td class="n"><strong>1.99%</strong></td><td class="n"><strong>21.2</strong></td></tr>
+    <tr><td class="n"><strong>7 — deployed cap, markdown</strong></td><td class="n"><strong>6.79%</strong></td><td class="n">72.3</td></tr>
+  </table>
+  <p><strong>This is structurally the same error that correctly killed the potion-8M design</strong> (51 windows × 1% = 40% per-request FPR). Applied to its own recommendation it survives only because W is small — and it was not stated at all. In an ENFORCE posture, 2% is a product-defining number.</p>
+  <p class="sub">Two further omissions: the model card publishes <strong>multilingual AUC 0.942</strong> against 0.995 English — the operative figure for a Mumbai deployment — with <strong>no multilingual recall@1%FPR published</strong> <span class="tag">NF</span>; and the 88.7% is on Meta's <em>private</em> benchmark, against an 8–16 point AUC collapse under leave-one-dataset-out in our own citations.</p>
+
+  <h3>I3 · The band must be stated in tokens</h3>
+  <p>Measured chars/token is <strong>3.04 (markdown) / 6.28 (prose)</strong> <span class="tag">M</span> — never the 4.00 rule of thumb. 1,024 tokens is <strong>3,158 characters</strong> of this corpus, not 4,096. And the <strong>deployed cap is 10,000 characters</strong> (<code>scanner.py:74</code>) — so the 6 ms figure describes a <em>sub-band</em> of the deployed configuration, presented as the configuration.</p>
+
+  <h3>The one sentence that can be said to a customer</h3>
+  <div class="callout">
+    <em>"A full deterministic scan plus a 22M-parameter transformer injection verdict on <strong>every</strong> request — synchronously and block-capable before any byte reaches the provider — at a projected <strong>4–6 ms p50 / ~18 ms p99</strong> of added latency for prompts up to 1,024 tokens, and <strong>590–1,064 RPS</strong> on a single-region $5,000/month footprint; every GPU figure is derived from NVIDIA's published TensorRT measurements of this exact architecture and <strong>none is yet measured on our own hardware</strong>. We cannot yet quote a false-positive rate: the classifier's published 1% FPR is per 512-token window, which compounds to ~2% per request at two windows and ~7% at our deployed 10,000-character cap."</em>
+  </div>
+  <p>Everything before the semicolon is strong. Everything after it is why this is not yet a product claim. <strong>A defensible 10 ms with a published per-request FPR beats an indefensible 6 ms with none.</strong></p>
+
+  <h3>The three actions, reordered by what the audit changed</h3>
+  <ol>
+    <li><strong>Measure the production prompt-length distribution in tokens.</strong> One day of telemetry. It sets the window count — which sets the latency headline, the RPS headline and the per-request FPR <em>simultaneously</em>. Cheapest high-value action in the workstream.</li>
+    <li><strong>Run the <code>trtexec</code> bake-off</strong> — $7, 30 minutes — sweeping <code>--optShapes</code> at W = 1, 2, 3, 4, 7. It must settle: is window-batch-1 inside 2.7–4.0 ms; where throughput saturates (the 490 vs 1,580 windows/s spread is 3.2× and directly sets $/RPS); <strong>p95/p99 over 1,000+ iterations — no tail data exists anywhere</strong>, and a 72 W card under sustained load is exactly where tails appear; and whether DeBERTa INT8 works on TensorRT at all <span class="tag">NF</span>, currently a coin-flip worth 2× throughput.</li>
+    <li><strong>Publish a per-request FPR budget before the demotion ships</strong>, scored at the deployed window count and including multilingual.</li>
+  </ol>
+</section>
+
+<!-- ============ COST MATRIX ============ -->
+<section class="page">
+  <h2>12 · Complete cost matrix</h2>
+  <p class="lede">Posture A — 4 × <code>g2-standard-24</code>, semantic scan on every request, 1,064 RPS, asia-south1, 3-year resource CUD. Volume basis: <strong>2,757,888,000 requests/month</strong>. This corrects the assembler's $3,737.58, which the audit found was a hot-path BOM presented as a total BOM.</p>
+  <div class="callout warn">
+    <strong>2026-09-02 — the $460.46 egress line below is wrong.</strong> 4,197 GiB ÷ 2.758 B requests = 1.52 KB/request = ASSEMBLY <code>eb=1634</code> = <code>0.7 × 1,770 + 0.3 × 1,316</code> — B4's <em>response-only</em> coalesce ×64 blend. It carries <strong>no prompt leg</strong> and assumes the tenant provider is in-region (lever 5, 1.90×), which a BYOK gateway cannot enforce. Do not reconcile other documents down to $460. Live totals: <code>docs/plans/2026-09-02-hot-path-cost-matrix.md</code> (~$1,090 egress / ~$4,561 all-in). $976 was the first honest correction — do not call it wrong.
+  </div>
+
+  <table style="font-size:7.9pt">
+    <tr><th>Service</th><th>Spec</th><th class="n">$/mo</th><th>Why</th><th>Tag</th></tr>
+    <tr><td colspan="5" style="background:var(--surface-2);font-weight:600;font-size:7.4pt;letter-spacing:.5px">COMPUTE</td></tr>
+    <tr><td><strong>GCE <code>g2-standard-24</code> × 4</strong></td><td>96 vCPU · 384 GB · <strong>8 × L4</strong> · zones a/b/c</td><td class="n"><strong>2,736.76</strong></td><td>The whole architecture. G2 bundles GPU <em>and</em> vCPU in one VM → <strong>zero network hop</strong> vs ≥16.1 ms RTT for any split. 8 L4 = the entire regional quota.</td><td><span class="tag">V</span></td></tr>
+    <tr><td colspan="5" style="background:var(--surface-2);font-weight:600;font-size:7.4pt;letter-spacing:.5px">DATA</td></tr>
+    <tr><td><strong>Cloud SQL PostgreSQL</strong></td><td>Enterprise HA, 4 vCPU / 16 GiB / 100 GiB</td><td class="n"><strong>273.91</strong></td><td>Orgs, keys, policies, users. Control-plane only — chat path opens <strong>zero</strong> DB connections. HA because a policy-store outage is a fail-closed outage.</td><td><span class="tag">V</span></td></tr>
+    <tr><td><strong>Memorystore Valkey</strong></td><td>HA, 2 × 13 GB <code>highmem-medium</code></td><td class="n"><strong>175.20</strong></td><td>The one shared-state call per request. HA because the kill-switch fails closed — a single-node failover is a full-product 503.</td><td><span class="tag">V</span></td></tr>
+    <tr><td>Persistent disks</td><td>650 GiB pd-balanced</td><td class="n">65.00</td><td>Boot volumes + the two self-hosted stores. Balanced not SSD — neither is on the hot path.</td><td><span class="tag">D</span></td></tr>
+    <tr><td colspan="5" style="background:var(--surface-2);font-weight:600;font-size:7.4pt;letter-spacing:.5px">PLATFORM &amp; NETWORK</td></tr>
+    <tr><td>GKE</td><td>1 regional cluster fee</td><td class="n">73.00</td><td>Per-fleet autoscaling, multi-zone, GPU node pools. Flat fee.</td><td><span class="tag">V</span></td></tr>
+    <tr><td>Artifact Registry</td><td>~20 GB images</td><td class="n">2.00</td><td>Gateway + TensorRT runtime images.</td><td><span class="tag">D</span></td></tr>
+    <tr><td>Regional external ALB</td><td>forwarding rules</td><td class="n">18.25</td><td>TLS, SSE pass-through, ≥350 s timeout. <strong>Regional</strong> — the global ALB is Premium-only, and Standard Tier saves 18% on egress.</td><td><span class="tag">V</span></td></tr>
+    <tr><td><strong>Egress + LB data processing</strong></td><td>4,197 GiB, Standard Tier, banded</td><td class="n"><strong>460.46</strong></td><td>Response bytes to clients + prompt bytes to provider. Priced through the real band table, <strong>not linearised</strong>.</td><td><span class="tag">D</span></td></tr>
+    <tr><td colspan="5" style="background:var(--surface-2);font-weight:600;font-size:7.4pt;letter-spacing:.5px">OBSERVABILITY</td></tr>
+    <tr><td>Cloud Monitoring</td><td>Managed Prometheus, cardinality-capped</td><td class="n">150.00</td><td><strong>Must</strong> use GMP — standard ingestion is $0.2580/MiB, which at naive per-request cardinality exceeds the entire budget. <strong>Risk line.</strong></td><td><span class="tag">D</span></td></tr>
+    <tr><td>Audit log → GCS</td><td>~400 GiB compressed</td><td class="n">20.00</td><td>A firewall must retain a per-request verdict record. <strong>GCS, not Cloud Logging</strong> — see below.</td><td><span class="tag">D</span></td></tr>
+    <tr><td colspan="5" style="background:var(--surface-2);font-weight:600;font-size:7.4pt;letter-spacing:.5px">CO-LOCATED — $0 INCREMENTAL COMPUTE</td></tr>
+    <tr><td>MongoDB · ChromaDB · control plane · workers · MCP broker · frontend · nginx · PgBouncer</td><td>on spare vCPU</td><td class="n">0.00</td><td><strong>CPU never binds:</strong> 26,592 RPS of CPU capacity against 1,064 RPS of GPU — ~25× spare. All of these fit in the headroom the GPU quota strands.</td><td><span class="tag">D</span></td></tr>
+    <tr><td colspan="5" style="background:var(--surface-2);font-weight:600;font-size:7.4pt;letter-spacing:.5px">DELIBERATELY NOT BOUGHT</td></tr>
+    <tr><td>Cloud NAT</td><td>—</td><td class="n">0.00</td><td>$0.045/GiB <strong>both directions</strong> would make the otherwise-free 87 KiB provider response billable.</td><td><span class="tag">V</span></td></tr>
+    <tr><td>Cloud Armor</td><td>—</td><td class="n">0.00</td><td><strong>$15,180/mo at these rates — 3× the entire budget.</strong></td><td><span class="tag">V</span></td></tr>
+    <tr><td>ClickHouse · Kafka · BigQuery · Vertex Vector Search</td><td>—</td><td class="n">0.00</td><td>Not needed at this volume; each is a new operational surface.</td><td>—</td></tr>
+    <tr class="tot"><td><strong>TOTAL</strong></td><td></td><td class="n"><strong>$3,974.58</strong></td><td>Headroom to $5,000: <strong>$1,025.42</strong> · <strong>$1.44 per million requests</strong></td><td></td></tr>
+  </table>
+
+  <h3>The one decision that breaks the budget</h3>
+  <table class="nobreak">
+    <tr><th>Audit destination</th><th class="n">Volume</th><th class="n">$/mo</th><th>Verdict</th></tr>
+    <tr><td><strong>GCS, compressed</strong> — recommended</td><td class="n">~400 GiB</td><td class="n"><strong>20</strong></td><td>fits, $1,025 headroom</td></tr>
+    <tr><td>Cloud Logging @ 200 B/request</td><td class="n">526 GiB</td><td class="n">238</td><td>fits, $807 headroom</td></tr>
+    <tr><td>Cloud Logging @ 1 KiB/request</td><td class="n">2,630 GiB</td><td class="n"><strong>1,290</strong></td><td><strong style="color:var(--critical)">$5,244.58 — OVER by $245</strong></td></tr>
+    <tr><td>Cloud Logging @ 2 KiB/request</td><td class="n">5,260 GiB</td><td class="n">2,605</td><td>catastrophically over</td></tr>
+  </table>
+  <div class="callout warn">At <strong>2.758 billion</strong> requests/month, Cloud Logging at a realistic 1 KiB structured audit line costs <strong>more than the entire remaining headroom</strong>. Avoidable via Log Router exclusions plus a GCS sink — but it is a decision to be <strong>made and stated</strong>, not discovered on the first invoice.</div>
+
+  <h3>Cost by posture</h3>
+  <p class="sub">Non-hot-path lines (disks, registry, monitoring, audit = <strong>$237</strong>) apply to every rung.</p>
+  <table class="nobreak">
+    <tr><th>Posture</th><th class="n">RPS</th><th class="n">Hot-path</th><th class="n">All-in</th><th>Fits $5k?</th></tr>
+    <tr><td><strong>A — scan every request</strong> <em>(recommended)</em></td><td class="n"><strong>1,064</strong></td><td class="n">3,737.58</td><td class="n"><strong>3,974.58</strong></td><td><strong style="color:var(--good)">yes — $1,025 spare</strong></td></tr>
+    <tr><td>A′ — quota raised to 14 L4</td><td class="n">1,862</td><td class="n">4,742.76</td><td class="n">4,979.76</td><td>yes, at the ceiling</td></tr>
+    <tr><td>B — risk-gated semantic ≥26%</td><td class="n">4,151</td><td class="n">5,000</td><td class="n">5,237</td><td><strong style="color:var(--critical)">no</strong></td></tr>
+    <tr><td>C — deterministic only</td><td class="n">7,200–9,400</td><td class="n">5,000</td><td class="n">5,237</td><td><strong style="color:var(--critical)">no</strong></td></tr>
+  </table>
+
+  <div class="callout ok"><strong>The budget is not the binding constraint at the recommended point — <code>NVIDIA_L4_GPUS = 8</code> is.</strong> File the quota increase before spending anything else: posture A′ nearly doubles throughput for $1,005/mo and is the best marginal purchase available.</div>
+
+  <p class="sub"><strong>Not included:</strong> customer BYOK model spend (out of envelope by definition) · the $7 <code>trtexec</code> bake-off · Cloud SQL backup storage beyond the included allocation <span class="tag">NF</span> · support plan · any AWS spend during the migration overlap.</p>
+</section>
+
+<!-- ============ HONESTY ============ -->
+<section class="page">
+  <h2>13 · What we must not claim</h2>
+  <p class="lede">The list exists because several of these were about to be claimed.</p>
+
+  <h4>Latency</h4>
+  <ol>
+    <li><strong>No "12 ms" without a posture, a prompt band, and a percentile.</strong> Today's honest sentence: <em>"≈119 ms p50 with semantic classification on; a Tier-1-only posture is projected at 3–5 ms p50 once rewritten, with p99 unmeasured."</em></li>
+    <li><strong>No streaming latency number from the current bench.</strong> It measures the customer's model.</li>
+    <li><strong>No p99 for any posture.</strong> The 40 ms clause is unbacked.</li>
+    <li><strong>No figure "on c4a / Axion."</strong> Nothing was measured there.</li>
+    <li><strong>Not N ≈ 85 RPS/host</strong> — a 32–64-token number; at 1024 tokens it is ~5.</li>
+    <li><strong>Not 100k RPS.</strong></li>
+  </ol>
+
+  <h4>Detection</h4>
+  <ol start="7">
+    <li><strong>We cannot claim the default posture detects prompt injection.</strong> 3/10 same-family, <strong>0/10 paraphrased</strong>.</li>
+    <li><strong>We cannot claim a low false-positive rate.</strong> 5/5 benign inline-code prompts and 3/12 ordinary tool descriptions hard-blocked at confidence 1.00, terminally.</li>
+    <li><strong>No tool/function-calling support at the 1024-token band</strong> — ~6–7 ordinary tools tip the request into <code>block/dos/context_length_exceeded</code>.</li>
+    <li><strong>No supported prompt length above ~1,970 tokens</strong> — ~800 in Hindi, ~750 in Tamil, in an India-only deployment.</li>
+    <li><strong>Streaming "block" is not a block.</strong></li>
+    <li><strong>Responses are not Tier-2 scanned end-to-end</strong> — and telemetry attests that they are.</li>
+    <li><strong>No per-tenant policy isolation.</strong></li>
+    <li><strong>Policy enforcement is not fail-closed.</strong></li>
+    <li><strong>No bounded revocation or config-propagation time.</strong> <code>auth:epoch</code> does not exist.</li>
+    <li><strong>No complete enforcement records.</strong></li>
+    <li><strong>Tier-2 does not see the whole response</strong> — <code>_head_tail</code> silently drops the middle of any answer over 10,000 characters.</li>
+    <li><strong>No availability during cache maintenance</strong> under the kill-switch contract as signed.</li>
+  </ol>
+
+  <h4>Process</h4>
+  <ol start="19">
+    <li><strong>Do not present target values as measurements.</strong> The "2.39 ms" row is a sum of unbuilt targets, two of which the same document calls unreachable.</li>
+    <li><strong><code>potion-base-8M</code> is not a viable Tier-2 replacement.</strong> AUC 0.60 / 2.8% recall at the deployed window.</li>
+    <li><strong>The off-host option was not evaluated.</strong> It was rejected on a price from a different cloud.</li>
+  </ol>
+
+  <div class="verdict" style="margin-top:20px">
+    <h3>For the person who signs this</h3>
+    <p>The 12 ms lock cannot be met with a semantic classifier on this hardware inside this budget, and no priced path to it exists. That part survived five adversarial reviews and a devil's advocate.</p>
+    <p>But the recommendation built on top of it is not safe to ship. It proposes defaulting to the deterministic layer and certifying 12 ms for that default — and <strong>nobody measured what the deterministic layer detects until this review</strong>: 0 of 10 paraphrased prompt injections caught, 5 of 5 benign questions containing inline code hard-blocked.</p>
+    <p style="margin-bottom:0">The plan spent seven agents optimising the latency of a control whose effectiveness had never been measured, and was about to publish an SLO for it. <strong>Fix the instrument, measure the detection, price the GPU, then choose the posture — in that order.</strong> The engineering work is real and ~10× is available this quarter with no new dependencies. But the decision in front of you is a product decision about what this firewall actually stops, and it cannot be made from a latency table.</p>
+  </div>
+</section>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'neutral',
+    themeVariables: { fontSize: '12px', fontFamily: 'Helvetica, DejaVu Sans, sans-serif' },
+    flowchart: { curve: 'basis', useMaxWidth: true },
+    sequence: { useMaxWidth: true, wrap: true, width: 150 }
+  });
+</script>
+</body>
+</html>

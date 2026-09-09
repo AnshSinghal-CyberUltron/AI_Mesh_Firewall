@@ -1138,7 +1138,42 @@ class InputScanner:
         """Synchronous prompt scanning logic, run in a thread to avoid blocking.
 
         ``_multiturn`` guards the G6 user-turn reassembly re-scan so the derived
-        view is scanned exactly once (no unbounded recursion)."""
+        view is scanned exactly once (no unbounded recursion).
+
+        policy-driven-detection (task 3.1): the automatic built-in default scan
+        was REMOVED. This method no longer iterates ``ATTACK_PATTERNS`` / the
+        built-in default PII/secret pattern set and NO LONGER emits an
+        independent injection / command / PII / DoS / etc. verdict on its own.
+        Tier-1 detection is now driven exclusively by the org's ENABLED policy
+        packages via ``policy_engine.evaluate`` — a zero-policy org is
+        passthrough (allow). This is a deliberate security-posture inversion
+        (fail-toward-no-detection): the scanner engine is RETAINED purely as an
+        executor a policy rule can be run through (``compile_pattern`` +
+        ``redact_all`` + the deobfuscation/unicode machinery are all kept), but
+        it produces no built-in verdict.
+        """
+        # No built-in/default detection: always passthrough. The prior automatic
+        # ATTACK_PATTERNS iteration, RAG-poisoning scan, built-in PII/secret/
+        # credential detection, encoded/obfuscated-PII checks, toxicity, and
+        # multi-turn split re-scan were all removed (task 3.1). Tier-1 detection
+        # is sourced from enabled policies at the enforcement seam, not here.
+        return ScanVerdict()
+
+    def _scan_prompt_sync_disabled_builtin_default(
+        self,
+        text: str,
+        is_rag: bool,
+        toxicity_threshold: float | None = None,
+        _multiturn: bool = True,
+    ) -> ScanVerdict:
+        """RETAINED-DISABLED reference of the former built-in default scan.
+
+        This is the pre-cutover automatic-detection body, kept ONLY as an
+        internal reference of the pattern-matching mechanics the retained engine
+        (``compile_pattern`` / ``redact_all`` / deobfuscation helpers) can still
+        execute. It is NOT called by ``scan_prompt`` / ``_scan_prompt_sync`` and
+        therefore emits no default verdict on the live path.
+        """
         if not text:
             return ScanVerdict(
                 action="allow",

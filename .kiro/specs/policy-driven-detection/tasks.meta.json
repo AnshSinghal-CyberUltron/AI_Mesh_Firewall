@@ -1,0 +1,406 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Baseline capture and test scaffold (no behaviour change yet)": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937133630
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937168294
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937367933
+      }
+    ],
+    "2.1 Stop passing the built-in scanner verdict into `resolve_and_enforce` on the chat path": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937135236
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937375520
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788942165565
+      }
+    ],
+    "2.2 Write property test for zero-policy passthrough (chat input)": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937136362
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788942173627
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788942699392
+      }
+    ],
+    "2.3 Write property test for no built-in contribution": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937137596
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788942174325
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788942699797
+      }
+    ],
+    "3.1 Remove the built-in `ATTACK_PATTERNS` default category loop from the scanner": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937138427
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788943041885
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788945884614
+      }
+    ],
+    "3.2 Route Tier-1 matching through the policy engine only": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937139141
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788946024130
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788949004564
+      }
+    ],
+    "3.3 Write property test for only-enabled-rules-fire": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937139829
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788949103514
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788956154691
+      }
+    ],
+    "3.4 Write property test for user-selected action is honored": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937140536
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788949104486
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788956155451
+      }
+    ],
+    "3.5 Write unit tests for scanner-engine retention and malformed-rule handling": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937141241
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788949105708
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788956157022
+      }
+    ],
+    "4.1 Resolve `tier2_enabled` to effective-OFF by default and gate the Tier-2 scan": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937141925
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788949107246
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788956158209
+      }
+    ],
+    "4.2 Write property test for Tier-2 opt-in gating": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937142688
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788956172003
+      }
+    ],
+    "4.3 Write property test for Tier-2/Tier-1 separation": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937143379
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788956172602
+      }
+    ],
+    "4.4 Write test for OpenAI-SDK surface Tier-2 parity": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937144130
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788956173805
+      }
+    ],
+    "5.1 Add the built-in-family catalog module": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937144755
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788956174691
+      }
+    ],
+    "5.2 Add the idempotent, default-OFF seeder": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937145421
+      }
+    ],
+    "5.3 Write unit tests for seeding and default-OFF": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937146001
+      }
+    ],
+    "5.4 Write test for enable/disable a package end to end (control → compiled bundle)": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937146689
+      }
+    ],
+    "5.5 Write property test for per-package isolation": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937147375
+      }
+    ],
+    "6.1 Remove the toggles from gateway config and gates": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937148088
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788949108007
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788956161101
+      }
+    ],
+    "6.2 Remove the toggles from the control-plane config serialization + frontend": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937148755
+      }
+    ],
+    "6.3 Write property test for legacy-toggle inertness": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937149494
+      },
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788956176665
+      }
+    ],
+    "7.1 Streaming output guard": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937150192
+      }
+    ],
+    "7.2 RAG (ingest + query)": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937150759
+      }
+    ],
+    "7.3 Embeddings": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937151519
+      }
+    ],
+    "7.4 MCP tool calls": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937152149
+      }
+    ],
+    "7.5 Write property tests for fail-toward-no-detection and surface coherence": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937152863
+      }
+    ],
+    "8.1 Add the Tier-2 toggle to the firewall settings UI": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937153555
+      }
+    ],
+    "8.2 Write a frontend test for the toggle reflecting + changing backend state": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937154155
+      }
+    ],
+    "9. Checkpoint — gateway unit gate + zero-policy passthrough proven in unit layer": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937154912
+      }
+    ],
+    "10.1 Author the ≥100-prompt corpus with per-config intended outcomes": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937155544
+      }
+    ],
+    "10.2 Author the harness that starts Docker services and drives both surfaces": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937156223
+      }
+    ],
+    "10.3 Implement the run matrix and pass/fail gate": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937156963
+      }
+    ],
+    "10.4 Emit the reproducible evidence artefact": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937157852
+      }
+    ],
+    "10.5 Write the reproducibility property test": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937158537
+      }
+    ],
+    "11. Cutover wiring and documentation": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937159163
+      }
+    ],
+    "12. Final checkpoint — full gates green and mandatory live E2E passed": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788937159803
+      }
+    ],
+    "2. Make the enforcement seam policy-only on the chat input path": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788942701008
+      }
+    ],
+    "3. Delete the built-in Tier-1 default scan; retain the engine as a policy executor": [
+      {
+        "executionId": "59e218bc-fed7-41ae-8200-cafd2ed05cf4",
+        "chatSessionId": "sess_de858945-703a-4702-bc06-37a1da6e4061",
+        "timestamp": 1788956157673
+      }
+    ]
+  }
+}

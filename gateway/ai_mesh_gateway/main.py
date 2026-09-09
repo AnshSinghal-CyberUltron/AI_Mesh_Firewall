@@ -31,6 +31,7 @@ from starlette.responses import StreamingResponse
 
 try:
     from .config import load_config
+    from .config_sync import resolve_tier2_enabled
     from .context_assembler import minimize_context
     from .jobs import enqueue_job, close_jobs_client
     from .policy_signing import signing_enforced, _get_signing_key
@@ -41,6 +42,7 @@ try:
     from .bedrock_tier2_breaker import Tier2UnavailableStrict
 except ImportError:
     from config import load_config
+    from config_sync import resolve_tier2_enabled
     from context_assembler import minimize_context
     from jobs import enqueue_job, close_jobs_client
     from policy_signing import signing_enforced, _get_signing_key
@@ -2393,8 +2395,10 @@ async def _apply_output_guard_nonstream(
         return None
     if not CONFIG.get("output_guard_enabled", True):
         return None
-    if not org_config.get("output_scan_enabled", CONFIG.get("output_scan_enabled", True)):
-        return None
+    # policy-driven-detection task 6.1: the legacy ``output_scan_enabled`` toggle is
+    # removed as a detection driver and no longer read. The output guard is governed
+    # by the global ``output_guard_enabled`` env default (retained); fully wiring the
+    # output guard to enabled output policies is task 7.1.
     # M-05(b): ground the guard against ACTUAL retrieved RAG context (if any)
     # instead of the previously hardcoded empty list. Fail-open to [] when no
     # request/RAG context is available, preserving prior behavior.
@@ -3910,7 +3914,11 @@ def _launch_chat_stream_response(
     Assumes eligibility_phase and selection_phase already ran in proxy_chat.
     """
     scan_mode = resolve_scan_mode(
-        output_scan_enabled=bool(org_config.get("output_scan_enabled", CONFIG.get("output_scan_enabled", True))),
+        # policy-driven-detection task 6.1: legacy ``output_scan_enabled`` removed as
+        # a detection driver — no longer read. Output scanning eligibility is
+        # governed by the scanner/guard infra + global env (task 7.1 makes the
+        # streaming output guard policy-driven).
+        output_scan_enabled=True,
         input_scanner=INPUT_SCANNER if secure_output_scan else None,
         output_guard=OUTPUT_GUARD if secure_output_scan else None,
     )
@@ -3984,7 +3992,9 @@ def _launch_chat_stream_response(
             yield chunk
 
     inner = _provider_stream()
-    if scan_mode != StreamScanMode.NONE and INPUT_SCANNER is not None and CONFIG.get("output_scan_enabled", True):
+    # policy-driven-detection task 6.1: legacy ``output_scan_enabled`` removed as a
+    # detection driver; ``scan_mode`` already encodes output-scan eligibility.
+    if scan_mode != StreamScanMode.NONE and INPUT_SCANNER is not None:
         if scan_mode == StreamScanMode.OUTPUT_GUARD and OUTPUT_GUARD is not None:
             # M-05(a): the OUTPUT_GUARD streaming path must run the guard WITH
             # request context (org tri-state tier-2 gating + correct breaker org
@@ -4719,9 +4729,12 @@ async def _scan_redact_embedding_inputs(
     ``block_meta`` is ``{"blocked": True, "reason": ..., "index": i}`` so the caller
     fails closed rather than embedding the raw value (G4).
     """
-    # No-op (and therefore NO behavior change) when scanning is disabled or the
-    # scanner is unavailable. This is REQUIRED for the no-regression guarantee.
-    if INPUT_SCANNER is None or not org_config.get("input_scan_enabled", True):
+    # No-op (and therefore NO behavior change) when the scanner infra is
+    # unavailable. policy-driven-detection task 6.1: the legacy
+    # ``input_scan_enabled`` toggle is removed as a detection driver and is no
+    # longer read here (a stale value cannot enable/suppress the embedding-input
+    # redaction). Making this surface fully policy-driven is task 7.3.
+    if INPUT_SCANNER is None:
         return texts, None
 
     # B4 (egress parity / one redaction implementation): redact embedding inputs with
@@ -4784,7 +4797,9 @@ async def _scan_redact_metadata(meta: dict, org_config: dict) -> dict:
     Recurses into nested dict/list so a value can't hide one level deep; uses the
     same INPUT_SCANNER redactor + digit backstop as ``_scan_redact_embedding_inputs``.
     """
-    if not isinstance(meta, dict) or INPUT_SCANNER is None or not org_config.get("input_scan_enabled", True):
+    # policy-driven-detection task 6.1: legacy ``input_scan_enabled`` removed as a
+    # detection driver — no longer read here (task 7.3 makes this policy-driven).
+    if not isinstance(meta, dict) or INPUT_SCANNER is None:
         return meta
 
     async def _r(v):
@@ -5738,13 +5753,18 @@ async def startup():
     # scanning is now Tier-1 + Tier-2 only — no system embedding model.
     _embedding_vault = None
 
-    if CONFIG.get("input_scan_enabled", True):
-        from scanner import InputScanner
+    # policy-driven-detection task 6.1: the legacy ``input_scan_enabled`` toggle no
+    # longer gates the construction of the scanning engine. The engine is RETAINED
+    # as the executor the policy engine drives (design §"Tier-1 becomes policy-only"
+    # keeps InputScanner/compile_pattern/redact_all), so it is always available; a
+    # zero-policy org still resolves to passthrough because Tier-1 detection is
+    # driven by the enabled policy set, not by whether the engine exists.
+    from scanner import InputScanner
 
-        INPUT_SCANNER = InputScanner(
-            thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
-            config=CONFIG,
-        )
+    INPUT_SCANNER = InputScanner(
+        thread_pool_size=CONFIG.get("scan_thread_pool_size", 4),
+        config=CONFIG,
+    )
 
     # Shared async Redis client for kill-switch + telemetry
     import redis.asyncio as aioredis
@@ -6981,12 +7001,17 @@ async def proxy_chat(
         # until AFTER input scanning when scanning will actually run — the
         # post-scan _validate_org_inference_model gate (same auth_ctx +
         # needs_inference condition) re-emits the identical 422 for clean
-        # prompts. When scanning is off (firewall disabled / no scanner /
-        # input_scan disabled) there is nothing to gain, so gate early as before.
+        # prompts. When the pipeline won't run (firewall disabled / no scanner
+        # infra) there is nothing to gain, so gate early as before.
+        # policy-driven-detection task 6.1: the legacy ``input_scan_enabled``
+        # toggle is NO LONGER a gate. Tier-1 detection is driven solely by the
+        # org's enabled policy set (evaluated later on the pipeline), so "the
+        # input pipeline will run" is a function of the scanner infra being
+        # present and ``firewall_enabled`` (suppression-only master bypass) not
+        # being explicitly False — never the removed scan toggle.
         _input_scan_will_run = bool(
             INPUT_SCANNER is not None
             and org_config.get("firewall_enabled") is not False
-            and org_config.get("input_scan_enabled", True)
         )
         if auth_ctx is not None and not inference_models and needs_inference and not _input_scan_will_run:
             return _build_no_inference_provider_response()
@@ -8322,7 +8347,13 @@ async def proxy_chat(
                         downgrade_to, original_model, user_id,
                     )
 
-        if INPUT_SCANNER is not None and org_config.get("input_scan_enabled", True):
+        # policy-driven-detection task 6.1: the legacy ``input_scan_enabled``
+        # toggle is REMOVED as a detection gate. The input pipeline (policy-only
+        # Tier-1 + opt-in Tier-2) runs whenever the scanner infra is present; a
+        # zero-policy org resolves to allow (passthrough) via resolve_and_enforce,
+        # and Tier-2 is gated separately by ``tier2_enabled`` (task 4). A stale
+        # ``input_scan_enabled`` value can no longer enable or suppress detection.
+        if INPUT_SCANNER is not None:
             tier2_execution_mode = str(org_config.get("tier2_execution_mode", "sync_pre_llm")).strip().lower()
             tier2_stream_hold_enabled = bool(org_config.get("tier2_stream_hold_enabled", False))
             is_stream_request = bool(body.get("stream", False))
@@ -8346,6 +8377,15 @@ async def proxy_chat(
             # without a default so ``None`` (no per-org opinion) survives and
             # is distinguishable from explicit ``False`` (force-disable).
             org_tier2_override = org_config.get("tier2_enabled")
+            # policy-driven-detection task 4.1 (R3.2/R3.4/R3.5/R3.7): Tier-2 is
+            # OPT-IN, model-only, default OFF. This is the SINGLE gate the chat
+            # path AND the OpenAI-SDK surface (/v1/chat/completions -> shared
+            # proxy_chat) both flow through. The nullable tri-state resolves to
+            # effective OFF unless it is explicitly True (None/absent/False/any
+            # stale value -> OFF). When OFF, the Tier-2 model scan MUST NOT run
+            # anywhere below and MUST contribute NO verdict — we run Tier-1-only
+            # (``scan_prompt``) and skip the async Tier-2 post-scan entirely.
+            resolved_tier2_enabled = resolve_tier2_enabled(org_tier2_override)
             # Phase 0 D-G3-v3: per-org Tier-2 strictness governs behaviour
             # when the Bedrock circuit breaker is OPEN. Default True (fail
             # closed with HTTP 451) per Adversarial Triage F5.
@@ -8421,7 +8461,19 @@ async def proxy_chat(
                 # base64'd plain-text injection can't bypass the scanner.
                 scan_text = (effective_prompt or "") + "\n" + agent_data
             try:
-                if force_sync_tier2:
+                if not resolved_tier2_enabled:
+                    # policy-driven-detection task 4.1 (R3.2/R3.7): Tier-2 is OFF
+                    # for this org (None/absent/False -> effective OFF). The Tier-2
+                    # model scan MUST NOT run and MUST contribute NO verdict — run
+                    # Tier-1-only and DO NOT enqueue the async Tier-2 post-scan.
+                    # This gate governs the native chat path AND the OpenAI-SDK
+                    # surface (shared proxy_chat).
+                    verdict = await INPUT_SCANNER.scan_prompt(
+                        scan_text, is_rag=is_rag_request,
+                        toxicity_threshold=org_toxicity_threshold,
+                    )
+                    stage_metrics["tier1_ms"] = round((time.perf_counter() - scan_start) * 1000, 2)
+                elif force_sync_tier2:
                     # Routing is now fully deterministic (no network call), so there is
                     # nothing left to overlap the Tier-2 input scan against — the former
                     # T2-vs-adjudicator prefetch/gather has been removed.
@@ -8433,6 +8485,11 @@ async def proxy_chat(
                     # Tier2UnavailableStrict exactly as the previous
                     # gather(return_exceptions=False) did, so the strict 503 fail-closed
                     # contract below is unchanged.
+                    #
+                    # Tier-2 is resolved-ON here; ``org_tier2_override`` is still
+                    # passed for the scanner's per-org strictness/breaker path but
+                    # the run/skip decision was already made by
+                    # ``resolve_tier2_enabled`` above (single source of truth).
                     verdict = await INPUT_SCANNER.scan_prompt_with_tier2(
                         scan_text,
                         is_rag=is_rag_request,
@@ -8447,6 +8504,8 @@ async def proxy_chat(
                     else:
                         stage_metrics["tier1_ms"] = round((time.perf_counter() - scan_start) * 1000, 2)
                 else:
+                    # Tier-2 resolved-ON but async_post_llm mode: run Tier-1 sync
+                    # and defer the model scan to the async post-scan job.
                     verdict = await INPUT_SCANNER.scan_prompt(
                         scan_text, is_rag=is_rag_request,
                         toxicity_threshold=org_toxicity_threshold,
@@ -8641,20 +8700,34 @@ async def proxy_chat(
                 from patterns import contains_smart_redaction_markers as _has_smart_masks
             except ImportError:
                 from .patterns import contains_smart_redaction_markers as _has_smart_masks
-            _pii_detection_enabled = bool(org_config.get("scan_block_on_pii", True))
-            # PIPELINE-0012: smart partial masks are already redacted bytes — still
-            # attribute input-stage REDACT (never allow/downgrade to block).
-            if _has_smart_masks(scan_text):
-                _pii_detection_enabled = True
+            # policy-driven-detection task 6.1: the legacy ``scan_block_on_pii``
+            # toggle is REMOVED as a detection driver — it is no longer read from
+            # org_config. PII redaction eligibility is a fixed property of the
+            # enforcement authority (a matched enabled policy whose action is
+            # redact/block drives it); the toggle can no longer enable/suppress
+            # detection. Since task 2.1 passes scanner_*=None, this flag is inert
+            # on the input path today (no scanner threat to gate) and defaults to
+            # the redact-eligible value it always resolved to for a clean prompt.
+            _pii_detection_enabled = True
 
+            # policy-driven-detection task 2.1: the built-in Tier-1 scanner
+            # verdict (``verdict.*`` from INPUT_SCANNER) is NO LONGER a first-class
+            # guard recommendation to the enforcement authority. Tier-1 detection
+            # must come SOLELY from the org's enabled policies
+            # (``org_policy_action`` + ``matched_rules`` + ``matched_policy_names``
+            # via ``_policy_check_cached``). Passing ``scanner_* = None`` means a
+            # zero-policy org (no matched rules) + Tier-2 off resolves to
+            # ``PipelineDecision(action="allow")`` (passthrough). (The built-in
+            # scan still RUNS for now; task 3.1 removes the ATTACK_PATTERNS loop.
+            # Any opt-in Tier-2 recommendation is gated separately by task 4.)
             _input_decision = _resolve_and_enforce(
-                scanner_recommendation=_guard_rec,
-                scanner_action=verdict.action,
-                scanner_threat_type=verdict.threat_type,
-                scanner_confidence=verdict.confidence,
-                scanner_tier=verdict.tier,
-                scanner_matched_patterns=verdict.matched_patterns,
-                scanner_detail=verdict.detail,
+                scanner_recommendation=None,
+                scanner_action=None,
+                scanner_threat_type=None,
+                scanner_confidence=None,
+                scanner_tier=None,
+                scanner_matched_patterns=None,
+                scanner_detail=None,
                 org_policy_action=_org_policy_action,
                 matched_rules=check_resp.get("matched_rules") or [],
                 matched_policy_names=check_resp.get("matched_policy_names") or [],
@@ -8663,7 +8736,11 @@ async def proxy_chat(
                 tier1_pii_detected=_degraded_pii_detected,
                 redaction_possible=True,
                 pii_detection_enabled=_pii_detection_enabled,
-                scan_block_on_injection=org_config.get("scan_block_on_injection", True),
+                # policy-driven-detection task 6.1: legacy ``scan_block_on_injection``
+                # toggle removed as a detection driver — no longer read from
+                # org_config. Injection block/monitor is governed by the matched
+                # enabled policy action, not this toggle. Inert here (scanner_*=None).
+                scan_block_on_injection=True,
                 injection_threshold=org_config.get("prompt_injection_threshold", 0.80),
             )
 
@@ -8808,19 +8885,28 @@ async def proxy_chat(
                     from .patterns import smart_mask_redaction_noop_is_expected as _smart_noop_ok
                 if _redaction_noop and _smart_noop_ok(prompt, verdict.matched_patterns):
                     _redaction_noop = False
+                # policy-driven-detection task 2.1: same as the primary input
+                # enforcement call — the built-in Tier-1 scanner verdict is NOT a
+                # driver. This unmaskable-PII fail-closed honesty check is only
+                # reached when an enabled policy already resolved the input to
+                # redact (``_input_decision.is_redact``); it fails closed on a
+                # redaction no-op via ``redaction_possible`` + the policy action,
+                # never on the built-in ``verdict.*``.
                 _noop_decision = _resolve_and_enforce(
-                    scanner_recommendation=_guard_rec,
-                    scanner_action=verdict.action,
-                    scanner_threat_type=verdict.threat_type,
-                    scanner_confidence=verdict.confidence,
-                    scanner_tier=verdict.tier,
+                    scanner_recommendation=None,
+                    scanner_action=None,
+                    scanner_threat_type=None,
+                    scanner_confidence=None,
+                    scanner_tier=None,
                     org_policy_action=_org_policy_action,
                     enforcement_mode=enforcement_mode,
                     tier2_degraded=_is_tier2_degraded_verdict(verdict),
                     tier1_pii_detected=_degraded_pii_detected,
                     redaction_possible=not _redaction_noop,
                     pii_detection_enabled=pii_detection_enabled,
-                    scan_block_on_injection=org_config.get("scan_block_on_injection", True),
+                    # policy-driven-detection task 6.1: legacy scan_block_on_injection
+                    # removed as a detection driver (no longer read from org_config).
+                    scan_block_on_injection=True,
                     injection_threshold=org_config.get("prompt_injection_threshold", 0.80),
                 )
                 if _redaction_noop and _noop_decision.is_terminal_block:
@@ -8966,7 +9052,10 @@ async def proxy_chat(
                     rate_limit_tpm=rate_limit_tpm or 0,
                     estimated_tokens=estimated_request_tokens,
                     org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
-                    secure_output_scan=bool(CONFIG.get("output_scan_enabled", True)),
+                    # policy-driven-detection task 6.1: legacy output_scan_enabled
+                    # removed as a detection driver — output scanning eligibility is
+                    # governed by the scanner/guard infra + global env, not this toggle.
+                    secure_output_scan=True,
                     input_action=_input_decision.action if _input_decision is not None else "allow",
                     stage_metrics=stage_metrics,
                     matched_policy_names=(check_resp.get("matched_policy_names") or check_resp.get("matched_policies") or []),
@@ -9647,7 +9736,9 @@ async def proxy_chat(
                 deep_scan_task.cancel()
                 deep_scan_task = None
 
-        if org_config.get("deep_scan_enabled") and org_config.get("input_scan_enabled", True) and AGENT_ID and CONFIG["backend_url"]:
+        # policy-driven-detection task 6.1: legacy ``input_scan_enabled`` removed as
+        # a gate here; deep scan is governed by its own ``deep_scan_enabled`` toggle.
+        if org_config.get("deep_scan_enabled") and AGENT_ID and CONFIG["backend_url"]:
             deep_scan_task = asyncio.create_task(
                 asyncio.to_thread(_security_scan, effective_prompt, "")
             )
@@ -9824,7 +9915,9 @@ async def proxy_chat(
                 rate_limit_tpm=rate_limit_tpm or 0,
                 estimated_tokens=estimated_request_tokens,
                 org_tpm_limit=int(org_config.get("org_tpm_limit", 0) or 0),
-                secure_output_scan=bool(CONFIG.get("output_scan_enabled", True)),
+                # policy-driven-detection task 6.1: legacy output_scan_enabled removed
+                # as a detection driver.
+                secure_output_scan=True,
                 input_action=_input_decision.action if _input_decision is not None else "allow",
                 stage_metrics=stage_metrics,
                 matched_policy_names=(check_resp.get("matched_policy_names") or check_resp.get("matched_policies") or []),
@@ -9914,11 +10007,14 @@ async def proxy_chat(
         # in addition to the global GATEWAY_OUTPUT_GUARD_ENABLED env default.
         output_verdict = None
         _output_scan_degraded = False  # M11: set True if the tier-2 output guard could not scan
+        # policy-driven-detection task 6.1: the legacy ``output_scan_enabled`` toggle
+        # is removed as a detection driver and no longer read; the output guard is
+        # governed by the global ``output_guard_enabled`` env default (task 7.1 makes
+        # it policy-driven).
         _output_guard_active = (
             OUTPUT_GUARD is not None
             and _og_scan_text
             and CONFIG.get("output_guard_enabled", True)
-            and org_config.get("output_scan_enabled", CONFIG.get("output_scan_enabled", True))
         )
         if _output_guard_active:
             _og_start = time.perf_counter()
@@ -10407,7 +10503,9 @@ async def proxy_chat(
                         "review_required": True,
                     },
                 )
-        elif INPUT_SCANNER is not None and response_text and org_config.get("output_scan_enabled", True):
+        elif INPUT_SCANNER is not None and response_text:
+            # policy-driven-detection task 6.1: legacy output_scan_enabled removed as
+            # a detection driver — no longer read here.
             output_verdict = await INPUT_SCANNER.scan_output(response_text)
             _sync_pipeline_ctx(output_scan_verdict=output_verdict)
             if output_verdict.action == "flag" and output_verdict.threat_type in ("pii", "secret"):
@@ -10461,13 +10559,14 @@ async def proxy_chat(
                             t.get("type") in _deep_injection_types
                             for t in _deep_threats if isinstance(t, dict)
                         )
-                        # Respect scan_block_on_injection for injection-type deep scan blocks
-                        if _deep_has_injection and not org_config.get("scan_block_on_injection", True):
-                            LOG.info(
-                                "Backend deep scan detected injection but scan_block_on_injection=False (user=%s)",
-                                user_id,
-                            )
-                        elif enforcement_mode != "block":
+                        # policy-driven-detection task 6.1: the legacy
+                        # ``scan_block_on_injection`` toggle is removed as a detection
+                        # driver (it previously SUPPRESSED an injection-type deep-scan
+                        # block). It is no longer read; injection deep-scan blocks are
+                        # governed by enforcement_mode (monitor vs block) like any other
+                        # deep-scan block. ``_deep_has_injection`` is retained for the
+                        # log/telemetry classification below.
+                        if enforcement_mode != "block":
                             LOG.warning(
                                 "MONITOR: Backend deep scan would block (action=%s, user=%s)",
                                 scan_action, user_id,
@@ -12983,7 +13082,9 @@ async def rag_query(request: Request):
                 "prompt_injection_threshold",
                 "prompt_rewrite_threshold",
                 "prompt_downgrade_threshold",
-                "input_scan_enabled",
+                # policy-driven-detection task 6.1: legacy ``input_scan_enabled``
+                # removed as a detection driver — no longer propagated to the RAG
+                # QueryStage (task 7.2 makes RAG fully policy-driven).
                 "rag_relevance_threshold",
                 # RAG-33: the per-org Tier-2 (Bedrock guard model) switch for RAG.
                 # ``rag_tier2_enabled`` already existed on FirewallConfig
@@ -15643,9 +15744,11 @@ def _should_block_tier1_verdict(verdict, org_config: dict) -> bool:
         and verdict.threat_type not in ("pii", "secret")
     )
     if _is_injection:
+        # policy-driven-detection task 6.1: legacy ``scan_block_on_injection``
+        # removed as a detection driver — no longer read here. Injection blocking
+        # is a function of the verdict action + confidence threshold.
         _should_block = (
             _should_block
-            and org_config.get("scan_block_on_injection", True)
             and verdict.confidence >= injection_threshold
         )
     return _should_block
@@ -15660,7 +15763,9 @@ async def _policy_check_tier1_scan_block(
     model: str = "",
 ) -> JSONResponse | None:
     """Run tier-1 input scan for /v1/policy/check; return 403 JSON if blocked."""
-    if INPUT_SCANNER is None or not org_config.get("input_scan_enabled", True) or not prompt:
+    # policy-driven-detection task 6.1: legacy ``input_scan_enabled`` removed as a
+    # detection driver — no longer read here.
+    if INPUT_SCANNER is None or not prompt:
         return None
     try:
         verdict = await INPUT_SCANNER.scan_prompt(prompt)

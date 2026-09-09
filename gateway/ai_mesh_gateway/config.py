@@ -103,10 +103,14 @@ def load_config():
     auth_enabled = get_env("GATEWAY_AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
     policy_cache_enabled = get_env("GATEWAY_POLICY_CACHE_ENABLED", "true").lower() in ("true", "1", "yes")
     policy_cache_require_loaded = get_env("GATEWAY_POLICY_CACHE_REQUIRE_LOADED", "true").lower() in ("true", "1", "yes")
-    input_scan_enabled = get_env("GATEWAY_INPUT_SCAN_ENABLED", "true").lower() in ("true", "1", "yes")
-    output_scan_enabled = get_env("GATEWAY_OUTPUT_SCAN_ENABLED", "true").lower() in ("true", "1", "yes")
-    scan_block_on_injection = get_env("GATEWAY_SCAN_BLOCK_ON_INJECTION", "true").lower() in ("true", "1", "yes")
-    scan_block_on_pii = get_env("GATEWAY_SCAN_BLOCK_ON_PII", "false").lower() in ("true", "1", "yes")
+    # policy-driven-detection task 6.1: the legacy default-on scan toggles
+    # (``input_scan_enabled`` / ``output_scan_enabled`` / ``scan_block_on_injection``
+    # / ``scan_block_on_pii``) are REMOVED as detection drivers. Tier-1 detection is
+    # now driven SOLELY by the org's enabled policy set (Requirement 5.1/5.2), and
+    # ``firewall_enabled`` remains a suppression-only master bypass (it may never
+    # CAUSE detection). These keys are intentionally NOT emitted into the gateway
+    # config; a stale value arriving from an old control plane is ignored for the
+    # purpose of enabling detection (Requirement 5.4), not treated as an error.
     # E12: OPT-IN hard-block of a credential/secret detected in MCP tool ARGUMENTS
     # (outbound to the MCP server). STRICTLY-WHAT-THE-OPERATOR-SELECTED (2026-07-22,
     # commit 005a6ffa): DEFAULT OFF. This was a built-in floor that ESCALATED a
@@ -277,10 +281,9 @@ def load_config():
         "auth_enabled": auth_enabled,
         "policy_cache_enabled": policy_cache_enabled,
         "policy_cache_require_loaded": policy_cache_require_loaded,
-        "input_scan_enabled": input_scan_enabled,
-        "output_scan_enabled": output_scan_enabled,
-        "scan_block_on_injection": scan_block_on_injection,
-        "scan_block_on_pii": scan_block_on_pii,
+        # policy-driven-detection task 6.1: legacy scan toggles removed as
+        # detection drivers (input_scan_enabled / output_scan_enabled /
+        # scan_block_on_injection / scan_block_on_pii). Not emitted here.
         "mcp_block_on_credential": mcp_block_on_credential,
         "mcp_redact_result_on_detect": mcp_redact_result_on_detect,
         "tier2_fail_closed_enabled": tier2_fail_closed_enabled,
@@ -342,3 +345,19 @@ def load_config():
         "rag_relevance_threshold": rag_relevance_threshold,
         "prompt_rewrite_threshold": prompt_rewrite_threshold,
     }
+
+
+# policy-driven-detection R3.2/R3.7: re-export the single-source tri-state
+# resolver so callers reaching for ``config.resolve_tier2_enabled`` and
+# ``config_sync.resolve_tier2_enabled`` get the SAME function (Tier-2 is
+# opt-in, default OFF; ``None``/absent -> False, ``True`` -> True, else False).
+# Guarded so a config_sync import hiccup can never break ``load_config``.
+try:  # pragma: no cover - trivial re-export wiring
+    from .config_sync import resolve_tier2_enabled  # noqa: F401
+except ImportError:  # pragma: no cover
+    try:
+        from config_sync import resolve_tier2_enabled  # type: ignore[no-redef]  # noqa: F401
+    except ImportError:
+        def resolve_tier2_enabled(value):  # type: ignore[misc]
+            """Fallback resolver (identical rule) if config_sync is unavailable."""
+            return value is True

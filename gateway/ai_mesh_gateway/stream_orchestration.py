@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Callable, TYPE_CHECKING
 
-from pipeline_trace import attach_latency_breakdown
+from pipeline_trace import attach_latency_breakdown, compute_addon_split
 
 if TYPE_CHECKING:
     from llm_router import LLMRouter, ModelSelection
@@ -628,6 +628,23 @@ def _stamp_output_stage_action(
     return pt
 
 
+def _stage_latency_ms(pt: dict, name: str) -> float:
+    """Latency (ms) of the named pipeline stage in a rebuilt trace, else 0.0.
+
+    honest-stream-latency-metric (task 2.2): the model_output / output_guardrail
+    stage latencies are exactly the model_output_ms / output_guardrail_ms values
+    build_pipeline_trace fed to compute_addon_split, so reading them back off the
+    rebuilt trace reproduces the split's inputs while only the total changes.
+    """
+    for stage in pt.get("stages") or []:
+        if isinstance(stage, dict) and stage.get("name") == name:
+            try:
+                return float(stage.get("latency_ms") or 0.0)
+            except (TypeError, ValueError):
+                return 0.0
+    return 0.0
+
+
 def _rebuilt_stream_trace(
     ctx: "StreamLaunchContext",
     metrics: "StreamRunMetrics",
@@ -735,9 +752,17 @@ def build_stream_trace_frame(
     zs.setdefault("action", "allow")
     if ctx.request_id:
         zs["request_id"] = ctx.request_id
-    elapsed_ms = metrics.duration_ms
-    if elapsed_ms <= 0 and ctx.start_time:
+    # PIPELINE / honest-stream-latency-metric (task 2.1): anchor the streaming
+    # total on the REQUEST-ACCEPT epoch (ctx.start_time, captured pre-stream
+    # after preflight+selection), NOT the provider-stream-only duration_ms.
+    # Read the clock ONCE per frame build and reuse the single snapshot for
+    # processing_time_ms, the stage/overhead reconciliation, and
+    # total_latency_ms so they cannot drift apart. Fall back to duration_ms
+    # only when start_time is unset/falsy (R1.5 fail-safe).
+    if ctx.start_time:
         elapsed_ms = (time.perf_counter() - ctx.start_time) * 1000
+    else:
+        elapsed_ms = metrics.duration_ms
     zs["processing_time_ms"] = round(elapsed_ms, 2)
     if metrics.ttft_ms > 0:
         zs["ttft_ms"] = round(metrics.ttft_ms, 2)
@@ -778,6 +803,26 @@ def build_stream_trace_frame(
             pt["total_latency_ms"] = round(elapsed_ms, 2)
             if metrics.ttft_ms > 0:
                 pt["ttft_ms"] = round(metrics.ttft_ms, 2)
+            # honest-stream-latency-metric (task 2.2): build_pipeline_trace already
+            # ran compute_addon_split against ITS OWN stage-sum total, so the addon
+            # keys on `pt` were derived from the wrong (provider-only) total. Now that
+            # we've overwritten pt["total_latency_ms"] with the re-anchored elapsed_ms
+            # (request-accept → close), recompute the addon split from that honest
+            # total and merge the same keys back in (same names, same numeric types),
+            # so t_addon_pre_ms reflects gateway pre-model time rather than the
+            # provider TTFT. compute_addon_split reads only model_output_ms /
+            # output_guardrail_ms / tier2_ms — sourced from the rebuilt stage
+            # latencies (== what build_pipeline_trace fed it) + the preserved t_t2_ms.
+            # Wrapped so a split recompute can only ADD fidelity, never break the frame.
+            try:
+                pt_metrics = {
+                    "model_output_ms": _stage_latency_ms(pt, "model_output"),
+                    "output_guardrail_ms": _stage_latency_ms(pt, "output_guardrail"),
+                    "tier2_ms": pt.get("t_t2_ms", 0.0),
+                }
+                pt.update(compute_addon_split(pt_metrics, elapsed_ms))
+            except Exception:
+                LOG.debug("stream addon-split recompute failed; keeping prior split", exc_info=True)
             attach_latency_breakdown(pt)
             frame["pipeline_trace"] = pt
         except Exception:
