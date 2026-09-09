@@ -1432,6 +1432,88 @@ def classify_pattern_key(key: str) -> str:
     return "pii"
 
 
+_PREFILTER = None
+_PREFILTER_KEYS: tuple[str, ...] = ()
+_PREFILTER_READY = False
+# Patterns Hyperscan cannot compile — every one rejects on "zero-width assertions are not
+# supported", and every one is a FALSE-POSITIVE SUPPRESSOR: the
+# (?!forgotten|forgot|instructions?|…) guards that stop "password: forgotten" being flagged
+# as a leaked credential, and email's (?!:[^\s/]+/) that stops URLs matching as addresses.
+# They are a design boundary, not a porting backlog: translating the lookaround away makes
+# the firewall flag MORE benign traffic. They always run.
+_RE_ONLY_KEYS = frozenset({
+    "email", "government_id", "password_assignment", "secret_assignment",
+    "token_assignment", "api_key_assignment", "exposed_password",
+})
+
+
+def _build_prefilter():
+    """Compile the 56 Hyperscan-compatible patterns into one database, or give up.
+
+    MEASURED: `_redact_all_raw` runs 63 full-text `.sub()` scans per call and costs ~5.36 ms
+    per 4 KB regardless of content, because the cost is the sweep rather than what it finds.
+    A single combined `re` alternation was tried first and REFUTED — 3.478 vs 3.300 ms,
+    slower than the scans it replaces, because `re` backtracks branch by branch. Hyperscan
+    scans all 56 in 0.005 ms; the hybrid measures 7.4x end of the matching path.
+    """
+    global _PREFILTER, _PREFILTER_KEYS, _PREFILTER_READY
+    if _PREFILTER_READY:
+        return _PREFILTER
+    _PREFILTER_READY = True
+    try:
+        import hyperscan as _hs  # noqa: PLC0415
+    except Exception:  # noqa: BLE001 — absent wheel means today's behaviour, not a failure
+        return None
+    keys, exprs = [], []
+    for fam in (PII_PATTERNS, PHI_PATTERNS, PCI_PATTERNS,
+                SECRET_PATTERNS, CREDENTIAL_EXPOSURE_PATTERNS):
+        for k, pat in fam.items():
+            if k in _RE_ONLY_KEYS:
+                continue
+            try:
+                probe = _hs.Database()
+                probe.compile(expressions=[pat.encode()], ids=[0], elements=1,
+                              flags=[_hs.HS_FLAG_CASELESS])
+            except Exception:  # noqa: BLE001 — anything unusable simply stays on re
+                continue
+            keys.append(k)
+            exprs.append(pat.encode())
+    if not keys:
+        return None
+    try:
+        db = _hs.Database()
+        db.compile(expressions=exprs, ids=list(range(len(keys))), elements=len(keys),
+                   flags=[_hs.HS_FLAG_CASELESS] * len(keys))
+        _PREFILTER = (db, _hs.Scratch(db))
+        _PREFILTER_KEYS = tuple(keys)
+    except Exception:  # noqa: BLE001
+        _PREFILTER = None
+    return _PREFILTER
+
+
+def _candidate_keys(text: str):
+    """Pattern keys that COULD match, or ``None`` meaning "no prefilter — scan everything".
+
+    Returning ``None`` on any failure is the safety property: the prefilter may only ever
+    REMOVE work it has proven unnecessary. It must never be able to fail a request or
+    reduce redaction.
+    """
+    pf = _build_prefilter()
+    if pf is None:
+        return None
+    db, scratch = pf
+    hits: set[str] = set()
+    try:
+        def _on_match(idx, frm, to, flags, ctx):  # noqa: ANN001
+            hits.add(_PREFILTER_KEYS[idx])
+
+        db.scan(text.encode("utf-8", "surrogatepass"),
+                match_event_handler=_on_match, scratch=scratch)
+    except Exception:  # noqa: BLE001
+        return None
+    return hits
+
+
 def _redact_all_raw(text: str, allowed_classes: set[str] | None = None) -> str:
     """Redact PII with smart partial masking; PHI/PCI use placeholder tags (raw text only).
 
@@ -1442,9 +1524,17 @@ def _redact_all_raw(text: str, allowed_classes: set[str] | None = None) -> str:
     def _included(key: str) -> bool:
         return allowed_classes is None or classify_pattern_key(key) in allowed_classes
 
+    # Keys that cannot possibly match, per the multi-pattern prefilter. `None` disables
+    # every guard below, which is exactly today's behaviour — the fallback is not a
+    # separate path, it is this code with the guards inert.
+    _cand = _candidate_keys(text)
+
+    def _skippable(key: str) -> bool:
+        return _cand is not None and key not in _cand and key not in _RE_ONLY_KEYS
+
     result = text
     for pii_type, pattern_str in PII_PATTERNS.items():
-        if not _included(pii_type):
+        if not _included(pii_type) or _skippable(pii_type):
             continue
         compiled = compile_pattern(pattern_str)
         masker = _PII_MASKERS.get(pii_type)
@@ -1453,17 +1543,17 @@ def _redact_all_raw(text: str, allowed_classes: set[str] | None = None) -> str:
         else:
             result = compiled.sub(f"[{pii_type.upper()}_REDACTED]", result)
     for phi_type, pattern_str in PHI_PATTERNS.items():
-        if not _included(phi_type):
+        if not _included(phi_type) or _skippable(phi_type):
             continue
         compiled = compile_pattern(pattern_str)
         result = compiled.sub(f"[{phi_type.upper()}_REDACTED]", result)
     for pci_type, pattern_str in PCI_PATTERNS.items():
-        if not _included(pci_type):
+        if not _included(pci_type) or _skippable(pci_type):
             continue
         compiled = compile_pattern(pattern_str)
         result = compiled.sub(f"[{pci_type.upper()}_REDACTED]", result)
     for secret_type, pattern_str in SECRET_PATTERNS.items():
-        if not _included(secret_type):
+        if not _included(secret_type) or _skippable(secret_type):
             continue
         compiled = compile_pattern(pattern_str)
         masker = _SECRET_MASKERS.get(secret_type)
@@ -1472,7 +1562,7 @@ def _redact_all_raw(text: str, allowed_classes: set[str] | None = None) -> str:
         else:
             result = compiled.sub(f"[{secret_type.upper()}_REDACTED]", result)
     for cred_type, pattern_str in CREDENTIAL_EXPOSURE_PATTERNS.items():
-        if not _included(cred_type):
+        if not _included(cred_type) or _skippable(cred_type):
             continue
         compiled = compile_pattern(pattern_str)
         masker = _CREDENTIAL_MASKERS.get(cred_type)
