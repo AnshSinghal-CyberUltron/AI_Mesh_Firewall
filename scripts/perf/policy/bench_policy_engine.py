@@ -21,12 +21,19 @@ from ai_mesh_gateway import policy_engine as pe  # noqa: E402
 from ai_mesh_gateway.policy_sync import filter_policies_by_domain  # noqa: E402
 
 
-PROMPT = (
+import os as _os
+
+# MUST match the load driver's --prompt-chars (default 4096). Benching at 250 chars
+# measured an input 16x smaller than the one the gateway actually sees, and regex cost
+# scales with input length — so the 250-char figures understated every regex line.
+PROMPT_CHARS = int(_os.environ.get("BENCH_PROMPT_CHARS", "4096"))
+_UNIT = (
     "Please summarise the quarterly planning notes for the platform team. "
     "We discussed capacity, the migration timeline, and the onboarding backlog. "
     "Nothing here is sensitive; it is ordinary internal prose of the kind a "
-    "benign user sends many times a day."
+    "benign user sends many times a day. "
 )
+PROMPT = (_UNIT * ((PROMPT_CHARS // len(_UNIT)) + 1))[:PROMPT_CHARS]
 
 
 def _bundle():
