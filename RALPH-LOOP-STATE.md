@@ -18,6 +18,12 @@
 | DEBUG logger + sync Redis PUBLISH | unconditional, **not** env-gated | `main.py:6019` |
 | 41 KiB `pipeline_trace` on allow paths | `_scrub_trace_for_client` called only at `:957` (blocked path) | — |
 | `redact_all` | 8.19 ms p50 per pass, 4–20 passes/request | prior corpus |
+| **Firewall tax p50 (45 rules, 50-tok answer)** | **8.20 ms — inside the 20 ms budget** | E2E, conc 16 |
+| **Firewall tax p99** | **112–148 ms**, and **97% of the excess is outside every stage** | E2E tail attribution |
+| Gateway CPU when p99 collapses | **1.53 of 4 vCPU** — idle, so not CPU-bound | `docker stats` |
+| `pipeline_trace` on an allowed response | **35,577 B = 91% of the body**; 98% of it duplicated text | measured |
+| Redis under load | 0.13 ms avg; `publish` 3.84 µs server-side | `redis-cli --latency`, commandstats |
+| Log records published per request | **7.0** (plan G4.5 says ~17) | channel subscription |
 
 ## Spec status (`.kiro/specs/`)
 
@@ -66,16 +72,40 @@
   only 2.4× at 4,096 chars, and the residual 10.43 ms there is real regex work needing a
   multi-pattern engine. Evidence: `docs/perf/evidence/2026-09-09-policy-engine-baseline.md`.
 
+## THE FINDING THAT REORDERS EVERYTHING
+
+**97% of the p99 excess is spent while no stage is executing** (`docs/perf/evidence/
+2026-09-09-tail-is-outside-every-stage.md`). Nine stage deltas sum to +2.75 ms against a
++92.70 ms tail excess.
+
+The median already meets the goal — **8.20 ms against a 20 ms budget**. The p99 does not,
+and no stage-level change can fix it, because the time is not in a stage.
+
+Gate 2 and Phase 2 of the plan (multi-pattern engine, rule budgets, Tier-2 gating) all
+target stage time. At 45 rules that is the 3%. They remain right for higher rule counts
+and wrong as the next thing to do.
+
+### Hypotheses tried for the out-of-stage tail
+
+| # | hypothesis | verdict |
+|---|---|---|
+| 1 | thread-per-regex churn (~1,200 threads/s) | **REFUTED by experiment** — fixed it (task 2, 2.4× on the engine); p99 unchanged 53.20 → 53.30 |
+| 2 | 7 synchronous Redis publishes on the loop | **REFUTED by measurement** — Redis 0.13 ms avg, `publish` 3.84 µs; 7 cannot be 90 ms |
+| 3 | `pipeline_trace` build + serialise (91% of the body, 98% duplicated text) | **under test** — task 6 makes it switchable; sweep pending |
+| 4 | GC pauses from that same allocation churn | coupled to 3; the same experiment bears on it |
+
+Two named causes have already been wrong. Nothing goes in the plan as a cause until a
+sweep says so.
+
 ## Next action
 
-**Task 1D/1E are done.** Next is the per-guard-pass fixed cost: ~3.2 ms to scan ~525
-characters. That single number now sets the floor on streaming first-token latency —
-every lever left (flush cadence, retention) trades against it, and the Pareto table in
-`secure_streaming.py` shows why: halving the flush threshold roughly doubles guard
-passes. Reduce the per-pass cost and every point on that curve moves at once.
+Run the capacity sweep with `PERF_TRACE_MODE=metrics` and compare against the full-mode
+baseline (conc 4: p99 53.30; conc 16: p99 148.10). Record it either way — if the tail
+does not move, hypothesis 3 joins 1 and 2 as refuted and the next candidates are ASGI
+middleware and h11 request parsing, neither yet measured.
 
-After that: task 10 (max RPS/vCPU measured) — still the only way to make the RPS half of
-the promise a measured number rather than an aspiration.
+`load.py --latency-metric addon` with tail attribution is the instrument for all of this;
+it has now refused to publish a number four times, each time correctly.
 
 ## Completion promise — NOT yet true
 

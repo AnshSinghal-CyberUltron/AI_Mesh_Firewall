@@ -100,6 +100,13 @@ services:
       WEB_CONCURRENCY: "${PERF_WEB_CONCURRENCY:-4}"
       GATEWAY_SCANNER_THREAD_POOL_SIZE: "${PERF_SCANNER_POOL:-4}"
 
+      # ── Task 6: pipeline_trace projection. `full` (default) is today's behaviour
+      #    byte-for-byte; `metrics` keeps stage names/actions/latencies and the root
+      #    timing keys — everything drive.py and load.py read, including the
+      #    nine-stage honesty check — while dropping the duplicated prompt/response
+      #    text that is 98% of the bytes. MEASURED: 35,572 B -> 684 B, 52x.
+      GATEWAY_PIPELINE_TRACE_MODE: "${PERF_TRACE_MODE:-full}"
+
       PYTHONUNBUFFERED: "1"
     deploy:
       resources:

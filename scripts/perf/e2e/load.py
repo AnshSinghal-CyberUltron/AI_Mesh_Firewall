@@ -204,6 +204,27 @@ def run_level(a, conc: int) -> dict:
     }
 
 
+def assert_host_idle() -> str | None:
+    """Return a warning if another heavy job is running, else None.
+
+    `pgrep -f "[p]ytest"` is NOT reliable here: the bracket trick stops a plain `pgrep`
+    matching itself, but it does not stop it matching the *invoking shell's* command
+    line, which contains the pattern. It reported "pytest running" during a clean run.
+    Matching on the executable's own argv is the check that means what it says.
+    """
+    try:
+        out = subprocess.run(["ps", "-eo", "comm,args"], capture_output=True,
+                             text=True, timeout=10).stdout
+    except Exception:  # noqa: BLE001
+        return None
+    busy = [ln for ln in out.splitlines()[1:]
+            if ln.split(" ", 1)[0] in ("pytest", "python3", "python")
+            and "pytest" in ln.split(" ", 1)[-1]
+            and "load.py" not in ln]
+    return (f"{len(busy)} pytest process(es) are running; latency numbers from this run "
+            f"are contaminated") if busy else None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default="http://127.0.0.1:8300/v1/chat/completions")
@@ -229,6 +250,10 @@ def main() -> int:
     ap.add_argument("--cpu-limit", type=float, default=4.0,
                     help="the gateway's `cpus` limit — the RPS/vCPU denominator")
     a = ap.parse_args()
+
+    warn = assert_host_idle()
+    if warn:
+        print(f"WARNING: {warn}")
 
     levels = [int(x) for x in a.concurrency.split(",")]
     rows, fails = [], []
