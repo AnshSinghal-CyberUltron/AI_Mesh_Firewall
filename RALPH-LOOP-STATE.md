@@ -72,40 +72,56 @@
   only 2.4× at 4,096 chars, and the residual 10.43 ms there is real regex work needing a
   multi-pattern engine. Evidence: `docs/perf/evidence/2026-09-09-policy-engine-baseline.md`.
 
-## THE FINDING THAT REORDERS EVERYTHING
+## THE CAUSE, FOUND — and how many wrong turns it took
 
-**97% of the p99 excess is spent while no stage is executing** (`docs/perf/evidence/
-2026-09-09-tail-is-outside-every-stage.md`). Nine stage deltas sum to +2.75 ms against a
-+92.70 ms tail excess.
+**`redact_all` is 78% of the gateway's on-CPU time** (py-spy, 121,169 samples, 0 errors).
+It is reached from `_redact_trace_text` on four fields per request while *building* the
+pipeline_trace — after every stage timer has closed, so it never appeared in any stage
+attribution.
 
-The median already meets the goal — **8.20 ms against a 20 ms budget**. The p99 does not,
-and no stage-level change can fix it, because the time is not in a stage.
-
-Gate 2 and Phase 2 of the plan (multi-pattern engine, rule budgets, Tier-2 gating) all
-target stage time. At 45 rules that is the 3%. They remain right for higher rule counts
-and wrong as the next thing to do.
-
-### Hypotheses tried for the out-of-stage tail
+The decisive number came from dividing two figures the harness had been printing side by
+side, unexamined, for several iterations: **`docker stats` CPU ÷ achieved RPS = ~56 ms of
+CPU per request, against 8.2 ms traced.** Seven hypotheses failed because every one of them
+targeted something inside that 8.2 ms — 15% of the real cost.
 
 | # | hypothesis | verdict |
 |---|---|---|
-| 1 | thread-per-regex churn (~1,200 threads/s) | **REFUTED by experiment** — fixed it (task 2, 2.4× on the engine); p99 unchanged 53.20 → 53.30 |
-| 2 | 7 synchronous Redis publishes on the loop | **REFUTED by measurement** — Redis 0.13 ms avg, `publish` 3.84 µs; 7 cannot be 90 ms |
-| 3 | `pipeline_trace` build + serialise (91% of the body, 98% duplicated text) | **under test** — task 6 makes it switchable; sweep pending |
-| 4 | GC pauses from that same allocation churn | coupled to 3; the same experiment bears on it |
+| 1 | thread-per-regex churn | refuted by experiment — fixed it, p99 unchanged |
+| 2 | synchronous Redis publishes | refuted — 0.13 ms avg, 3.84 µs/publish |
+| 3 | `pipeline_trace` payload size | partial — ~5.6% p90, not the cause |
+| 4 | scanner thread pool | refuted — pool 4/16/32, no trend |
+| 5 | telemetry enqueue | refuted — `telemetry_ms` 0.00 |
+| 6 | GC pauses | refuted — `gc_pause_ms` +0.07 ms |
+| 7 | CFS quota throttling | refuted — 22.8 ms across the container's whole lifetime |
+| 8 | **trace redaction** | **confirmed — 78% of on-CPU time** |
 
-Two named causes have already been wrong. Nothing goes in the plan as a cause until a
-sweep says so.
+**py-spy needed no gateway changes and would have answered this at hypothesis 1.** A trace
+can only report regions someone chose to instrument; this work was in none of them.
+
+## Three corrections I had to make to my own claims
+
+| claim | why it was wrong |
+|---|---|
+| task 6 gave "28% p99" | n=1 per arm, inside a 100.90–151.20 ms spread on an unchanged build. Real effect ~5.6% p90. Fixed by `--repeat N` (median-of-N with spread) |
+| "the tail is outside every stage" | sum of per-stage medians ≠ median of the per-request sum. A stall landing on a different stage each request leaves every per-stage median flat. Fixed by per-request attribution |
+| "the delay is before the model call" | `t_addon_pre_ms` is `total − model_out − post` — a residual, not an instrument |
+
+Plus three instances of a `-f` process pattern matching the **invoking shell's own command
+line**: `pgrep -f "[p]ytest"` reporting a busy host during a clean run, and `pkill -f
+"[l]oad\.py"` killing its own parent. Fixed in the driver, then repeated in an ad-hoc
+command minutes later.
 
 ## Next action
 
-Run the capacity sweep with `PERF_TRACE_MODE=metrics` and compare against the full-mode
-baseline (conc 4: p99 53.30; conc 16: p99 148.10). Record it either way — if the tail
-does not move, hypothesis 3 joins 1 and 2 as refuted and the next candidates are ASGI
-middleware and h11 request parsing, neither yet measured.
+Verify task 8b (memoising `redact_all`) in **`full`** mode against the pre-task-8 baseline
+p90 54.10–56.80 / p99 100.90–151.20. `full` is the default; task 8 helps only `metrics`, so
+8b is the change that reaches the shipped configuration.
 
-`load.py --latency-metric addon` with tail attribution is the instrument for all of this;
-it has now refused to publish a number four times, each time correctly.
+Then: re-measure the streaming path. Every number above is non-streaming, and streaming
+first-token was 358–962 ms at last measurement (task 1E) — before any of the redaction work.
+
+`load.py` has now refused to publish an RPS number **six times**, each time correctly. The
+closest approach is p99 35.90 ms against a 20 ms bound, after task 8.
 
 ## Completion promise — NOT yet true
 
