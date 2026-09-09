@@ -210,6 +210,22 @@ def main() -> int:
             fails.append(f"stage {name!r} reported 0 ms on every sample — scans did not run, "
                          f"so this is not a nine-stage result (R7.5)")
 
+    # STUB PACING INVARIANT. `--max-tokens` only CAPS the stub; the actual count is
+    # min(max_tokens, duration_s * tok_per_s). If the container's
+    # GATEWAY_LOADTEST_STUB_DURATION_S is lower than a run assumes, the answer is
+    # silently shorter AND paced faster (n tokens over a fixed duration), so HEAD
+    # falls for a reason that has nothing to do with the gateway. That is how a
+    # rebuild reverting DURATION_S 3->2 produced "after" numbers that looked better
+    # than they were. Refuse rather than report an unnoticed-faster upstream as a win.
+    if a.max_tokens > 0 and rows:
+        got = _pct([float(r["tokens"]) for r in rows], .5)
+        if got < a.max_tokens:
+            fails.append(
+                f"requested --max-tokens {a.max_tokens} but the stub emitted {got:.0f}: "
+                f"duration_s * tok_per_s caps it lower. The answer is shorter AND paced "
+                f"faster, so HEAD is not comparable with a run at a different duration. "
+                f"Raise GATEWAY_LOADTEST_STUB_DURATION_S (PERF_STUB_DURATION_S) and re-run.")
+
     # THE ATTRIBUTION INVARIANT. The firewall tax is defined by subtracting
     # `model_output` from the total. If the upstream demonstrably produced tokens
     # but `model_output` is 0, there is nothing to subtract and the provider's

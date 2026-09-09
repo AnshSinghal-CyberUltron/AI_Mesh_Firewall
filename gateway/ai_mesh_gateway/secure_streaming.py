@@ -28,7 +28,34 @@ SENTENCE_BOUNDARIES = frozenset(".!?\n")
 # "alex@" in this flush, "example.com" in the next) is re-scanned WITH its
 # completion before any part of it is released to the client. Must exceed the
 # longest single PII/secret token (email/phone/SSN/credit-card/API-key < 512B).
+# CORRECTION (task 1E, measured): that claim does not hold. patterns.py contains 25
+# whitespace-crossing patterns with UNBOUNDED width, and even the bounded `email`
+# pattern reaches 601 chars. 512 is a pragmatic cap, not a covering bound; the actual
+# cross-boundary protection is the `_secret_anchor` carry (E14), which is width-free.
 STREAM_LOOKAHEAD_BYTES = 512
+# Floor for the content-derived retention (task 1E). Sized from evidence, not
+# taste: of the 31 patterns in patterns.py that can match ACROSS whitespace, 25
+# are UNBOUNDED (`[\s\S]*?`, `{20,}`, `.*?`) and no finite window covers them --
+# the old flat 512 did not either. The widest BOUNDED one with whitespace inside
+# the match is phone_intl at 52 chars, so 64 covers every pattern a finite window
+# can cover, with margin. Contiguous runs (keys, emails, URLs) are handled
+# separately by _min_retain_bytes and are never truncated below the cap.
+STREAM_MIN_RETAIN_BYTES = 64
+# New CONTENT since the last flush that justifies another guard pass (task 1E).
+# With retention now content-derived (~70 bytes for prose) the flush TRIGGER became
+# the binding constraint on first-token latency: a 64-CHUNK trigger is 384 bytes of
+# token-sized deltas. Denominating it in bytes decouples the cadence from the
+# provider's delta size, which is what made the same 1,290 bytes cost 152 guard
+# passes as 6-byte chunks and 1 as 120-byte chunks.
+# Measured Pareto (300 token-sized deltas, scripts/detection sweep):
+#   bytes   1st release @chunk   guard passes
+#      64                   25             29
+#      96                   19             21
+#     160                   30             13
+#     192                   35             11
+#     384                   65              6
+# 160 is the largest threshold still inside the <=32-chunk first-release budget.
+STREAM_FLUSH_BYTES = 160
 # E14 long-secret split fix: characters that can appear inside a high-entropy
 # secret/API-key/JWT body. A trailing run of these abutting a just-redacted
 # secret is treated as a "secret in progress" and carried across the flush so
@@ -87,6 +114,34 @@ def _defang_open_media(text: str) -> str:
     if start is None:
         return text
     return text[:start] + "[exfil-redacted]"
+
+
+def _min_retain_bytes(text: str) -> int:
+    """Bytes of trailing buffer that must NOT be released on a non-final flush.
+
+    Was a flat ``STREAM_LOOKAHEAD_BYTES``, which held every caller ~86
+    token-sized chunks behind and made a short streamed answer arrive whole at
+    [DONE] (measured 3097 ms to first token for 100 tokens; task 1D).
+
+    A boundary can only split a pattern in one of three ways:
+
+    * **contiguous** (no whitespace in the match: keys, emails, URLs, connection
+      strings) -- it lies wholly inside the trailing non-whitespace run, retained
+      here in full up to the cap;
+    * **whitespace-crossing and bounded** -- widest is 52 chars, covered by
+      ``STREAM_MIN_RETAIN_BYTES``;
+    * **whitespace-crossing and unbounded** -- 25 of the 31 whitespace-crossing
+      patterns; no finite window covers these and the previous flat 512 did not
+      either, so nothing changes for them.
+
+    The cap stays ``STREAM_LOOKAHEAD_BYTES``, so this can only ever retain LESS
+    than before, never more: no input is held longer than it already was.
+    """
+    i = len(text)
+    while i > 0 and not text[i - 1].isspace():
+        i -= 1
+    tail_run = len(text[i:].encode("utf-8"))
+    return min(STREAM_LOOKAHEAD_BYTES, tail_run + STREAM_MIN_RETAIN_BYTES)
 
 
 def _trailing_secret_run(text: str) -> str:
@@ -205,6 +260,7 @@ class SecureStreamingResponse:
         # at the limit and flushed on EVERY subsequent chunk (measured: 237 guard
         # passes for a 300-token answer, ~3.2 ms each).
         self._chunks_since_flush: int = 0
+        self._bytes_since_flush: int = 0
         self._stream_blocked: bool = False
         self._last_flush_reason: FlushReason | None = None
         # E14 long-secret split fix: a "secret-in-progress" anchor carried across
@@ -290,7 +346,11 @@ class SecureStreamingResponse:
                     yield raw_sse
                     continue
 
-                if self._chunks_since_flush >= self._max_buffer_chunks:
+                # Either trigger may fire. Bytes bound the LATENCY (how much
+                # content can pile up unreleased); chunks remain a backstop so a
+                # long run of empty/whitespace deltas still cannot buffer forever.
+                if (self._bytes_since_flush >= STREAM_FLUSH_BYTES
+                        or self._chunks_since_flush >= self._max_buffer_chunks):
                     async for flushed in self._flush_buffer(FlushReason.BUFFER_LIMIT):
                         yield flushed
                     if self._stream_blocked:
@@ -298,6 +358,7 @@ class SecureStreamingResponse:
 
                 self._chunk_queue.append((raw_sse, content_delta))
                 self._chunks_since_flush += 1
+                self._bytes_since_flush += len(content_delta.encode("utf-8"))
                 self._content_buffer.append(content_delta)
                 self._content_buffer_len += len(content_delta.encode("utf-8"))
 
@@ -338,6 +399,7 @@ class SecureStreamingResponse:
         # chunks are deliberately NOT counted — they have already been scanned and
         # are held only so a value split across the boundary can re-anchor.
         self._chunks_since_flush = 0
+        self._bytes_since_flush = 0
 
         full_text = "".join(self._content_buffer)
         try:
@@ -1095,8 +1157,10 @@ class SecureStreamingResponse:
         opener so the completed beacon is scanned + defanged whole. If it grows past
         MAX_OPEN_MEDIA_HOLDBACK (a never-closing opener), we fail closed: defang the
         opener in place and flush the neutralized buffer."""
-        min_retain = STREAM_LOOKAHEAD_BYTES
         full_text = "".join(c for _, c in self._chunk_queue)
+        # Content-derived, capped at STREAM_LOOKAHEAD_BYTES (task 1E). The open-media
+        # branch below still raises this via max(), so its holdback is unaffected.
+        min_retain = _min_retain_bytes(full_text)
         open_start = _open_media_opener_start(full_text)
         if open_start is not None:
             open_tail_bytes = len(full_text[open_start:].encode("utf-8"))

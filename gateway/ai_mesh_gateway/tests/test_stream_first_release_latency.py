@@ -89,10 +89,6 @@ async def first_release_index(tokens: list[str]) -> tuple[int | None, int]:
     return first, len(tokens)
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "OPEN DEFECT (task 1E): min_retain = STREAM_LOOKAHEAD_BYTES is unconditional, so "
-    "a <512-byte answer is never released before [DONE]. strict=True so this flips to "
-    "XPASS and forces the marker's removal the moment 1E lands."))
 @pytest.mark.asyncio
 async def test_short_answer_is_not_streamed_at_all():
     """A 100-token answer is delivered entirely at [DONE].
@@ -112,10 +108,6 @@ async def test_short_answer_is_not_streamed_at_all():
     )
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "OPEN DEFECT (task 1E): first release lands at input chunk 129 (measured); budget "
-    "is 32. Dominated by the unconditional 512-byte retention, not by the flush "
-    "trigger. strict=True so it flips to XPASS when 1E lands."))
 @pytest.mark.asyncio
 async def test_first_token_reaches_client_early():
     """The caller must see a first token within a bounded PREFIX of the answer.

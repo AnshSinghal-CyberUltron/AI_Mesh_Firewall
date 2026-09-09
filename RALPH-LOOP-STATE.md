@@ -32,6 +32,32 @@
 
 ## Iteration log
 
+- **9** — **Task 1E: streaming first-token latency, 129 → 30 chunks.** Built the
+  detection-equivalence gate FIRST (`scripts/detection/stream_retention_equivalence.py`),
+  then changed retention from a flat 512 bytes to content-derived
+  (`_min_retain_bytes`) and the flush trigger from chunks to bytes
+  (`STREAM_FLUSH_BYTES=160`). Gate: 748/748 short + 2244/2244 long documents
+  byte-identical, every enforced verdict unchanged. **Corpus alone would have been
+  vacuous** — no item exceeds 93 chars, so none reaches the BUFFER_LIMIT trigger; hence
+  the `--long` mode. Sized the retention from evidence: of 31 whitespace-crossing
+  patterns, **25 are unbounded**, and the flat 512 never was a covering bound.
+- **8** — **Task 1D: the added streaming time is at the HEAD, not the tail.** Splitting
+  ADDED WALL CLOCK into HEAD/TAIL showed 3097 / 2042 / 1393 ms to first token for
+  100/200/300 tokens — a 100-token answer streamed *nothing* before `[DONE]`. Also
+  measured that **my own 1C fix regressed this** (first release chunk 89 → 129) and said
+  so. Predicted first release at chunk 128; measured 129.
+- **7** — Task 1C: flush on NEW chunks rather than queue depth. Guard CPU
+  112.5 → 6.70 / 454.6 → 18.10 / 793.2 → 24.90 ms (**31.9×** at 300 tokens). Twice
+  mis-diagnosed the mechanism (O(n²), then a growing buffer) before instrumenting
+  refuted both: the scan window was already bounded at ~525 chars; the bug was flush
+  COUNT.
+- **2-6** — Built the Docker E2E harness from scratch and cleared five bring-up
+  blockers (chunked-SSE framing in the stub; two compose `environment:` > `env_file:`
+  precedence traps; control healthy with no schema; `422 no_provider_configured`
+  because `ensure_default_llm_model` seeds the *guard* model, not an org inference
+  model). Produced the project's first real end-to-end nine-stage measurement, and
+  added a refusal for a harness bug of my own that reported 2,638 ms of "firewall tax"
+  while claiming all honesty checks passed.
 - **1** — Created worktree + `dev/perf-9stage`; replicated ansh WIP (`a83d113f`). Measured the
   policy-engine cost curve and isolated the mechanism (`Thread` create+join = **0.0586 ms**, which is
   the entire 0.065 ms/rule slope). Proved G0.3 targets dead code and re-scoped it onto task-5
@@ -40,11 +66,16 @@
   only 2.4× at 4,096 chars, and the residual 10.43 ms there is real regex work needing a
   multi-pattern engine. Evidence: `docs/perf/evidence/2026-09-09-policy-engine-baseline.md`.
 
-## Next action (iteration 2)
+## Next action
 
-Start **task 1 — the Docker E2E harness**. It blocks every latency claim. Begin with 1.1
-(`token_stub.py`) and 1.2 (`compose.perf.yml`), then 1.8 to capture the pre-change baseline matrix.
-Do **not** start task 2 before task 1.8 has a recorded baseline — there would be no denominator.
+**Task 1D/1E are done.** Next is the per-guard-pass fixed cost: ~3.2 ms to scan ~525
+characters. That single number now sets the floor on streaming first-token latency —
+every lever left (flush cadence, retention) trades against it, and the Pareto table in
+`secure_streaming.py` shows why: halving the flush threshold roughly doubles guard
+passes. Reduce the per-pass cost and every point on that curve moves at once.
+
+After that: task 10 (max RPS/vCPU measured) — still the only way to make the RPS half of
+the promise a measured number rather than an aspiration.
 
 ## Completion promise — NOT yet true
 
