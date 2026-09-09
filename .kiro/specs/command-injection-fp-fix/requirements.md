@@ -198,3 +198,54 @@ false-positive problem for a different vulnerability.
 2. THE narrowed Backtick_Pattern SHALL be a linear-time-safe regular expression that does not introduce catastrophic backtracking on adversarial input (no nested unbounded quantifiers over overlapping character classes), such that scanning a pathological backtick-heavy input completes within the Scanner's existing per-scan time envelope.
 3. THE feature SHALL NOT add, remove, or alter any Scanner log statement, and SHALL NOT cause any prompt content to be logged that the Before_State did not already log.
 4. IF the narrowed Backtick_Pattern would match a substantially broader span of text than the Before_State pattern for the same input (risking new PII/secret capture into `matched_patterns`), THEN the feature SHALL constrain the match span so the After_State captures no more raw prompt content than the Before_State for equivalent inputs.
+
+---
+
+## Staleness correction (dev/perf-9stage, 2026-09-09)
+
+**This spec's premise no longer describes running code. Do not implement it as written.**
+
+### What was verified
+
+The Introduction states the scanner "returns `action="block", confidence=1.0, tier="tier_1"` on the
+FIRST matching `ATTACK_PATTERNS` category". That code path was **deleted** by
+`policy-driven-detection` task 3 (marked `[x]` complete). Verified in this tree:
+
+| Check | Evidence |
+|---|---|
+| `_scan_prompt_sync` no longer scans | `scanner.py:1131-1160` — body is `return ScanVerdict()`; the docstring states the `ATTACK_PATTERNS` iteration "was REMOVED (task 3.1)" |
+| The old body is retained but dead | `_scan_prompt_sync_disabled_builtin_default` (`scanner.py:1162`) — `grep` for callers returns **nothing** |
+| The only full-dict iterations are dead | `scanner.py:1212` and `:1277` both fall inside `_scan_prompt_sync_disabled_builtin_default` |
+| Every **live** consumer reads only two categories | `policy_engine.py:95`, `policy_engine.py:136`, `mcp_scan_orchestrator.py:272` — each iterates `("prompt_injection", "jailbreak")` only |
+| That exclusion is deliberate | `mcp_scan_orchestrator.py:260-262`: *"Only those two LLM-manipulation categories (**NOT sql/command/path** — which would FP on benign tool output mentioning SQL/paths)"* |
+
+**Conclusion:** `ATTACK_PATTERNS["command_injection"]`, including the bare `` `[^`]+` `` pattern, is
+**unreachable on every live path**. The measured 5/5 benign inline-code hard-block cannot occur in
+this tree. Narrowing the regex in `scanner.py` would change nothing observable.
+
+### Why the spec is not simply cancelled
+
+`policy-driven-detection` **task 5 — "Re-home the built-in families as seeded, default-OFF policy
+packages (control plane)" — is still OPEN**, and no seed currently carries the pattern (verified:
+`grep` for the backtick pattern across `control/ai_mesh_control/policy/*seed*.py` returns nothing).
+The defect is therefore **latent, not fixed**: re-homing `command_injection` verbatim would
+reintroduce the exact false positive into a policy rule, where it would be *enabled by operators*
+rather than built in.
+
+### Re-scope
+
+G0.3 changes from *"narrow a scanner regex"* to a **constraint on the task-5 re-homing**:
+
+1. The seeded `command_injection` policy package MUST NOT contain the bare `` `[^`]+` `` pattern.
+2. The G0.2 posture-scoring harness MUST gate the seed against G0.1's `developer_traffic` benign
+   family, so the FP cannot be reintroduced silently.
+3. Requirements 3, 4, 6, 7 (genuine detection retained, zero recall regression, scored sign-off,
+   verification gate) carry over unchanged and apply to the seeded package.
+4. Requirements 1, 2, 5, 8 are re-pointed from `scanner.py` to the seed data.
+
+**Sequencing:** G0.3 is now **blocked by and merged into** `policy-driven-detection` task 5. It must
+not be scheduled as independent scanner work.
+
+**Method note.** This correction exists because the spec was written against a measurement of the
+pre-rewrite scanner. Per `CLAUDE.md` ("assume documentation may be outdated"; "evidence always
+wins"), the premise was re-verified against the tree before any design was written.
