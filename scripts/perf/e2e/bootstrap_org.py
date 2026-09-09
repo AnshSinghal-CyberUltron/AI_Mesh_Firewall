@@ -89,6 +89,28 @@ def main() -> int:
     out(f"key prefix={key.prefix} org={key.organization.slug} "
         f"tpm={key.rate_limit_tokens_per_minute}")
 
+    # ── Raise the rate-limit CEILING (not the work) ─────────────────────────
+    # FirewallConfig defaults to 1000 requests_per_minute. A throughput run at 25 RPS
+    # is 1500/min, so the ceiling trips mid-window and the harness sees HTTP 429 on
+    # 83% of requests — a configuration limit masquerading as a capacity limit.
+    #
+    # Raise the CEILING ONLY. The rate_limit stage still performs its full Redis work
+    # on every request (INCR + EXPIRE NX for the burst bucket, again for the RPM
+    # bucket — four commands over two pipelined round-trips), so the stage's latency
+    # contribution is unchanged. Setting rate_limit_enabled=False would have removed
+    # that work and quietly shortened the pipeline.
+    try:
+        from core.models import FirewallConfig
+        fc, _ = FirewallConfig.objects.get_or_create(organization=org)
+        fc.requests_per_minute = 100_000_000
+        fc.burst_limit = 1_000_000
+        fc.rate_limit_enabled = True          # stage KEEPS doing its Redis work
+        fc.save(update_fields=["requests_per_minute", "burst_limit", "rate_limit_enabled"])
+        out(f"rate-limit ceiling raised: rpm={fc.requests_per_minute} "
+            f"burst={fc.burst_limit} enabled={fc.rate_limit_enabled}")
+    except Exception as exc:  # noqa: BLE001
+        out(f"WARN FirewallConfig: {type(exc).__name__}: {exc}")
+
     # ── A routable model for the org ────────────────────────────────────────
     try:
         from core.simulator_seed import ensure_default_llm_model
