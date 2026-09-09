@@ -53,3 +53,31 @@ Do **not** start task 2 before task 1.8 has a recorded baseline — there would 
 Blockers: no Docker E2E harness yet (policy-driven-detection task 10); no end-to-end latency measured
 on this tree; 100k RPS/vCPU is **refuted** by measurement (best case ~426 RPS/vCPU at 60 rules on
 c8i-class hardware). The RPS half of the promise must be stated as *measured maximum*, not 100k.
+
+## ⚠ Concurrent work is landing on `ansh`
+
+During iteration 1, six files appeared in the `ansh` working tree that I did **not** create
+(mtimes 17:52–17:55):
+
+```
+control/ai_mesh_control/policy/builtin_packs_catalog.py          ← task 5 (re-homing)
+control/ai_mesh_control/policy/tests/test_builtin_packs_catalog.py
+gateway/.../tests/test_policy_driven_legacy_toggle_inertness.py  ← task 6
+gateway/.../tests/test_policy_driven_sdk_tier2_parity.py         ← task 4
+gateway/.../tests/test_policy_driven_tier2_gate_property.py      ← task 4
+gateway/.../tests/test_policy_driven_tier_separation.py
+```
+
+These are exactly `policy-driven-detection` tasks 4/5/6 — another session is actively working them
+on `ansh`. **The worktree isolation was the correct call**; it kept this branch stable while that
+landed.
+
+**Consequence for this branch:** the `dev/perf-9stage` baseline (`a83d113f`) was snapshotted *before*
+those files existed, so it lacks them. `builtin_packs_catalog.py` matters here because the G0.3
+re-scope depends on the task-5 seed. Before starting task 7 (multi-pattern engine) or any work that
+touches policy packages, **re-sync from `ansh`** and re-check whether the seeded `command_injection`
+pack carries the bare `` `[^`]+` `` pattern.
+
+**Verification that `ansh` was not disturbed by me:** its 8 tracked modifications are byte-identical
+to the snapshot taken at the start of iteration 1 (`git diff HEAD --binary` sha256 `32bb3c5083f7836f`
+before and after). Only untracked files changed, and none by me.
