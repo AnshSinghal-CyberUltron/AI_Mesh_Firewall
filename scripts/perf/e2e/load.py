@@ -127,6 +127,7 @@ def one_request(url, key, model, prompt_chars, max_tokens, timeout, stream):
                     pass
     addon = None
     stages: dict[str, float] = {}
+    roots: dict[str, float] = {}
     if trace:
         for st in (trace.get("stages") or []):
             if isinstance(st, dict) and st.get("name"):
@@ -138,10 +139,18 @@ def one_request(url, key, model, prompt_chars, max_tokens, timeout, stream):
         # stub pacing here, seconds of real generation in production - so bounding
         # capacity on wall would refuse every run for a reason that has nothing to do
         # with the gateway.
-        addon = (float(trace.get("t_addon_pre_ms") or 0.0)
-                 + float(trace.get("t_addon_post_ms") or 0.0))
+        pre = float(trace.get("t_addon_pre_ms") or 0.0)
+        post = float(trace.get("t_addon_post_ms") or 0.0)
+        addon = pre + post
+        # The gateway's OWN accounting of time inside the request but outside any
+        # stage, plus the split around the upstream call. `overhead_ms` names the gap
+        # the stage-only attribution kept reporting as UNATTRIBUTED; pre/post localise
+        # it to before or after the model call. Both were already being collected and
+        # thrown away.
+        roots = {"overhead_ms": float(trace.get("overhead_ms") or 0.0),
+                 "t_addon_pre_ms": pre, "t_addon_post_ms": post}
     return {"ok": True, "ms": ms, "ttft": ttft, "addon": addon, "nine": nine,
-            "stages": stages, "trace_seen": trace is not None}
+            "stages": stages, "roots": roots, "trace_seen": trace is not None}
 
 
 def run_level(a, conc: int) -> dict:
@@ -237,6 +246,11 @@ def main() -> int:
     ap.add_argument("--warmup-s", type=float, default=5.0)
     ap.add_argument("--window-s", type=float, default=20.0)
     ap.add_argument("--p99-bound-ms", type=float, default=20.0)
+    ap.add_argument("--repeat", type=int, default=1,
+                    help="repeat each concurrency level N times and report the MEDIAN "
+                         "with the observed spread. At ~550 samples a run's p99 rests on "
+                         "about 5 observations and swings 100-151 ms on an unchanged "
+                         "build; a single run cannot resolve anything smaller than that.")
     ap.add_argument("--latency-metric", choices=("addon", "wall", "ttft"), default="addon",
                     help="addon = the FIREWALL TAX (t_addon_pre + t_addon_post), the "
                          "quantity the <20 ms SLO names and the default. wall includes "
@@ -263,12 +277,25 @@ def main() -> int:
           f"{'wall_p50':>10}{'gw_cpu%':>9}{'cli_cores':>11}{'err%':>7}  9stage")
     over = 0
     for c in levels:
-        r = run_level(a, c)
+        reps = [run_level(a, c) for _ in range(max(1, a.repeat))]
+        # Report the MEDIAN run, and carry the spread so a reader can see whether a
+        # difference is resolvable. Reporting the best run would be cherry-picking;
+        # reporting one run and calling a 28% difference a result is what this option
+        # exists to stop — that mistake is already in the git history.
+        reps.sort(key=lambda r: r["p99"])
+        r = reps[len(reps) // 2]
+        if len(reps) > 1:
+            r = dict(r)
+            r["p99_spread"] = f"{reps[0]['p99']:.1f}-{reps[-1]['p99']:.1f}"
+            r["p90_spread"] = (f"{min(x['p90'] for x in reps):.1f}-"
+                               f"{max(x['p90'] for x in reps):.1f}")
         rows.append(r)
         print(f"{r['conc']:>5}{r['rps']:>10.1f}{r['p50']:>9.2f}{r['p90']:>9.2f}"
               f"{r['p99']:>9.2f}{r['wall_p50']:>10.1f}{r['gw_cpu']:>9.1f}"
               f"{r['client_cpu_cores']:>11.2f}"
-              f"{100*r['err_rate']:>7.2f}  {'yes' if r['nine_all'] else 'NO'}")
+              f"{100*r['err_rate']:>7.2f}  {'yes' if r['nine_all'] else 'NO'}"
+              + (f"   [{a.repeat} runs: p90 {r['p90_spread']}, p99 {r['p99_spread']}]"
+                 if r.get("p99_spread") else ""))
         if not r["nine_all"]:
             fails.append(f"conc {c}: {r['nine_missing']} of {r['n']} samples did not run "
                          f"all nine stages — a shorter pipeline is being measured (R1)")
@@ -313,6 +340,13 @@ def main() -> int:
             for d, name, m, t in sorted(deltas, reverse=True):
                 flag = "  <== dominates the tail" if d == max(x[0] for x in deltas) and d > 1 else ""
                 print(f"{name:<20}{m:>11.2f}{t:>10.2f}{d:>+10.2f}{flag}")
+            # Root-level timing the gateway computes for itself.
+            print(f"{'-- root timing --':<20}")
+            for rk in ("t_addon_pre_ms", "t_addon_post_ms", "overhead_ms"):
+                rm = statistics.median([(r.get("roots") or {}).get(rk, 0.0) for r in mid])
+                rt = statistics.median([(r.get("roots") or {}).get(rk, 0.0) for r in slow])
+                print(f"{rk:<20}{rm:>11.2f}{rt:>10.2f}{rt-rm:>+10.2f}")
+
             m_add = statistics.median([r["addon"] or 0.0 for r in mid])
             t_add = statistics.median([r["addon"] or 0.0 for r in slow])
             acc = sum(d for d, _, _, _ in deltas)
