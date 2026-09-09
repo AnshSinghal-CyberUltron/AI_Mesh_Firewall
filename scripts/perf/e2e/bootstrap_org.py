@@ -72,7 +72,22 @@ def main() -> int:
         allowed_models=[],                 # [] = no per-key model restriction
         rate_limit_tokens_per_minute=10_000_000,   # never the bottleneck under load
     )
-    out(f"key prefix={key.prefix} tpm={key.rate_limit_tokens_per_minute}")
+    # THE ORG LIVES ON THE KEY, NOT THE USER.
+    # This was a silent, total measurement invalidator: the gateway resolves an org from
+    # GatewayAPIKey.organization, then loads that org's compiled policy bundle. With a null
+    # org it loads NOTHING and the policy engine evaluates ZERO rules — while the trace
+    # still reports a `policy` stage with a plausible 0.3 ms latency and "no matching policy
+    # rule". Every latency measurement taken before this fix ran with detection inert.
+    #
+    # The earlier code set `owner.organization`, which does not exist on the User model
+    # (it has a `profile` relation instead), so the assignment was skipped and nothing
+    # complained. `compute_full_nine_stages` did not catch it either: it verifies stage
+    # NAMES are present, and the stage WAS present — it just had no rules to evaluate.
+    if getattr(key, "organization_id", None) != org.id:
+        key.organization = org
+        key.save(update_fields=["organization"])
+    out(f"key prefix={key.prefix} org={key.organization.slug} "
+        f"tpm={key.rate_limit_tokens_per_minute}")
 
     # ── A routable model for the org ────────────────────────────────────────
     try:
