@@ -1,0 +1,49 @@
+{
+  "preflight": "pass",
+  "gateway_url": "http://127.0.0.1:18300",
+  "git_sha": "a67337fb06ecc1b6444f2c1eeb6e952a878e0eed",
+  "compose_project": "aimf_p0",
+  "git_sha_label": "a67337fb06ecc1b6444f2c1eeb6e952a878e0eed",
+  "redis_keys_seen": [
+    "firewall:config:aimfp0",
+    "policies:compiled:aimfp0",
+    "llm:model_configs:aimfp0"
+  ],
+  "health_status": 200,
+  "redis_compiled": {
+    "policy_count": 2,
+    "version": 1,
+    "compiled_at": 1789001166.571157,
+    "_sig": "e3a0c55aed2c2c15"
+  },
+  "redis_routing_count": 1,
+  "kill_switch": "",
+  "redis_config_present": true,
+  "observability_status": 200,
+  "observability": {
+    "organization": "aimfp0",
+    "policy": {
+      "policy_count": 2,
+      "version": 1
+    }
+  },
+  "pins": {
+    "ENABLE_TIER2": "false",
+    "DURATION": "2",
+    "WEB_CONCURRENCY": "1",
+    "GROUNDING": "false"
+  },
+  "signing_fp": {
+    "gateway": "2fed7dd177560a01",
+    "control": "2fed7dd177560a01"
+  },
+  "probe": {
+    "status": 200,
+    "class": "counted",
+    "counted": true,
+    "completion_tokens": 32,
+    "error_code": null,
+    "blocked_by": null
+  },
+  "token_floor": 32
+}
