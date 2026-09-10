@@ -5,8 +5,12 @@
 #
 #   docker compose -f docker-compose.yml -f scripts/perf/e2e/compose.perf.yml up -d
 #
+# `name:` pins the project so this overlay cannot attach to live `ai_mesh_firewall`
+# or `aimeshperf` by directory accident. Do not remove it.
+#
 # Duplicating docker-compose.yml would let the harness drift from production; an
 # overlay cannot.
+name: aimeshperf
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # WHY GATEWAY_LOADTEST_STUB_DURATION_S IS SET EXPLICITLY
