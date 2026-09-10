@@ -1,0 +1,60 @@
+# P0.0 measurement overlay. Compose ON TOP of docker-compose.yml.
+#   export P0_GIT_SHA=$(git rev-parse HEAD)
+#   docker compose -f docker-compose.yml -f scripts/perf/e2e/compose.p0.yml up -d
+#
+# Do not copy aimesh-dev compose.perf.yml (SYS_PTRACE / GIL / token-stub / ${PERF_*}).
+
+name: aimf_p0
+
+networks:
+  mcp_sandbox_bridge:
+    name: aimf_p0_mcp_sandbox_bridge
+    external: false
+  mcp_sandbox_net_zeroshield:
+    name: aimf_p0_mcp_sandbox_net_zeroshield
+    external: false
+
+services:
+  postgres:
+    ports: !override []
+  redis:
+    ports: !override []
+  pgbouncer:
+    ports: !override []
+
+  control:
+    ports: !override []
+    env_file: !override ["scripts/perf/e2e/p0.env"]
+    build:
+      context: .
+      dockerfile: control/Dockerfile
+      labels:
+        git.sha: "${P0_GIT_SHA}"
+    environment:
+      POLICY_SIGNING_KEY: "p0-harness-signing-key-not-a-secret"
+      DJANGO_SECRET_KEY: "p0-harness-not-a-secret-do-not-deploy"
+      CELERY_BROKER_URL: "redis://redis:6379/2"
+      CONTROL_WEB_CONCURRENCY: "2"
+
+  gateway:
+    ports: !override ["18300:8300"]
+    env_file: !override ["scripts/perf/e2e/p0.env"]
+    cpus: "1.0"
+    mem_limit: 4g
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+      labels:
+        git.sha: "${P0_GIT_SHA}"
+    environment:
+      POLICY_SIGNING_KEY: "p0-harness-signing-key-not-a-secret"
+      DJANGO_SECRET_KEY: "p0-harness-not-a-secret-do-not-deploy"
+      GATEWAY_LOADTEST_STUB_LLM: "1"
+      GATEWAY_LOADTEST_STUB_DURATION_S: "2"
+      GATEWAY_LOADTEST_STUB_TOK_PER_S: "50"
+      ENABLE_TIER2: "false"
+      GATEWAY_OUTPUT_GUARD_ENABLED: "true"
+      GATEWAY_INPUT_SCAN_ENABLED: "true"
+      GATEWAY_OUTPUT_GROUNDING_ENABLED: "false"
+      WEB_CONCURRENCY: "1"
+      GATEWAY_TIER2_CACHE_TTL_SECONDS: "0"

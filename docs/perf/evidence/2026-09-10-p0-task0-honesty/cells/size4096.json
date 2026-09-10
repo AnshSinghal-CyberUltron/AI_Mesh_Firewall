@@ -1,0 +1,140 @@
+{
+  "cell": "size",
+  "vs_20ms": false,
+  "n_counted": 7,
+  "excluded": {
+    "redact": 1
+  },
+  "firewall_tax_ms": {
+    "n": 7,
+    "mean": 1335.371,
+    "p50": 1334.0,
+    "p90": 1371.7,
+    "p95": 1630.0,
+    "p99": 1630.0,
+    "max": 1630.0
+  },
+  "wall_ms": {
+    "n": 7,
+    "mean": 3335.657,
+    "p50": 3334.2,
+    "p90": 3371.5,
+    "p95": 3630.2,
+    "p99": 3630.2,
+    "max": 3630.2
+  },
+  "wall_label": "N/A-not-tax",
+  "stages": {
+    "auth": {
+      "n": 7,
+      "mean": 0.514,
+      "p50": 0.5,
+      "p90": 0.6,
+      "p95": 0.7,
+      "p99": 0.7,
+      "max": 0.7
+    },
+    "kill_switch": {
+      "n": 7,
+      "mean": 0.214,
+      "p50": 0.2,
+      "p90": 0.2,
+      "p95": 0.3,
+      "p99": 0.3,
+      "max": 0.3
+    },
+    "rate_limit": {
+      "n": 7,
+      "mean": 0.686,
+      "p50": 0.7,
+      "p90": 0.7,
+      "p95": 0.7,
+      "p99": 0.7,
+      "max": 0.7
+    },
+    "policy": {
+      "n": 7,
+      "mean": 8.186,
+      "p50": 8.2,
+      "p90": 8.3,
+      "p95": 8.5,
+      "p99": 8.5,
+      "max": 8.5
+    },
+    "input_scan": {
+      "n": 7,
+      "mean": 1312.043,
+      "p50": 1310.4,
+      "p90": 1348.4,
+      "p95": 1606.9,
+      "p99": 1606.9,
+      "max": 1606.9
+    },
+    "model_routing": {
+      "n": 7,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "model_input": {
+      "n": 7,
+      "mean": 0.357,
+      "p50": 0.4,
+      "p90": 0.5,
+      "p95": 0.5,
+      "p99": 0.5,
+      "max": 0.5
+    },
+    "model_output": {
+      "n": 7,
+      "mean": 2000.286,
+      "p50": 2000.2,
+      "p90": 2000.5,
+      "p95": 2000.6,
+      "p99": 2000.6,
+      "max": 2000.6
+    },
+    "output_guardrail": {
+      "n": 7,
+      "mean": 1.671,
+      "p50": 1.6,
+      "p90": 1.8,
+      "p95": 2.0,
+      "p99": 2.0,
+      "max": 2.0
+    }
+  },
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": true,
+    "stub_llm_env": "1",
+    "full_nine_stages": true,
+    "unique_prompt": true,
+    "capacity_eligible": false,
+    "capacity_predicate": "fail",
+    "capacity_fail_reasons": [
+      "stub_llm"
+    ],
+    "completion_ids": {
+      "chatcmpl-loadtest-stub": 7
+    },
+    "full_nine_stages_meaning": "input_scan p50>0 and output_guardrail p50>0 only"
+  },
+  "capacity_fail_reasons": [
+    "stub_llm"
+  ],
+  "unique_fingerprints": 9,
+  "two_bodies_differ": true,
+  "cpu_mid_window": "0.18%",
+  "gateway_container": "aimf_p0-gateway-1",
+  "offered_rps": 0.283,
+  "achieved_rps": 0.22,
+  "WEB_CONCURRENCY": 1,
+  "driver_inflight": 1,
+  "token_floor": 32,
+  "compute_full_nine_stages": true,
+  "20ms_tax": "N/A-not-20ms"
+}

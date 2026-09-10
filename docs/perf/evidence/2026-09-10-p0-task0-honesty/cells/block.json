@@ -1,0 +1,138 @@
+{
+  "cell": "block",
+  "vs_20ms": false,
+  "n_counted": 8,
+  "excluded": {},
+  "firewall_tax_ms": {
+    "n": 8,
+    "mean": 6.5,
+    "p50": 6.6,
+    "p90": 6.7,
+    "p95": 7.0,
+    "p99": 7.0,
+    "max": 7.0
+  },
+  "wall_ms": {
+    "n": 8,
+    "mean": 6.5,
+    "p50": 6.6,
+    "p90": 6.7,
+    "p95": 7.0,
+    "p99": 7.0,
+    "max": 7.0
+  },
+  "wall_label": "N/A-not-tax",
+  "stages": {
+    "auth": {
+      "n": 8,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "kill_switch": {
+      "n": 8,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "rate_limit": {
+      "n": 8,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "policy": {
+      "n": 8,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "input_scan": {
+      "n": 8,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "model_routing": {
+      "n": 8,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "model_input": {
+      "n": 8,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "model_output": {
+      "n": 8,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "output_guardrail": {
+      "n": 8,
+      "mean": 0.0,
+      "p50": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    }
+  },
+  "honesty": {
+    "addon_definition": "pipeline_trace.total_latency_ms - model_output_ms (BYOK inference excluded)",
+    "stub_llm": true,
+    "stub_llm_env": "1",
+    "full_nine_stages": false,
+    "unique_prompt": true,
+    "capacity_eligible": false,
+    "capacity_predicate": "fail",
+    "capacity_fail_reasons": [
+      "not_full_nine_stages",
+      "stub_llm"
+    ],
+    "completion_ids": {},
+    "full_nine_stages_meaning": "input_scan p50>0 and output_guardrail p50>0 only"
+  },
+  "capacity_fail_reasons": [
+    "not_full_nine_stages",
+    "stub_llm"
+  ],
+  "unique_fingerprints": 9,
+  "two_bodies_differ": true,
+  "cpu_mid_window": "0.17%",
+  "gateway_container": "aimf_p0-gateway-1",
+  "offered_rps": 8.002,
+  "achieved_rps": 7.113,
+  "WEB_CONCURRENCY": 1,
+  "driver_inflight": 1,
+  "token_floor": 32,
+  "compute_full_nine_stages": false,
+  "20ms_tax": "N/A-not-20ms"
+}
