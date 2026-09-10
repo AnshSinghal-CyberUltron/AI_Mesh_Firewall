@@ -2936,9 +2936,9 @@ def _return_scan_only_chat(
     }
     resp["pipeline_trace"] = _stamp_pipeline_trace_request_id(
         build_pipeline_trace(
-            prompt=_redact_trace_text(prompt),
-            forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
-            policy_redacted_prompt=_redact_trace_text(policy_redacted_prompt)
+            prompt=_trace_text(prompt),
+            forwarded_prompt=_trace_text(redacted_prompt or prompt),
+            policy_redacted_prompt=_trace_text(policy_redacted_prompt)
             if policy_redacted_prompt
             else "",
             policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
@@ -4148,8 +4148,8 @@ def _launch_chat_stream_response(
             if _rule_names:
                 _trace_zs["matched_rule_names"] = _rule_names
         _trace_kwargs = dict(
-            prompt=_redact_trace_text(_orig_prompt),
-            forwarded_prompt=_redact_trace_text(_fwd_prompt or _orig_prompt),
+            prompt=_trace_text(_orig_prompt),
+            forwarded_prompt=_trace_text(_fwd_prompt or _orig_prompt),
             policy_redacted_flag=_policy_acted,
             scanner_redaction_applied=_any_redaction,
             scan_verdict=scan_verdict,
@@ -5076,6 +5076,35 @@ def _resolve_success_metadata_from_verdict(
     return action, reason, threat_type, confidence, matched_patterns, detail
 
 
+def _trace_text(text) -> str:
+    """Redact text destined for the pipeline_trace — unless the mode will discard it.
+
+    MEASURED (py-spy, 121,169 samples): 78% of the gateway's on-CPU time is `redact_all`
+    and its transport decoders, reached from `_redact_trace_text` on four fields per
+    request while BUILDING the trace — after every stage timer has closed, which is why
+    it never appeared in any stage attribution. At the plan's own 8.19 ms per pass (G4.4),
+    four to six passes over a 3.5 KB prompt is 33-49 ms, matching the ~50 ms of untraced
+    CPU measured independently as `docker stats / RPS`.
+
+    In `metrics` mode the projection drops these very keys, so the value is unobservable:
+    the gateway was redacting kilobytes of text four to six times and discarding the
+    result. This is NOT redacting less — it is not redacting text that reaches no one.
+
+    Deliberately a SEPARATE helper rather than a change to `_redact_trace_text`, because
+    that function is also a detection predicate (`_redact_trace_text(raw) != raw` at the
+    `_policy_redaction_changed_text` site). Blanking it there would answer "nothing was
+    redacted" about text full of PII.
+    """
+    try:
+        from trace_projection import trace_mode  # noqa: PLC0415
+
+        if trace_mode() == "metrics":
+            return ""
+    except Exception:  # noqa: BLE001 — never break a response over a diagnostic
+        pass
+    return _redact_trace_text(text)
+
+
 def _redact_trace_text(text) -> str:
     """Deterministically redact PII/secrets from any text destined for the
     operator pipeline_trace (R17).
@@ -5434,15 +5463,37 @@ def _bind_gateway_request_id(request: Request, *, prefix: str = "zs") -> str:
 
 
 def _stamp_pipeline_trace_request_id(trace: dict | None) -> dict | None:
-    """Attach the canonical gateway request_id to a pipeline_trace dict."""
+    """Attach the canonical gateway request_id to a pipeline_trace dict, and project it
+    per ``GATEWAY_PIPELINE_TRACE_MODE`` (task 6).
+
+    MEASURED: on an allowed non-streaming response the trace is 35,572 of 38,225 bytes —
+    **91% of the body** — and 98% of the trace is duplicated prompt/response text (the
+    prompt appears at the root three times and again inside each of nine stages).
+    ``metrics`` mode reduces it 52x while keeping every field the perf harness reads.
+
+    This is the single point every ALLOW-path attach site goes through, so those sites
+    cannot drift apart. **Block traces are left alone**: their client-facing copy is
+    handled by ``_scrub_trace_for_client``, which strips evidence rather than bulk, and a
+    403 body is both rare and the one place a caller most needs the stage detail.
+
+    Default is ``full`` — the identity — so nothing changes until an operator opts in.
+    """
     if not isinstance(trace, dict):
         return trace
     rid = _REQUEST_ID.get("")
-    if not rid:
-        return trace
-    stamped = dict(trace)
-    stamped["request_id"] = rid
-    return stamped
+    if rid:
+        stamped = dict(trace)
+        stamped["request_id"] = rid
+    else:
+        stamped = trace
+    if stamped.get("final_action") == "block":
+        return stamped
+    try:
+        from trace_projection import project_pipeline_trace  # noqa: PLC0415
+
+        return project_pipeline_trace(stamped)
+    except Exception:  # noqa: BLE001 — diagnostics must never break a response
+        return stamped
 
 
 def _sync_pipeline_ctx(**fields) -> None:
@@ -5862,6 +5913,55 @@ async def _telemetry_loop():
 
 @app.on_event("startup")
 async def startup():
+    # Task 7: register the GC pause observer when GATEWAY_GC_INSTRUMENTATION is set.
+    # Off by default — a diagnostic that always runs is a permanent cost for an
+    # occasional question. Idempotent, and it cannot raise.
+    try:
+        from gc_monitor import init as _gc_init  # noqa: PLC0415
+
+        if _gc_init():
+            LOG.info("GC pause instrumentation enabled (gc.callbacks)")
+    except Exception:  # noqa: BLE001
+        pass
+
+    # GIL switch interval. CPython's default is 5 ms: a thread that wants the GIL while
+    # another holds it waits a FULL switch interval before the holder is even ASKED to
+    # yield. The chat path crosses thread boundaries repeatedly (11 asyncio.to_thread
+    # sites here, the scanner's run_in_executor, the policy engine's regex worker), and
+    # each crossing is two GIL acquisitions. Three or four 5 ms waits is 15-20 ms — the
+    # size of the unexplained p99 stall that lands on a different stage every run.
+    #
+    # Unset/empty keeps CPython's default, i.e. today's behaviour exactly, so this ships
+    # dark and reverts by configuration rather than by deploy.
+    try:
+        _switch_s = os.environ.get("GATEWAY_GIL_SWITCH_INTERVAL_S", "").strip()
+        if _switch_s:
+            import sys as _sys  # noqa: PLC0415
+            _sys.setswitchinterval(float(_switch_s))
+            LOG.info("GIL switch interval set to %s s (default 0.005)", _switch_s)
+    except Exception:  # noqa: BLE001 — a tuning knob must never block startup
+        pass
+
+    # Task 7: build the multi-pattern prefilter HERE, not lazily on first use.
+    # MEASURED: the Hyperscan database takes 326 ms to compile (56 patterns), once per
+    # process. Built lazily it lands on the FIRST REQUEST through each fresh worker - a
+    # 326 ms cold-start spike hidden behind an otherwise healthy p50, and paid again every
+    # time a worker is recycled or the deployment scales out. Building it before the worker
+    # accepts traffic moves that cost where it belongs.
+    # No-ops in ~0 ms when hyperscan is absent, which is the current container.
+    try:
+        import patterns as _patterns  # noqa: PLC0415
+
+        # Read _PREFILTER_KEYS off the MODULE, after the build. `from patterns import
+        # _PREFILTER_KEYS` binds the name by VALUE at import time — before
+        # _build_prefilter() populates it — so the old form logged "ready (0 patterns)"
+        # however many it had actually compiled. A startup line that misreports whether
+        # an optimisation is live is how an inert component stays invisible.
+        if _patterns._build_prefilter() is not None:
+            LOG.info("Multi-pattern prefilter ready (%d patterns)",
+                     len(_patterns._PREFILTER_KEYS))
+    except Exception:  # noqa: BLE001 — an optimisation must never block startup
+        pass
     global CONFIG, CONFIG_SYNC, LLM_ROUTER, POLICY_SYNC, RATE_LIMITER, INPUT_SCANNER
     global VECTOR_POLICY_SYNC, VECTOR_CLIENTS, CONTEXT_GUARD, VECTOR_PROVIDER_SYNC
     global REDIS_CLIENT, TELEMETRY, OUTPUT_GUARD, CIRCUIT_BREAKER
@@ -6561,6 +6661,18 @@ async def proxy_chat(
         "upstream_ms": 0.0,
         "telemetry_enqueue_ms": 0.0,
     }
+    # Task 7: capture the process-lifetime GC pause counter now, so the pause time that
+    # elapses DURING this request is a subtraction of two monotonic readings rather than
+    # a residual. None when GATEWAY_GC_INSTRUMENTATION is off, and then nothing is
+    # surfaced. See gc_monitor.
+    try:
+        from gc_monitor import mark as _gc_mark  # noqa: PLC0415
+
+        _m = _gc_mark()
+        if _m is not None:
+            stage_metrics["gc_pause_mark"] = _m
+    except Exception:  # noqa: BLE001 — a diagnostic must never break a request
+        pass
     _REQUEST_PIPELINE_CTX.set({
         "stage_metrics": stage_metrics,
         "prompt": "",
@@ -9385,9 +9497,9 @@ async def proxy_chat(
                     )
                     resp["pipeline_trace"] = _stamp_pipeline_trace_request_id(
                         build_pipeline_trace(
-                            prompt=_redact_trace_text(prompt),
-                            forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
-                            policy_redacted_prompt=_redact_trace_text(policy_redacted_prompt)
+                            prompt=_trace_text(prompt),
+                            forwarded_prompt=_trace_text(redacted_prompt or prompt),
+                            policy_redacted_prompt=_trace_text(policy_redacted_prompt)
                             if policy_redacted_prompt
                             else "",
                             policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
@@ -9397,7 +9509,7 @@ async def proxy_chat(
                             http_status=200,
                             scan_verdict=scan_verdict,
                             zeroshield=_zs_full,
-                            response_text=_redact_trace_text(_extract_response_from_completion(resp)),
+                            response_text=_trace_text(_extract_response_from_completion(resp)),
                             requested_model=body.get("model", ""),
                             output_scan_verdict=_out_verdict,
                             prompt_in_operator_masked=_trace_prompt_operator_masked(prompt),
@@ -11283,9 +11395,9 @@ async def proxy_chat(
             )
             llm_resp["pipeline_trace"] = _stamp_pipeline_trace_request_id(
                 build_pipeline_trace(
-                    prompt=_redact_trace_text(prompt),
-                    forwarded_prompt=_redact_trace_text(redacted_prompt or prompt),
-                    policy_redacted_prompt=_redact_trace_text(policy_redacted_prompt)
+                    prompt=_trace_text(prompt),
+                    forwarded_prompt=_trace_text(redacted_prompt or prompt),
+                    policy_redacted_prompt=_trace_text(policy_redacted_prompt)
                     if policy_redacted_prompt
                     else "",
                     policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
@@ -11297,7 +11409,7 @@ async def proxy_chat(
                     scan_verdict=scan_verdict,
                     route_metadata=route_metadata,
                     zeroshield=_zs_full,
-                    response_text=_redact_trace_text(response_text or ""),
+                    response_text=_trace_text(response_text or ""),
                     requested_model=(
                         (route_metadata or {}).get("original_model")
                         or body.get("model", "")

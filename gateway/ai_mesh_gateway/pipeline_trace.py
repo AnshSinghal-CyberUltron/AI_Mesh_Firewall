@@ -263,6 +263,41 @@ def attach_latency_breakdown(trace: dict[str, Any]) -> dict[str, Any]:
     return trace
 
 
+def attach_offstage_timings(trace: dict, stage_metrics: dict | None) -> dict:
+    """Surface the timings that are NOT stages, so the tail can be attributed.
+
+    The firewall tax reconciles as ``wall = stage_sum + telemetry_enqueue + overhead``.
+    Only the first and last of those were reachable from the trace, so a tail
+    attribution over the nine stages reported 95% of the excess as "outside every
+    stage" without being able to say where. ``telemetry_enqueue_ms`` is the missing
+    term: ``build_telemetry_event`` runs ``redact_all`` over up to 21 metadata text
+    keys synchronously on the request path, after the upstream call, and it is not a
+    stage — so it lands in the residual either way.
+
+    Additive: three numbers, no existing field changed.
+    """
+    if not isinstance(trace, dict) or not isinstance(stage_metrics, dict):
+        return trace
+    try:
+        for src, dst in (("telemetry_enqueue_ms", "telemetry_ms"),
+                         ("stage_latency_sum_ms", "stage_latency_sum_ms"),
+                         ("total_ms", "total_ms")):
+            v = stage_metrics.get(src)
+            if v is not None:
+                trace[dst] = round(float(v), 2)
+        # Task 7: GC pause time that elapsed during THIS request.
+        mark = stage_metrics.get("gc_pause_mark")
+        if mark is not None:
+            from gc_monitor import pause_ms_since  # noqa: PLC0415
+
+            gp = pause_ms_since(float(mark))
+            if gp is not None:
+                trace["gc_pause_ms"] = gp
+    except Exception:  # noqa: BLE001 — diagnostics must never break a response
+        pass
+    return trace
+
+
 # Deterministic PII/secret redactor. Applied to every prompt/response text field
 # written into the trace so raw PII never leaks into the operator UI / SSE / API
 # (redact_all is a no-op on benign text, so the preview utility is preserved).
@@ -723,13 +758,58 @@ def _round_ms(value: Any, default: float = 0.0) -> float:
     return round(n, 1)
 
 
+# Bounded trace redaction. `redact_all` is linear at ~1.2 us/char, and _truncate used to
+# redact the WHOLE text before keeping `limit` characters — so the cost of a diagnostic
+# artefact grew without bound with prompt length (4 KB -> 2.67 ms, 32 KB -> ~21 ms) while
+# only the first 1200 characters were ever kept. Measured, it was 39.6% of firewall CPU:
+# more than the policy engine spends deciding anything.
+_REDACT_WINDOW_OVERLAP = 256    # every whitespace-containing pattern is far shorter
+_REDACT_WINDOW_HARD_CAP = 4096  # never hunt further than this for a whitespace boundary
+
+
+def _redaction_window(text: str, limit: int) -> str:
+    r"""Smallest prefix whose redaction yields the same first ``limit`` characters.
+
+    Redacting after truncating would be unsound: a secret cut in half may no longer match
+    its own pattern, leaving the visible half in the trace. That is why the original code
+    redacted everything, and it is the property this must keep.
+
+    The window therefore ends at WHITESPACE, which is what makes a prefix sufficient.
+    Auditing the redaction patterns for unbounded length splits them cleanly:
+
+      * unbounded patterns match a whitespace-FREE run — ``xox[baprs]-[0-9A-Za-z-]{10,}``,
+        ``glpat-[A-Za-z0-9_-]{20,}``, ``(?:mongodb|postgres|...)://[^\s]{10,}``. Such a run
+        cannot straddle a cut placed at whitespace.
+      * patterns that contain whitespace are short and bounded — SSN ~11 chars, phone ~14,
+        card ~19, ``-----BEGIN PRIVATE KEY-----`` ~30 (the pattern matches the HEADER, not
+        the key body). All fit inside OVERLAP.
+      * ``LABEL<ws>SECRET`` shapes (``Bearer\s+[A-Za-z0-9_\-.]{20,}``, ``password\s*[:=]``)
+        are the interesting case: if the cut lands between label and token the match fails,
+        but what stays visible is the LABEL, not the secret. The token is whitespace-free, so
+        it lies wholly on one side — masked inside the window, discarded beyond it.
+
+    RESIDUAL RISK: a single whitespace-free run longer than HARD_CAP that spans the cut ends
+    the window mid-run, so a pattern matching that run is missed. Bounded, named, and tunable
+    by HARD_CAP. The run must SPAN the cut — a long token entirely before ``limit`` is inside
+    the window and masked normally.
+    """
+    cut = limit + _REDACT_WINDOW_OVERLAP
+    if len(text) <= cut:
+        return text
+    end = min(len(text), cut + _REDACT_WINDOW_HARD_CAP)
+    j = cut
+    while j < end and not text[j].isspace():
+        j += 1
+    return text[:j]
+
+
 def _truncate(text: str, limit: int = 1200) -> str:
     raw = (text or "").strip()
     # Redact PII/secrets BEFORE truncating so raw PII is never persisted/echoed in
     # the trace (R17). No-op on benign text; fail-open if the redactor is missing.
     if raw and _redact_all is not None:
         try:
-            raw = _redact_all(raw)
+            raw = _redact_all(_redaction_window(raw, limit))
         except Exception:
             pass
     if len(raw) <= limit:
@@ -1600,4 +1680,7 @@ def build_pipeline_trace(
     }
     trace_out.update(compute_addon_split(metrics, total))
     attach_latency_breakdown(trace_out)
+    # Surface the OFF-STAGE timings so a tail can be attributed rather than reported
+    # as "outside every stage". See attach_offstage_timings.
+    attach_offstage_timings(trace_out, stage_metrics)
     return trace_out

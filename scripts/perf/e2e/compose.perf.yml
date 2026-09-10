@@ -1,0 +1,157 @@
+# Perf E2E overlay — task 1.2 of .kiro/specs/hot-path-latency-20ms
+#
+# This is an OVERLAY, not a standalone stack. Compose it on top of the real one so
+# the thing measured is the thing that ships:
+#
+#   docker compose -f docker-compose.yml -f scripts/perf/e2e/compose.perf.yml up -d
+#
+# Duplicating docker-compose.yml would let the harness drift from production; an
+# overlay cannot.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# WHY GATEWAY_LOADTEST_STUB_DURATION_S IS SET EXPLICITLY
+#
+# `loadtest_stub_duration_s()` (llm_router.py:91) defaults to "0", and
+# `_stub_token_count` returns **1** when duration <= 0 — a single token, content
+# "ok". With a one-token answer the output path barely runs: `output_guardrail`
+# reports ~0 ms, `compute_full_nine_stages` goes False, and the harness measures a
+# six-stage pipeline while reporting nine.
+#
+# So the default configuration of the in-gateway stub is precisely the
+# non-emitting hazard Requirement 7.7 exists to prevent. It is pinned > 0 here and
+# asserted again in drive.py — belt and braces, because a silent regression to the
+# default would invalidate every number without failing anything.
+#
+# Bounds enforced by llm_router.py:71-73: tok/s clamped to [30, 100], duration
+# capped at 10 s. 100 tok/s x 2 s = 200 tokens per answer.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # The base compose publishes 5432/6379 on the host, but another project already
+  # binds them. The perf stack reaches these over the compose network only, so it
+  # publishes nothing and cannot collide.
+  postgres:
+    ports: !override []
+  redis:
+    ports: !override []
+
+  # `.env` is gitignored, so a git worktree does not carry it. Rather than depend
+  # on a file this branch cannot see, the perf stack uses its own NON-SECRET env:
+  # it answers from the stub, so it needs no provider credentials. `!override`
+  # replaces the base list rather than appending to it.
+  control:
+    env_file: !override ["scripts/perf/e2e/perf.env"]
+    environment:
+      # MUST match the gateway's key exactly. Control SIGNS the compiled bundle;
+      # the gateway VERIFIES it. If control's key is empty (the same
+      # `environment:` > `env_file:` precedence trap as F3) it emits an unsigned
+      # bundle and the gateway correctly refuses it:
+      #   CRITICAL REFUSING policy bundle ... unsigned or its signature is invalid
+      # ...while /health still reports ok with policy_count 0 — a silent
+      # no-detection state.
+      POLICY_SIGNING_KEY: "perf-harness-signing-key-not-a-secret"
+      DJANGO_SECRET_KEY: "perf-harness-not-a-secret-do-not-deploy"
+
+  gateway:
+    # py-spy attaches with ptrace to find where wall time goes inside the request
+    # handler. Diagnostic only: it grants no network or filesystem reach and does not
+    # alter scheduling, so a profiled run and a measured run stay comparable. This
+    # overlay is the measurement harness, never production.
+    cap_add:
+      - SYS_PTRACE
+    env_file: !override ["scripts/perf/e2e/perf.env"]
+    environment:
+      # ── Upstream: in-gateway stub so T_upstream is controlled and the firewall
+      #    tax is a real subtraction rather than provider noise. Correctly flagged
+      #    by the capacity gate (id "chatcmpl-loadtest-stub"), so runs on this
+      #    overlay are valid for LATENCY and invalid for CAPACITY claims.
+      # COMPOSE PRECEDENCE TRAP: docker-compose.yml sets
+      #   POLICY_SIGNING_KEY: ${POLICY_SIGNING_KEY:-}
+      # in its `environment:` block, which OUTRANKS `env_file:`. With no host var
+      # and no project .env it resolves to "", so a value in perf.env is silently
+      # ignored and /health returns 503 {"reason":"policy_signing_key_missing"}.
+      # It must therefore be set HERE, in `environment:`, not in perf.env.
+      POLICY_SIGNING_KEY: "perf-harness-signing-key-not-a-secret"
+      DJANGO_SECRET_KEY: "perf-harness-not-a-secret-do-not-deploy"
+
+      GATEWAY_LOADTEST_STUB_LLM: "1"
+      GATEWAY_LOADTEST_STUB_DURATION_S: "${PERF_STUB_DURATION_S:-2}"   # MUST be > 0
+      # Empty = CPython default (5 ms). See .kiro/specs/gil-switch-interval/.
+      GATEWAY_GIL_SWITCH_INTERVAL_S: "${PERF_GIL_SWITCH_S:-}"
+      GATEWAY_LOADTEST_STUB_TOK_PER_S: "${PERF_STUB_TOK_PER_S:-100}"   # clamped [30,100]
+
+      # ── Posture under test. Swept by sweep.py; defaults are the contracted
+      #    primary point from Requirement 1.3 (block posture).
+      ENABLE_TIER2: "${PERF_ENABLE_TIER2:-false}"
+      GATEWAY_TIER2_EXECUTION_MODE: "${PERF_TIER2_MODE:-sync_pre_llm}"
+      GATEWAY_TIER2_CACHE_TTL_SECONDS: "0"     # no cache: every request pays real cost
+
+      # ── Keep the nine stages ON. Turning scans off to make a number look good is
+      #    the failure mode compute_full_nine_stages() exists to catch.
+      GATEWAY_OUTPUT_GUARD_ENABLED: "true"
+      GATEWAY_RAG_ENABLED: "false"             # RAG is a separate path (spec §out-of-scope)
+
+      # ── Grounding calls Bedrock Titan on the RAG output path. Off: this spec
+      #    measures the chat pipeline, and D18 removes Bedrock regardless.
+      GATEWAY_OUTPUT_GROUNDING_ENABLED: "false"
+
+      # ── Logging. NOTE: main.py:6019 forces the "gateway" logger to DEBUG
+      #    unconditionally and constructs RedisLogPublisher with no env guard, so
+      #    this variable does NOT remove the ~17 synchronous PUBLISH per request.
+      #    That is task 5 (Change 4). Set here so the baseline is taken under the
+      #    same conditions the fix will be measured against.
+      GATEWAY_LOG_LEVEL: "${PERF_LOG_LEVEL:-INFO}"
+
+      # ── Determinism: pin workers so RPS/vCPU is attributable. Left unset the
+      #    entrypoint derives it from detected cores, which makes runs on
+      #    different hosts incomparable.
+      WEB_CONCURRENCY: "${PERF_WEB_CONCURRENCY:-4}"
+      GATEWAY_SCANNER_THREAD_POOL_SIZE: "${PERF_SCANNER_POOL:-4}"
+
+      # ── Task 6: pipeline_trace projection. `full` (default) is today's behaviour
+      #    byte-for-byte; `metrics` keeps stage names/actions/latencies and the root
+      #    timing keys — everything drive.py and load.py read, including the
+      #    nine-stage honesty check — while dropping the duplicated prompt/response
+      #    text that is 98% of the bytes. MEASURED: 35,572 B -> 684 B, 52x.
+      GATEWAY_PIPELINE_TRACE_MODE: "${PERF_TRACE_MODE:-full}"
+
+      # ── Task 7: GC pause attribution. The tail excess lands on a DIFFERENT stage
+      #    nearly every request and is sized independently of that stage's work — the
+      #    shape of the interpreter stopping. This records real pause durations from
+      #    gc.callbacks so the question is measured, not reasoned about. Off by default.
+      GATEWAY_GC_INSTRUMENTATION: "${PERF_GC_INSTRUMENTATION:-0}"
+
+      PYTHONUNBUFFERED: "1"
+    deploy:
+      resources:
+        limits:
+          # Pinned so RPS/vCPU has a denominator. Change this and every prior
+          # measurement becomes incomparable — record it in the evidence file.
+          cpus: "${PERF_CPUS:-4}"
+          memory: "${PERF_MEM:-6g}"
+
+  # External token stub (scripts/perf/e2e/token_stub.py). Not on the gateway's
+  # path by default — the in-gateway stub covers both stream and non-stream. This
+  # is the higher-fidelity option: realistic prose rather than "tok0 tok1 tok2",
+  # so output-path scan cost is representative. Wire it as a BYOK provider when
+  # comparing scan cost on synthetic vs natural text.
+  perf-token-stub:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ./scripts/perf/e2e:/app:ro
+    command: >
+      python token_stub.py
+      --port 9099
+      --tokens ${PERF_EXT_STUB_TOKENS:-200}
+      --rate ${PERF_EXT_STUB_RATE:-100}
+      --ttft-ms ${PERF_EXT_STUB_TTFT_MS:-20}
+    ports: ["9099:9099"]
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:9099/health',timeout=3)"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped

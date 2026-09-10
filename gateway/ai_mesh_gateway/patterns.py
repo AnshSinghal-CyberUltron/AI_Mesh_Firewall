@@ -103,6 +103,70 @@ _SMALLCAP_MAP = {
 }
 
 
+def _canon_char(ch: str) -> str | None:
+    """Canonical replacement for ONE character, or ``None`` if it should be dropped.
+
+    This is the per-character body of ``_canonicalize_with_map``, factored out so the
+    ASCII fast-path table below can be GENERATED from it rather than hand-written. A
+    hand-written table would be free to drift from these rules; a generated one changes
+    whenever they do.
+    """
+    cp = ord(ch)
+    # G18: Unicode Tag block "ASCII smuggling". TAG SPACE..TAG TILDE
+    # (U+E0020..U+E007E) mirror printable ASCII 0x20..0x7E but are category Cf, so
+    # the drop below would silently REMOVE them — hiding tag-encoded PII/secrets
+    # from detection while the original tag bytes still egress (LLMs decode them).
+    # DECODE the printable mirror back to ASCII here (BEFORE the Cf-drop). It is a
+    # 1->1 position-preserving substitution, so index_map[k]=i still masks the
+    # match back onto the original tag bytes. Tag controls (U+E0000/E0001/E007F)
+    # are also Cf and fall through to the drop below.
+    if 0xE0020 <= cp <= 0xE007E:
+        return chr(cp - 0xE0000)
+    cat = unicodedata.category(ch)
+    if cat in ("Cf", "Mn", "Me"):                 # invisibles / combining marks -> drop
+        return None
+    if cat == "Cc" and ch not in "\t\n\r":         # control chars -> drop (keep whitespace)
+        return None
+    nc = unicodedata.normalize("NFKC", ch)
+    if len(nc) == 1:
+        ch2 = nc                                   # keep 1->1 compat folds (fullwidth/math/circled)
+    else:
+        # G101: a DECORATED single alphanumeric has a MULTI-char NFKC that the 1->1 guard
+        # skipped — parenthesized letter ⒤ -> "(i)", parenthesized digit ⑵ -> "(2)", full-stop
+        # digit ⒈ -> "1." — so it evaded detect_pii/detect_secrets (a parenthesized-digit SSN
+        # went UNdetected; the scanner's richer deobfuscation caught the injection side, but the
+        # PII/secret path relies on this canon). Fold to the lone alnum char (still 1->1, so the
+        # index map still masks back onto the original char). Ligatures / fractions / "No."-type
+        # symbols (>1 alnum: ﬁ->"fi", ½->"1⁄2", №->"No") are LEFT untouched. FP-safe: fires only
+        # when the canonical form is a real PII/secret/injection pattern.
+        _alnums = [c for c in nc if c.isalnum()]
+        ch2 = _alnums[0] if len(_alnums) == 1 else ch
+    if ch2 in _DASH_CHARS:
+        ch2 = "-"
+    elif unicodedata.category(ch2) == "Zs":
+        ch2 = " "
+    elif ch2 in _CONFUSABLE_MAP:
+        ch2 = _CONFUSABLE_MAP[ch2]
+    elif ch2 in _SMALLCAP_MAP:            # G21: small-caps -> ASCII (1->1)
+        ch2 = _SMALLCAP_MAP[ch2]
+    return ch2
+
+
+# ASCII code points that ``_canon_char`` maps to THEMSELVES. Generated from the rules
+# above at import, so it cannot disagree with them. Task 1F: canonicalisation was 67% of
+# a guard pass (0.324 s of 0.482 s over 100 scans of 525 chars) and called
+# ``unicodedata.category`` twice per character in a pure-Python loop. For plain ASCII —
+# nearly all LLM output — every one of those calls is a no-op.
+_ASCII_IDENTITY = frozenset(
+    c for c in map(chr, range(128)) if _canon_char(c) == c
+)
+# Whole-string test in C. A Python ``all(c in set for c in text)`` would still pay
+# per-character interpreter overhead, which is the cost being removed.
+_ASCII_IDENTITY_RE = re.compile(
+    "[" + "".join(re.escape(c) for c in sorted(_ASCII_IDENTITY)) + "]*\\Z"
+)
+
+
 def _canonicalize_with_map(text: str):
     """Return ``(canonical_text, index_map)`` using only 1->1 subs and 1->0 removals.
 
@@ -112,56 +176,32 @@ def _canonicalize_with_map(text: str):
     if not text:
         return "", []
     src = text[:_CANON_MAX_LEN]
+    # Fast path: every character is ASCII that canonicalises to itself, so the canonical
+    # form IS the input and the map is the identity. No Python-level loop, no unicodedata.
+    if _ASCII_IDENTITY_RE.match(src) is not None:
+        return src, list(range(len(src)))
     out_chars: List[str] = []
     idx_map: List[int] = []
     for i, ch in enumerate(src):
-        cp = ord(ch)
-        # G18: Unicode Tag block "ASCII smuggling". TAG SPACE..TAG TILDE
-        # (U+E0020..U+E007E) mirror printable ASCII 0x20..0x7E but are category Cf, so
-        # the drop below would silently REMOVE them — hiding tag-encoded PII/secrets
-        # from detection while the original tag bytes still egress (LLMs decode them).
-        # DECODE the printable mirror back to ASCII here (BEFORE the Cf-drop). It is a
-        # 1->1 position-preserving substitution, so index_map[k]=i still masks the
-        # match back onto the original tag bytes. Tag controls (U+E0000/E0001/E007F)
-        # are also Cf and fall through to the drop below.
-        if 0xE0020 <= cp <= 0xE007E:
-            out_chars.append(chr(cp - 0xE0000))
-            idx_map.append(i)
+        ch2 = _canon_char(ch)
+        if ch2 is None:
             continue
-        cat = unicodedata.category(ch)
-        if cat in ("Cf", "Mn", "Me"):                 # invisibles / combining marks -> drop
-            continue
-        if cat == "Cc" and ch not in "\t\n\r":         # control chars -> drop (keep whitespace)
-            continue
-        nc = unicodedata.normalize("NFKC", ch)
-        if len(nc) == 1:
-            ch2 = nc                                   # keep 1->1 compat folds (fullwidth/math/circled)
-        else:
-            # G101: a DECORATED single alphanumeric has a MULTI-char NFKC that the 1->1 guard
-            # skipped — parenthesized letter ⒤ -> "(i)", parenthesized digit ⑵ -> "(2)", full-stop
-            # digit ⒈ -> "1." — so it evaded detect_pii/detect_secrets (a parenthesized-digit SSN
-            # went UNdetected; the scanner's richer deobfuscation caught the injection side, but the
-            # PII/secret path relies on this canon). Fold to the lone alnum char (still 1->1, so the
-            # index map still masks back onto the original char). Ligatures / fractions / "No."-type
-            # symbols (>1 alnum: ﬁ->"fi", ½->"1⁄2", №->"No") are LEFT untouched. FP-safe: fires only
-            # when the canonical form is a real PII/secret/injection pattern.
-            _alnums = [c for c in nc if c.isalnum()]
-            ch2 = _alnums[0] if len(_alnums) == 1 else ch
-        if ch2 in _DASH_CHARS:
-            ch2 = "-"
-        elif unicodedata.category(ch2) == "Zs":
-            ch2 = " "
-        elif ch2 in _CONFUSABLE_MAP:
-            ch2 = _CONFUSABLE_MAP[ch2]
-        elif ch2 in _SMALLCAP_MAP:            # G21: small-caps -> ASCII (1->1)
-            ch2 = _SMALLCAP_MAP[ch2]
         out_chars.append(ch2)
         idx_map.append(i)
     return "".join(out_chars), idx_map
 
 
+@functools.lru_cache(maxsize=32)
 def canonicalize_for_detection(text: str) -> str:
-    """Public canonical form for obfuscation-resistant matching (no index map)."""
+    """Public canonical form for obfuscation-resistant matching (no index map).
+
+    Cached: `scan_output` canonicalises the SAME text three times (detect_pii,
+    detect_secrets, and one more site) — measured 300 calls per 100 scans. Strings are
+    immutable and hashable so memoisation is sound, and `maxsize` bounds memory so a
+    stream of distinct texts cannot grow it without limit. `_canonicalize_with_map` is
+    deliberately NOT cached: it returns a mutable list, and handing the same list to two
+    callers would be a sharing hazard.
+    """
     return _canonicalize_with_map(text)[0]
 
 
@@ -1392,6 +1432,88 @@ def classify_pattern_key(key: str) -> str:
     return "pii"
 
 
+_PREFILTER = None
+_PREFILTER_KEYS: tuple[str, ...] = ()
+_PREFILTER_READY = False
+# Patterns Hyperscan cannot compile — every one rejects on "zero-width assertions are not
+# supported", and every one is a FALSE-POSITIVE SUPPRESSOR: the
+# (?!forgotten|forgot|instructions?|…) guards that stop "password: forgotten" being flagged
+# as a leaked credential, and email's (?!:[^\s/]+/) that stops URLs matching as addresses.
+# They are a design boundary, not a porting backlog: translating the lookaround away makes
+# the firewall flag MORE benign traffic. They always run.
+_RE_ONLY_KEYS = frozenset({
+    "email", "government_id", "password_assignment", "secret_assignment",
+    "token_assignment", "api_key_assignment", "exposed_password",
+})
+
+
+def _build_prefilter():
+    """Compile the 56 Hyperscan-compatible patterns into one database, or give up.
+
+    MEASURED: `_redact_all_raw` runs 63 full-text `.sub()` scans per call and costs ~5.36 ms
+    per 4 KB regardless of content, because the cost is the sweep rather than what it finds.
+    A single combined `re` alternation was tried first and REFUTED — 3.478 vs 3.300 ms,
+    slower than the scans it replaces, because `re` backtracks branch by branch. Hyperscan
+    scans all 56 in 0.005 ms; the hybrid measures 7.4x end of the matching path.
+    """
+    global _PREFILTER, _PREFILTER_KEYS, _PREFILTER_READY
+    if _PREFILTER_READY:
+        return _PREFILTER
+    _PREFILTER_READY = True
+    try:
+        import hyperscan as _hs  # noqa: PLC0415
+    except Exception:  # noqa: BLE001 — absent wheel means today's behaviour, not a failure
+        return None
+    keys, exprs = [], []
+    for fam in (PII_PATTERNS, PHI_PATTERNS, PCI_PATTERNS,
+                SECRET_PATTERNS, CREDENTIAL_EXPOSURE_PATTERNS):
+        for k, pat in fam.items():
+            if k in _RE_ONLY_KEYS:
+                continue
+            try:
+                probe = _hs.Database()
+                probe.compile(expressions=[pat.encode()], ids=[0], elements=1,
+                              flags=[_hs.HS_FLAG_CASELESS])
+            except Exception:  # noqa: BLE001 — anything unusable simply stays on re
+                continue
+            keys.append(k)
+            exprs.append(pat.encode())
+    if not keys:
+        return None
+    try:
+        db = _hs.Database()
+        db.compile(expressions=exprs, ids=list(range(len(keys))), elements=len(keys),
+                   flags=[_hs.HS_FLAG_CASELESS] * len(keys))
+        _PREFILTER = (db, _hs.Scratch(db))
+        _PREFILTER_KEYS = tuple(keys)
+    except Exception:  # noqa: BLE001
+        _PREFILTER = None
+    return _PREFILTER
+
+
+def _candidate_keys(text: str):
+    """Pattern keys that COULD match, or ``None`` meaning "no prefilter — scan everything".
+
+    Returning ``None`` on any failure is the safety property: the prefilter may only ever
+    REMOVE work it has proven unnecessary. It must never be able to fail a request or
+    reduce redaction.
+    """
+    pf = _build_prefilter()
+    if pf is None:
+        return None
+    db, scratch = pf
+    hits: set[str] = set()
+    try:
+        def _on_match(idx, frm, to, flags, ctx):  # noqa: ANN001
+            hits.add(_PREFILTER_KEYS[idx])
+
+        db.scan(text.encode("utf-8", "surrogatepass"),
+                match_event_handler=_on_match, scratch=scratch)
+    except Exception:  # noqa: BLE001
+        return None
+    return hits
+
+
 def _redact_all_raw(text: str, allowed_classes: set[str] | None = None) -> str:
     """Redact PII with smart partial masking; PHI/PCI use placeholder tags (raw text only).
 
@@ -1402,9 +1524,17 @@ def _redact_all_raw(text: str, allowed_classes: set[str] | None = None) -> str:
     def _included(key: str) -> bool:
         return allowed_classes is None or classify_pattern_key(key) in allowed_classes
 
+    # Keys that cannot possibly match, per the multi-pattern prefilter. `None` disables
+    # every guard below, which is exactly today's behaviour — the fallback is not a
+    # separate path, it is this code with the guards inert.
+    _cand = _candidate_keys(text)
+
+    def _skippable(key: str) -> bool:
+        return _cand is not None and key not in _cand and key not in _RE_ONLY_KEYS
+
     result = text
     for pii_type, pattern_str in PII_PATTERNS.items():
-        if not _included(pii_type):
+        if not _included(pii_type) or _skippable(pii_type):
             continue
         compiled = compile_pattern(pattern_str)
         masker = _PII_MASKERS.get(pii_type)
@@ -1413,17 +1543,17 @@ def _redact_all_raw(text: str, allowed_classes: set[str] | None = None) -> str:
         else:
             result = compiled.sub(f"[{pii_type.upper()}_REDACTED]", result)
     for phi_type, pattern_str in PHI_PATTERNS.items():
-        if not _included(phi_type):
+        if not _included(phi_type) or _skippable(phi_type):
             continue
         compiled = compile_pattern(pattern_str)
         result = compiled.sub(f"[{phi_type.upper()}_REDACTED]", result)
     for pci_type, pattern_str in PCI_PATTERNS.items():
-        if not _included(pci_type):
+        if not _included(pci_type) or _skippable(pci_type):
             continue
         compiled = compile_pattern(pattern_str)
         result = compiled.sub(f"[{pci_type.upper()}_REDACTED]", result)
     for secret_type, pattern_str in SECRET_PATTERNS.items():
-        if not _included(secret_type):
+        if not _included(secret_type) or _skippable(secret_type):
             continue
         compiled = compile_pattern(pattern_str)
         masker = _SECRET_MASKERS.get(secret_type)
@@ -1432,7 +1562,7 @@ def _redact_all_raw(text: str, allowed_classes: set[str] | None = None) -> str:
         else:
             result = compiled.sub(f"[{secret_type.upper()}_REDACTED]", result)
     for cred_type, pattern_str in CREDENTIAL_EXPOSURE_PATTERNS.items():
-        if not _included(cred_type):
+        if not _included(cred_type) or _skippable(cred_type):
             continue
         compiled = compile_pattern(pattern_str)
         masker = _CREDENTIAL_MASKERS.get(cred_type)
@@ -1731,13 +1861,34 @@ def _redact_obfuscated(original: str, result: str) -> str:
     return result
 
 
+@functools.lru_cache(maxsize=64)
+def _redact_all_cached(text: str) -> str:
+    """Memoised body of ``redact_all`` — task 8b.
+
+    MEASURED: `redact_all` is **78% of the gateway's on-CPU time** (py-spy, 121,169
+    samples), and the allow path redacts the SAME string twice per request:
+    `redacted_prompt` is None whenever no redaction fired, so
+    `forwarded_prompt=_trace_text(redacted_prompt or prompt)` re-does exactly the work
+    `prompt=_trace_text(prompt)` just did. The plan's G4.4 puts a pass at 8.19 ms p50.
+
+    SAFE TO SHARE ACROSS TENANTS because the output depends on NOTHING but the text — no
+    org config, no policy set, no request context. Two tenants sending identical bytes are
+    entitled to identical output. `redact_all_scoped` is deliberately NOT routed through
+    here: its result depends on `allowed_classes`, so a text-keyed cache would hand one
+    scope another scope's answer, mutating a class the operator chose not to mutate.
+
+    `maxsize` is small on purpose: the win is the intra-request duplicate, not long-lived
+    cross-request retention, which the tracker's G4.1 note flagged as a surface to avoid.
+    """
+    return _redact_obfuscated(text, _redact_all_raw(text))
+
+
 def redact_all(text: str) -> str:
     """Redact PII/secrets from ``text``, resistant to unicode/zero-width/homoglyph (G1) and
     base64/hex (G2) obfuscation. Runs the raw partial-masking pass, then masks any obfuscated
     or encoded PII/secret that survived. A no-op beyond the raw pass on plain ASCII, so the
     frozen golden cases and existing redaction outputs are unchanged."""
-    result = _redact_all_raw(text)
-    return _redact_obfuscated(text, result)
+    return _redact_all_cached(text)
 
 
 def redact_all_scoped(text: str, allowed_classes: set[str]) -> str:

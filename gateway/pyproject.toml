@@ -29,6 +29,14 @@ dependencies = [
     "opentelemetry-sdk>=1.20.0",
     "opentelemetry-exporter-otlp>=1.20.0",
     "prometheus-client>=0.20.0",
+    # Multi-pattern prefilter for patterns.py (task 7). The code has ALWAYS been written
+    # to no-op when this wheel is absent — and it was absent, so the prefilter never ran
+    # and its gate never exercised the path it exists to check.
+    # MEASURED with it present, unique 4096-char input: redact_all 4.88 -> 2.67 ms (1.83x).
+    # (The 7.4x in _build_prefilter's docstring is NOT what the end-to-end function does.)
+    # Soundness: scripts/detection/hyperscan_prefilter_gate.py, 762 inputs, 0 under-reports;
+    # 56 patterns compile, 7 with zero-width assertions are rejected and stay on `re`.
+    "hyperscan>=0.7.0; platform_machine == 'x86_64'",
     "aiobotocore>=3.9.0",
 ]
 
