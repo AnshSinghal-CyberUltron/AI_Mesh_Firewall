@@ -1,0 +1,20 @@
+# Generated / build outputs (keep application source visible to the agent)
+**/dist/**
+**/build/**
+**/.next/**
+**/.nuxt/**
+**/coverage/**
+
+# Caches
+**/.cache/**
+**/.pytest_cache/**
+**/.mypy_cache/**
+**/.ruff_cache/**
+
+# Logs and scratch
+**/tmp/**
+**/logs/**
+**/*.log
+
+# Large generated artifacts
+**/artifacts/**

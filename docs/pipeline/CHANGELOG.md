@@ -2,6 +2,42 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0032 (2026-09-10)
+
+**PII platform floor + HTTP 503 pipeline-trace honesty (Attack Simulator ALLOW/503).**
+
+Root Cause:
+- Policy-driven-detection task 3.1 gutted `_scan_prompt_sync` to always
+  `return ScanVerdict()` and task 2.1 passed `scanner_*=None` into
+  `resolve_and_enforce`. Maskable SSN/email/PAN reached the model unless an
+  org CISO rule matched. Attack Simulator "Transmit raw PII" showed
+  input_scan ALLOW + "No threat detected".
+- `_sanitize_llm_error_response` and circuit-breaker JSON 503 omitted
+  `pipeline_trace`. Frontend `normalizeChatPipelineResult` synthesized ALLOW
+  for every stage before model_output when `stages.length < 6`. Burst ×10
+  with inference ON then looked like a clean scan that failed at the model
+  (HTTP 503, 46ms, zs-2dbd179ecabb). SSE mode ON does not change that JSON
+  503 (SSE is HTTP 200).
+
+Fix:
+- `scanner.py`: restore data-protection + DoS floor (PII/secrets/credentials
+  → redact; oversized/repetitive → dos). Injection/jailbreak stay policy-only.
+- `main.py`: `_scanner_kwargs_for_enforcement` feeds scanner_* only for
+  `{pii,phi,pci,secret,credential,sensitive_content,dos}`;
+  `_attach_pipeline_trace_to_llm_error` stamps 5xx with input_scan verdict,
+  `model_output=error`, `output_guardrail=skip`, `final_action=error`, and
+  keeps top-level `code` plus nested OpenAI `error.code`.
+- FE: 5xx without scan evidence → input_scan skip (not ALLOW);
+  Attack Simulator Action ERROR, never "No threat detected" on HTTP ≥500.
+
+Verification:
+- `test_pipeline_llm_error_trace.py` (PII 503 + stream CB keep redact trace;
+  raw canaries absent from model input and error body).
+- `test_scan_only_skips_acompletion.py` (PII scan-only does not call model).
+- `test_policy_driven_detection.py` (injection still policy-only).
+- `liveGateway.test.js` 23/23 (503 without trace → skip; 503 with redact
+  trace → REDACT + ERROR).
+
 ## PIPELINE-0031 (2026-07-15)
 
 **Auto-routing bias toward north-mini — preferences now change winners.**

@@ -1140,23 +1140,71 @@ class InputScanner:
         ``_multiturn`` guards the G6 user-turn reassembly re-scan so the derived
         view is scanned exactly once (no unbounded recursion).
 
-        policy-driven-detection (task 3.1): the automatic built-in default scan
-        was REMOVED. This method no longer iterates ``ATTACK_PATTERNS`` / the
-        built-in default PII/secret pattern set and NO LONGER emits an
-        independent injection / command / PII / DoS / etc. verdict on its own.
-        Tier-1 detection is now driven exclusively by the org's ENABLED policy
-        packages via ``policy_engine.evaluate`` — a zero-policy org is
-        passthrough (allow). This is a deliberate security-posture inversion
-        (fail-toward-no-detection): the scanner engine is RETAINED purely as an
-        executor a policy rule can be run through (``compile_pattern`` +
-        ``redact_all`` + the deobfuscation/unicode machinery are all kept), but
-        it produces no built-in verdict.
+        Injection / jailbreak / RAG-poisoning stay policy-only (task 3.1): this
+        method does NOT iterate ``ATTACK_PATTERNS``. A zero-policy org will not
+        get a built-in injection block.
+
+        Data-protection + DoS remain a platform floor: maskable PII / secrets /
+        credentials still emit ``redact``, and oversized / repetitive prompts
+        still emit ``dos``. PCI/GDPR traffic must not reach the model just
+        because no org rule matched (Attack Simulator + scan-only contract).
         """
-        # No built-in/default detection: always passthrough. The prior automatic
-        # ATTACK_PATTERNS iteration, RAG-poisoning scan, built-in PII/secret/
-        # credential detection, encoded/obfuscated-PII checks, toxicity, and
-        # multi-turn split re-scan were all removed (task 3.1). Tier-1 detection
-        # is sourced from enabled policies at the enforcement seam, not here.
+        if not text:
+            return ScanVerdict(
+                action="allow",
+                threat_type="none",
+                confidence=0.0,
+                detail="Empty prompt",
+            )
+        if len(text) > MAX_PROMPT_LENGTH:
+            LOG.warning("Prompt exceeds max length (%d > %d)", len(text), MAX_PROMPT_LENGTH)
+            return ScanVerdict(
+                action="block",
+                threat_type="dos",
+                confidence=1.0,
+                detail=f"Prompt length {len(text)} exceeds maximum {MAX_PROMPT_LENGTH}",
+                tier="tier_1",
+                reason_code="context_length_exceeded",
+            )
+        if self._is_repetitive(text):
+            return ScanVerdict(
+                action="block",
+                threat_type="dos",
+                confidence=0.9,
+                detail="Excessive repetition detected (potential DoS)",
+                tier="tier_1",
+            )
+
+        pii_matched = detect_pii(text)
+        if pii_matched:
+            return ScanVerdict(
+                action="redact",
+                threat_type="pii",
+                confidence=0.85,
+                detail=f"PII detected in prompt: {', '.join(pii_matched.keys())}",
+                matched_patterns=list(pii_matched.keys()),
+                tier="tier_1",
+            )
+        secret_matched = detect_secrets(text)
+        if secret_matched:
+            return ScanVerdict(
+                action="redact",
+                threat_type="secret",
+                confidence=0.9,
+                detail=f"Secret/credential detected: {', '.join(secret_matched.keys())}",
+                matched_patterns=list(secret_matched.keys()),
+                tier="tier_1",
+            )
+        cred_matched = detect_credential_exposure(text)
+        if cred_matched:
+            return ScanVerdict(
+                action="redact",
+                threat_type="secret",
+                confidence=0.9,
+                detail=f"Credential detected in prompt: {', '.join(cred_matched.keys())}",
+                matched_patterns=list(cred_matched.keys()),
+                tier="tier_1",
+            )
         return ScanVerdict()
 
     def _scan_prompt_sync_disabled_builtin_default(

@@ -517,12 +517,15 @@ function formatInputScanBlockDetail(data, zs) {
   return formatInputScanDetail(data, zs, { blocked: true });
 }
 
-function scanStageAction(finalAction, blockedStage, httpStatus) {
+function scanStageAction(finalAction, blockedStage, httpStatus, { scanRan = false } = {}) {
   if (blockedStage === "input_scan" && (finalAction === "block" || httpStatus === 403)) {
     return "block";
   }
   if (finalAction === "redact") return "redact";
   if (finalAction === "flag") return "flag";
+  if ((finalAction === "error" || httpStatus >= 500) && !scanRan) {
+    return "skip";
+  }
   return "allow";
 }
 
@@ -835,13 +838,15 @@ function buildSimulatorStages(data, httpStatus, zs, finalAction, blockedStage, c
         && (finalAction === "redact" || String(zs.action || "").toLowerCase() === "redact");
       stages.push({
         name: "input_scan",
-        action: policyTierRedact ? "allow" : scanStageAction(finalAction, blockedStage, httpStatus),
+        action: policyTierRedact ? "allow" : scanStageAction(finalAction, blockedStage, httpStatus, { scanRan }),
         latency_ms: latencyForStage("input_scan", stageMetrics, zs, context) || roundMs(zs.processing_time_ms, 0.5),
         detail: policyTierRedact
           ? "Tier-2 scanned the policy-redacted prompt — no additional threats (PII already masked upstream)"
           : (scanRan
             ? formatInputScanDetail(data, zs, { blocked: false })
-            : "Input scan not invoked for this request"),
+            : (httpStatus >= 500
+              ? "Scan verdict omitted from error response"
+              : "Input scan not invoked for this request")),
         threat_type: (!policyTierRedact && zs.threat_type && zs.threat_type !== "none") ? zs.threat_type : "",
         confidence: policyTierRedact ? 0 : (zs.confidence ?? 0),
         tier: formatDetectionTier(tier) || tier || "",

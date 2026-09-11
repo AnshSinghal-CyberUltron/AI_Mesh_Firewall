@@ -11,6 +11,14 @@
 **/.ruff_cache
 **/.venv
 frontend/node_modules
+**/node_modules
+**/.next
+**/dist
+**/build
+**/coverage
+**/*.log
+.idea
+.vscode
 .playwright-mcp
 .claude-flow
 .swarm

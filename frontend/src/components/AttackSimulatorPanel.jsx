@@ -1047,18 +1047,23 @@ export function AttackSimulatorPanel() {
               // defaults to ALLOW / "No threat detected" / 0%. Honor the actual
               // verdict so a BLOCKED request can never render as allowed/clean.
               const blocked = result.final_action === "block" || result.httpStatus === 403;
+              const errored = result.final_action === "error" || result.httpStatus >= 500;
               const humanize = (s) =>
                 String(s || "").replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
               const actionLabel = blocked
                 ? (result.final_action?.toUpperCase() || "BLOCK")
-                : (scan.action || result.final_action?.toUpperCase() || "ALLOW");
-              const isClean = blocked ? false : scan.clean;
+                : errored
+                  ? "ERROR"
+                  : (scan.action || result.final_action?.toUpperCase() || "ALLOW");
+              const isClean = blocked || errored ? false : scan.clean;
               const threatLabel =
                 blocked && scan.clean
                   ? (result.blocked_by
                       ? `Blocked (${humanize(result.blocked_by)})`
                       : humanize(result.category) || "Policy violation")
-                  : scan.threatLabel;
+                  : errored && scan.clean
+                    ? "Scan verdict omitted"
+                    : scan.threatLabel;
               const scoreValue = blocked && scan.scoreValue === "0%" ? "—" : scan.scoreValue;
               return (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

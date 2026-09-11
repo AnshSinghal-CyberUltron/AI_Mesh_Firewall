@@ -855,6 +855,44 @@ def _is_redactable_pii_threat(threat_type: str) -> bool:
     return "pii" in t or "phone" in t or t.startswith("phi") or t.startswith("pci")
 
 
+_PLATFORM_FLOOR_SCANNER_THREATS = frozenset({
+    "pii", "phi", "pci", "secret", "credential", "sensitive_content", "dos",
+})
+
+
+def _scanner_kwargs_for_enforcement(verdict, *, recommendation: str | None = None) -> dict:
+    """Feed built-in PII/secret/DoS into ``resolve_and_enforce``; keep injection policy-only.
+
+    Policy-driven-detection task 2.1 passed ``scanner_*=None`` for every threat, which
+    let raw SSN/PAN reach the model whenever no org rule matched. The platform floor
+    restores data-protection + DoS without re-arming ATTACK_PATTERNS as enforcement.
+    """
+    empty = {
+        "scanner_recommendation": None,
+        "scanner_action": None,
+        "scanner_threat_type": None,
+        "scanner_confidence": None,
+        "scanner_tier": None,
+        "scanner_matched_patterns": None,
+        "scanner_detail": None,
+    }
+    if verdict is None:
+        return empty
+    threat = str(getattr(verdict, "threat_type", None) or "").strip().lower()
+    if threat not in _PLATFORM_FLOOR_SCANNER_THREATS and not _is_redactable_pii_threat(threat):
+        return empty
+    action = getattr(verdict, "action", None) or recommendation or None
+    return {
+        "scanner_recommendation": recommendation or action,
+        "scanner_action": getattr(verdict, "action", None) or action,
+        "scanner_threat_type": getattr(verdict, "threat_type", None) or None,
+        "scanner_confidence": getattr(verdict, "confidence", None),
+        "scanner_tier": getattr(verdict, "tier", None) or None,
+        "scanner_matched_patterns": list(getattr(verdict, "matched_patterns", None) or []),
+        "scanner_detail": getattr(verdict, "detail", None) or None,
+    }
+
+
 def _build_safe_block_response(
     status_code: int,
     code: str,
@@ -3301,6 +3339,115 @@ def _sanitize_llm_error_response(code: int, resp) -> dict:
     if code:
         sanitized["error"]["code"] = int(code)
     return sanitized
+
+
+def _attach_pipeline_trace_to_llm_error(content: dict, *, http_status: int) -> dict:
+    """Preserve the input-scan pipeline_trace on JSON 5xx (LiteLLM / circuit breaker).
+
+    Attack Simulator synthesizes ALLOW + "No threat detected" when a 503 body has no
+    ``pipeline_trace``. The scan already ran; dropping it made a redacted PII prompt
+    look like a clean pass that failed at model output.
+    """
+    from pipeline_trace import build_pipeline_trace
+
+    out = dict(content) if isinstance(content, dict) else {"error": content}
+    ctx = _REQUEST_PIPELINE_CTX.get() or {}
+    prompt = ctx.get("prompt") or ""
+    redacted_prompt = ctx.get("redacted_prompt")
+    policy_redacted_prompt = ctx.get("policy_redacted_prompt") or ""
+    scan_verdict = ctx.get("scan_verdict")
+    check_resp = ctx.get("check_resp") if isinstance(ctx.get("check_resp"), dict) else {}
+    input_decision = ctx.get("input_decision")
+    stage_metrics = ctx.get("stage_metrics") or {}
+    route_metadata = ctx.get("route_metadata")
+    requested_model = ctx.get("requested_model") or ""
+
+    raw_forwarded = redacted_prompt or prompt
+    raw_policy = policy_redacted_prompt or prompt
+    scanner_redaction_applied = bool(scan_verdict and raw_forwarded != raw_policy)
+
+    zs_threat = getattr(scan_verdict, "threat_type", None) or ""
+    zs_conf = float(getattr(scan_verdict, "confidence", None) or 0.0)
+    zs_tier = getattr(scan_verdict, "tier", None) or ""
+    zs_patterns = list(getattr(scan_verdict, "matched_patterns", None) or [])
+    zs_detail = getattr(scan_verdict, "detail", None) or ""
+    if input_decision is not None and not zs_threat:
+        zs_threat = getattr(input_decision, "threat_type", None) or ""
+        zs_tier = zs_tier or getattr(input_decision, "detection_tier", None) or ""
+        zs_conf = zs_conf or float(getattr(input_decision, "confidence", None) or 0.0)
+
+    zs = _build_zeroshield_metadata(
+        action="error",
+        reason=zs_detail or "Upstream inference failed after input scan.",
+        detection_tier=zs_tier or "none",
+        threat_type=zs_threat or "none",
+        confidence=zs_conf,
+        matched_patterns=zs_patterns,
+        original_prompt=prompt,
+        redacted_prompt=redacted_prompt,
+        detail=zs_detail,
+        routing=route_metadata if isinstance(route_metadata, dict) else None,
+    )
+    if check_resp:
+        zs["matched_policy_names"] = (
+            check_resp.get("matched_policy_names")
+            or check_resp.get("matched_policies")
+            or []
+        )
+        zs["matched_rule_names"] = check_resp.get("matched_rules") or []
+    zs = _redact_for_client_response(zs) or zs
+
+    trace = build_pipeline_trace(
+        prompt=_trace_text(prompt),
+        forwarded_prompt=_trace_text(raw_forwarded),
+        policy_redacted_prompt=_trace_text(policy_redacted_prompt) if policy_redacted_prompt else "",
+        policy_redacted_flag=(bool(policy_redacted_prompt) and policy_redacted_prompt != prompt),
+        scanner_redaction_applied=scanner_redaction_applied,
+        stage_metrics=stage_metrics,
+        final_action="error",
+        http_status=int(http_status or 502),
+        scan_verdict=scan_verdict,
+        zeroshield=zs,
+        response_text="",
+        requested_model=requested_model,
+        route_metadata=route_metadata if isinstance(route_metadata, dict) else None,
+        prompt_in_operator_masked=_trace_prompt_operator_masked(prompt),
+        skip_inference=False,
+    )
+    for stage in trace.get("stages") or []:
+        name = stage.get("name")
+        if name == "model_output":
+            stage["action"] = "error"
+            stage["detail"] = "Upstream inference failed"
+            stage["guard_reason"] = "Upstream inference failed"
+        elif name == "output_guardrail":
+            stage["action"] = "skip"
+            stage["detail"] = "Output guard not evaluated — model output failed"
+            stage["guard_reason"] = "Output guard skipped because model output failed"
+    trace["final_action"] = "error"
+    out["pipeline_trace"] = _stamp_pipeline_trace_request_id(trace)
+    out["final_action"] = "error"
+    out["zeroshield"] = zs
+    rid = _REQUEST_ID.get("")
+    if rid:
+        out["request_id"] = rid
+    # Keep ``code`` at top level (Attack Simulator stage mapping) AND nested in
+    # ``error`` (OpenAI SDK). If we leave a flat ``error: str`` body, the
+    # JSONResponse OpenAI-coercer moves ``code`` inside ``error`` and drops it
+    # from the top level — CB OPEN then looks like a generic model_output 503.
+    err = out.get("error")
+    if isinstance(err, str):
+        nested_code = out.get("code")
+        out["error"] = {
+            "message": out.get("message") or err,
+            "type": "service_unavailable" if int(http_status or 0) >= 500 else "upstream_error",
+            "code": nested_code if nested_code is not None else http_status,
+        }
+        if nested_code is not None:
+            out["code"] = nested_code
+    elif isinstance(err, dict) and out.get("code") is None and err.get("code") is not None:
+        out["code"] = err.get("code")
+    return out
 
 
 def _extract_chat_routing_preferences(body: dict, org_config: dict, auth_ctx, scan_verdict) -> dict:
@@ -8328,7 +8475,10 @@ async def proxy_chat(
                 _body = resp
             else:
                 # Never reflect raw LiteLLM exception text to the client (R5).
-                _body = _sanitize_llm_error_response(code, resp)
+                _body = _attach_pipeline_trace_to_llm_error(
+                    _sanitize_llm_error_response(code, resp),
+                    http_status=code if code else 502,
+                )
             return JSONResponse(
                 status_code=code if code else 502,
                 content=_body,
@@ -8997,24 +9147,10 @@ async def proxy_chat(
             # the redact-eligible value it always resolved to for a clean prompt.
             _pii_detection_enabled = True
 
-            # policy-driven-detection task 2.1: the built-in Tier-1 scanner
-            # verdict (``verdict.*`` from INPUT_SCANNER) is NO LONGER a first-class
-            # guard recommendation to the enforcement authority. Tier-1 detection
-            # must come SOLELY from the org's enabled policies
-            # (``org_policy_action`` + ``matched_rules`` + ``matched_policy_names``
-            # via ``_policy_check_cached``). Passing ``scanner_* = None`` means a
-            # zero-policy org (no matched rules) + Tier-2 off resolves to
-            # ``PipelineDecision(action="allow")`` (passthrough). (The built-in
-            # scan still RUNS for now; task 3.1 removes the ATTACK_PATTERNS loop.
-            # Any opt-in Tier-2 recommendation is gated separately by task 4.)
+            # Platform floor: PII/secret/DoS from the built-in scanner still feed
+            # enforcement. Injection/jailbreak stay policy-only (scanner_* None).
             _input_decision = _resolve_and_enforce(
-                scanner_recommendation=None,
-                scanner_action=None,
-                scanner_threat_type=None,
-                scanner_confidence=None,
-                scanner_tier=None,
-                scanner_matched_patterns=None,
-                scanner_detail=None,
+                **_scanner_kwargs_for_enforcement(verdict, recommendation=_guard_rec),
                 org_policy_action=_org_policy_action,
                 matched_rules=check_resp.get("matched_rules") or [],
                 matched_policy_names=check_resp.get("matched_policy_names") or [],
@@ -9023,10 +9159,6 @@ async def proxy_chat(
                 tier1_pii_detected=_degraded_pii_detected,
                 redaction_possible=True,
                 pii_detection_enabled=_pii_detection_enabled,
-                # policy-driven-detection task 6.1: legacy ``scan_block_on_injection``
-                # toggle removed as a detection driver — no longer read from
-                # org_config. Injection block/monitor is governed by the matched
-                # enabled policy action, not this toggle. Inert here (scanner_*=None).
                 scan_block_on_injection=True,
                 injection_threshold=org_config.get("prompt_injection_threshold", 0.80),
             )
@@ -9180,19 +9312,13 @@ async def proxy_chat(
                 # redaction no-op via ``redaction_possible`` + the policy action,
                 # never on the built-in ``verdict.*``.
                 _noop_decision = _resolve_and_enforce(
-                    scanner_recommendation=None,
-                    scanner_action=None,
-                    scanner_threat_type=None,
-                    scanner_confidence=None,
-                    scanner_tier=None,
+                    **_scanner_kwargs_for_enforcement(verdict, recommendation=_guard_rec),
                     org_policy_action=_org_policy_action,
                     enforcement_mode=enforcement_mode,
                     tier2_degraded=_is_tier2_degraded_verdict(verdict),
                     tier1_pii_detected=_degraded_pii_detected,
                     redaction_possible=not _redaction_noop,
                     pii_detection_enabled=pii_detection_enabled,
-                    # policy-driven-detection task 6.1: legacy scan_block_on_injection
-                    # removed as a detection driver (no longer read from org_config).
                     scan_block_on_injection=True,
                     injection_threshold=org_config.get("prompt_injection_threshold", 0.80),
                 )
@@ -9523,7 +9649,10 @@ async def proxy_chat(
             # Never reflect raw LiteLLM exception text to the client (R5).
             return JSONResponse(
                 status_code=code if code else 502,
-                content=_sanitize_llm_error_response(code, resp),
+                content=_attach_pipeline_trace_to_llm_error(
+                    _sanitize_llm_error_response(code, resp),
+                    http_status=code if code else 502,
+                ),
             )
 
         # ── Policy check + backend security scan run ABOVE input_scan now ──
@@ -9767,7 +9896,13 @@ async def proxy_chat(
                 "weights": routing_prefs["weights"],
             }
 
-        _sync_pipeline_ctx(route_metadata=route_metadata)
+        _sync_pipeline_ctx(
+            route_metadata=route_metadata,
+            redacted_prompt=redacted_prompt,
+            policy_redacted_prompt=policy_redacted_prompt,
+            input_decision=_input_decision,
+            check_resp=check_resp,
+        )
 
         if _is_routing_sentinel_model(requested_model):
             resolved = _resolve_routing_hint_model(
@@ -10143,11 +10278,14 @@ async def proxy_chat(
                         _cancel_deep_scan()
                         return JSONResponse(
                             status_code=503,
-                            content={
-                                "error": "service_unavailable",
-                                "message": f"Circuit breaker OPEN for model '{requested_model}'. Try again later.",
-                                "code": "circuit_breaker_open",
-                            },
+                            content=_attach_pipeline_trace_to_llm_error(
+                                {
+                                    "error": "service_unavailable",
+                                    "message": f"Circuit breaker OPEN for model '{requested_model}'. Try again later.",
+                                    "code": "circuit_breaker_open",
+                                },
+                                http_status=503,
+                            ),
                             headers={"Retry-After": str(CONFIG.get("circuit_breaker_cooldown_seconds", 120))},
                         )
                 else:
@@ -10155,11 +10293,14 @@ async def proxy_chat(
                     _cancel_deep_scan()
                     return JSONResponse(
                         status_code=503,
-                        content={
-                            "error": "service_unavailable",
-                            "message": f"Circuit breaker OPEN for model '{requested_model}'. Try again later.",
-                            "code": "circuit_breaker_open",
-                        },
+                        content=_attach_pipeline_trace_to_llm_error(
+                            {
+                                "error": "service_unavailable",
+                                "message": f"Circuit breaker OPEN for model '{requested_model}'. Try again later.",
+                                "code": "circuit_breaker_open",
+                            },
+                            http_status=503,
+                        ),
                         headers={"Retry-After": str(CONFIG.get("circuit_breaker_cooldown_seconds", 120))},
                     )
 
@@ -10275,7 +10416,10 @@ async def proxy_chat(
             # OpenRouter user_id) to the client (R5).
             return JSONResponse(
                 status_code=code if code else 502,
-                content=_sanitize_llm_error_response(code, llm_resp),
+                content=_attach_pipeline_trace_to_llm_error(
+                    _sanitize_llm_error_response(code, llm_resp),
+                    http_status=code if code else 502,
+                ),
             )
 
         # Record circuit breaker success

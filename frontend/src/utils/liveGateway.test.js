@@ -274,3 +274,45 @@ test("scan-only chat body sends max_tokens=0, inference omits the sentinel", () 
   const infer = chatCompletionBody({ prompt: "hi", model: "gpt-4o-mini", runInference: true, maxTokens: 512 });
   assert.equal(infer.max_tokens, 512);
 });
+
+test("503 without pipeline_trace does not badge input_scan ALLOW / no threats", () => {
+  const result = normalizeChatPipelineResult(
+    { error: { message: "The inference provider is temporarily unavailable.", type: "upstream_error", code: 503 } },
+    503,
+    {},
+  );
+  assert.equal(result.final_action, "error");
+  const input = result.stages.find((s) => s.name === "input_scan");
+  assert.ok(input);
+  assert.equal(input.action, "skip");
+  assert.match(input.detail, /omitted from error response/i);
+});
+
+test("503 with input_scan redact trace keeps REDACT and overall ERROR", () => {
+  const stages = [
+    "auth", "rate_limit", "policy", "input_scan", "kill_switch",
+    "model_routing", "model_input", "model_output", "output_guardrail",
+  ].map((name) => ({
+    name,
+    action: name === "input_scan" ? "redact" : name === "model_output" ? "error" : name === "output_guardrail" ? "skip" : "allow",
+    latency_ms: 1,
+    detail: name === "input_scan" ? "PII detected in prompt: ssn, email" : "",
+    threat_type: name === "input_scan" ? "pii" : "",
+    tier: name === "input_scan" ? "tier_1" : "",
+  }));
+  const result = normalizeChatPipelineResult(
+    {
+      final_action: "error",
+      pipeline_trace: { stages, total_latency_ms: 46 },
+      zeroshield: { action: "error", threat_type: "pii", detection_tier: "tier_1", confidence: 0.85 },
+    },
+    503,
+    {},
+  );
+  assert.equal(result.final_action, "error");
+  const input = result.stages.find((s) => s.name === "input_scan");
+  assert.equal(input.action, "redact");
+  assert.equal(input.threat_type, "pii");
+  const output = result.stages.find((s) => s.name === "model_output");
+  assert.equal(output.action, "error");
+});
