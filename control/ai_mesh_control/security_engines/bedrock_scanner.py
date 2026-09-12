@@ -1,8 +1,8 @@
 """
-Bedrock-based Tier-2 scanner that calls the external Bedrock/OpenAI-compatible
-runtime (GPT-OSS-20B) and normalizes findings into the internal detection format.
+Tier-2 scanner: Gemini Developer API (TIER2_PROVIDER=gemini) or legacy Bedrock.
 
-The scanner is designed to produce outputs compatible with `risk_scorer.RiskScorer`.
+Inference goes through ``default_tier2_client()``. Bedrock Converse is legacy
+when the provider is bedrock. Compatible with ``risk_scorer.RiskScorer``.
 """
 
 from __future__ import annotations
@@ -13,9 +13,35 @@ import os
 import re
 from typing import Any
 
-from .bedrock_client import BedrockClient, default_bedrock_client
+from .bedrock_client import default_bedrock_client
 
 LOG = logging.getLogger("backend.bedrock_scanner")
+
+_BEDROCK_T2_DEPRECATION_WARNED = False
+
+
+def reset_tier2_factory_for_tests() -> None:
+    global _BEDROCK_T2_DEPRECATION_WARNED
+    _BEDROCK_T2_DEPRECATION_WARNED = False
+
+
+def default_tier2_client() -> Any:
+    """Select Gemini or legacy Bedrock from ``TIER2_PROVIDER`` (default bedrock)."""
+    global _BEDROCK_T2_DEPRECATION_WARNED
+    try:
+        from ai_mesh_shared.tier2_gemini_client import GeminiTier2Client, is_gemini_tier2_provider
+    except ImportError:
+        is_gemini_tier2_provider = None  # type: ignore[assignment]
+        GeminiTier2Client = None  # type: ignore[assignment,misc]
+    if is_gemini_tier2_provider is not None and is_gemini_tier2_provider():
+        return GeminiTier2Client()
+    if not _BEDROCK_T2_DEPRECATION_WARNED:
+        _BEDROCK_T2_DEPRECATION_WARNED = True
+        LOG.warning(
+            "TIER2_PROVIDER=bedrock: Tier-2 inference still uses Bedrock Converse "
+            "(legacy). Set TIER2_PROVIDER=gemini to use the Gemini Developer API."
+        )
+    return default_bedrock_client()
 
 SAFE_OWASP_SUMMARY: dict[str, Any] = {
     "scan_results": {},
@@ -304,9 +330,19 @@ SYSTEM_PROMPT = (
 
 
 class BedrockScanner:
-    def __init__(self, client: BedrockClient | None = None, model: str | None = None):
-        self.client = client or default_bedrock_client()
-        self.model = model or os.getenv("BEDROCK_MODEL", "openai.gpt-oss-120b-1:0")
+    def __init__(self, client: Any | None = None, model: str | None = None):
+        self.client = client or default_tier2_client()
+        try:
+            from ai_mesh_shared.tier2_gemini_client import gemini_tier2_model, is_gemini_tier2_provider
+        except ImportError:
+            is_gemini_tier2_provider = None  # type: ignore[assignment]
+            gemini_tier2_model = None  # type: ignore[assignment]
+        if model:
+            self.model = model
+        elif is_gemini_tier2_provider is not None and is_gemini_tier2_provider():
+            self.model = gemini_tier2_model()
+        else:
+            self.model = os.getenv("BEDROCK_MODEL", "openai.gpt-oss-120b-1:0")
 
     def scan(self, prompt: str, context: str | None = None) -> dict[str, Any]:
         """

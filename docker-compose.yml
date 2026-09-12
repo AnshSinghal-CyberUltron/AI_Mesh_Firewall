@@ -140,6 +140,9 @@ services:
       # Phase 1 Fx-2b: server-to-server admin proxy (control -> gateway)
       GATEWAY_URL: http://gateway:8300
       GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
+      TIER2_PROVIDER: ${TIER2_PROVIDER:-bedrock}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      VERTEX_TIER2_MODEL: ${VERTEX_TIER2_MODEL:-gemini-3.5-flash-lite}
       TELEMETRY_DRAIN_MODE: ${TELEMETRY_DRAIN_MODE:-thread}
       TELEMETRY_DRAIN_INTERVAL_SEC: ${TELEMETRY_DRAIN_INTERVAL_SEC:-1.0}
       TELEMETRY_DRAIN_BATCH_SIZE: ${TELEMETRY_DRAIN_BATCH_SIZE:-250}
@@ -247,6 +250,9 @@ services:
       BEDROCK_REGION: ${BEDROCK_REGION:-ap-south-1}
       BEDROCK_MODEL: ${BEDROCK_MODEL:-global.anthropic.claude-haiku-4-5-20251001-v1:0}
       ENABLE_TIER2: ${ENABLE_TIER2:-true}
+      TIER2_PROVIDER: ${TIER2_PROVIDER:-bedrock}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      VERTEX_TIER2_MODEL: ${VERTEX_TIER2_MODEL:-gemini-3.5-flash-lite}
       GATEWAY_TIER2_CACHE_TTL_SECONDS: ${GATEWAY_TIER2_CACHE_TTL_SECONDS:-0}
       # Capacity bench only. Default off. When 1, LiteLLM/BYOK is stubbed so
       # /v1/chat/completions still runs the 9-stage pipeline minus provider RTT.

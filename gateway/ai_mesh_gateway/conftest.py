@@ -43,6 +43,27 @@ def _reset_bedrock_client_singleton():
     reset_bedrock_client_for_tests()
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_tier2_provider(monkeypatch):
+    """Host `.env` may set TIER2_PROVIDER=gemini + GOOGLE_API_KEY.
+
+    Pytest must never construct a live Gemini client or call generateContent.
+    Tests that exercise Gemini set TIER2_PROVIDER explicitly (after this fixture).
+    """
+    monkeypatch.setenv("TIER2_PROVIDER", "bedrock")
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    reset_fn = None
+    try:
+        from bedrock_scanner import reset_tier2_factory_for_tests as reset_fn
+    except ImportError:
+        try:
+            from ai_mesh_gateway.bedrock_scanner import reset_tier2_factory_for_tests as reset_fn
+        except ImportError:
+            reset_fn = None
+    if reset_fn is not None:
+        reset_fn()
+
+
 
 @pytest.fixture()
 def fake_redis_server():

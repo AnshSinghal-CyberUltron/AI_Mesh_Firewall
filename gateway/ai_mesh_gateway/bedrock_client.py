@@ -1,5 +1,9 @@
 """
-AWS Bedrock client for platform ML (Tier-2 scan, routing adjudicator).
+AWS Bedrock client for platform ML (legacy Tier-2 Converse, routing adjudicator).
+
+Tier-2 chat/MCP/RAG inference is selected by TIER2_PROVIDER (see
+default_tier2_client). Bedrock Converse is the legacy T2 transport when
+the provider is bedrock. Embeddings, LLM judge, and grounding stay on Bedrock.
 
 Uses Converse for Anthropic/Global CRIS models and invoke_model for OpenAI-compat.
 

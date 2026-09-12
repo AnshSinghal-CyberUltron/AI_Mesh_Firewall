@@ -94,7 +94,7 @@ def guard_block(category: str, evidence: str, rule_id: str = "LLM01", conf: floa
     }
 
 
-class BedrockOutage(RuntimeError):
+class BedrockOutage(Exception):
     """Stands in for a botocore ClientError / throttle / region outage."""
 
 
@@ -148,6 +148,12 @@ class FakeBedrockClient:
             "tokens_out": 60,
             "elapsed_s": 0.12,
         }
+
+    async def ascan_prompt(self, model, prompt_payload, deployment_path=None,
+                           request_id=None, call_site="tier2_scan"):
+        return self.scan_prompt(
+            model, prompt_payload, deployment_path, request_id, call_site,
+        )
 
 
 def responder_const(body):

@@ -38,6 +38,7 @@ dependencies = [
     # 56 patterns compile, 7 with zero-width assertions are rejected and stay on `re`.
     "hyperscan>=0.7.0; platform_machine == 'x86_64'",
     "aiobotocore>=3.9.0",
+    "google-genai>=2.23.0",
 ]
 
 [project.optional-dependencies]

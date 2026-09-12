@@ -33,6 +33,7 @@ dependencies = [
     "litellm>=1.30.0",
     "pinecone>=5.0.0",
     "pymilvus>=2.3.0",
+    "google-genai>=2.23.0",
 ]
 
 [project.optional-dependencies]

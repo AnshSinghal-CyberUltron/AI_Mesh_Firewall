@@ -24,8 +24,14 @@
  *   cd frontend && BASE_URL=http://127.0.0.1:8180 SHOT_DIR=../runs/d6 \
  *     E2E_REPORT=../runs/playwright_demo_simulators.json node ../scripts/playwright_demo_simulators.mjs
  */
-import { chromium } from "playwright";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import fs from "node:fs";
+
+const require = createRequire(import.meta.url);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const { chromium } = require(path.join(HERE, "../tests/e2e/node_modules/playwright"));
 
 const BASE = (process.env.BASE_URL || "http://127.0.0.1:8180").replace(/\/$/, "");
 const EMAIL = process.env.TEST_EMAIL || "admin@zeroshield.io";
@@ -175,7 +181,12 @@ async function runAttackScenario(page, panel, scenarioText) {
 
 async function main() {
   fs.mkdirSync("runs", { recursive: true });
-  const browser = await chromium.launch({ headless: true });
+  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || "/usr/bin/chromium-browser";
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath,
+    args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+  });
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1400 },
     permissions: ["clipboard-read", "clipboard-write"],

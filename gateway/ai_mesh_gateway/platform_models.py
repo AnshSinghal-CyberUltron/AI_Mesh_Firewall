@@ -89,6 +89,13 @@ def is_bedrock_model_id(name: str) -> bool:
 
 
 def default_tier2_scanner_model() -> str:
+    try:
+        from ai_mesh_shared.tier2_gemini_client import gemini_tier2_model, is_gemini_tier2_provider
+    except ImportError:
+        is_gemini_tier2_provider = None  # type: ignore[assignment]
+        gemini_tier2_model = None  # type: ignore[assignment]
+    if is_gemini_tier2_provider is not None and is_gemini_tier2_provider():
+        return gemini_tier2_model()
     return (
         os.getenv("BEDROCK_TIER2_SCANNER_MODEL", "").strip()
         or os.getenv("BEDROCK_MODEL", "").strip()

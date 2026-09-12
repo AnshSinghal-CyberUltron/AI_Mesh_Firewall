@@ -145,6 +145,25 @@ class ScanVerdict:
     owasp_codes: list[str] = field(default_factory=list)
     scan_meta: dict = field(default_factory=dict)
 
+
+def _tier2_output_fail_closed() -> bool:
+    try:
+        from ai_mesh_shared.tier2_gemini_client import is_gemini_tier2_provider
+    except ImportError:
+        return False
+    return bool(is_gemini_tier2_provider())
+
+
+def _gemini_output_fail_closed_verdict() -> "ScanVerdict":
+    return ScanVerdict(
+        action="block",
+        threat_type="scanner_degraded",
+        confidence=1.0,
+        detail="ZeroShield Tier-2 Gemini output scan failed; response withheld (fail-closed)",
+        tier="tier_2",
+        reason_code="tier2_unavailable_failclosed",
+    )
+
 ATTACK_PATTERNS: dict[str, list[str]] = {
     "prompt_injection": [
         r"ignore\s+(previous|all\s+previous|earlier|above|all)\s+instructions",
@@ -2455,11 +2474,15 @@ class InputScanner:
         on the model OUTPUT. The SAME guard model + breaker/cache/sampling infra
         as the input path is reused.
 
-        ALWAYS fail-open: a guard-model outage (breaker open, Bedrock error,
-        parse failure) must never block or hold an already-generated completion
-        — it degrades to the static tier-1 verdict. ``org_tier2_override`` is the
-        same tri-state per-org switch as input (pass ``org_config.get("tier2_enabled")``
-        so ``None`` is preserved).
+        ALWAYS fail-open on Bedrock: a guard-model outage (breaker open, Bedrock
+        error, parse failure) must never block or hold an already-generated
+        completion — it degrades to the static tier-1 verdict.
+
+        Gemini (``TIER2_PROVIDER=gemini``) fails CLOSED: exception / HTTP 4xx /
+        empty unparseable with no threat salvage returns ``scanner_degraded``
+        block so ``enforce_output`` withholds rather than delivering raw output.
+        ``org_tier2_override`` is the same tri-state per-org switch as input
+        (pass ``org_config.get("tier2_enabled")`` so ``None`` is preserved).
         """
         tier1 = await self.scan_output(text)
         if org_tier2_override is False:
@@ -2506,7 +2529,9 @@ class InputScanner:
                 )
             except Exception:
                 BREAKER.record_result(org_slug, scanner_model_id, failure=True)
-                return tier1  # fail-open
+                if _tier2_output_fail_closed():
+                    return _gemini_output_fail_closed_verdict()
+                return tier1  # Bedrock fail-open
             if cache_key is not None:
                 _cm = bedrock_normalized.get("meta", {})
                 if not _cm.get("error") and not _cm.get("parse_failed"):
@@ -2519,6 +2544,8 @@ class InputScanner:
         _failed = bool(meta.get("error") or meta.get("parse_failed") or not llm_guard)
         BREAKER.record_result(org_slug, scanner_model_id, failure=_failed)
         if _failed:
+            if _tier2_output_fail_closed():
+                return _gemini_output_fail_closed_verdict()
             return tier1  # degraded output scan -> fail-open to static verdict
 
         raw_findings = meta.get("raw_findings") or []

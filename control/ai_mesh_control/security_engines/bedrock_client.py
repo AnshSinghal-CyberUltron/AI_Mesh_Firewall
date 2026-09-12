@@ -1,5 +1,8 @@
 """
-AWS Bedrock client for Tier-2 scanning using boto3 invoke_model.
+AWS Bedrock client for platform ML (legacy Tier-2 invoke_model, health).
+
+Tier-2 inference is selected by TIER2_PROVIDER. This client remains the Bedrock
+transport when the provider is bedrock. Embeddings/judge stay on Bedrock.
 
 Authentication uses standard AWS IAM credentials from environment:
   - AWS_ACCESS_KEY_ID

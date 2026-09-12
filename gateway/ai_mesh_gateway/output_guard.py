@@ -54,6 +54,14 @@ except ImportError:
 
 LOG = logging.getLogger("gateway.output_guard")
 
+
+def _tier2_output_fail_closed() -> bool:
+    try:
+        from ai_mesh_shared.tier2_gemini_client import is_gemini_tier2_provider
+    except ImportError:
+        return False
+    return bool(is_gemini_tier2_provider())
+
 ACTION_PRIORITY = {"allow": 0, "flag": 1, "rewrite": 2, "redact": 3, "block": 4}
 
 # Per-detector output actions an operator may configure. Anything outside this
@@ -1099,11 +1107,23 @@ class OutputGuard:
                         compliance_tags=t2_compliance_tags,
                         redaction_spans=t2_redaction_spans,
                     ))
-            except Exception:  # noqa: BLE001 - output tier-2 must never break delivery
-                # M11: fail-open (never block an already-generated response on a
-                # guard outage) but make it VISIBLE — WARN (was silent debug) +
-                # mark the verdict degraded so telemetry + client metadata record
-                # that the output was passed UNSCANNED.
+            except Exception:  # noqa: BLE001
+                if _tier2_output_fail_closed():
+                    LOG.warning(
+                        "Output tier-2 Gemini scan FAILED — response withheld (fail-closed)",
+                        exc_info=True,
+                    )
+                    return OutputVerdict(
+                        action="block",
+                        threat_type="scanner_degraded",
+                        confidence=1.0,
+                        detail="ZeroShield Tier-2 Gemini output scan failed; response withheld (fail-closed)",
+                        scan_degraded=True,
+                    )
+                # Bedrock: fail-open (never block an already-generated response on a
+                # guard outage) but make it VISIBLE — WARN + mark the verdict degraded
+                # so telemetry + client metadata record that the output was passed
+                # UNSCANNED.
                 output_scan_degraded = True
                 LOG.warning(
                     "Output tier-2 guard-model scan FAILED — output passed UNSCANNED (fail-open / degraded)",

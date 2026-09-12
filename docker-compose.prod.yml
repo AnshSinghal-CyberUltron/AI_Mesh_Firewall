@@ -152,6 +152,9 @@ services:
       # Internal Docker DNS — nginx terminates TLS; control→gateway stays HTTP.
       GATEWAY_URL: http://gateway:8300
       GATEWAY_INTERNAL_API_KEY: ${GATEWAY_INTERNAL_API_KEY:-}
+      TIER2_PROVIDER: ${TIER2_PROVIDER:-bedrock}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      VERTEX_TIER2_MODEL: ${VERTEX_TIER2_MODEL:-gemini-3.5-flash-lite}
       # Transaction pooling: never keep idle server conns behind PgBouncer.
       POSTGRES_CONN_MAX_AGE: ${POSTGRES_CONN_MAX_AGE:-0}
       DISABLE_SERVER_SIDE_CURSORS: ${DISABLE_SERVER_SIDE_CURSORS:-true}
@@ -186,6 +189,9 @@ services:
       GATEWAY_TIER2_CACHE_MAX: ${GATEWAY_TIER2_CACHE_MAX:-3000}
       GATEWAY_TIER2_SAMPLE_RATE: ${GATEWAY_TIER2_SAMPLE_RATE:-1.0}
       ENABLE_TIER2: ${ENABLE_TIER2:-true}
+      TIER2_PROVIDER: ${TIER2_PROVIDER:-bedrock}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      VERTEX_TIER2_MODEL: ${VERTEX_TIER2_MODEL:-gemini-3.5-flash-lite}
       # Empty = T2 scanner model (Haiku). Nova Micro is optional; this account
       # rejects it on-demand. T2 scanner stays BEDROCK_TIER2_SCANNER_MODEL.
       GATEWAY_RAG_ENABLED: ${GATEWAY_RAG_ENABLED:-true}

@@ -1,0 +1,84 @@
+{
+  "when": "2026-09-11T07:36:00Z",
+  "url": "https://aimeshfirewall.zeroshield.ai/?tab=firewall-1-1",
+  "host": "mesh-firewall-mig-nws9",
+  "project": "aisecshield-prod",
+  "images": {
+    "gateway": "asia-south1-docker.pkg.dev/aisecshield-prod/mesh-firewall-images/ai-mesh-gateway:v20260911-gemini-t2",
+    "control": "asia-south1-docker.pkg.dev/aisecshield-prod/mesh-firewall-images/ai-mesh-control:v20260911-gemini-t2"
+  },
+  "tier2": {
+    "provider": "gemini",
+    "model": "gemini-3.5-flash-lite"
+  },
+  "health": {
+    "ui": 200,
+    "gateway_health": 200,
+    "control_api_health": 200,
+    "config_sync_loaded_quirk": false
+  },
+  "bedrock_aconverse_failed_last_25m": 0,
+  "cases": [
+    {
+      "scenario": "Prompt Injection (DAN)",
+      "request_id": "zs-d8344174c5f0",
+      "scan_id": 251315,
+      "http": 400,
+      "verdict": "BLOCKED",
+      "blocked_by": "policy Jailbreak & Guardrail Bypass / Block known jailbreak personas",
+      "input_scan": "skip",
+      "gemini_ran": false,
+      "attack_sim_latency_ms": 3.7,
+      "scan_detail_latency_ms": 2.7,
+      "output": "withheld at policy",
+      "screenshots": [
+        "prod-ui-attack-blocked.png",
+        "prod-ui-scan-detail-block.png",
+        "prod-ui-scan-detail-block-withheld.png"
+      ]
+    },
+    {
+      "scenario": "Sensitive Data Leakage (SSN/email/phone/PAN)",
+      "request_id": "zs-740ab801329f",
+      "scan_id": 251317,
+      "http": 200,
+      "verdict": "REDACTED",
+      "input_scan_ms": 1235.9,
+      "output_guard_ms": 1047.4,
+      "total_ms": 6610.9,
+      "gemini_input_elapsed_s": 1.233,
+      "gemini_output_elapsed_s": 1.042,
+      "t2_action": "redact",
+      "t2_category": "pii",
+      "raw_pii_in_scan_detail": false,
+      "forwarded_to_model": "masked SSN/email/phone/card",
+      "screenshots": [
+        "prod-ui-attack-pii.png",
+        "prod-ui-scan-detail-redact.png"
+      ]
+    },
+    {
+      "scenario": "Clean Prompt (capital of France)",
+      "request_id": "zs-c8671b23cba0",
+      "scan_id": 251319,
+      "http": 200,
+      "verdict": "ALLOWED",
+      "input_scan": "tier_2 1161.1ms",
+      "output_guard_ms": 942.6,
+      "total_ms": 3159.5,
+      "gemini_input_elapsed_s": 1.143,
+      "gemini_output_elapsed_s": 0.941,
+      "model": "gpt-5.2",
+      "output": "Paris.",
+      "latency_parity_sim_vs_scan_detail": true,
+      "screenshots": [
+        "prod-ui-attack-allowed.png",
+        "prod-ui-scan-detail-allow.png"
+      ]
+    }
+  ],
+  "console": {
+    "expected_400_on_block": "https://aimeshfirewall.zeroshield.ai/v1/chat/completions",
+    "stale_local_8300": "http://127.0.0.1:8300/v1/chat/completions from earlier local session in same browser"
+  }
+}

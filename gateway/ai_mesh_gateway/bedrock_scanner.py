@@ -1,8 +1,8 @@
 """
-Bedrock-based Tier-2 scanner that calls the external Bedrock/OpenAI-compatible
-runtime (GPT-OSS-20B) and normalizes findings into the internal detection format.
+Tier-2 scanner: Gemini Developer API (TIER2_PROVIDER=gemini) or legacy Bedrock Converse.
 
-Gateway-local copy -- uses gateway.bedrock_client for HTTP transport.
+Inference goes through ``default_tier2_client()``. Bedrock Converse is legacy when
+the provider is bedrock. Gateway-local copy — uses gateway.bedrock_client for AWS.
 """
 from __future__ import annotations
 
@@ -602,9 +602,36 @@ def build_tier2_system_prompt() -> str:
     return SYSTEM_PROMPT + _PROMPT_CACHE_REFERENCE
 
 
+_BEDROCK_T2_DEPRECATION_WARNED = False
+
+
+def reset_tier2_factory_for_tests() -> None:
+    global _BEDROCK_T2_DEPRECATION_WARNED
+    _BEDROCK_T2_DEPRECATION_WARNED = False
+
+
+def default_tier2_client() -> Any:
+    """Select Gemini or legacy Bedrock from ``TIER2_PROVIDER`` (default bedrock)."""
+    global _BEDROCK_T2_DEPRECATION_WARNED
+    try:
+        from ai_mesh_shared.tier2_gemini_client import GeminiTier2Client, is_gemini_tier2_provider
+    except ImportError:
+        is_gemini_tier2_provider = None  # type: ignore[assignment]
+        GeminiTier2Client = None  # type: ignore[assignment,misc]
+    if is_gemini_tier2_provider is not None and is_gemini_tier2_provider():
+        return GeminiTier2Client()
+    if not _BEDROCK_T2_DEPRECATION_WARNED:
+        _BEDROCK_T2_DEPRECATION_WARNED = True
+        LOG.warning(
+            "TIER2_PROVIDER=bedrock: Tier-2 inference still uses Bedrock Converse "
+            "(legacy). Set TIER2_PROVIDER=gemini to use the Gemini Developer API."
+        )
+    return default_bedrock_client()
+
+
 class BedrockScanner:
-    def __init__(self, client: Optional[BedrockClient] = None, model: Optional[str] = None):
-        self.client = client or default_bedrock_client()
+    def __init__(self, client: Optional[Any] = None, model: Optional[str] = None):
+        self.client = client or default_tier2_client()
         # Prefer dedicated Tier-2 scanner model env var so the scanner can use
         # a fast, cheap model (e.g. Claude 3 Haiku) without affecting the main
         # LLM judge / routing model selection elsewhere.
@@ -624,6 +651,15 @@ class BedrockScanner:
         """
         model_id = (self.model or "").lower()
         system_prompt = build_tier2_system_prompt()
+        if model_id.startswith("gemini") or "gemini" in model_id:
+            return {
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content},
+                ],
+                "max_tokens": max_tokens,
+                "temperature": 0.0,
+            }
         if (
             model_id.startswith("anthropic.")
             or model_id.startswith("global.anthropic")
@@ -786,6 +822,12 @@ class BedrockScanner:
             # Session/import failures must fail closed (do not skip T2 as flag).
             raise
         except Exception as exc:
+            try:
+                from ai_mesh_shared.tier2_gemini_client import is_gemini_tier2_provider
+            except ImportError:
+                is_gemini_tier2_provider = None  # type: ignore[assignment]
+            if is_gemini_tier2_provider is not None and is_gemini_tier2_provider():
+                raise RuntimeError("Gemini tier-2 request failed") from exc
             return self._scan_client_error(exc, reqid, scan_start, payload)
         return self._complete_scan(resp, reqid, scan_start)
 
