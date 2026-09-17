@@ -1,0 +1,29 @@
+{
+  "task": "revamp-vite",
+  "verdict": "PASS",
+  "branch": "revamp",
+  "pin_before_vite": "2ed687a6",
+  "frontend": {
+    "image": "node:22-alpine",
+    "command": "npm install && npm run dev",
+    "host_port": "8180:5173",
+    "bind_mount": "/home/contact_cyberultron_com/AI_Mesh_Firewall/frontend -> /app",
+    "html_has_vite_client": true,
+    "baked_hashed_js": false,
+    "server_header": null
+  },
+  "http": {
+    "evidence": "docs/plans/evidence/2026-09-17-revamp-vite/vite_http.json",
+    "ok": true
+  },
+  "browser": {
+    "evidence": "docs/plans/evidence/2026-09-17-revamp-vite/vite_browser.json",
+    "login_http": 200,
+    "config_http": 200,
+    "after_login_path": "/",
+    "ok": true
+  },
+  "t02_lab": "PASS with L02-3 waiver — see docs/plans/evidence/2026-09-17-t02/T02_COMPLETENESS.md",
+  "t03_started": false,
+  "t03_reason": "user lock vite_only_no_t03"
+}

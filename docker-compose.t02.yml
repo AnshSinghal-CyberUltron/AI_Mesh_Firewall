@@ -29,17 +29,3 @@ services:
     depends_on:
       t02-recorder:
         condition: service_healthy
-
-  frontend:
-    image: ai-mesh-nginx-t00:t02
-    command: ["nginx", "-g", "daemon off;"]
-    working_dir: /
-    volumes: !reset []
-    ports: !override
-      - "8180:80"
-    environment: !reset {}
-    depends_on:
-      control:
-        condition: service_healthy
-      gateway:
-        condition: service_started

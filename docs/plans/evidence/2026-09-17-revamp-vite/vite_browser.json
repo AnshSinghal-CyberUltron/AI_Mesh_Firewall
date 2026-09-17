@@ -1,0 +1,42 @@
+{
+  "task": "revamp-vite",
+  "base": "http://127.0.0.1:8180",
+  "email": "admin@…",
+  "started_at": "2026-09-17T08:08:39.397Z",
+  "html_has_vite_client": true,
+  "hashed_js": null,
+  "server": null,
+  "login_http": 200,
+  "after_login_path": "/",
+  "config_http": 200,
+  "ok": true,
+  "asserts": [
+    {
+      "label": "Vite client present on :8180",
+      "pass": true
+    },
+    {
+      "label": "baked hashed /assets/index-*.js absent",
+      "pass": true
+    },
+    {
+      "label": "login HTTP 200",
+      "pass": true
+    },
+    {
+      "label": "firewall config GET 200 after login",
+      "pass": true
+    },
+    {
+      "label": "no page errors",
+      "pass": true
+    }
+  ],
+  "pageErrors": [],
+  "console_errors": [],
+  "error": null,
+  "config_statuses": [
+    200
+  ],
+  "finished_at": "2026-09-17T08:09:26.305Z"
+}

@@ -1,0 +1,53 @@
+{
+  "ok": true,
+  "rows": [
+    {
+      "url": "http://127.0.0.1:8180/",
+      "status": 200,
+      "server": null,
+      "content_type": "text/html",
+      "vite": true,
+      "body_prefix": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <script type=\"module\">import { injectIntoGlobalHook } from \"/@react-refres"
+    },
+    {
+      "url": "http://127.0.0.1:8180/login",
+      "status": 200,
+      "server": null,
+      "content_type": "text/html",
+      "vite": true,
+      "body_prefix": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <script type=\"module\">import { injectIntoGlobalHook } from \"/@react-refres"
+    },
+    {
+      "url": "http://127.0.0.1:8180/api/health/",
+      "status": 200,
+      "server": "uvicorn",
+      "content_type": "application/json",
+      "vite": false,
+      "body_prefix": "{\"status\": \"ok\"}"
+    },
+    {
+      "url": "http://127.0.0.1:8180/health",
+      "status": 200,
+      "server": "uvicorn",
+      "content_type": "application/json",
+      "vite": false,
+      "body_prefix": "{\"status\":\"ok\",\"agent_id\":\"72ed7540-dcc9-44c4-80af-a5ccc14decd0\",\"policy_cache_loaded\":true,\"policy_cache_version\":3,\"po"
+    },
+    {
+      "url": "http://127.0.0.1:8100/api/health/",
+      "status": 200,
+      "server": "uvicorn",
+      "content_type": "application/json",
+      "vite": false,
+      "body_prefix": "{\"status\": \"ok\"}"
+    },
+    {
+      "url": "http://127.0.0.1:8300/health",
+      "status": 200,
+      "server": "uvicorn",
+      "content_type": "application/json",
+      "vite": false,
+      "body_prefix": "{\"status\":\"ok\",\"agent_id\":\"72ed7540-dcc9-44c4-80af-a5ccc14decd0\",\"policy_cache_loaded\":true,\"policy_cache_version\":3,\"po"
+    }
+  ]
+}
