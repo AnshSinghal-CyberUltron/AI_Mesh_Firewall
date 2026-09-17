@@ -1,0 +1,71 @@
+{
+  "checked_at_utc": "2026-09-17T07:19:00Z",
+  "runbook": "docs/plans/FINAL_AI_MESH_SCALABLE_GATEWAY_EXECUTION_RUNBOOK_WITH_FRONTEND_REVAMP.docx",
+  "start_t02": false,
+  "reason": "T00 and T01 do not fully pass the runbook verbatim. User-locked exceptions exist. Confirm before T02.",
+  "t00": {
+    "session_verdict": "PASS with waivers",
+    "runbook_verbatim": false,
+    "L00-1": {
+      "t00_evidence": "PASS baked nginx e95f974 index-DZ9cjnHm.js xid 73a5923e-ea84-474d-b7f8-7fad064d7a8c",
+      "fresh_now": {
+        "frontend_image": "ai-mesh-nginx-t00:t01",
+        "frontend_digest": "sha256:9d31fbd58311e07d0b60743426216c96fc1061b64e9b17658b84140dcb9111a7",
+        "server": "nginx/1.30.5",
+        "hashed_js": "/assets/index-BwiHFc60.js",
+        "vite": false,
+        "frontend_bind_mounts": 0,
+        "gateway": "sha256:d45cbb6dae7963257cd7b14c8ee72f0485a0960a79dfa4c5bd59087d1ad87acd",
+        "control": "sha256:12533d0077614eb70673e93fbbf71f0e48bac9a54b832b1a03d3d0f5179f007d",
+        "gateway_health": 200,
+        "control_health": 200
+      }
+    },
+    "L00-2": {
+      "result": "WAIVED",
+      "runbook": "requires second clean worker/VM",
+      "evidence": "docs/plans/evidence/2026-09-16-t00/manifest.json"
+    },
+    "L00-3": {
+      "result": "WAIVED",
+      "runbook": "old credential rejected if applicable; rotate if OpenSSH artifact genuine/uncertain",
+      "still_tracked": "ai-mesh-firewall OPENSSH private key file",
+      "rotation_verified": false
+    }
+  },
+  "t01": {
+    "session_verdict": "FULL (user lock: live L01 + signed residuals)",
+    "runbook_verbatim": false,
+    "release_ready": false,
+    "L01-1": {
+      "pass": true,
+      "ui_put": "eb5a41ea-592f-4aa2-be2c-4cd64a963a19"
+    },
+    "L01-2": {
+      "pass": true,
+      "original": "9e53b77d-ac2a-45ee-9a74-e6014a79d8e1",
+      "fresh_rewrite_put_400": "d161f95f-d2c1-433c-ac38-c15feccefd28"
+    },
+    "L01-3": {
+      "pass": true,
+      "pii_off": "zs-5dcb5ad52554",
+      "openrouter_pong": [
+        "zs-f63fd2818b6c",
+        "zs-fc30d1327ae2"
+      ]
+    },
+    "runbook_exit_gaps": [
+      "T_fw_addon p99 signed 20ms TARGET, measured 20.6ms miss",
+      "1064 is qualified-chat floor; only scan-only 1308.52 RPS measured",
+      "quality Target_FPR 0.01 unmet; Achieved_FPR 1.0; Recall_At_Floor 0.0",
+      "H22 still blocks product release (V3 IMPLEMENTATION_RUNBOOK_V3.md)",
+      "Node OpenAI SDK pin not frozen (frontend has no openai package)"
+    ]
+  },
+  "identity_drift": {
+    "t00_pin": "e95f974dc500414b8f4db28038977fa9bf7deb44",
+    "head_now": "2a657fad48e3f557f4c1f3c7bf23acec5007d304",
+    "note": "Expected after T01 product commit. T02 would need a new pin."
+  },
+  "t02_not_started": true
+}

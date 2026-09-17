@@ -17,6 +17,8 @@ import {
   formatDominantStageLabel,
   resolveRoutingDecision,
   resolvePipelineInputOutput,
+  deriveStageVerdict,
+  derivePipelineDetections,
 } from "./pipelineTrace.js";
 
 // Robustness: the trace card (StageTimeline) renders `stage.action` per element, so a
@@ -75,6 +77,69 @@ test("honestStageAction renders 0ms allow as skip, not allow", () => {
   assert.equal(honestStageAction({ action: "allow", latency_ms: 1.2 }), "allow");
   assert.equal(honestStageAction({ action: "block", latency_ms: 0 }), "block");
   assert.equal(honestStageAction({ action: "skip", latency_ms: 0 }), "skip");
+});
+
+test("honestStageAction keeps model_routing allow even at 0ms", () => {
+  assert.equal(
+    honestStageAction({ name: "model_routing", action: "allow", latency_ms: 0 }),
+    "allow",
+  );
+  assert.equal(
+    honestStageAction({ name: "route", action: "allow", latency_ms: 0 }),
+    "allow",
+  );
+});
+
+test("honestStageAction flags unenforced injection BLOCK rec (scan 251434)", () => {
+  assert.equal(
+    honestStageAction({
+      name: "input_scan",
+      action: "allow",
+      latency_ms: 1649.2,
+      threat_type: "prompt_injection",
+      recommended_action: "block",
+    }),
+    "flag",
+  );
+});
+
+test("honestStageAction keeps PII allow when tier-2 recommended block", () => {
+  assert.equal(
+    honestStageAction({
+      name: "input_scan",
+      action: "allow",
+      latency_ms: 12,
+      threat_type: "pii",
+      recommended_action: "block",
+      scan_outcome: "analyzed",
+    }),
+    "allow",
+  );
+});
+
+test("deriveStageVerdict scores 251434-style allow+injection rec as flag", () => {
+  const v = deriveStageVerdict([
+    { name: "auth", action: "allow", latency_ms: 0.8 },
+    {
+      name: "input_scan",
+      action: "allow",
+      latency_ms: 1649.2,
+      threat_type: "prompt_injection",
+      recommended_action: "block",
+    },
+    { name: "model_output", action: "allow", latency_ms: 4388.5 },
+  ]);
+  assert.equal(v.action, "flag");
+  assert.equal(v.score, 60);
+});
+
+test("derivePipelineDetections reads injection from stage when telemetry is null", () => {
+  const d = derivePipelineDetections(
+    [{ name: "input_scan", action: "allow", threat_type: "prompt_injection", recommended_action: "block" }],
+    { prompt_injection_detected: false, jailbreak_detected: false, pii_detected: false },
+  );
+  assert.equal(d.promptInjection, true);
+  assert.equal(d.jailbreak, false);
 });
 
 test("buildHonestTraceStages badges a 0ms allow stage as skipped", () => {
@@ -270,6 +335,7 @@ test("resolveRoutingDecision merges trace root and model_routing stage (PIPELINE
         routing_reason: "Adjudicator pick",
         decision_source: "policy_adjudicator",
         weights: { latency: 0.4 },
+        org_routing_enabled: true,
       },
       stages: [
         {
@@ -291,6 +357,7 @@ test("resolveRoutingDecision merges trace root and model_routing stage (PIPELINE
   assert.deepEqual(routing.weights, { latency: 0.4 });
   assert.equal(routing.routing_score, 0.9);
   assert.equal(routing.candidate_count, 2);
+  assert.equal(routing.org_routing_enabled, true);
 });
 
 test("resolvePipelineInputOutput blocked shows withheld output (PIPELINE-0022)", () => {

@@ -1,0 +1,55 @@
+{
+  "task": "T01",
+  "gate": "L01-3-openrouter-ui",
+  "base": "http://127.0.0.1:8180",
+  "email": "v3a02.admin@example.invalid",
+  "ok": true,
+  "steps": [
+    "login-ok",
+    "attack-sim-visible",
+    "ui-inference-ok"
+  ],
+  "asserts": [
+    {
+      "label": "baked console has no Vite client",
+      "pass": true
+    },
+    {
+      "label": "simulator model shows gpt-4o-mini: Simulator model: gpt-4o-mini (Custom / Other)",
+      "pass": true
+    },
+    {
+      "label": "UI chat HTTP 200",
+      "pass": true
+    },
+    {
+      "label": "UI chat has choices",
+      "pass": true
+    },
+    {
+      "label": "UI chat is not scan-only max_tokens=512",
+      "pass": true
+    },
+    {
+      "label": "model_output allow",
+      "pass": true
+    }
+  ],
+  "pageErrors": [],
+  "console_errors": [],
+  "chat": {
+    "http": 200,
+    "x_request_id": "zs-fc30d1327ae2",
+    "has_choices": true,
+    "assistant_preview": "Pong.",
+    "model_output": "allow",
+    "final_action": "allow",
+    "max_tokens": 512
+  },
+  "hashed_js": "/assets/index-BwiHFc60.js",
+  "html_has_vite_client": false,
+  "error": null,
+  "login_status": 200,
+  "simulator_model_label": "Simulator model: gpt-4o-mini (Custom / Other)",
+  "finished_at": "2026-09-17T07:12:30.893Z"
+}

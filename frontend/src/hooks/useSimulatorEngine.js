@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { isDocumentHidden } from "../utils/requestLifecycle.js";
 import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { resolveGatewayHealthUrl } from "../utils/environmentUrls";
+import { fetchGatewayPath } from "../utils/gatewayChatFetch";
 
 const HEALTH_POLL_INTERVAL = 15000;
 const GATEWAY_KEY_STORAGE_LEGACY = "zeroshield_gateway_key";
@@ -59,15 +60,14 @@ export function useSimulatorEngine() {
 
   // Authenticated fetch to gateway
   const gatewayFetch = useCallback(async (path, opts = {}) => {
-    const url = `${gatewayUrl}${path}`;
-    const headers = {
-      "Content-Type": "application/json",
-      ...(gatewayKey ? { Authorization: `Bearer ${gatewayKey}` } : {}),
-      ...(opts.headers || {}),
-    };
-    let res;
     try {
-      res = await fetch(url, { ...opts, headers });
+      return await fetchGatewayPath({
+        gatewayUrl,
+        gatewayKey,
+        path,
+        opts,
+        stream: false,
+      });
     } catch (err) {
       const timedOut = err?.name === "TimeoutError" || /timeout/i.test(String(err?.message || ""));
       if (err?.name === "AbortError" || timedOut) {
@@ -89,20 +89,6 @@ export function useSimulatorEngine() {
       }
       throw err;
     }
-    const contentType = res.headers.get("content-type") || "";
-    if (contentType.includes("text/event-stream")) {
-      const sse = await import("../utils/liveGateway").then((m) => m.consumeSSEStream(res));
-      return {
-        ok: res.ok,
-        status: res.status,
-        headers: res.headers,
-        sse,
-        data: sse.data || sse.terminalError || null,
-        isStream: true,
-      };
-    }
-    const data = await res.json().catch(() => null);
-    return { ok: res.ok, status: res.status, headers: res.headers, data, isStream: false };
   }, [gatewayUrl, gatewayKey]);
 
   /**
@@ -110,24 +96,13 @@ export function useSimulatorEngine() {
    * Reason: output-guard blocks arrive mid-stream; JSON fetch cannot observe them.
    */
   const gatewayFetchStream = useCallback(async (path, opts = {}) => {
-    const url = `${gatewayUrl}${path}`;
-    const headers = {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-      ...(gatewayKey ? { Authorization: `Bearer ${gatewayKey}` } : {}),
-      ...(opts.headers || {}),
-    };
-    const res = await fetch(url, { ...opts, headers });
-    const { consumeSSEStream } = await import("../utils/liveGateway");
-    const sse = await consumeSSEStream(res);
-    return {
-      ok: res.ok,
-      status: res.status,
-      headers: res.headers,
-      sse,
-      data: sse.data || null,
-      isStream: true,
-    };
+    return fetchGatewayPath({
+      gatewayUrl,
+      gatewayKey,
+      path,
+      opts,
+      stream: true,
+    });
   }, [gatewayUrl, gatewayKey]);
 
   // Authenticated fetch to backend (through proxy)

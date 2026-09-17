@@ -1,0 +1,29 @@
+187. [POST] http://127.0.0.1:8180/api/auth/token/ => [200] OK
+188. [GET] http://127.0.0.1:8180/api/auth/me/ => [200] OK
+189. [GET] http://127.0.0.1:8180/api/health/ => [200] OK
+190. [GET] http://127.0.0.1:8180/api/health/ => [200] OK
+191. [GET] http://127.0.0.1:8180/api/health/ => [200] OK
+192. [GET] http://127.0.0.1:8180/api/health/ => [200] OK
+193. [GET] http://127.0.0.1:8180/api/security/owasp-stats/?hours=168 => [200] OK
+194. [GET] http://127.0.0.1:8180/api/policies/analytics/?days=14 => [200] OK
+195. [GET] http://127.0.0.1:8180/api/policies/top-violators/?days=14&limit=10 => [200] OK
+196. [GET] http://127.0.0.1:8180/api/policy/top-rules/?days=14&limit=10 => [200] OK
+197. [GET] http://127.0.0.1:8180/api/security/owasp-stats/?hours=168 => [200] OK
+198. [GET] http://127.0.0.1:8180/api/policies/analytics/?days=14 => [200] OK
+199. [GET] http://127.0.0.1:8180/api/policies/top-violators/?days=14&limit=10 => [200] OK
+200. [GET] http://127.0.0.1:8180/api/policy/top-rules/?days=14&limit=10 => [200] OK
+201. [GET] http://127.0.0.1:8180/api/security/soc-kpis/?period=24h => [200] OK
+202. [GET] http://127.0.0.1:8180/api/security/attack-vector-trends/?period=24h => [200] OK
+203. [GET] http://127.0.0.1:8180/api/notifications/?limit=30 => [200] OK
+205. [GET] http://127.0.0.1:8180/api/security/module-kpis/?period=24h => [200] OK
+206. [GET] http://127.0.0.1:8180/api/security/module-trends/?period=24h => [200] OK
+207. [GET] http://127.0.0.1:8180/api/security/soc-kpis/?period=24h => [200] OK
+208. [GET] http://127.0.0.1:8180/api/security/attack-vector-trends/?period=24h => [200] OK
+209. [GET] http://127.0.0.1:8180/api/security/module-kpis/?period=24h => [200] OK
+210. [GET] http://127.0.0.1:8180/api/security/module-trends/?period=24h => [200] OK
+211. [GET] http://127.0.0.1:8180/api/security/soc-kpis/?period=24h => [200] OK
+212. [GET] http://127.0.0.1:8180/api/security/attack-vector-trends/?period=24h => [200] OK
+213. [GET] http://127.0.0.1:8180/api/security/module-kpis/?period=24h => [200] OK
+214. [GET] http://127.0.0.1:8180/api/security/module-trends/?period=24h => [200] OK
+
+Note: 187 static requests not shown, run with "static" option to see them.

@@ -1,0 +1,59 @@
+{
+  "threat_feed_status": 200,
+  "match_id": "251456",
+  "match_action": "block",
+  "match_request_id": "zs-69a750d5950e",
+  "match_threat": "sensitive_information_disclosure",
+  "detail_status": 200,
+  "detail_action": "block",
+  "detail_request_id": "zs-69a750d5950e",
+  "pipeline_final": "block",
+  "stages": [
+    {
+      "name": "auth",
+      "action": "allow",
+      "threat_type": null
+    },
+    {
+      "name": "kill_switch",
+      "action": "allow",
+      "threat_type": null
+    },
+    {
+      "name": "rate_limit",
+      "action": "allow",
+      "threat_type": null
+    },
+    {
+      "name": "policy",
+      "action": "allow",
+      "threat_type": null
+    },
+    {
+      "name": "input_scan",
+      "action": "block",
+      "threat_type": "sensitive_information_disclosure"
+    },
+    {
+      "name": "model_routing",
+      "action": "skip",
+      "threat_type": null
+    },
+    {
+      "name": "model_input",
+      "action": "skip",
+      "threat_type": null
+    },
+    {
+      "name": "model_output",
+      "action": "skip",
+      "threat_type": null
+    },
+    {
+      "name": "output_guardrail",
+      "action": "skip",
+      "threat_type": null
+    }
+  ],
+  "final_action": "block"
+}

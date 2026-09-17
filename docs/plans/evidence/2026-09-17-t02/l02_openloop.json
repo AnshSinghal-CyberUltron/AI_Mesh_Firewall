@@ -1,0 +1,22 @@
+{
+  "mode": "open_loop",
+  "target_rps": 20.0,
+  "duration_s": 15.0,
+  "scheduled": 300,
+  "completed": 300,
+  "wall_s": 16.561,
+  "achieved_rps": 18.114,
+  "http_200": 300,
+  "status_hist": {
+    "200": 300
+  },
+  "latency_ms": {
+    "n": 300,
+    "p50": 1098.0088394135237,
+    "p95": 1496.959458105266,
+    "p99": 1841.3139414042234
+  },
+  "recorder_calls": 300,
+  "not_a_1064_claim": true,
+  "not_a_20ms_sla_claim": true
+}

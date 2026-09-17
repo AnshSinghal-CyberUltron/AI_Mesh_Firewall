@@ -1,0 +1,15 @@
+{
+  "task": "T02",
+  "gate": "wipe",
+  "ts": "2026-09-17T07:36:00Z",
+  "vm_only": true,
+  "gcp_vms_deleted": false,
+  "docker_after": {
+    "containers": 0,
+    "images": 0,
+    "named_volumes": 0,
+    "user_networks": 0
+  },
+  "preserved": [".env", "/tmp keys copied to ~/.t02-preserve"],
+  "git_pin": "2a657fad48e3f557f4c1f3c7bf23acec5007d304"
+}

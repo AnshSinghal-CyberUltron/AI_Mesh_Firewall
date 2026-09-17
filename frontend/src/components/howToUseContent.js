@@ -114,7 +114,7 @@ const HOW_TO_USE_RAW = {
   -H "Authorization: Bearer <your_gateway_api_key>" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "gpt-4o-mini",
+    "model": "gpt-5.2",
     "messages": [{"role": "user", "content": "What is the capital of France?"}],
     "stream": false
   }'`,
@@ -131,7 +131,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="gpt-4o-mini",
+    model="gpt-5.2",
     messages=[{"role": "user", "content": "What is the capital of France?"}],
 )
 
@@ -150,7 +150,7 @@ print(response.choices[0].message.content)`,
       Authorization: "Bearer <your_gateway_api_key>",
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: "gpt-5.2",
       messages: [{ role: "user", content: "What is the capital of France?" }],
     }),
   }
@@ -166,7 +166,7 @@ console.log(data.choices[0].message.content);`,
         code: `from langchain_openai import ChatOpenAI
 
 llm = ChatOpenAI(
-    model="gpt-4o-mini",
+    model="gpt-5.2",
     openai_api_base="https://aisecshieldgateway.zeroshield.ai/v1",
     openai_api_key="<your_gateway_api_key>",
 )
@@ -441,7 +441,7 @@ embeddings = OpenAIEmbeddings(
 llm = ChatOpenAI(
     openai_api_base="https://aisecshieldgateway.zeroshield.ai/v1",
     openai_api_key="<your_gateway_api_key>",
-    model="gpt-4o-mini",
+    model="gpt-5.2",
 )
 
 vector_store = Pinecone.from_existing_index(

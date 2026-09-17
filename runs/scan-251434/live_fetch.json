@@ -1,0 +1,302 @@
+{
+  "firewall_config": {
+    "enforcement_mode": "block",
+    "routing_enabled": true,
+    "default_model": "qwen3-coder-free",
+    "prompt_injection_threshold": 0.8,
+    "pii_detection_enabled": true,
+    "firewall_enabled": true
+  },
+  "detail_status": 200,
+  "n_events": 71,
+  "summaries": [
+    {
+      "id": "251434",
+      "action": "allow",
+      "request_id": "zs-e01ec4ab88db",
+      "threat_type": null,
+      "security_risk_score": 0,
+      "prompt_injection_detected": false,
+      "jailbreak_detected": false,
+      "pii_detected": false,
+      "event_type": "request",
+      "final_action": "allow",
+      "input_scan": {
+        "action": "allow",
+        "threat_type": "prompt_injection",
+        "recommended_action": "block",
+        "guard_action": "allow",
+        "confidence": 0.95,
+        "scan_outcome": "",
+        "reason_code": "model_recommendation"
+      },
+      "routing_stage": {
+        "action": "allow",
+        "decision_source": "routing_disabled",
+        "org_routing_enabled": null,
+        "requested_model": "gemini-flash-cheap",
+        "selected_model": "gemini-flash-cheap",
+        "latency_ms": 0.0
+      },
+      "routing_meta": {
+        "org_routing_enabled": null,
+        "routing_enabled": null,
+        "decision_source": "routing_disabled"
+      },
+      "has_pipeline_trace": true,
+      "stage_count": 9
+    },
+    {
+      "id": "251436",
+      "action": "redact",
+      "request_id": "zs-b7fbe25e0d03",
+      "threat_type": "pii",
+      "security_risk_score": 95,
+      "prompt_injection_detected": false,
+      "jailbreak_detected": false,
+      "pii_detected": true,
+      "event_type": "request",
+      "final_action": "redact",
+      "input_scan": {
+        "action": "allow",
+        "threat_type": "pii",
+        "recommended_action": "redact",
+        "guard_action": "allow",
+        "confidence": 0.95,
+        "scan_outcome": "analyzed",
+        "reason_code": "model_recommendation"
+      },
+      "routing_stage": {
+        "action": "reroute",
+        "decision_source": "deterministic_weighted",
+        "org_routing_enabled": null,
+        "requested_model": "Haiku",
+        "selected_model": "gemini-flash-cheap",
+        "latency_ms": 4.1
+      },
+      "routing_meta": {
+        "org_routing_enabled": null,
+        "routing_enabled": null,
+        "decision_source": "deterministic_weighted"
+      },
+      "has_pipeline_trace": true,
+      "stage_count": 9
+    },
+    {
+      "id": "251434",
+      "action": "allow",
+      "request_id": "zs-e01ec4ab88db",
+      "threat_type": null,
+      "security_risk_score": 0,
+      "prompt_injection_detected": false,
+      "jailbreak_detected": false,
+      "pii_detected": false,
+      "event_type": "request",
+      "final_action": "allow",
+      "input_scan": {
+        "action": "allow",
+        "threat_type": "prompt_injection",
+        "recommended_action": "block",
+        "guard_action": "allow",
+        "confidence": 0.95,
+        "scan_outcome": "",
+        "reason_code": "model_recommendation"
+      },
+      "routing_stage": {
+        "action": "allow",
+        "decision_source": "routing_disabled",
+        "org_routing_enabled": null,
+        "requested_model": "gemini-flash-cheap",
+        "selected_model": "gemini-flash-cheap",
+        "latency_ms": 0.0
+      },
+      "routing_meta": {
+        "org_routing_enabled": null,
+        "routing_enabled": null,
+        "decision_source": "routing_disabled"
+      },
+      "has_pipeline_trace": true,
+      "stage_count": 9
+    },
+    {
+      "id": "251433",
+      "action": "allow",
+      "request_id": "zs-7431689d8a1b",
+      "threat_type": null,
+      "security_risk_score": 0,
+      "prompt_injection_detected": false,
+      "jailbreak_detected": false,
+      "pii_detected": false,
+      "event_type": "request",
+      "final_action": "allow",
+      "input_scan": {
+        "action": "allow",
+        "threat_type": "prompt_injection",
+        "recommended_action": "block",
+        "guard_action": "allow",
+        "confidence": 0.99,
+        "scan_outcome": "",
+        "reason_code": "model_recommendation"
+      },
+      "routing_stage": {
+        "action": "allow",
+        "decision_source": "routing_disabled",
+        "org_routing_enabled": null,
+        "requested_model": "gemini-flash-cheap",
+        "selected_model": "gemini-flash-cheap",
+        "latency_ms": 0.0
+      },
+      "routing_meta": {
+        "org_routing_enabled": null,
+        "routing_enabled": null,
+        "decision_source": "routing_disabled"
+      },
+      "has_pipeline_trace": true,
+      "stage_count": 9
+    },
+    {
+      "id": "251432",
+      "action": "redact",
+      "request_id": "zs-0cffd5cc7770",
+      "threat_type": "pii",
+      "security_risk_score": 95,
+      "prompt_injection_detected": false,
+      "jailbreak_detected": false,
+      "pii_detected": true,
+      "event_type": "request",
+      "final_action": "redact",
+      "input_scan": {
+        "action": "allow",
+        "threat_type": "pii",
+        "recommended_action": "redact",
+        "guard_action": "allow",
+        "confidence": 0.95,
+        "scan_outcome": "analyzed",
+        "reason_code": "model_recommendation"
+      },
+      "routing_stage": {
+        "action": "allow",
+        "decision_source": "routing_disabled",
+        "org_routing_enabled": null,
+        "requested_model": "gemini-flash-cheap",
+        "selected_model": "gemini-flash-cheap",
+        "latency_ms": 0.0
+      },
+      "routing_meta": {
+        "org_routing_enabled": null,
+        "routing_enabled": null,
+        "decision_source": "routing_disabled"
+      },
+      "has_pipeline_trace": true,
+      "stage_count": 9
+    },
+    {
+      "id": "251431",
+      "action": "allow",
+      "request_id": "zs-f9e13663051b",
+      "threat_type": null,
+      "security_risk_score": 0,
+      "prompt_injection_detected": false,
+      "jailbreak_detected": false,
+      "pii_detected": false,
+      "event_type": "request",
+      "final_action": "allow",
+      "input_scan": {
+        "action": "allow",
+        "threat_type": "clean",
+        "recommended_action": "allow",
+        "guard_action": "allow",
+        "confidence": 0.0,
+        "scan_outcome": "clean",
+        "reason_code": "model_recommendation"
+      },
+      "routing_stage": {
+        "action": "reroute",
+        "decision_source": "deterministic_weighted",
+        "org_routing_enabled": null,
+        "requested_model": "qwen3-coder-free",
+        "selected_model": "gemini-flash-cheap",
+        "latency_ms": 4.0
+      },
+      "routing_meta": {
+        "org_routing_enabled": null,
+        "routing_enabled": null,
+        "decision_source": "deterministic_weighted"
+      },
+      "has_pipeline_trace": true,
+      "stage_count": 9
+    },
+    {
+      "id": "251429",
+      "action": "block",
+      "request_id": "zs-718cfc2058f3",
+      "threat_type": "policy_violation",
+      "security_risk_score": 85,
+      "prompt_injection_detected": false,
+      "jailbreak_detected": false,
+      "pii_detected": false,
+      "event_type": "input_blocked",
+      "final_action": "block",
+      "input_scan": {
+        "action": "skip",
+        "threat_type": "",
+        "recommended_action": "",
+        "guard_action": "",
+        "confidence": 0,
+        "scan_outcome": "",
+        "reason_code": ""
+      },
+      "routing_stage": {
+        "action": "skip",
+        "decision_source": "",
+        "org_routing_enabled": null,
+        "requested_model": "qwen3-coder-free",
+        "selected_model": "",
+        "latency_ms": 0.0
+      },
+      "routing_meta": {
+        "org_routing_enabled": null,
+        "routing_enabled": null,
+        "decision_source": ""
+      },
+      "has_pipeline_trace": true,
+      "stage_count": 9
+    },
+    {
+      "id": "251428",
+      "action": "block",
+      "request_id": "zs-2a09929c891e",
+      "threat_type": "policy_violation",
+      "security_risk_score": 85,
+      "prompt_injection_detected": false,
+      "jailbreak_detected": false,
+      "pii_detected": false,
+      "event_type": "input_blocked",
+      "final_action": "block",
+      "input_scan": {
+        "action": "skip",
+        "threat_type": "",
+        "recommended_action": "",
+        "guard_action": "",
+        "confidence": 0,
+        "scan_outcome": "",
+        "reason_code": ""
+      },
+      "routing_stage": {
+        "action": "skip",
+        "decision_source": "",
+        "org_routing_enabled": null,
+        "requested_model": "qwen3-coder-free",
+        "selected_model": "",
+        "latency_ms": 0.0
+      },
+      "routing_meta": {
+        "org_routing_enabled": null,
+        "routing_enabled": null,
+        "decision_source": ""
+      },
+      "has_pipeline_trace": true,
+      "stage_count": 9
+    }
+  ]
+}

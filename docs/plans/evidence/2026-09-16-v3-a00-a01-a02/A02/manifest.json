@@ -1,0 +1,108 @@
+{
+  "task": "A02",
+  "title": "Approve one policy, failure and latency contract",
+  "run_at_utc": "2026-09-16T07:12:00Z",
+  "signer": "Ansh",
+  "verdict": "CONTRACT_SIGNED_LIVE_PARTIAL_RELEASE_BLOCKED",
+  "verdict_reason": "Quality metrics remain null (H22). p99<20ms and >=1064 RPS are TARGETS not measurements. Org PII OFF is signed as a versioned migration; live UI save on synthetic org 95 persists DB/API false but Redis omits the key and proxy_chat hardcodes True. Honest synth-org chat after key FK fix is 422 no inference model (no provider key copied). Earlier 200 redact/flag chats were contaminated because simulator keys were stamped organization_id=2.",
+  "depends_on": ["A01"],
+  "source_identity": {
+    "git_head": "e95f974dc500414b8f4db28038977fa9bf7deb44",
+    "gateway_image": "sha256:79b1bbcdafa53cf60a7e3ee949bf45fb0634fc3a0aff16dd07db003557179a07",
+    "policy_cache_version": 50
+  },
+  "settings_surface": {
+    "no_FirewallConfigPanel": true,
+    "page": "frontend/src/components/AIMeshFirewallConfig.jsx",
+    "save_map": "frontend/src/store.js frontendToApi",
+    "useGatewayConfig": "URL discovery only; does not PUT FirewallConfig",
+    "output_keys": "OutputGuardrailControls.jsx MANAGED_KEYS"
+  },
+  "empty_unavailable_detector_down": {
+    "empty_valid_policy": "policy_engine evaluate default action=allow; injection/jailbreak policy-only; PII/secret/DoS floor still redacts; stream output may passthrough if no pipeline policies and tier2 off",
+    "unavailable_policy": "GATEWAY_POLICY_CACHE_REQUIRE_LOADED default true → HTTP 503 code=policy_unavailable; health 503 policy_cache_unavailable; stream output gate does not consult require_loaded",
+    "detector_down_t2_strict": "HTTP 503 code=tier2_unavailable",
+    "detector_down_t2_degraded": "degraded+PII → redact (or block if unmaskable); degraded+clean → monitor",
+    "only_skip_of_input_floor": "firewall_enabled=false master bypass, not PII OFF"
+  },
+  "g0_1_vs_a04": {
+    "g0_1_exists": true,
+    "items": 748,
+    "split": "323 malicious / 425 benign",
+    "a04": "NOT_RUN; needs policy-aware wire-action freeze, not a copy of G0.1"
+  },
+  "ui_to_byte": [
+    {"ui": "PII Detection piiDetectionEnabled (ContentFilteringCard via AIMeshFirewallConfig)", "api": "pii_detection_enabled", "redis": "OMITTED from build_gateway_payload", "resolver": "proxy_chat hardcodes _pii_detection_enabled=True then resolve_and_enforce", "bytes": "OFF is a no-op on the wire; platform PII/secret/DoS floor remains", "live": "org95 save false → DB/API false, Redis has_pii_detection_enabled=false"},
+    {"ui": "Enforcement Mode", "api": "enforcement_mode", "redis": "emitted", "resolver": "resolve_and_enforce / enforce_output", "bytes": "monitor: policy block→observe; maskable PII still redact; unmaskable still block", "live": "v3a02-block redis=block; v3a02-observe redis=monitor"},
+    {"ui": "Output PII enable/action", "api": "output_pii_enabled / output_pii_action", "redis": "emitted, in _BOOL_KEYS", "resolver": "OutputGuard.inspect", "bytes": "output PII path is live and independent of input toggle", "live": "both synth orgs output_pii_enabled true"},
+    {"ui": "Firewall Enabled", "api": "firewall_enabled", "redis": "emitted", "resolver": "_input_scan_will_run", "bytes": "false skips input scan", "live": "true on synth orgs"},
+    {"ui": "chunk_enforce", "api": "absent", "redis": "absent", "resolver": "SecureStreamingResponse withhold vs redact", "bytes": "no named mode; prefix can already have flushed", "live": "identifier grep 0"}
+  ],
+  "live_docker_wire": {
+    "redis_opposite_policy": {
+      "v3a02-block": {"enforcement_mode": "block", "has_pii_detection_enabled": false},
+      "v3a02-observe": {"enforcement_mode": "monitor", "has_pii_detection_enabled": false},
+      "zeroshield": {"enforcement_mode": "block", "output_pii_action": "flag", "has_pii_detection_enabled": false}
+    },
+    "contaminated_zeroshield_chats_DO_NOT_USE_AS_SYNTH_PROOF": {
+      "why": "GatewayAPIKey.save stamped owner zeroshield org_id=2; project_id was simulator-v3a02-* ; EnforcementEvent.organization_id=2",
+      "block_pii_auto": {"request_id": "zs-6f6f448bd337", "http": 200, "final_action": "redact", "org_events": 2},
+      "observe_pii_auto": {"request_id": "zs-b09d181afa8b", "http": 200, "final_action": "flag", "org_events": 2},
+      "ssn_in_response": false
+    },
+    "after_fk_fix_honest_synth": {
+      "block_pii_auto": {"request_id": "zs-8b3a4466e928", "http": 422, "blocked_by": "model_routing", "ms": 17.6, "pipeline_trace": false, "leaked_ssn": false},
+      "note": "422 no organization inference model — fail-closed, no secret copy from zeroshield models. Scan not proven (no trace; 17ms)."
+    },
+    "policy_check": {
+      "block-pii": {"request_id": "zs-99a4be4dc5f0", "http": 200, "ms": 27.0, "message": "Content redacted by policy", "leaked_ssn": false},
+      "note": "policy/check does not 403 on pii/secret by design (_should_block_tier1_verdict excludes those types)"
+    }
+  },
+  "real_frontend": {
+    "user": "v3a02.admin@example.invalid",
+    "org_id": 95,
+    "url": "http://127.0.0.1:8180/?tab=firewall-config",
+    "login": "real form not localStorage",
+    "save_reload": {
+      "put_http": 200,
+      "x_request_id": "5acbb02f-f3da-4317-bae3-ba97a4ad82fb",
+      "reload_switch": "PII Detection not checked",
+      "db_pii_detection_enabled": false,
+      "api_pii_detection_enabled": false,
+      "redis_still_omits_key": true
+    },
+    "shots": [
+      "A02/shots/02-config-loaded.png",
+      "A02/shots/04-after-reload.png"
+    ],
+    "unsupported_policy_visibly_rejected": "NOT EXERCISED (no malformed rule activation this run)"
+  },
+  "success_criteria": {
+    "versioned_signed_contract_no_null_quality": false,
+    "compatibility_and_migration_approved": "desired signed; live migration NOT implemented (A02 must not silent-flip)"
+  },
+  "fail_stop": [
+    "quality null H22",
+    "PII OFF does not remove floor on live gateway",
+    "SOURCE_MANIFEST missing so C06-C18 not probe-bound",
+    "synth org has no callable customer model without copying secrets"
+  ],
+  "reviewer_surviving_conclusions": [
+    "A02 full-PASS is correctly denied (quality unsigned) — Agent1",
+    "Misbound keys made isolation/redact look green on zeroshield — Agent2/4",
+    "Redis omit of pii_detection_enabled is the payload writer not a cache miss — Agent3",
+    "422 after FK fix is honest isolation but untraced — Agent2/4/5",
+    "chunk_enforce is not a product identifier — Agent5",
+    "chat get_config inherits default; empty policy is not isolation — Agent5"
+  ],
+  "artifacts": [
+    "A02/live_wire.json",
+    "A02/live_auto_rich.json",
+    "A02/live_after_org_fix.json",
+    "A02/frontend_save_reload.json",
+    "A02/network.json",
+    "A02/shots/",
+    "../V3_SCOPE_AND_ACCEPTANCE_CONTRACT.json"
+  ]
+}

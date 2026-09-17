@@ -1,0 +1,51 @@
+{
+  "ok": true,
+  "base": "http://127.0.0.1:8180",
+  "email": "v3a02.admin@example.invalid",
+  "org_slug": "v3a02-block",
+  "org_id": 95,
+  "steps": [
+    "login-form-real-credentials",
+    "goto-?tab=firewall-config",
+    "pii-switch-was-checked",
+    "toggled-pii-off-unsaved-banner",
+    "clicked-save-configuration",
+    "unsaved-hidden",
+    "reload-switch-not-checked",
+    "db-and-api-confirm-false"
+  ],
+  "asserts": [
+    {"label": "login left /login", "pass": true},
+    {"label": "PII Detection visible", "pass": true},
+    {"label": "PUT /api/firewall/config/ 200 present in network log", "pass": true},
+    {"label": "reload PII switch lacks checked", "pass": true},
+    {"label": "DB pii_detection_enabled false after save", "pass": true},
+    {"label": "API GET pii_detection_enabled false org 95", "pass": true},
+    {"label": "Redis still omits pii_detection_enabled", "pass": true}
+  ],
+  "pii_before": "checked",
+  "pii_after_toggle": "unchecked (unsaved)",
+  "pii_after_reload": "unchecked",
+  "put_network": {
+    "url": "http://127.0.0.1:8180/api/firewall/config/",
+    "method": "PUT",
+    "http_status": 200,
+    "x_request_id": "5acbb02f-f3da-4317-bae3-ba97a4ad82fb"
+  },
+  "post_save": {
+    "db_pii_detection_enabled": false,
+    "api_pii_detection_enabled": false,
+    "api_org_id": 95,
+    "redis_has_pii_detection_enabled": false,
+    "redis_enforcement_mode": "block"
+  },
+  "shots": [
+    "docs/plans/evidence/2026-09-16-v3-a00-a01-a02/A02/shots/02-config-loaded.png",
+    "docs/plans/evidence/2026-09-16-v3-a00-a01-a02/A02/shots/04-after-reload.png"
+  ],
+  "a11y": {
+    "before_save": "switch PII Detection [checked]",
+    "after_reload": "switch PII Detection without checked"
+  },
+  "note": "Save/reload proves UI→DB/API. It does not prove gateway byte effect: Redis payload omits the key."
+}

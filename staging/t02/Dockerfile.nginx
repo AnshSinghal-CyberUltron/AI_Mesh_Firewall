@@ -1,0 +1,11 @@
+# T02 baked UI. Context: repo root after `npm run build` in frontend/.
+# nginx.conf lives under staging/ (not docs/) so .dockerignore docs/ exclusion does not drop it.
+FROM nginx:1.30-alpine
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
+LABEL git.sha="${GIT_SHA}"
+LABEL t02.frontend="baked"
+RUN rm -f /etc/nginx/conf.d/default.conf
+COPY staging/t02/nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/dist/ /usr/share/nginx/html/
+EXPOSE 80

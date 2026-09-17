@@ -167,7 +167,7 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
               ? extra.rerouted
               : (originalModel !== "auto" && originalModel !== routedModel);
             const isExpanded = expandedId === ev.id;
-            const routingExplain = summarizeRoutingDecision({
+              const routingExplain = summarizeRoutingDecision({
               requested_model: originalModel,
               selected_model: routedModel,
               routed_model: routedModel,
@@ -180,6 +180,7 @@ export function RoutingAuditPanel({ events: eventsProp, loading: loadingProp, on
               candidate_count: extra.candidate_count ?? meta.candidate_count,
               fallback_chain: fallbacks,
               rerouted,
+              org_routing_enabled: extra.org_routing_enabled ?? meta.org_routing_enabled,
             });
 
             return (

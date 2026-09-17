@@ -5,6 +5,7 @@ import {
   composeAbortSignal,
   DEFAULT_FETCH_TIMEOUT_MS,
   HEAVY_ANALYTICS_CONCURRENCY,
+  isAnalyticsBusyPayload,
   isDocumentHidden,
   mapWithConcurrency,
 } from "./requestLifecycle.js";
@@ -67,6 +68,12 @@ describe("visiblePoll (Phase 0a F-a)", () => {
 describe("requestLifecycle (Phase 0b F-c)", () => {
   it("caps heavy analytics concurrency at 2", () => {
     assert.equal(HEAVY_ANALYTICS_CONCURRENCY, 2);
+  });
+
+  it("detects analytics_busy 503 payloads", () => {
+    assert.equal(isAnalyticsBusyPayload({ error: "analytics_busy", detail: "Too many concurrent analytics queries" }), true);
+    assert.equal(isAnalyticsBusyPayload({ detail: "Authentication credentials were not provided." }), false);
+    assert.equal(isAnalyticsBusyPayload(null), false);
   });
 
   it("mapWithConcurrency never runs more than the limit at once", async () => {

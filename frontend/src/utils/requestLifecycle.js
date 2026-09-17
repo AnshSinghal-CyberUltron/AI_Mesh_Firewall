@@ -4,6 +4,12 @@ export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 export const HEAVY_ANALYTICS_CONCURRENCY = 2;
 export const ANALYTICS_DEDUPE_TTL_MS = 2500;
 
+/** True when control rejected a heavy analytics GET with the per-worker semaphore. */
+export function isAnalyticsBusyPayload(data) {
+  if (!data || typeof data !== "object") return false;
+  return data.error === "analytics_busy";
+}
+
 export function isLiveGeneration(signal, gen, currentGen) {
   return !signal?.aborted && gen === currentGen;
 }

@@ -39,6 +39,26 @@ def test_smart_mask_noop_is_expected():
     )
 
 
+def test_smart_mask_noop_expected_for_tier2_evidence_strings():
+    """R2: Tier-2 matched_patterns are evidence prose, not pattern keys.
+
+    Live Mesh blocked already-masked PII because the honesty guard required
+    every key to end with ``_smart_masked``. Evidence like
+    ``SSN ***-**-6789, email`` failed that check → redaction_possible=False → 400.
+    """
+    assert patterns.smart_mask_redaction_noop_is_expected(
+        _USER_RECORD,
+        ["SSN ***-**-6789, email, phone, credit card"],
+    )
+
+
+def test_smart_mask_noop_still_false_on_raw_pattern_keys():
+    assert not patterns.smart_mask_redaction_noop_is_expected(
+        _USER_RECORD,
+        ["ssn", "email_smart_masked"],
+    )
+
+
 def test_resolve_and_enforce_redact_when_noop_expected():
     decision = resolve_and_enforce(
         scanner_recommendation="redact",

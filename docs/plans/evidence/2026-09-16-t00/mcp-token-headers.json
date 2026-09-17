@@ -1,0 +1,14 @@
+x-request-id: 83579cff-e347-4ebf-bf11-a1b9fc8d42f4
+cache-control: no-store, no-cache, must-revalidate
+cross-origin-opener-policy: same-origin
+connection: keep-alive
+x-content-type-options: nosniff
+allow: POST, OPTIONS
+referrer-policy: same-origin
+access-control-allow-origin: *
+content-length: 531
+date: Wed, 16 Sep 2026 14:21:32 GMT
+content-type: application/json
+vary: Accept, origin
+server: nginx/1.30.5
+x-frame-options: DENY

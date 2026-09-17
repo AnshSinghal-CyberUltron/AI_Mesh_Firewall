@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
-import { isDocumentHidden } from "../utils/requestLifecycle.js";
+import { isDocumentHidden, HEAVY_ANALYTICS_CONCURRENCY, mapWithConcurrency } from "../utils/requestLifecycle.js";
 import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { useRealtimeNotifications } from "./useRealtimeNotifications";
 import { selectOutputGovernanceEvents } from "../utils/outputGovernanceFeed";
@@ -96,8 +96,8 @@ export function useFirewallData(moduleId, timeRange = "24h", { enabled = true } 
       };
 
       const jobs = [
-        apply(fetchWithAuth(`/api/security/soc-kpis/?period=${period}`), (data) => setSocKpis(data)),
-        apply(fetchWithAuth(`/api/security/threat-feed/?${feedParams.toString()}`), (data) => {
+        () => apply(fetchWithAuth(`/api/security/soc-kpis/?period=${period}`), (data) => setSocKpis(data)),
+        () => apply(fetchWithAuth(`/api/security/threat-feed/?${feedParams.toString()}`), (data) => {
           const normalizeResults = (rows) => (
             moduleId === "1.7" ? selectOutputGovernanceEvents(rows) : rows
           );
@@ -119,16 +119,16 @@ export function useFirewallData(moduleId, timeRange = "24h", { enabled = true } 
             setThreatFeedActionCounts(null);
           }
         }),
-        apply(fetchWithAuth(`/api/security/attack-vector-trends/?period=${period}`), (data) => setAttackTrends(Array.isArray(data) ? data : [])),
-        apply(fetchWithAuth("/api/gateways/stats/"), (data) => setGatewayStats(data)),
+        () => apply(fetchWithAuth(`/api/security/attack-vector-trends/?period=${period}`), (data) => setAttackTrends(Array.isArray(data) ? data : [])),
+        () => apply(fetchWithAuth("/api/gateways/stats/"), (data) => setGatewayStats(data)),
       ];
       if (moduleId === "1.2" || moduleId === "1.3") {
-        jobs.push(apply(fetchWithAuth(`/api/security/rag-pipeline-kpis/?period=${period}`), (data) => setRagPipelineKpis(data)));
+        jobs.push(() => apply(fetchWithAuth(`/api/security/rag-pipeline-kpis/?period=${period}`), (data) => setRagPipelineKpis(data)));
       }
 
-      // Await all so `loading` clears and hasLoadedOnce flips only once every request
-      // has settled — but state has already streamed in as each resolved above.
-      await Promise.all(jobs);
+      // Cap concurrent mixin analytics (soc-kpis / attack-vector-trends) so a
+      // module page does not trip ANALYTICS_MAX_INFLIGHT=2 → HTTP 503.
+      await mapWithConcurrency(jobs, HEAVY_ANALYTICS_CONCURRENCY, (job) => job());
     } catch (err) {
       setSocKpis(null);
       setThreatFeed([]);

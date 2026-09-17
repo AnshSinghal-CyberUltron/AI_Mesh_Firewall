@@ -1,0 +1,29 @@
+{
+  "ok": true,
+  "pushed_at": "2026-09-17T07:30:00Z",
+  "registry": "asia-south1-docker.pkg.dev/aisecshield-prod/mesh-firewall-images",
+  "image": "ai-mesh-gateway:v20260917-sid-floor",
+  "digest": "sha256:45bde19fbbaaa7772f8b2b84aafe355307e395fbd8dd62d07df0c24ed54d2da9",
+  "fully_qualified_digest": "asia-south1-docker.pkg.dev/aisecshield-prod/mesh-firewall-images/ai-mesh-gateway@sha256:45bde19fbbaaa7772f8b2b84aafe355307e395fbd8dd62d07df0c24ed54d2da9",
+  "push_path": "instance-SA docker push failed (authentication failed / credHelper); owner-token auths-only config then restored",
+  "overlay": "/home/support/docker-compose.sid-floor.yml",
+  "pull_policy": "always",
+  "compose_pull": "Pulled",
+  "container": "ai_mesh_firewall-gateway-1",
+  "container_created": "2026-09-17T07:30:54.65210793Z",
+  "running_image": "sha256:45bde19fbbaaa7772f8b2b84aafe355307e395fbd8dd62d07df0c24ed54d2da9",
+  "health": "healthy",
+  "local_sid": {
+    "http_status": 400,
+    "request_id": "zs-90044a385a82",
+    "final_action": "block",
+    "threat": "sensitive_information_disclosure"
+  },
+  "public_sid": {
+    "http_status": 400,
+    "request_id": "zs-e7cfac5fb8b7",
+    "threat_feed_id": "251469",
+    "input_scan_threat": "sensitive_information_disclosure",
+    "model_output_action": "skip"
+  }
+}

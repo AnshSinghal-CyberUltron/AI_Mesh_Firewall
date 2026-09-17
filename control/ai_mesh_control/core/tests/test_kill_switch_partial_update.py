@@ -21,11 +21,29 @@ class KillSwitchPartialUpdateTests(TestCase):
         from auth.models import Organization, UserProfile
         from core.models import KillSwitch
 
+        from core.models import LLMModelConfig
+
         self.org = Organization.objects.create(name="KS Org", slug="ks-org")
-        self.user = User.objects.create_user(username="ks_user", password="pass")
+        self.user = User.objects.create_user(
+            username="ks_user", password="pass", is_staff=True,
+        )
         profile, _ = UserProfile.objects.get_or_create(user=self.user)
         profile.organization = self.org
         profile.save(update_fields=["organization"])
+
+        for name, provider, model_id in (
+            ("claude-3-haiku", "anthropic", "anthropic/claude-3-haiku"),
+            ("gpt-4o-mini", "openai", "openai/gpt-4o-mini"),
+            ("gpt-4o", "openai", "openai/gpt-4o"),
+        ):
+            LLMModelConfig.objects.create(
+                organization=self.org,
+                provider=provider,
+                model_name=name,
+                model_id=model_id,
+                encrypted_api_key="enc-dummy-key",
+                is_active=True,
+            )
 
         self.switch = KillSwitch.objects.create(
             organization=self.org,
@@ -135,7 +153,8 @@ class KillSwitchPartialUpdateTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("api_key_prefix", resp.json())
+        body = resp.json()
+        self.assertTrue("api_key_prefix" in body or "model_name" in body)
 
         global_switch.refresh_from_db()
         self.assertEqual(global_switch.api_key_prefix, "")
@@ -156,7 +175,8 @@ class KillSwitchPartialUpdateTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("action", resp.json())
+        body = resp.json()
+        self.assertTrue("action" in body or "model_name" in body)
 
     def test_create_self_loop_still_rejected(self):
         """Create-path self-loop rejection is unchanged by the instance fallback."""

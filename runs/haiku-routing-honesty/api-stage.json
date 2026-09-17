@@ -1,0 +1,11 @@
+{
+  "status": 200,
+  "original": "Haiku",
+  "selected": "gemini-flash-cheap",
+  "rerouted": true,
+  "stage_action": "reroute",
+  "stage_requested": "Haiku",
+  "stage_has_candidate_scores": true,
+  "stage_sensitivity_source": "org_default",
+  "stage_score0": "gemini-flash-cheap"
+}

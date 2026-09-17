@@ -1,0 +1,212 @@
+{
+  "task": "T02",
+  "started_at": "2026-09-17T07:46:10Z",
+  "pin": "2a657fad48e3f557f4c1f3c7bf23acec5007d304",
+  "gates": {
+    "no_source_bind_mounts": {
+      "pass": true,
+      "detail": {
+        "ai_mesh_firewall-gateway-1": [],
+        "ai_mesh_firewall-control-1": [],
+        "ai_mesh_firewall-frontend-1": [],
+        "ai_mesh_firewall-t02-recorder-1": []
+      }
+    },
+    "baked_frontend": {
+      "pass": true,
+      "hashed_js": "/assets/index-BwiHFc60.js",
+      "server": "nginx/1.30.5"
+    },
+    "L02-2-ALLOW": {
+      "pass": true
+    },
+    "L02-2-REDACT": {
+      "pass": true
+    },
+    "L02-2-BLOCK": {
+      "pass": true,
+      "byte_truth": "recorder_calls==0 is the L02-2 upstream-zero contract",
+      "trace_model_output": "allow"
+    },
+    "L02-4": {
+      "pass": true,
+      "public_ok": true,
+      "wrong_admin": 401,
+      "admin_loopback": true,
+      "openai_unpublished": true
+    },
+    "L02-3": {
+      "pass": true,
+      "waiver": "keep_waiver with L00-2 \u2014 second host not required on this VM"
+    }
+  },
+  "ok": true,
+  "login_http": 200,
+  "images_before": {
+    "ai_mesh_firewall-gateway-1": "sha256:2fd529f864f1527445fe4b0ffe1df512628f78d43c6f0249489853f0f68d31af",
+    "ai_mesh_firewall-control-1": "sha256:692077b47db75d905bfad93b711c9199798f81e001dd68b99c40b7ab054c311e",
+    "ai_mesh_firewall-frontend-1": "sha256:4a47de9a3cd1d18f805748208a165d1831353db918ba2d0205e271fda79ab8b1",
+    "ai_mesh_firewall-t02-recorder-1": "sha256:f7f85c914d4af29465737977a36a909f58e3ea6d45f56a3e4a293469b5c6b005"
+  },
+  "mounts": {
+    "ai_mesh_firewall-gateway-1": {
+      "container": "ai_mesh_firewall-gateway-1",
+      "mount_count": 2,
+      "repo_bind_mounts": []
+    },
+    "ai_mesh_firewall-control-1": {
+      "container": "ai_mesh_firewall-control-1",
+      "mount_count": 0,
+      "repo_bind_mounts": []
+    },
+    "ai_mesh_firewall-frontend-1": {
+      "container": "ai_mesh_firewall-frontend-1",
+      "mount_count": 0,
+      "repo_bind_mounts": []
+    },
+    "ai_mesh_firewall-t02-recorder-1": {
+      "container": "ai_mesh_firewall-t02-recorder-1",
+      "mount_count": 0,
+      "repo_bind_mounts": []
+    }
+  },
+  "listen": {
+    "8180": {
+      "tcp_open_on_127": true,
+      "error": null
+    },
+    "8300": {
+      "tcp_open_on_127": true,
+      "error": null
+    },
+    "8100": {
+      "tcp_open_on_127": true,
+      "error": null
+    },
+    "18081": {
+      "tcp_open_on_127": true,
+      "error": null
+    },
+    "8080": {
+      "tcp_open_on_127": false,
+      "error": "[Errno 111] Connection refused"
+    },
+    "ss": [
+      "LISTEN 0      65535      127.0.0.1:18081      0.0.0.0:*",
+      "LISTEN 0      65535        0.0.0.0:8300       0.0.0.0:*",
+      "LISTEN 0      65535        0.0.0.0:8100       0.0.0.0:*",
+      "LISTEN 0      65535        0.0.0.0:8180       0.0.0.0:*",
+      "LISTEN 0      65535           [::]:8300          [::]:*",
+      "LISTEN 0      65535           [::]:8100          [::]:*",
+      "LISTEN 0      65535           [::]:8180          [::]:*"
+    ]
+  },
+  "frontend": {
+    "http_status": 200,
+    "server": "nginx/1.30.5",
+    "hashed_js": "/assets/index-BwiHFc60.js",
+    "vite_client": false
+  },
+  "L02-2-ALLOW": {
+    "gateway_http": 200,
+    "request_id": "zs-e6e611e587a9",
+    "ms": 918.3,
+    "assistant": "pong-t02 seq=309",
+    "input_scan": "allow",
+    "model_output": "allow",
+    "recorder_calls": 1,
+    "recorder_saw_original": true,
+    "recorder_saw_ssn": false,
+    "leaked_ssn_in_gw": false
+  },
+  "L02-2-REDACT": {
+    "gateway_http": 200,
+    "request_id": "zs-1d720143ca49",
+    "ms": 1011.9,
+    "input_scan": "redact",
+    "model_output": "allow",
+    "final_action": "redact",
+    "recorder_calls": 1,
+    "recorder_prompt_has_raw_ssn": false,
+    "recorder_contains_ssn_flag": false,
+    "gw_body_has_raw_ssn": false,
+    "assistant": "pong-t02 seq=310"
+  },
+  "L02-2-BLOCK": {
+    "gateway_http": 400,
+    "request_id": "zs-e37efd2772ce",
+    "ms": 6.0,
+    "input_scan": "block",
+    "model_output": "allow",
+    "final_action": "block",
+    "recorder_calls": 0,
+    "assistant": "",
+    "payload": "blocked_keyword_T02BLOCKCANARY"
+  },
+  "L02-4": {
+    "public_probe": {
+      "http://127.0.0.1:8180/fault": {
+        "http_status": 200,
+        "error": null
+      },
+      "http://127.0.0.1:8180/v1/fault": {
+        "http_status": 401,
+        "error": null
+      },
+      "http://127.0.0.1:8180/__t02/fault": {
+        "http_status": 200,
+        "error": null
+      },
+      "http://127.0.0.1:8180/calls": {
+        "http_status": 200,
+        "error": null
+      },
+      "http://127.0.0.1:8300/fault": {
+        "http_status": 401,
+        "error": null
+      },
+      "http://127.0.0.1:8300/v1/fault": {
+        "http_status": 401,
+        "error": null
+      },
+      "http://127.0.0.1:18081/calls": {
+        "http_status": 401,
+        "error": null
+      }
+    },
+    "wrong_admin_http": 401,
+    "localhost_admin_health": 200,
+    "listen": {
+      "8180": {
+        "tcp_open_on_127": true,
+        "error": null
+      },
+      "8300": {
+        "tcp_open_on_127": true,
+        "error": null
+      },
+      "8100": {
+        "tcp_open_on_127": true,
+        "error": null
+      },
+      "18081": {
+        "tcp_open_on_127": true,
+        "error": null
+      },
+      "8080": {
+        "tcp_open_on_127": false,
+        "error": "[Errno 111] Connection refused"
+      },
+      "ss": [
+        "LISTEN 0      65535      127.0.0.1:18081      0.0.0.0:*",
+        "LISTEN 0      65535        0.0.0.0:8300       0.0.0.0:*",
+        "LISTEN 0      65535        0.0.0.0:8100       0.0.0.0:*",
+        "LISTEN 0      65535        0.0.0.0:8180       0.0.0.0:*",
+        "LISTEN 0      65535           [::]:8300          [::]:*",
+        "LISTEN 0      65535           [::]:8100          [::]:*",
+        "LISTEN 0      65535           [::]:8180          [::]:*"
+      ]
+    }
+  },
+  "finished_at": "2026-09-17T07:46:13Z"
+}

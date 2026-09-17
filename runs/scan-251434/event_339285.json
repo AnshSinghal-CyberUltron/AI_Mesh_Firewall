@@ -1,0 +1,77 @@
+{
+  "detail_status": 200,
+  "id": "339285",
+  "action": "block",
+  "threat_type": null,
+  "request_id": "zs-1b34a6759ecd",
+  "prompt_injection_detected": true,
+  "security_risk_score": 95,
+  "final_action": "block",
+  "output_withheld": true,
+  "stages": {
+    "auth": {
+      "action": "allow",
+      "threat_type": null,
+      "recommended_action": null,
+      "confidence": 0,
+      "latency_ms": 0.8
+    },
+    "kill_switch": {
+      "action": "allow",
+      "threat_type": null,
+      "recommended_action": null,
+      "confidence": 0,
+      "latency_ms": 0.9
+    },
+    "rate_limit": {
+      "action": "allow",
+      "threat_type": null,
+      "recommended_action": null,
+      "confidence": 0,
+      "latency_ms": 2.2
+    },
+    "policy": {
+      "action": "allow",
+      "threat_type": null,
+      "recommended_action": null,
+      "confidence": 0.0,
+      "latency_ms": 13.8
+    },
+    "input_scan": {
+      "action": "block",
+      "threat_type": "prompt_injection",
+      "recommended_action": "block",
+      "confidence": 0.95,
+      "latency_ms": 2004.2
+    },
+    "model_routing": {
+      "action": "skip",
+      "threat_type": null,
+      "recommended_action": null,
+      "confidence": 0,
+      "latency_ms": 0.0
+    },
+    "model_input": {
+      "action": "skip",
+      "threat_type": null,
+      "recommended_action": null,
+      "confidence": 0,
+      "latency_ms": 0.0
+    },
+    "model_output": {
+      "action": "skip",
+      "threat_type": null,
+      "recommended_action": null,
+      "confidence": 0,
+      "latency_ms": 0.0
+    },
+    "output_guardrail": {
+      "action": "skip",
+      "threat_type": null,
+      "recommended_action": "",
+      "confidence": 0,
+      "latency_ms": 0.0
+    }
+  },
+  "model_output_action": "skip"
+}

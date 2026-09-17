@@ -1,0 +1,31 @@
+{
+  "task": "T02",
+  "base": "http://127.0.0.1:8180",
+  "email": "admin@zeroshield.io",
+  "started_at": "2026-09-17T07:45:01.978Z",
+  "html_has_vite_client": false,
+  "hashed_js": "/assets/index-BwiHFc60.js",
+  "ok": true,
+  "steps": [
+    "login-ok",
+    "config-page-visible"
+  ],
+  "asserts": [
+    {
+      "label": "baked console has no Vite client",
+      "pass": true
+    },
+    {
+      "label": "hashed JS asset present",
+      "pass": true
+    }
+  ],
+  "pageErrors": [],
+  "console_errors": [],
+  "error": null,
+  "server": "nginx/1.30.5",
+  "login_status": 200,
+  "simulator_prompt_visible": false,
+  "chat_network": [],
+  "finished_at": "2026-09-17T07:45:06.471Z"
+}

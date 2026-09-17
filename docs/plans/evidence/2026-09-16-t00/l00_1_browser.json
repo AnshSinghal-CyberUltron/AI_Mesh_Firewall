@@ -1,0 +1,231 @@
+{
+  "base": "http://127.0.0.1:8180",
+  "started_at": "2026-09-16T14:19:06.035Z",
+  "requests": [
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/assets/index-BSQJP-da.css",
+      "status": 200,
+      "x-request-id": null,
+      "content_type": "text/css"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/assets/index-DZ9cjnHm.js",
+      "status": 200,
+      "x-request-id": null,
+      "content_type": "application/javascript"
+    },
+    {
+      "method": "POST",
+      "url": "http://127.0.0.1:8180/api/auth/token/",
+      "status": 200,
+      "x-request-id": "73a5923e-ea84-474d-b7f8-7fad064d7a8c",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/auth/me/",
+      "status": 200,
+      "x-request-id": "d34dbd23-fa11-4b0d-9039-43aa60e19479",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/health/",
+      "status": 200,
+      "x-request-id": "11fbc602-54a2-4849-b2b5-461ff5bfe4aa",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/health/",
+      "status": 200,
+      "x-request-id": "6b7f19d3-dd8f-4434-9a9b-ce4e6db90206",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/security/owasp-stats/?hours=168",
+      "status": 200,
+      "x-request-id": "f4d65db6-55a2-4fa7-869c-883503294d88",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/security/attack-vector-trends/?period=24h",
+      "status": 200,
+      "x-request-id": "20678f22-0f2f-48a0-8148-cfe192c9ae07",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/policy/top-rules/?days=14&limit=10",
+      "status": 200,
+      "x-request-id": "5f0a0a34-7b79-4945-8cbb-0a1e46862402",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/notifications/?limit=30",
+      "status": 200,
+      "x-request-id": "134e52ab-de66-46f4-a79f-2945f8b7dd99",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/policies/top-violators/?days=14&limit=10",
+      "status": 200,
+      "x-request-id": "8a219ba2-bbc4-4d26-811b-9049727a39da",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/security/soc-kpis/?period=24h",
+      "status": 200,
+      "x-request-id": "a3665426-0482-43b8-ae2e-0d35dc79ca6d",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/policies/analytics/?days=14",
+      "status": 200,
+      "x-request-id": "c2b3ff67-212d-4b40-ac4d-5f01dcde594d",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/security/module-kpis/?period=24h",
+      "status": 200,
+      "x-request-id": "82af7119-8b94-474f-a663-db918d97f26a",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/security/module-trends/?period=24h",
+      "status": 200,
+      "x-request-id": "2ac13c68-6919-4333-8a15-95ab156fae02",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/assets/index-DZ9cjnHm.js",
+      "status": 200,
+      "x-request-id": null,
+      "content_type": "application/javascript"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/assets/index-BSQJP-da.css",
+      "status": 200,
+      "x-request-id": null,
+      "content_type": "text/css"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/auth/me/",
+      "status": 200,
+      "x-request-id": "89f990bc-5143-43db-89dd-6e7af56c635a",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/health/",
+      "status": 200,
+      "x-request-id": "8730b8ad-192e-42f3-b848-7b2ba653d659",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/health/",
+      "status": 200,
+      "x-request-id": "dec9aa18-3747-40d5-81b8-cc9c098c0911",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/security/owasp-stats/?hours=168",
+      "status": 200,
+      "x-request-id": "e461b7ee-a9c3-4508-813c-6c2a01e7b4fd",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/notifications/?limit=30",
+      "status": 200,
+      "x-request-id": "53214f72-c41f-4be7-993d-f6ef4efe8636",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/policy/top-rules/?days=14&limit=10",
+      "status": 200,
+      "x-request-id": "1417b528-da2d-4278-9a35-a884c8812058",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/policies/top-violators/?days=14&limit=10",
+      "status": 200,
+      "x-request-id": "eced54bc-dba3-4809-977c-a0af4705d3d3",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/security/attack-vector-trends/?period=24h",
+      "status": 200,
+      "x-request-id": "366d58f2-abf9-482c-a048-2b81ba306b64",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/security/soc-kpis/?period=24h",
+      "status": 200,
+      "x-request-id": "190c7657-b25b-4b98-a05a-75578540002c",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/policies/analytics/?days=14",
+      "status": 200,
+      "x-request-id": "15e3e24e-4a89-4698-bad8-a12cd3797906",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/security/module-kpis/?period=24h",
+      "status": 200,
+      "x-request-id": "ac39c988-0a8a-4f75-8014-992a8bcaae63",
+      "content_type": "application/json"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/security/module-trends/?period=24h",
+      "status": 200,
+      "x-request-id": "3621a205-93b6-478f-b4ce-c71f243a1be1",
+      "content_type": "application/json"
+    }
+  ],
+  "html_has_vite_client": false,
+  "hashed_js": "/assets/index-DZ9cjnHm.js",
+  "hashed_css": "/assets/index-BSQJP-da.css",
+  "login": {
+    "method": "POST",
+    "url": "http://127.0.0.1:8180/api/auth/token/",
+    "status": 200,
+    "x-request-id": "73a5923e-ea84-474d-b7f8-7fad064d7a8c",
+    "content_type": "application/json"
+  },
+  "me": {
+    "method": "GET",
+    "url": "http://127.0.0.1:8180/api/auth/me/",
+    "status": 200,
+    "x-request-id": "d34dbd23-fa11-4b0d-9039-43aa60e19479",
+    "content_type": "application/json"
+  },
+  "post_login_path": "/",
+  "title": "AI Mesh Firewall",
+  "console_errors": [],
+  "pass": true,
+  "finished_at": "2026-09-16T14:19:13.767Z"
+}

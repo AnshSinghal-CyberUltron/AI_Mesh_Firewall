@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { isDocumentHidden } from "../utils/requestLifecycle.js";
 import { startVisibleInterval } from "../utils/visiblePoll.js";
 import { resolveGatewayHealthUrl } from "../utils/environmentUrls";
+import { fetchGatewayPath } from "../utils/gatewayChatFetch";
 
 const HEALTH_POLL_INTERVAL = 15000;
 const PLAYGROUND_API = "/api/gateways/isolation-playground/";
@@ -69,48 +70,23 @@ export function useIsolationPlayground() {
   }, [fetchWithAuth]);
 
   const gatewayFetch = useCallback(async (path, opts = {}) => {
-    const url = `${gatewayUrl}${path}`;
-    const headers = {
-      "Content-Type": "application/json",
-      ...(gatewayKey ? { Authorization: `Bearer ${gatewayKey}` } : {}),
-      ...(opts.headers || {}),
-    };
-    const res = await fetch(url, { ...opts, headers });
-    const contentType = res.headers.get("content-type") || "";
-    if (contentType.includes("text/event-stream")) {
-      const sse = await import("../utils/liveGateway").then((m) => m.consumeSSEStream(res));
-      return {
-        ok: res.ok,
-        status: res.status,
-        headers: res.headers,
-        sse,
-        data: sse.data || sse.terminalError || null,
-        isStream: true,
-      };
-    }
-    const data = await res.json().catch(() => null);
-    return { ok: res.ok, status: res.status, headers: res.headers, data, isStream: false };
+    return fetchGatewayPath({
+      gatewayUrl,
+      gatewayKey,
+      path,
+      opts,
+      stream: false,
+    });
   }, [gatewayUrl, gatewayKey]);
 
   const gatewayFetchStream = useCallback(async (path, opts = {}) => {
-    const url = `${gatewayUrl}${path}`;
-    const headers = {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-      ...(gatewayKey ? { Authorization: `Bearer ${gatewayKey}` } : {}),
-      ...(opts.headers || {}),
-    };
-    const res = await fetch(url, { ...opts, headers });
-    const { consumeSSEStream } = await import("../utils/liveGateway");
-    const sse = await consumeSSEStream(res);
-    return {
-      ok: res.ok,
-      status: res.status,
-      headers: res.headers,
-      sse,
-      data: sse.data || null,
-      isStream: true,
-    };
+    return fetchGatewayPath({
+      gatewayUrl,
+      gatewayKey,
+      path,
+      opts,
+      stream: true,
+    });
   }, [gatewayUrl, gatewayKey]);
 
   const checkHealth = useCallback(async () => {

@@ -17,6 +17,8 @@ import {
   resolvePipelineInputOutput,
   resolveTotalLatencyMs,
   resolveTtftMs,
+  deriveStageVerdict,
+  derivePipelineDetections,
 } from "../utils/pipelineTrace";
 import { formatDecisionSource } from "../constants/zeroshieldBrand";
 import { summarizeRoutingDecision } from "../utils/routingExplain";
@@ -138,9 +140,8 @@ function normalizeLogDetail(logData) {
 // stage trace, not the stream_complete summary). Lift the displayed verdict to the
 // most-severe pipeline stage so the Scan Detail is honest regardless of which
 // telemetry path (stream vs non-stream) produced the event.
-const _STAGE_SEVERITY = { block: 3, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
-const _STAGE_SCORE = { block: 90, error: 90, redact: 75, rewrite: 75, flag: 60, reroute: 40 };
 const ACTION_TONE = { allow: "emerald", monitor: "emerald", pass: "emerald", redact: "blue", rewrite: "blue", flag: "amber", reroute: "amber", block: "red", error: "red" };
+const _STAGE_SEVERITY = { block: 3, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
 
 // Honest timestamp: a log missing its timestamp must show "—", never the
 // current wall-clock time (which reads as if the event just happened now).
@@ -148,17 +149,6 @@ function fmtTimestamp(ts) {
   if (!ts) return "—";
   const d = new Date(ts);
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
-}
-
-function deriveStageVerdict(stages) {
-  let action = null, score = 0, severity = -1;
-  for (const s of Array.isArray(stages) ? stages : []) {
-    const a = String(s?.action || "").toLowerCase();
-    const sev = _STAGE_SEVERITY[a] ?? 0;
-    if (a && sev > severity) { severity = sev; action = a; }
-    if (_STAGE_SCORE[a]) score = Math.max(score, _STAGE_SCORE[a]);
-  }
-  return { action, score, severity };
 }
 
 export function LogDetailPage({ logData, onBack }) {
@@ -260,6 +250,7 @@ export function LogDetailPage({ logData, onBack }) {
   // Promote the displayed verdict / score / threat to the most-severe pipeline stage
   // when the event's own top-level fields under-report it (see deriveStageVerdict).
   const stageVerdict = deriveStageVerdict(pipelineStages);
+  const detections = derivePipelineDetections(pipelineStages, meta);
   const baseScore = parseNumeric(logData?.severity || meta?.security_risk_score) || 0;
   const securityScore = Math.max(baseScore, stageVerdict.score);
   const threatLevel = securityScore > 0
@@ -660,9 +651,9 @@ export function LogDetailPage({ logData, onBack }) {
               <DataRow label="Threat Level" value={threatLevel} />
               <DataRow label="Input Validation" value={meta?.input_validation || "--"} />
               <DataRow label="Content Safety" value={meta?.content_safety || "--"} />
-              <DataRow label="PII Detection" value={String(meta?.pii_detected ?? "--")} />
-              <DataRow label="Prompt Injection" value={String(meta?.prompt_injection_detected ?? "--")} />
-              <DataRow label="Jailbreak Attempt" value={String(meta?.jailbreak_detected ?? "--")} />
+              <DataRow label="PII Detection" value={String(detections.pii || meta?.pii_detected || false)} />
+              <DataRow label="Prompt Injection" value={String(detections.promptInjection)} />
+              <DataRow label="Jailbreak Attempt" value={String(detections.jailbreak)} />
               <DataRow label="Rate Limit Status" value={meta?.rate_limit_status || "--"} />
               <DataRow label="Auth Status" value={meta?.auth_status || "--"} />
               <DataRow label="Policy Violations" value={

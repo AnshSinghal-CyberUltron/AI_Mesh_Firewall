@@ -1,0 +1,10 @@
+# T00 baked UI only. Context: clean git worktree at pinned SHA after `npm run build`.
+FROM nginx:1.30-alpine
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
+LABEL git.sha="${GIT_SHA}"
+LABEL t00.frontend="baked"
+RUN rm -f /etc/nginx/conf.d/default.conf
+COPY docs/plans/evidence/2026-09-16-t00/nginx-t00-local.conf /etc/nginx/conf.d/default.conf
+COPY frontend/dist/ /usr/share/nginx/html/
+EXPOSE 80

@@ -1,0 +1,666 @@
+{
+  "ok": true,
+  "base": "https://aimeshfirewall.zeroshield.ai",
+  "started_at": "2026-09-15T06:46:49.499Z",
+  "asserts": [
+    {
+      "label": "seed auth (ok)",
+      "pass": true
+    },
+    {
+      "label": "no console/gateway 404 on /v1/chat/completions (got 200)",
+      "pass": true
+    },
+    {
+      "label": "pipeline completed HTTP 200 (statuses 200)",
+      "pass": true
+    },
+    {
+      "label": "requested/original model is Haiku (got Haiku)",
+      "pass": true
+    },
+    {
+      "label": "selected a callable model, not Haiku (got gemini-flash-cheap)",
+      "pass": true
+    },
+    {
+      "label": "model_routing action is reroute (got reroute)",
+      "pass": true
+    },
+    {
+      "label": "WHY THIS MODEL summary is visible",
+      "pass": true
+    },
+    {
+      "label": "WHY copy is a Haiku reroute (got You asked for Haiku; routing policy selected gemini-flash-cheap instead from 12 eligible models because it ranked best on cost and response time.)",
+      "pass": true
+    },
+    {
+      "label": "WHY THIS MODEL mentions cost (got You asked for Haiku; routing policy selected gemini-flash-cheap instead from 12 eligible models because it ranked best on cost and response time.)",
+      "pass": true
+    },
+    {
+      "label": "WHY THIS MODEL does not lead with public sensitivity",
+      "pass": true
+    },
+    {
+      "label": "timeline chip is reroute (got Pipeline stage model routing: reroute, 2.9ms latency. Activate to pin details.)",
+      "pass": true
+    }
+  ],
+  "pageErrors": [],
+  "chats": [
+    {
+      "url": "https://aimeshfirewall.zeroshield.ai/v1/chat/completions",
+      "status": 200,
+      "requestModel": "Haiku",
+      "preferred": "Haiku",
+      "enable_routing": true,
+      "response": {
+        "id": "chatcmpl-1789454813-WiQfLQQ4peycTWElzOy5",
+        "created": 1789454813,
+        "model": "Haiku",
+        "object": "chat.completion",
+        "system_fingerprint": null,
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "content": "I've processed the user record. To ensure privacy and security, I have masked most of the sensitive information.",
+              "role": "assistant",
+              "tool_calls": null,
+              "function_call": null
+            }
+          }
+        ],
+        "usage": {
+          "completion_tokens": "[REDACTED]",
+          "prompt_tokens": "[REDACTED]",
+          "total_tokens": "[REDACTED]",
+          "completion_tokens_details": "[REDACTED]",
+          "prompt_tokens_details": "[REDACTED]"
+        },
+        "service_tier": "default",
+        "zeroshield": {
+          "request_id": "zs-[REDACTED]",
+          "action": "redact",
+          "reason": "PII detected in prompt (). Redacted before forwarding to LLM.",
+          "detail": "ZeroShield Tier-2 suggested redaction: SSN ***-**-6789, email j***@a***.com, credit card",
+          "detection_tier": "tier_2",
+          "threat_type": "pii",
+          "confidence": 0.95,
+          "matched_patterns": [],
+          "processing_time_ms": 3426.59,
+          "routing": {
+            "original_model": "Haiku",
+            "selected_model": "gemini-flash-cheap",
+            "routed_model": "gemini-flash-cheap",
+            "route_destination": "llm",
+            "routing_enabled": true,
+            "routing_override": true,
+            "org_routing_enabled": true,
+            "routing_score": 0.840801,
+            "rerouted": true,
+            "reroute_reason": "Deterministic weighted selection (risk=15%, cost=50%, latency=20%, priority=15%); gemini-flash-cheap ranked best among 12 eligible models.",
+            "routing_reason": "Deterministic weighted selection (risk=15%, cost=50%, latency=20%, priority=15%); gemini-flash-cheap ranked best among 12 eligible models.",
+            "fallback_chain": [
+              "gpt-4o-mini-cheap",
+              "claude-haiku-cheap",
+              "hermes-3-405b-free"
+            ],
+            "decision_source": "deterministic_weighted",
+            "evaluator_model": "",
+            "policy_summary": "Deterministic weighted selection (dominant dimension: cost)",
+            "decision_factors": [
+              "risk_weight=0.15",
+              "cost_weight=0.50",
+              "latency_weight=0.20",
+              "priority_weight=0.15",
+              "request_risk=0.00",
+              "data_sensitivity=public"
+            ],
+            "candidate_count": 12,
+            "data_sensitivity": "public",
+            "data_sensitivity_source": "org_default",
+            "compliance_requirements": [],
+            "request_risk_score": 0,
+            "estimated_tokens": "[REDACTED]",
+            "token_budget_tpm": "[REDACTED]",
+            "latency_budget_ms": 30000,
+            "weights": {
+              "risk": 0.15,
+              "cost": 0.5,
+              "latency": 0.2,
+              "priority": 0.15
+            },
+            "sensitivity_fallback": false,
+            "score_tie": false,
+            "candidate_scores": [
+              {
+                "model_name": "gemini-flash-cheap",
+                "score": 0.840801,
+                "risk_component": 0.6667,
+                "cost_component": 0.971,
+                "latency_component": 0.8547,
+                "priority_component": 0.5625
+              },
+              {
+                "model_name": "gpt-4o-mini-cheap",
+                "score": 0.822427,
+                "risk_component": 0.625,
+                "cost_component": 0.986,
+                "latency_component": 0.8034,
+                "priority_component": 0.5
+              },
+              {
+                "model_name": "claude-haiku-cheap",
+                "score": 0.809125,
+                "risk_component": 0.8333,
+                "cost_component": 0.9209,
+                "latency_component": 0.6496,
+                "priority_component": 0.625
+              },
+              {
+                "model_name": "hermes-3-405b-free",
+                "score": 0.786289,
+                "risk_component": 0.5833,
+                "cost_component": 0.986,
+                "latency_component": 0.7009,
+                "priority_component": 0.4375
+              },
+              {
+                "model_name": "llama-3.3-70b-free",
+                "score": 0.781092,
+                "risk_component": 0.5,
+                "cost_component": 0.992,
+                "latency_component": 0.7692,
+                "priority_component": 0.375
+              }
+            ],
+            "remapped_from": "",
+            "runtime_model": "gemini-flash-cheap",
+            "scoring_selected_model": "gemini-flash-cheap"
+          },
+          "decision_factors": [
+            "risk_weight=0.15",
+            "cost_weight=0.50",
+            "latency_weight=0.20",
+            "priority_weight=0.15",
+            "request_risk=0.00",
+            "data_sensitivity=public"
+          ],
+          "weights": {
+            "risk": 0.15,
+            "cost": 0.5,
+            "latency": 0.2,
+            "priority": 0.15
+          },
+          "selected_model": "gemini-flash-cheap",
+          "original_model": "Haiku",
+          "rerouted": true,
+          "routing_reason": "Deterministic weighted selection (risk=15%, cost=50%, latency=20%, priority=15%); gemini-flash-cheap ranked best among 12 eligible models.",
+          "decision_source": "deterministic_weighted",
+          "policy_summary": "Deterministic weighted selection (dominant dimension: cost)"
+        },
+        "pipeline_trace": {
+          "stages": [
+            {
+              "name": "auth",
+              "action": "allow",
+              "latency_ms": 0.4,
+              "detail": "Gateway API key accepted",
+              "decision_source": "gateway_auth",
+              "decision_source_label": "Gateway authentication",
+              "guard_reason": "Gateway API key accepted",
+              "tier": "",
+              "confidence": 0,
+              "matched_policies": [],
+              "matched_rules": [],
+              "prompt_in": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "prompt_out": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111."
+            },
+            {
+              "name": "kill_switch",
+              "action": "allow",
+              "latency_ms": 0.3,
+              "detail": "No active kill-switch for this model",
+              "decision_source": "",
+              "decision_source_label": "",
+              "guard_reason": "No active kill-switch for this model",
+              "tier": "",
+              "confidence": 0,
+              "matched_policies": [],
+              "matched_rules": [],
+              "prompt_in": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "prompt_out": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111."
+            },
+            {
+              "name": "rate_limit",
+              "action": "allow",
+              "latency_ms": 1,
+              "detail": "Within org TPM / RPM limits",
+              "decision_source": "org_rate_limit",
+              "decision_source_label": "Org rate limit",
+              "guard_reason": "Within org TPM / RPM limits",
+              "tier": "",
+              "confidence": 0,
+              "matched_policies": [],
+              "matched_rules": [],
+              "prompt_in": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "prompt_out": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111."
+            },
+            {
+              "name": "policy",
+              "action": "allow",
+              "latency_ms": 0.6,
+              "detail": "Policy engine evaluated request against compiled rules; no matching policy rule (regex/keyword rules target raw PII; pre-masked shapes are handled at input_scan)",
+              "matched_policies": [],
+              "matched_rules": [],
+              "prompt_in": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "prompt_out": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "prompt_in_operator_masked": false,
+              "redaction_display_note": "",
+              "decision_source": "policy_engine",
+              "decision_source_label": "Policy engine",
+              "guard_reason": "Policy engine — enforcement: ALLOW",
+              "tier": "policy",
+              "confidence": 0
+            },
+            {
+              "name": "input_scan",
+              "action": "flag",
+              "latency_ms": 1346.6,
+              "detail": "ZeroShield Tier-2 suggested redaction: SSN ***-**-6789, email j***@a***.com, credit card",
+              "threat_type": "pii",
+              "confidence": 0.95,
+              "risk_score": null,
+              "scan_outcome": "",
+              "redact_noop": false,
+              "tier": "tier_2",
+              "matched_patterns": [
+                "SSN ***-**-6789, email j***@a***.com, credit card"
+              ],
+              "prompt_submitted": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "prompt_in": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "prompt_out": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "guard_model": "ZeroShield Model",
+              "guard_action": "redact",
+              "guard_reason": "ZeroShield Model — enforcement: REDACT\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: pii\nConfidence: 95%\nZeroShield Tier-2 suggested redaction: SSN ***-**-6789, email j***@a***.com, credit card\nEvidence: SSN ***-**-6789, email j***@a***.com, credit card",
+              "reason_code": "model_recommendation",
+              "recommended_action": "redact",
+              "guard_findings": [
+                "SSN ***-**-6789, email j***@a***.com, credit card"
+              ],
+              "enforcement_source": "zeroshield_guard_model",
+              "decision_source": "zeroshield_guard_model",
+              "decision_source_label": "ZeroShield Model",
+              "matched_policies": [],
+              "matched_rules": []
+            },
+            {
+              "name": "model_routing",
+              "action": "reroute",
+              "latency_ms": 2.9,
+              "detail": "Deterministic weighted selection (risk=15%, cost=50%, latency=20%, priority=15%); gemini-flash-cheap ranked best among 12 eligible models.",
+              "requested_model": "Haiku",
+              "selected_model": "gemini-flash-cheap",
+              "routed_model": "gemini-flash-cheap",
+              "route_destination": "llm",
+              "route_destination_label": "LLM inference",
+              "routing_reason": "Deterministic weighted selection (risk=15%, cost=50%, latency=20%, priority=15%); gemini-flash-cheap ranked best among 12 eligible models.",
+              "decision_source": "deterministic_weighted",
+              "decision_source_label": "Deterministic weighted routing",
+              "policy_summary": "Deterministic weighted selection (dominant dimension: cost)",
+              "decision_factors": [
+                "risk_weight=0.15",
+                "cost_weight=0.50",
+                "latency_weight=0.20",
+                "priority_weight=0.15",
+                "request_risk=0.00",
+                "data_sensitivity=public"
+              ],
+              "weights": {
+                "risk": 0.15,
+                "cost": 0.5,
+                "latency": 0.2,
+                "priority": 0.15
+              },
+              "routing_score": 0.840801,
+              "candidate_count": 12,
+              "fallback_chain": [
+                "gpt-4o-mini-cheap",
+                "claude-haiku-cheap",
+                "hermes-3-405b-free"
+              ],
+              "evaluator_model": "",
+              "candidate_scores": [
+                {
+                  "model_name": "gemini-flash-cheap",
+                  "score": 0.840801,
+                  "risk_component": 0.6667,
+                  "cost_component": 0.971,
+                  "latency_component": 0.8547,
+                  "priority_component": 0.5625
+                },
+                {
+                  "model_name": "gpt-4o-mini-cheap",
+                  "score": 0.822427,
+                  "risk_component": 0.625,
+                  "cost_component": 0.986,
+                  "latency_component": 0.8034,
+                  "priority_component": 0.5
+                },
+                {
+                  "model_name": "claude-haiku-cheap",
+                  "score": 0.809125,
+                  "risk_component": 0.8333,
+                  "cost_component": 0.9209,
+                  "latency_component": 0.6496,
+                  "priority_component": 0.625
+                },
+                {
+                  "model_name": "hermes-3-405b-free",
+                  "score": 0.786289,
+                  "risk_component": 0.5833,
+                  "cost_component": 0.986,
+                  "latency_component": 0.7009,
+                  "priority_component": 0.4375
+                },
+                {
+                  "model_name": "llama-3.3-70b-free",
+                  "score": 0.781092,
+                  "risk_component": 0.5,
+                  "cost_component": 0.992,
+                  "latency_component": 0.7692,
+                  "priority_component": 0.375
+                }
+              ],
+              "data_sensitivity_source": "org_default",
+              "data_sensitivity": "public",
+              "remapped_from": "",
+              "guard_reason": "Deterministic weighted selection (risk=15%, cost=50%, latency=20%, priority=15%); gemini-flash-cheap ranked best among 12 eligible models.\nDestination: LLM inference\nFactors: risk_weight=0.15, cost_weight=0.50, latency_weight=0.20, priority_weight=0.15, request_risk=0.00, data_sensitivity=public\nWeights: risk=15%, cost=50%, latency=20%, priority=15%\nScore: 0.841\nCandidates: 12",
+              "tier": "",
+              "confidence": 0,
+              "matched_policies": [],
+              "matched_rules": [],
+              "prompt_in": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "prompt_out": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111."
+            },
+            {
+              "name": "model_input",
+              "action": "allow",
+              "latency_ms": 0.4,
+              "detail": "Prompt delivered to LLM",
+              "content": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "prompt_submitted": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "decision_source": "llm_request",
+              "decision_source_label": "LLM request",
+              "guard_reason": "Prompt delivered to LLM unchanged",
+              "tier": "",
+              "confidence": 0,
+              "matched_policies": [],
+              "matched_rules": [],
+              "prompt_in": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "prompt_out": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111."
+            },
+            {
+              "name": "model_output",
+              "action": "allow",
+              "latency_ms": 839.7,
+              "detail": "LLM inference complete",
+              "content": "I've processed the user record. To ensure privacy and security, I have masked most of the sensitive information.",
+              "decision_source": "llm_provider",
+              "decision_source_label": "LLM provider",
+              "guard_reason": "LLM inference complete",
+              "tier": "",
+              "confidence": 0,
+              "matched_policies": [],
+              "matched_rules": [],
+              "prompt_in": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+              "prompt_out": "I've processed the user record. To ensure privacy and security, I have masked most of the sensitive information."
+            },
+            {
+              "name": "output_guardrail",
+              "action": "allow",
+              "latency_ms": 1229.7,
+              "detail": "ZeroShield Output Guard — enforcement: ALLOW",
+              "content": "I've processed the user record. To ensure privacy and security, I have masked most of the sensitive information.",
+              "prompt_in": "I've processed the user record. To ensure privacy and security, I have masked most of the sensitive information.",
+              "prompt_out": "I've processed the user record. To ensure privacy and security, I have masked most of the sensitive information.",
+              "guard_model": "ZeroShield Output Guard",
+              "guard_action": "allow",
+              "guard_reason": "ZeroShield Output Guard — enforcement: ALLOW",
+              "reason_code": "",
+              "recommended_action": "",
+              "guard_findings": [],
+              "enforcement_source": "output_guard",
+              "decision_source": "output_guard",
+              "decision_source_label": "ZeroShield Output Guard",
+              "tier": "",
+              "confidence": 0,
+              "matched_policies": [],
+              "matched_rules": []
+            }
+          ],
+          "total_latency_ms": 3426.7,
+          "stage_latency_sum_ms": 3421.6,
+          "overhead_ms": 5.1,
+          "final_action": "redact",
+          "prompt_preview": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+          "input_text": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+          "prompt_submitted": "[user]: Please process this user record: SSN ***-**-6789, email j***@a***.com, phone ***-***-5309, credit card ****-****-****-1111.",
+          "output_text": "I've processed the user record. To ensure privacy and security, I have masked most of the sensitive information.",
+          "final_response": "I've processed the user record. To ensure privacy and security, I have masked most of the sensitive information.",
+          "output_withheld": false,
+          "output_withheld_reason": "",
+          "input_was_redacted": false,
+          "input_text_before": "",
+          "input_text_after": "",
+          "guard_summary": {
+            "guard_model": "ZeroShield Model",
+            "guard_action": "redact",
+            "guard_reason": "ZeroShield Model — enforcement: REDACT\nZeroShield Model issued a structured recommendation; org policy may apply a different enforcement action.\nThreat category: pii\nConfidence: 95%\nZeroShield Tier-2 suggested redaction: SSN ***-**-6789, email j***@a***.com, credit card\nEvidence: SSN ***-**-6789, email j***@a***.com, credit card",
+            "reason_code": "model_recommendation",
+            "recommended_action": "redact",
+            "guard_findings": [
+              "SSN ***-**-6789, email j***@a***.com, credit card"
+            ],
+            "enforcement_source": "zeroshield_guard_model",
+            "decision_source": "zeroshield_guard_model",
+            "decision_source_label": "ZeroShield Model"
+          },
+          "requested_model": "Haiku",
+          "routed_model": "gemini-flash-cheap",
+          "routing_reason": "Deterministic weighted selection (risk=15%, cost=50%, latency=20%, priority=15%); gemini-flash-cheap ranked best among 12 eligible models.",
+          "routing": {
+            "requested_model": "Haiku",
+            "selected_model": "gemini-flash-cheap",
+            "routed_model": "gemini-flash-cheap",
+            "route_destination": "llm",
+            "route_destination_label": "LLM inference",
+            "routing_reason": "Deterministic weighted selection (risk=15%, cost=50%, latency=20%, priority=15%); gemini-flash-cheap ranked best among 12 eligible models.",
+            "decision_source": "deterministic_weighted",
+            "decision_source_label": "Deterministic weighted routing",
+            "policy_summary": "Deterministic weighted selection (dominant dimension: cost)",
+            "decision_factors": [
+              "risk_weight=0.15",
+              "cost_weight=0.50",
+              "latency_weight=0.20",
+              "priority_weight=0.15",
+              "request_risk=0.00",
+              "data_sensitivity=public"
+            ],
+            "weights": {
+              "risk": 0.15,
+              "cost": 0.5,
+              "latency": 0.2,
+              "priority": 0.15
+            },
+            "routing_score": 0.840801,
+            "candidate_count": 12,
+            "fallback_chain": [
+              "gpt-4o-mini-cheap",
+              "claude-haiku-cheap",
+              "hermes-3-405b-free"
+            ],
+            "evaluator_model": "",
+            "candidate_scores": [
+              {
+                "model_name": "gemini-flash-cheap",
+                "score": 0.840801,
+                "risk_component": 0.6667,
+                "cost_component": 0.971,
+                "latency_component": 0.8547,
+                "priority_component": 0.5625
+              },
+              {
+                "model_name": "gpt-4o-mini-cheap",
+                "score": 0.822427,
+                "risk_component": 0.625,
+                "cost_component": 0.986,
+                "latency_component": 0.8034,
+                "priority_component": 0.5
+              },
+              {
+                "model_name": "claude-haiku-cheap",
+                "score": 0.809125,
+                "risk_component": 0.8333,
+                "cost_component": 0.9209,
+                "latency_component": 0.6496,
+                "priority_component": 0.625
+              },
+              {
+                "model_name": "hermes-3-405b-free",
+                "score": 0.786289,
+                "risk_component": 0.5833,
+                "cost_component": 0.986,
+                "latency_component": 0.7009,
+                "priority_component": 0.4375
+              },
+              {
+                "model_name": "llama-3.3-70b-free",
+                "score": 0.781092,
+                "risk_component": 0.5,
+                "cost_component": 0.992,
+                "latency_component": 0.7692,
+                "priority_component": 0.375
+              }
+            ],
+            "data_sensitivity_source": "org_default",
+            "data_sensitivity": "public",
+            "remapped_from": ""
+          },
+          "t_addon_pre_ms": 1357.3,
+          "t_addon_post_ms": 1229.7,
+          "t_t2_ms": 1346.6,
+          "latency_breakdown": {
+            "by_stage": [
+              {
+                "stage": "input_scan",
+                "latency_ms": 1346.6,
+                "share_pct": 39.3
+              },
+              {
+                "stage": "output_guardrail",
+                "latency_ms": 1229.7,
+                "share_pct": 35.9
+              },
+              {
+                "stage": "model_output",
+                "latency_ms": 839.7,
+                "share_pct": 24.5
+              },
+              {
+                "stage": "model_routing",
+                "latency_ms": 2.9,
+                "share_pct": 0.1
+              },
+              {
+                "stage": "rate_limit",
+                "latency_ms": 1,
+                "share_pct": 0
+              },
+              {
+                "stage": "policy",
+                "latency_ms": 0.6,
+                "share_pct": 0
+              },
+              {
+                "stage": "auth",
+                "latency_ms": 0.4,
+                "share_pct": 0
+              },
+              {
+                "stage": "model_input",
+                "latency_ms": 0.4,
+                "share_pct": 0
+              },
+              {
+                "stage": "kill_switch",
+                "latency_ms": 0.3,
+                "share_pct": 0
+              }
+            ],
+            "dominant_stage": "input_scan",
+            "dominant_latency_ms": 1346.6,
+            "dominant_share_pct": 39.3,
+            "overhead_ms": 5.1,
+            "overhead_share_pct": 0.1,
+            "hints": [
+              {
+                "stage": "input_scan",
+                "severity": "medium",
+                "message": "Input Scan took 1346.6ms (39% of total).",
+                "actions": [
+                  "Run Tier-2 (Bedrock) scans asynchronously when policy allows.",
+                  "Disable Tier-2 for low-risk endpoints or monitor-only posture.",
+                  "Narrow scan scope (fewer PII/secret detectors) if compliance permits."
+                ]
+              }
+            ]
+          },
+          "telemetry_ms": 0,
+          "total_ms": 3426.7,
+          "request_id": "zs-[REDACTED]"
+        }
+      }
+    }
+  ],
+  "ui": {
+    "modelOptions": [
+      "claude-haiku-cheap — Custom / Other",
+      "gemini-flash-cheap — Custom / Other",
+      "gemma-4-26b-free — Custom / Other",
+      "gpt-4o-mini-cheap — Custom / Other",
+      "gpt-oss-120b-free — Custom / Other",
+      "Haiku — Custom / Other",
+      "hermes-3-405b-free — Custom / Other",
+      "llama-3.1-8b-cheap — Custom / Other",
+      "llama-3.2-3b-free — Custom / Other",
+      "llama-3.3-70b-free — Custom / Other",
+      "mistral-nemo-cheap — Custom / Other",
+      "qwen3-coder-free — Custom / Other",
+      "gpt-5.2 — OpenAI"
+    ],
+    "selectedModel": "Haiku",
+    "routingChipLabel": "Pipeline stage model routing: reroute, 2.9ms latency. Activate to pin details.",
+    "chatSummary": [
+      {
+        "status": 200,
+        "requestModel": "Haiku",
+        "preferred": "Haiku",
+        "original": "Haiku",
+        "selected": "gemini-flash-cheap",
+        "routingAction": "reroute"
+      }
+    ],
+    "requested": "Haiku",
+    "selected": "gemini-flash-cheap",
+    "routingAction": "reroute",
+    "why": "Why this model",
+    "whyBody": "You asked for Haiku; routing policy selected gemini-flash-cheap instead from 12 eligible models because it ranked best on cost and response time."
+  },
+  "error": null,
+  "finished_at": "2026-09-15T06:46:55.915Z"
+}

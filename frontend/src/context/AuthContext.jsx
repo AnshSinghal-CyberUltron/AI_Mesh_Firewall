@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { composeAbortSignal, DEFAULT_FETCH_TIMEOUT_MS } from '../utils/requestLifecycle.js';
+import { composeAbortSignal, DEFAULT_FETCH_TIMEOUT_MS, isAnalyticsBusyPayload } from '../utils/requestLifecycle.js';
 
 const AuthContext = createContext(null);
 
@@ -33,18 +33,23 @@ function setStoredTokens(access, refresh) {
   } catch {}
 }
 
-function clearStoredTokens() {
+/** Drop JWTs only. Keep org simulator gateway keys so a live demo can still hit /v1. */
+function clearJwtTokens() {
   try {
     localStorage.removeItem(ACCESS_KEY);
     localStorage.removeItem(REFRESH_KEY);
-    // Clear legacy and tenant-sensitive auth artifacts that can leak across sessions.
     localStorage.removeItem('access_token');
     localStorage.removeItem('zeroshield_jwt_token');
+  } catch {}
+}
+
+function clearStoredTokens() {
+  clearJwtTokens();
+  try {
+    // Clear tenant-sensitive auth artifacts on explicit logout.
     localStorage.removeItem('zeroshield_gateway_api_key');
     localStorage.removeItem('simulator_gateway_api_key');
     localStorage.removeItem('gateway_api_key');
-    // Active storage key used by useSimulatorEngine; must be cleared on logout
-    // to prevent cross-user credential leakage on shared browsers.
     localStorage.removeItem('zeroshield_gateway_key');
     Object.keys(localStorage)
       .filter((key) => key.startsWith('zeroshield_gateway_key:'))
@@ -93,7 +98,15 @@ async function refreshAccess() {
         body: JSON.stringify({ refresh }),
         signal: AbortSignal.timeout(AUTH_REQUEST_TIMEOUT_MS),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        // Another tab may have already rotated this refresh. Do not treat that as logout.
+        const current = getStoredRefresh();
+        if (current && current !== refresh) {
+          const access = getStoredAccess();
+          if (access && !isTokenExpired(access, 0)) return access;
+        }
+        return null;
+      }
       const data = await res.json();
       if (data.access) {
         setStoredTokens(data.access, data.refresh || refresh);
@@ -135,11 +148,10 @@ export function AuthProvider({ children }) {
 
   const loadUser = useCallback(async () => {
     try {
-      let access = getStoredAccess();
+      // Refresh expired access BEFORE /me — an expired JWT always 401s /api/auth/me/.
+      const access = await getValidAccessToken();
       if (!access) {
-        access = await refreshAccess();
-      }
-      if (!access) {
+        clearJwtTokens();
         setUser(null);
         return;
       }
@@ -148,18 +160,18 @@ export function AuthProvider({ children }) {
         setUser(me);
         return;
       }
-      access = await refreshAccess();
-      if (access) {
-        const retryMe = await fetchMe(access);
+      const retried = await refreshAccess();
+      if (retried) {
+        const retryMe = await fetchMe(retried);
         if (retryMe) {
           setUser(retryMe);
           return;
         }
       }
-      clearStoredTokens();
+      clearJwtTokens();
       setUser(null);
     } catch {
-      clearStoredTokens();
+      clearJwtTokens();
       setUser(null);
     } finally {
       setLoading(false);
@@ -167,10 +179,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const refreshUser = useCallback(async () => {
-    let access = getStoredAccess();
-    if (!access) {
-      access = await refreshAccess();
-    }
+    const access = await getValidAccessToken();
     if (!access) {
       setUser(null);
       return null;
@@ -300,10 +309,31 @@ export function AuthProvider({ children }) {
       const newAccess = await refreshAccess();
       if (newAccess) {
         res = await doFetchResilient(newAccess);
+      } else {
+        clearJwtTokens();
+        setUser(null);
         return res;
       }
-      clearStoredTokens();
-      setUser(null);
+    }
+
+    // GET/HEAD: per-worker ANALYTICS_MAX_INFLIGHT=2 returns 503 analytics_busy
+    // when the dashboard fires soc-kpis + attack-vector-trends together.
+    // Retry after a short backoff; do not retry other 503s (maintenance/DB).
+    if (idempotent && res && res.status === 503) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        let busy = false;
+        try {
+          const peek = await res.clone().json();
+          busy = isAnalyticsBusyPayload(peek);
+        } catch {
+          busy = false;
+        }
+        if (!busy) break;
+        await new Promise((r) => setTimeout(r, 200 * attempt));
+        access = await getValidAccessToken();
+        res = await doFetchResilient(access);
+        if (res.status !== 503) break;
+      }
     }
 
     return res;

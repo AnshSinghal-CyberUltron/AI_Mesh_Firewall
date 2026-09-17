@@ -1,0 +1,57 @@
+{
+  "git": "e95f974dc500414b8f4db28038977fa9bf7deb44",
+  "gateway": {
+    "container": "ai_mesh_firewall-gateway-1",
+    "endpoint": "http://127.0.0.1:8300",
+    "image": "sha256:8a9f0387ebba996e8396b525c18b638560e4f978e067b9214d4441d1ff2fba85"
+  },
+  "control": {
+    "container": "ai_mesh_firewall-control-1",
+    "endpoint": "http://127.0.0.1:8100",
+    "image": "sha256:73c15e089057ddc4eb09b63d7d5356558784183099a7ef9a3fa2259969b207b7"
+  },
+  "frontend": {
+    "container": "ai_mesh_firewall-frontend-1",
+    "endpoint": "http://127.0.0.1:8180",
+    "image": "ai-mesh-nginx-t00:e95f974",
+    "image_id": "sha256:f68b418b3b41600853907965f237f7bec718bd5395211de514d39e1764c2db0a",
+    "bind_mount": null,
+    "mode": "baked nginx (H16); replaced node:22-alpine Vite bind-mount",
+    "label_git_sha": "e95f974dc500414b8f4db28038977fa9bf7deb44",
+    "hashed_js": "/assets/index-DZ9cjnHm.js",
+    "js_sha256": "d3f0aedb84444981eabfde660643d4c8035d9cf84f5125c9a25a2fe74866a6de"
+  },
+  "browser_joins": [
+    {
+      "surface": "Playwright real login form vs baked nginx",
+      "url": "http://127.0.0.1:8180/login -> http://127.0.0.1:8180/",
+      "user": "admin@zeroshield.io",
+      "POST /api/auth/token/": {
+        "http": 200,
+        "x-request-id": "73a5923e-ea84-474d-b7f8-7fad064d7a8c",
+        "control_log": "Login successful"
+      },
+      "GET /api/auth/me/": {
+        "http": 200,
+        "x-request-id": "d34dbd23-fa11-4b0d-9039-43aa60e19479"
+      }
+    },
+    {
+      "surface": "Playwright MCP real login form vs baked nginx",
+      "url": "http://127.0.0.1:8180/login -> / then /?tab=firewall-1-2 then /?tab=firewall-1-1",
+      "POST /api/auth/token/": {
+        "http": 200,
+        "x-request-id": "83579cff-e347-4ebf-bf11-a1b9fc8d42f4",
+        "server": "nginx/1.30.5",
+        "control_log": "Login successful"
+      }
+    }
+  ],
+  "screenshots": [
+    "docs/plans/evidence/2026-09-16-t00/shots/baked-login.png",
+    "docs/plans/evidence/2026-09-16-t00/shots/baked-post-login.png",
+    "docs/plans/evidence/2026-09-16-t00/shots/mcp-baked-overview.png",
+    "docs/plans/evidence/2026-09-16-t00/shots/mcp-baked-policy.png",
+    "docs/plans/evidence/2026-09-16-t00/shots/mcp-baked-gateway.png"
+  ]
+}

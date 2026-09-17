@@ -1,0 +1,62 @@
+{
+  "task": "A00",
+  "title": "Contain potential credential exposure; freeze a secure audit baseline",
+  "run_at_utc": "2026-09-16T07:12:00Z",
+  "signer": "Ansh",
+  "verdict": "FAIL_DEPLOYMENT_GATE",
+  "verdict_reason": "Historical AWS access-key last4 values remain in the git object database and rotation is not verified from this environment. Analysis and sanitised scan completed. New release deployment remains blocked per H21/A00 fail-stop.",
+  "source_identity": {
+    "git_head": "e95f974dc500414b8f4db28038977fa9bf7deb44",
+    "branch": "ansh",
+    "dirty_worktree": true
+  },
+  "commands_sanitized": [
+    {"cmd": "git ls-files .env", "result": "empty (not tracked at HEAD)"},
+    {"cmd": "git check-ignore .env .env.bak", "result": ".gitignore .env*"},
+    {"cmd": "pickaxe last4 EHPV/RYEY without -p", "result": "objects exist"}
+  ],
+  "findings_sanitized": [
+    {"kind": "aws_akia", "last4": "EHPV", "commit": "76e1c7dbe2994e73851993913a259ce7e9379256", "path": ".env", "blob": "fc88f99579835dc805fbbcd8701a1548ee1f801f", "head_ancestor": false, "ref": "origin/module2_config", "currently_tracked": false, "rotation_verified": false},
+    {"kind": "aws_akia", "last4": "RYEY", "commit": "40bacebff7fc74afd7de8ed0a96d53e83dcddb32", "path": ".env", "head_ancestor": true, "currently_tracked": false, "rotation_verified": false},
+    {"kind": "aws_akia", "last4": "RYEY", "commit": "76e1c7dbe2994e73851993913a259ce7e9379256", "path": ".env.bak", "head_ancestor": false, "currently_tracked": false, "rotation_verified": false}
+  ],
+  "sk_keys_in_leak_blobs": "NONE",
+  "history_rewrite": {
+    "git_filter_repo_run": false,
+    "bfg_run": false,
+    "objects_still_in_git_history": true
+  },
+  "untrack_commits": [
+    {"sha": "9f8c94891ea490ab48037219e2f88c63a1e9cc47", "date": "2026-06-15", "note": "stop tracking .env/.env.bak on mainline"},
+    {"sha": "f903c191155aff1be21d40a30c25c9865c39f489", "date": "2026-06-18", "note": "stop tracking .env on module2_config"}
+  ],
+  "head_fixtures_only": ["AKIAIOSFODNN7EXAMPLE last4=MPLE", "patterns.py last4=WXYZ", "ASIA fixture last4=MNOP", "placeholder last4=CDEF"],
+  "leak_keys_in_currently_tracked_files": {"EHPV": false, "RYEY": false},
+  "tracked_env_like_placeholders_not_live_keys": [
+    "scripts/perf/e2e/p0.env (name is not .env* so gitignore does not apply; harness placeholders)",
+    "scripts/perf/e2e/perf.env"
+  ],
+  "env_tracking": {
+    "currently_tracked": false,
+    "gitignore": [".env", ".env.bak", ".env*", "!.env.example"]
+  },
+  "frontend_dist_akia": "none in frontend/dist scan",
+  "unit_static": {
+    "secret_bodies_printed": false,
+    "revocation_owner": "infrastructure owner — NOT verified in this run",
+    "change_record": null
+  },
+  "live_docker": {
+    "old_access_no_longer_grants_privilege": "NOT_TESTED",
+    "reason": "H21: do not test leaked keys against AWS or unrelated hosts from this assistant"
+  },
+  "real_frontend": {
+    "login_still_works": true,
+    "frontend_build_contains_secret_config": false
+  },
+  "unresolved": [
+    "IAM rotation/revocation of last4 EHPV and RYEY not evidenced here",
+    "git object DB still holds historical .env blobs"
+  ],
+  "reviewers": ["agent1-false-positive", "agent2-hidden-failure", "agent3-state", "agent4-observability", "agent5-edges"]
+}

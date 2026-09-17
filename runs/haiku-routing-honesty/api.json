@@ -1,0 +1,104 @@
+{
+  "ok": false,
+  "targets": {
+    "spa_same_origin_haiku": {
+      "status": 200,
+      "error": null,
+      "message": "",
+      "model_echo": "Haiku",
+      "original_model": "Haiku",
+      "selected_model": "gemini-flash-cheap",
+      "rerouted": true,
+      "routing_stage_action": "reroute",
+      "requested_on_stage": "Haiku",
+      "candidate_count": 12,
+      "data_sensitivity": "public",
+      "data_sensitivity_source": "org_default",
+      "final_action": "redact",
+      "httpStatus": null
+    },
+    "dedicated_gateway_haiku": {
+      "status": 200,
+      "error": null,
+      "message": "",
+      "model_echo": "Haiku",
+      "original_model": "Haiku",
+      "selected_model": "gemini-flash-cheap",
+      "rerouted": true,
+      "routing_stage_action": "reroute",
+      "requested_on_stage": "Haiku",
+      "candidate_count": 12,
+      "data_sensitivity": "public",
+      "data_sensitivity_source": "org_default",
+      "final_action": "redact",
+      "httpStatus": null
+    },
+    "unknown_model": {
+      "status": 404,
+      "error": {
+        "message": "Model 'gpt-99-omniscient' is not configured for inference in this organization. Connect it under Multi-Model Governance, use a connected model, or send 'auto' to route automatically.",
+        "type": "invalid_request_error",
+        "param": null,
+        "code": "model_not_configured"
+      },
+      "message": "",
+      "model_echo": null,
+      "original_model": null,
+      "selected_model": null,
+      "rerouted": null,
+      "routing_stage_action": null,
+      "requested_on_stage": null,
+      "candidate_count": null,
+      "data_sensitivity": null,
+      "data_sensitivity_source": null,
+      "final_action": null,
+      "httpStatus": null
+    }
+  },
+  "asserts": [
+    {
+      "label": "SPA Haiku is not 404 (got 200)",
+      "pass": true
+    },
+    {
+      "label": "SPA Haiku HTTP 200 (got 200 err=None)",
+      "pass": true
+    },
+    {
+      "label": "dedicated Haiku HTTP 200 (got 200)",
+      "pass": true
+    },
+    {
+      "label": "SPA original_model=Haiku (got Haiku)",
+      "pass": true
+    },
+    {
+      "label": "GW original_model=Haiku (got Haiku)",
+      "pass": true
+    },
+    {
+      "label": "SPA selected callable (got gemini-flash-cheap)",
+      "pass": true
+    },
+    {
+      "label": "SPA routing action reroute (got reroute)",
+      "pass": true
+    },
+    {
+      "label": "GW routing action reroute (got reroute)",
+      "pass": true
+    },
+    {
+      "label": "SPA rerouted=true (got True)",
+      "pass": true
+    },
+    {
+      "label": "unknown model still 404 (got 404)",
+      "pass": true
+    },
+    {
+      "label": "unknown error model_not_configured (got {'message': \"Model 'gpt-99-omniscient' is not configured for inference in this organization. Connect it under Multi-Model Governance, use a connected model, or send 'auto' to route automatically.\", 'type': 'invalid_request_error', 'param': None, 'code': 'model_not_configured'})",
+      "pass": false
+    }
+  ]
+}

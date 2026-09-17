@@ -1,0 +1,65 @@
+{
+  "task": "A01",
+  "title": "Map GitHub source to real Docker, GPU and frontend builds",
+  "run_at_utc": "2026-09-16T07:12:00Z",
+  "signer": "Ansh",
+  "verdict": "MAPPED_WITH_MISMATCHES",
+  "verdict_reason": "Serving identity is recorded. Image revisions are unlabeled and older than HEAD; frontend is live Vite not a SHA-baked image; SOURCE_MANIFEST and source_contract_probe.py are missing so the specified unit/static probe cannot run. GPU absent. Public IP observed 8.231.115.48 vs locked claim 34.180.21.204.",
+  "source_identity": {
+    "inspected_ansh_sha": "e95f974dc500414b8f4db28038977fa9bf7deb44",
+    "branch": "ansh",
+    "tracks": "origin/ansh",
+    "dirty_worktree": true,
+    "older_main_sha": "not selected this run"
+  },
+  "host": {
+    "hostname": "ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal",
+    "internal_ip": "10.160.0.2",
+    "observed_public_ip_ifconfig_me": "8.231.115.48",
+    "locked_claim_public_ip": "34.180.21.204",
+    "ip_mismatch": true,
+    "compose_project": "ai_mesh_firewall",
+    "do_not_rebuild": true
+  },
+  "components": [
+    {"svc": "gateway", "container": "ai_mesh_firewall-gateway-1", "image_id": "sha256:79b1bbcdafa53cf60a7e3ee949bf45fb0634fc3a0aff16dd07db003557179a07", "image_created": "2026-09-11T06:54:45Z", "container_created": "2026-09-11T07:15:27Z", "git_label": null, "health": "healthy", "endpoint": "http://127.0.0.1:8300", "cpus_quota": 0, "mem_bytes": 0},
+    {"svc": "control", "container": "ai_mesh_firewall-control-1", "image_id": "sha256:493f686e3a518476d18b8ecb7789322acc1e39476b74b7f9136f69ebfcf03813", "image_created": "2026-09-11T06:54:45Z", "container_created": "2026-09-11T07:15:26Z", "git_label": null, "health": "healthy", "endpoint": "http://127.0.0.1:8100", "mem_bytes": 2684354560},
+    {"svc": "frontend", "container": "ai_mesh_firewall-frontend-1", "image_name": "node:22-alpine", "image_id": "sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32", "image_created": "2026-07-29T17:26:59Z", "mode": "Vite bind-mount npm run dev", "endpoint": "http://127.0.0.1:8180", "h16_immutable_image": false},
+    {"svc": "redis", "container": "ai_mesh_firewall-redis-1", "image": "redis:7.4-alpine", "health": "healthy"},
+    {"svc": "postgres", "container": "ai_mesh_firewall-postgres-1", "image": "pgvector/pgvector:pg16", "health": "healthy"}
+  ],
+  "gateway_health": {
+    "status": "ok",
+    "firewall_enabled": true,
+    "enforcement_mode": "block",
+    "config_sync_loaded": false,
+    "config_sync_loaded_note": "global sentinel; per-org Redis firewall:config:{slug} keys ARE present",
+    "policy_cache_loaded": true,
+    "policy_cache_version": 50,
+    "policy_count": 96
+  },
+  "gpu": {"nvidia_smi": "not found", "inference_owner_gpu": "NONE_ON_THIS_HOST"},
+  "unit_static": {
+    "SOURCE_MANIFEST.json": "MISSING",
+    "tools/source_contract_probe.py": "MISSING",
+    "collected_probe_tests": 0,
+    "detection_corpus_dir_exists": true,
+    "path": "tests/detection_corpus",
+    "g0_1_items": 748,
+    "g0_1_split": "323 malicious / 425 benign",
+    "note": "G0.1 corpus exists and is NOT V3 A04"
+  },
+  "test_tenants": {
+    "zeroshield": {"id": 2, "mode": "READ-only except identical-value GET proven earlier; not mutated this A02 UI pass"},
+    "v3a02-block": {"id": 95, "writes": "authorized synthetic"},
+    "v3a02-observe": {"id": 96, "writes": "authorized synthetic"}
+  },
+  "rollback_tuple": "not selected — no stack rebuild/recreate performed",
+  "mismatch_decisions": [
+    "Do not treat unlabeled 2026-09-11 images as e95f974",
+    "Do not treat Vite :8180 as H16 immutable frontend",
+    "Do not treat config_sync_loaded=false as empty per-org config",
+    "Record public IP 8.231.115.48; do not silently keep 34.180.21.204 as observed"
+  ],
+  "reviewers": ["agent1-false-positive", "agent2-hidden-failure", "agent3-state", "agent4-observability", "agent5-edges"]
+}

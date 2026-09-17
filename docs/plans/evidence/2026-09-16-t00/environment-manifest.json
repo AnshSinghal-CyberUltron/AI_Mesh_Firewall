@@ -1,0 +1,82 @@
+{
+  "task": "T00",
+  "runbook": "docs/plans/FINAL_AI_MESH_SCALABLE_GATEWAY_EXECUTION_RUNBOOK_WITH_FRONTEND_REVAMP.docx",
+  "run_at_utc": "2026-09-16T14:24:00Z",
+  "signer": "Ansh",
+  "pinned_commit": "e95f974dc500414b8f4db28038977fa9bf7deb44",
+  "branch": "ansh",
+  "origin_ansh": "e95f974dc500414b8f4db28038977fa9bf7deb44",
+  "working_tree": "DIRTY (uncommitted gateway/frontend/control files remain; images built from clean worktree /tmp/t00-clean at the pinned SHA)",
+  "host": {
+    "hostname": "ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal",
+    "gcp_instance": "ai-mesh-firewall",
+    "zone": "asia-south1-c",
+    "machine_type": "c4-standard-16",
+    "internal_ip": "10.160.0.2",
+    "observed_public_ip": "8.231.115.48",
+    "arch": "x86_64",
+    "gpu_on_this_host": false
+  },
+  "compose_project": "ai_mesh_firewall",
+  "compose_files_used_for_recreate": [
+    "docker-compose.yml",
+    "docker-compose.override.yml"
+  ],
+  "compose_files_listed_before_recreate": [
+    "docker-compose.yml",
+    "docker-compose.override.yml",
+    "mcp-parallel/findings/vishal-bhatnagar-e2e/docker-compose.mcp-internal.yml (MISSING on disk)"
+  ],
+  "lockfiles_git_blobs": {
+    "frontend/package-lock.json": "258e5538dc9c900add8e2c7df72cd783bba89662",
+    "gateway/uv.lock": "3c0990c184ce4d3d9cfba4f3ff39c9d4455a0d9a",
+    "control/uv.lock": "95c8bd3853233b32e1cf39558539418bcb23fb87"
+  },
+  "images_after_rebuild": {
+    "gateway": {
+      "id": "sha256:8a9f0387ebba996e8396b525c18b638560e4f978e067b9214d4441d1ff2fba85",
+      "created": "2026-09-16T12:08:50Z",
+      "source": "clean worktree e95f974",
+      "git_label_in_dockerfile": null
+    },
+    "control": {
+      "id": "sha256:73c15e089057ddc4eb09b63d7d5356558784183099a7ef9a3fa2259969b207b7",
+      "created": "2026-09-16T12:08:49Z",
+      "source": "clean worktree e95f974",
+      "git_label_in_dockerfile": null
+    },
+    "frontend": {
+      "image": "ai-mesh-nginx-t00:e95f974",
+      "id": "sha256:f68b418b3b41600853907965f237f7bec718bd5395211de514d39e1764c2db0a",
+      "mode": "baked nginx from clean e95f974 dist; 0 bind mounts",
+      "h16_immutable": true,
+      "rebuilt": true,
+      "label_git_sha": "e95f974dc500414b8f4db28038977fa9bf7deb44",
+      "replaced_vite": "node:22-alpine bind-mount ./frontend:/app stopped 2026-09-16T14:16:53Z"
+    }
+  },
+  "images_before_rebuild_rollback_tuple": {
+    "gateway": "sha256:79b1bbcdafa53cf60a7e3ee949bf45fb0634fc3a0aff16dd07db003557179a07",
+    "control": "sha256:493f686e3a518476d18b8ecb7789322acc1e39476b74b7f9136f69ebfcf03813",
+    "note": "containers recreated 2026-09-16T12:10:20Z; postgres/redis volumes not touched"
+  },
+  "gateway_health_after": {
+    "status": "ok",
+    "firewall_enabled": true,
+    "policy_cache_loaded": true,
+    "policy_cache_version": 54,
+    "config_sync_loaded": false
+  },
+  "synthetic_tenants": {
+    "v3a02-block": {"id": 95},
+    "v3a02-observe": {"id": 96},
+    "zeroshield": {"id": 2, "mode": "READ-only for T00"}
+  },
+  "gpu_staging": {
+    "created_this_session": false,
+    "t00_fail_reason": false,
+    "nvidia_smi": "command not found on this host",
+    "reason": "GPU not required for T00; user: do not fail T00 for missing GPU; do not create L4; do not delete existing GCP instances",
+    "gcp_instances_still_running": ["ai-mesh-firewall asia-south1-c", "aiguardx-ws2022-test us-central1-a"]
+  }
+}

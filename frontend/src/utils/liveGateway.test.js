@@ -7,6 +7,7 @@ import {
   normalizeChatPipelineResult,
   pinnedModelRoutingPreferences,
   simulatorRoutingPreferences,
+  attackSimulatorRoutingPreferences,
   chatCompletionBody,
 } from "./liveGateway.js";
 
@@ -252,6 +253,61 @@ test("simulatorRoutingPreferences honours org routing_enabled (PIPELINE-0030)", 
     pinnedModelRoutingPreferences("nvidia/nemotron-3-super-120b-a12b:free"),
   );
   assert.equal(simulatorRoutingPreferences("auto", { orgRoutingEnabled: true }), null);
+});
+
+test("attackSimulatorRoutingPreferences omits enable_routing until firewall config is ready", () => {
+  assert.equal(
+    attackSimulatorRoutingPreferences("gpt-4o-mini", { orgRoutingEnabled: true, configReady: false }),
+    null,
+  );
+  assert.deepEqual(
+    attackSimulatorRoutingPreferences("gpt-4o-mini", { orgRoutingEnabled: true, configReady: true }),
+    { enable_routing: true, preferred_model: "gpt-4o-mini" },
+  );
+  assert.deepEqual(
+    attackSimulatorRoutingPreferences("gpt-4o-mini", { orgRoutingEnabled: false, configReady: true }),
+    pinnedModelRoutingPreferences("gpt-4o-mini"),
+  );
+});
+
+test("upstream 503 after PII scan ALLOW maps to model_output, not input_scan", () => {
+  const zs = {
+    action: "error",
+    threat_type: "pii",
+    detection_tier: "tier_1",
+    confidence: 0.85,
+    guard_action: "allow",
+    matched_patterns: ["email_smart_masked"],
+  };
+  const data = {
+    code: 503,
+    final_action: "error",
+    zeroshield: zs,
+    pipeline_trace: {
+      stages: [
+        { name: "input_scan", action: "allow", threat_type: "pii", tier: "tier_1" },
+        { name: "model_output", action: "error" },
+      ],
+      total_latency_ms: 1272.3,
+    },
+  };
+  assert.equal(inferTerminalBlockedStage(data, 503, zs, "error"), "model_output");
+  const result = normalizeChatPipelineResult(data, 503, {});
+  assert.equal(result.final_action, "error");
+  assert.equal(result.blocked_by, "model_output");
+  assert.notEqual(result.detection_checkpoint, "input_scan");
+});
+
+test("isolation_target_uncallable maps to kill_switch, not model_output", () => {
+  assert.equal(
+    inferTerminalBlockedStage(
+      { code: "isolation_target_uncallable", blocked_by: "kill_switch" },
+      503,
+      {},
+      "error",
+    ),
+    "kill_switch",
+  );
 });
 
 test("circuit_breaker_open maps to circuit_breaker, not a generic model_output error", () => {

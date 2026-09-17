@@ -1,0 +1,55 @@
+{
+  "contract_id": "V3_SCOPE_AND_ACCEPTANCE_CONTRACT",
+  "signed_at_utc": "2026-09-16T07:12:00Z",
+  "signer": "Ansh",
+  "status": "SIGNED_WITH_NULL_QUALITY_H22_BLOCKS_RELEASE",
+  "environment": {
+    "name": "AIMeshFirewall",
+    "locked_ip_claim": "34.180.21.204",
+    "observed_public_ip": "8.231.115.48",
+    "hostname": "ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal"
+  },
+  "latency": {
+    "p99_complete_firewall_overhead_ms": 20,
+    "kind": "TARGET_NOT_MEASURED",
+    "includes": "pre-auth through output delivery; excludes customer model compute and client WAN"
+  },
+  "goodput": {
+    "qualified_rps": 1064,
+    "kind": "TARGET_NOT_MEASURED"
+  },
+  "profile": {
+    "sse_percent": 70,
+    "json_percent": 30,
+    "effective_input_tokens_max": 1024,
+    "output_tokens": 400,
+    "kind": "PROPOSED_NOT_MEASURED_PRODUCTION_DISTRIBUTION"
+  },
+  "quality": {
+    "recall": null,
+    "fpr": null,
+    "span_accuracy": null,
+    "g0_2_achieved_fpr_not_copied": 1.0,
+    "h22": "release BLOCKED while quality remains null"
+  },
+  "pii_floor_migration": {
+    "desired": "org OFF removes input PII floor; observe/enforce as signed; versioned migration vs PIPELINE-0032",
+    "not_authorized_in_A02": "silent gateway flip or Bedrock deletion",
+    "live_as_of_this_run": "UI/DB can persist false; Redis omits key; proxy_chat hardcodes True"
+  },
+  "settings_surface": "AIMeshFirewallConfig.jsx (no FirewallConfigPanel.jsx); useGatewayConfig does not save",
+  "g0_1_vs_a04": "G0.1 tests/detection_corpus 748 items exists; A04 is a different policy-aware freeze still NOT_RUN",
+  "empty_vs_unavailable": {
+    "empty_valid_policy": "allow/observe content (no match); PII/secret/DoS floor still redacts",
+    "unavailable_policy": "fail-closed no dispatch (input 503 when policy_cache_require_loaded)",
+    "live_split": "output/stream unavailable can fail open; chat get_config inherits default org"
+  },
+  "detector_down": "per-rule (injection block; PII redact/block; optional skip only if recorded)",
+  "output_mode": {
+    "signed_name": "chunk_enforce",
+    "identifier_in_repo": false,
+    "mapped_to": ["nonstream whole-response withhold", "stream remaining-chunk withhold after lookahead", "per-flush redact"]
+  },
+  "tenants": ["zeroshield READ", "v3a02-block synthetic writes", "v3a02-observe synthetic writes"],
+  "not_this_task": ["scanner optimization", "Bedrock import deletion", "aimeshperf attach", "compose rebuild"]
+}

@@ -1,0 +1,14 @@
+188. [GET] http://127.0.0.1:8180/api/auth/me/ => [200] OK
+189. [GET] http://127.0.0.1:8180/api/auth/me/ => [200] OK
+194. [GET] http://127.0.0.1:8180/api/firewall/config/ => [200] OK
+195. [GET] http://127.0.0.1:8180/api/firewall/config/ => [200] OK
+201. [GET] http://127.0.0.1:8180/api/firewall/config/ => [200] OK
+202. [GET] http://127.0.0.1:8180/api/firewall/config/ => [200] OK
+203. [GET] http://127.0.0.1:8180/api/firewall/models/ => [200] OK
+205. [GET] http://127.0.0.1:8180/api/firewall/config/ => [200] OK
+206. [GET] http://127.0.0.1:8180/api/firewall/config/ => [200] OK
+207. [GET] http://127.0.0.1:8180/api/firewall/models/ => [200] OK
+208. [GET] http://127.0.0.1:8180/api/firewall/config/ => [200] OK
+213. [PUT] http://127.0.0.1:8180/api/firewall/config/ => [200] OK
+
+Note: 188 static requests not shown, run with "static" option to see them.

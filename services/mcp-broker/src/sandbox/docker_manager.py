@@ -634,6 +634,11 @@ class DockerManager:
         _agent_key = os.environ.get("MCP_AGENT_INTERNAL_KEY", "").strip()
         if _agent_key:
             environment["MCP_AGENT_INTERNAL_KEY"] = _agent_key
+        # Opt-in: let sandboxes dial RFC1918 MCP stubs (mcp-stub, chroma, etc.).
+        # Unset keeps the SSRF default (fail closed on private IPs).
+        _allow_internal = os.environ.get("MCP_AGENT_ALLOW_INTERNAL_HOSTS", "").strip()
+        if _allow_internal:
+            environment["MCP_AGENT_ALLOW_INTERNAL_HOSTS"] = _allow_internal
         if runtime == "runsc":
             dns = _gvisor_dns_servers()
             if dns:

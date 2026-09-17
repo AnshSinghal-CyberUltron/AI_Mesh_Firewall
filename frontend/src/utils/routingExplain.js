@@ -62,6 +62,51 @@ function topDifferentiators(parsed, weights) {
     .map((row) => row.label);
 }
 
+function parseScoreComponents(routing) {
+  const parsed = parseDecisionFactors(routing.decision_factors);
+  const top = Array.isArray(routing.candidate_scores) ? routing.candidate_scores[0] : null;
+  if (top && typeof top === "object") {
+    for (const key of SCORE_COMPONENT_KEYS) {
+      if (parsed[key] == null && Number.isFinite(Number(top[key]))) {
+        parsed[key] = Number(top[key]);
+      }
+    }
+  }
+  return parsed;
+}
+
+function shouldCiteSensitivity(routing, sensitivity) {
+  if (!sensitivity) return false;
+  const sens = String(sensitivity).toLowerCase();
+  const source = String(routing.data_sensitivity_source || "").toLowerCase();
+  // Org-default (or omitted) "public" is the absence of a floor, not why a model won.
+  if (sens === "public" && source !== "request" && source !== "client") {
+    return false;
+  }
+  if (source === "org_default" && sens === "public") {
+    return false;
+  }
+  return true;
+}
+
+function topWeightLabels(weights) {
+  const labels = {
+    cost: "cost",
+    latency: "response time",
+    risk: "risk profile",
+    priority: "model priority",
+  };
+  return Object.entries(weights || {})
+    .map(([key, value]) => ({
+      label: labels[key] || key,
+      weight: Number(value) || 0,
+    }))
+    .filter((row) => row.weight > 0)
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 1)
+    .map((row) => row.label);
+}
+
 function extractSensitivity(policySummary, factors) {
   const fromFactor = (factors || []).find((f) => String(f).startsWith("data_sensitivity="));
   if (fromFactor) return String(fromFactor).split("=")[1]?.trim() || "";
@@ -118,9 +163,13 @@ export function summarizeRoutingDecision(routing = {}) {
   const rawReason = routing.routing_reason || "";
   const factors = Array.isArray(routing.decision_factors) ? routing.decision_factors : [];
   const weights = routing.weights && typeof routing.weights === "object" ? routing.weights : {};
-  const parsed = parseDecisionFactors(factors);
-  const tops = topDifferentiators(parsed, weights);
-  const sensitivity = extractSensitivity(routing.policy_summary, factors);
+  const parsed = parseScoreComponents(routing);
+  let tops = topDifferentiators(parsed, weights);
+  if (tops.length === 0) {
+    tops = topWeightLabels(weights);
+  }
+  const sensitivityRaw = extractSensitivity(routing.policy_summary, factors);
+  const sensitivity = shouldCiteSensitivity(routing, sensitivityRaw) ? sensitivityRaw : "";
   const inactiveRemap = isInactiveModelRemap(rawReason)
     || Boolean(routing.remapped_from)
     || factorPresent(factors, "inactive_model_remapped");
@@ -152,10 +201,20 @@ export function summarizeRoutingDecision(routing = {}) {
   if (source === "kill_switch" || source === "model_state") {
     const label = source === "kill_switch" ? "Kill switch" : "Model isolation";
     summary = `${label} redirected traffic from ${requested} to ${selected} because the requested model is disabled or isolated.`;
+    if (count > 0) {
+      const noun = count === 1 ? "model" : "models";
+      summary += ` Routing policy evaluated ${count} remaining eligible ${noun}.`;
+    }
   } else if (source === "routing_disabled") {
     const used = selected || requested;
     const modelLabel = used === "auto" ? "the default model" : used;
-    summary = `Org routing is off — the gateway used ${modelLabel} directly without running routing policy.`;
+    if (routing.org_routing_enabled === true) {
+      summary = `This request pinned ${modelLabel} (\`enable_routing: false\`). Organization Dynamic Routing is Enabled.`;
+    } else if (routing.org_routing_enabled === false) {
+      summary = `Org routing is off — the gateway used ${modelLabel} directly without running routing policy.`;
+    } else {
+      summary = `Routing policy did not run for this request — the gateway used ${modelLabel} directly.`;
+    }
   } else if (
     source === "deterministic_weighted" ||
     // Legacy sources, retained so historical audit rows still explain themselves.

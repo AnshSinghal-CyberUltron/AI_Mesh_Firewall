@@ -64,6 +64,16 @@ export function simulatorRoutingPreferences(model, { orgRoutingEnabled = true } 
 }
 
 /**
+ * Attack Simulator: honour org Dynamic Routing once firewall config is loaded.
+ * While config is loading, omit routing_preferences so the gateway uses org RAM
+ * (do not default enable_routing to true).
+ */
+export function attackSimulatorRoutingPreferences(model, { orgRoutingEnabled, configReady = false } = {}) {
+  if (!configReady) return null;
+  return simulatorRoutingPreferences(model, { orgRoutingEnabled: Boolean(orgRoutingEnabled) });
+}
+
+/**
  * Parse an OpenAI-compatible SSE response body into discrete events.
  * Reason: output-guard and stream governance paths only emit on text/event-stream;
  * the simulator must consume chunks the same way production clients do.
@@ -369,6 +379,11 @@ export function inferTerminalBlockedStage(data, httpStatus, zs, finalAction = ""
 
 /** Last pipeline stage that ran input/output scanning (informational, not a block). */
 export function inferDetectionCheckpoint(data, zs) {
+  const stages = data?.pipeline_trace?.stages || data?.stages || [];
+  const input = stages.find((s) => s?.name === "input_scan");
+  if (input && String(input.action || "").toLowerCase() === "allow") {
+    return "";
+  }
   const tier = String(data?.detection_tier || zs?.detection_tier || "").toLowerCase();
   if (!tier || tier === "none" || tier === "output_guard" || tier === "output_guardrail") {
     return "";
@@ -397,7 +412,7 @@ function inferBlockedStage(data, httpStatus, zs) {
   ) {
     return "rate_limit";
   }
-  if (code === "kill_switch_active") return "kill_switch";
+  if (code === "kill_switch_active" || code === "isolation_target_uncallable") return "kill_switch";
   if (
     code === "circuit_breaker_open"
     || code === "circuit_open"
@@ -411,6 +426,10 @@ function inferBlockedStage(data, httpStatus, zs) {
   }
   if (code === "model_not_allowed" || code === "model_not_configured") return "model_routing";
   if (code === "output_blocked" || category === "output_guard") return "output_guardrail";
+
+  // Upstream 5xx (LiteLLM 404 remapped, provider 401/503) is model_output even
+  // when zeroshield still carries the ALLOWED scan's threat_type=pii.
+  if (httpStatus >= 500) return "model_output";
 
   if (
     category === "prompt_injection"
@@ -673,6 +692,11 @@ function enrichStages(stages, data, zs, context) {
         || zs.decision_factors
         || [];
       enriched.weights = enriched.weights || routing.weights || zs.weights || {};
+      if (enriched.org_routing_enabled == null && routing.org_routing_enabled != null) {
+        enriched.org_routing_enabled = routing.org_routing_enabled;
+      } else if (enriched.org_routing_enabled == null && zs.org_routing_enabled != null) {
+        enriched.org_routing_enabled = zs.org_routing_enabled;
+      }
       if (!enriched.detail && enriched.routing_reason) {
         enriched.detail = enriched.routing_reason;
       }

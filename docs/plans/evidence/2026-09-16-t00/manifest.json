@@ -1,0 +1,60 @@
+{
+  "task": "T00",
+  "title": "Freeze source/deployment identity and close critical repository/security unknowns",
+  "sot": "FINAL_AI_MESH_SCALABLE_GATEWAY_EXECUTION_RUNBOOK_WITH_FRONTEND_REVAMP.docx",
+  "verdict": "PASS",
+  "verdict_reason": "L00-1 PASS: baked nginx frontend (no Vite bind-mount) + gateway/control images from e95f974; browser login x-request-id joins control logs. GPU is N/A on this c4-standard-16 (not a fail). L00-2 WAIVED (this VM only). L00-3 WAIVED (user: ai-mesh-firewall is the identity file; no rotation).",
+  "live_gates": {
+    "L00-1": {
+      "result": "PASS",
+      "browser": "http://127.0.0.1:8180",
+      "frontend_image": "ai-mesh-nginx-t00:e95f974",
+      "frontend_digest": "sha256:f68b418b3b41600853907965f237f7bec718bd5395211de514d39e1764c2db0a",
+      "frontend_label_git_sha": "e95f974dc500414b8f4db28038977fa9bf7deb44",
+      "frontend_bind_mounts": 0,
+      "hashed_js": "/assets/index-DZ9cjnHm.js",
+      "js_sha256": "d3f0aedb84444981eabfde660643d4c8035d9cf84f5125c9a25a2fe74866a6de",
+      "index_sha256": "08b95a885de7577259962d13ec7959460c8ea98238bdf41eecbb5055ca7b0cd5",
+      "vite_client": false,
+      "gateway": "sha256:8a9f0387ebba996e8396b525c18b638560e4f978e067b9214d4441d1ff2fba85",
+      "control": "sha256:73c15e089057ddc4eb09b63d7d5356558784183099a7ef9a3fa2259969b207b7",
+      "joins": [
+        {
+          "surface": "Playwright real login form",
+          "POST /api/auth/token/": {
+            "http": 200,
+            "x-request-id": "73a5923e-ea84-474d-b7f8-7fad064d7a8c",
+            "control_log": "Login successful from ip=172.18.0.1"
+          },
+          "GET /api/auth/me/": {
+            "http": 200,
+            "x-request-id": "d34dbd23-fa11-4b0d-9039-43aa60e19479"
+          }
+        },
+        {
+          "surface": "Playwright MCP real login form",
+          "POST /api/auth/token/": {
+            "http": 200,
+            "x-request-id": "83579cff-e347-4ebf-bf11-a1b9fc8d42f4",
+            "control_log": "Login successful from ip=172.18.0.1",
+            "server": "nginx/1.30.5"
+          }
+        }
+      ],
+      "spa_routes_verified": ["/", "/?tab=firewall-1-2", "/?tab=firewall-1-1"],
+      "console_errors": 0
+    },
+    "L00-2": {
+      "result": "WAIVED",
+      "reason": "user: use this VM only; no second worker"
+    },
+    "L00-3": {
+      "result": "WAIVED",
+      "reason": "user identified repo file ai-mesh-firewall as the identity file; fingerprint SHA256:z0v4cXDadmOUjJWg8EfyvHDuja0TIeGSIk94id/pn/g; no rotation; not tested against hosts"
+    }
+  },
+  "gpu_vm": "N/A — nvidia-smi not present on c4-standard-16; T00 has no GPU live test; NOT a fail; existing GCP instances NOT deleted (ai-mesh-firewall RUNNING, aiguardx-ws2022-test RUNNING)",
+  "t01": "not started; T00 only",
+  "product_code_changed": false,
+  "do_not_claim": ["20 ms measured", "1064 RPS measured", "T01 complete"]
+}

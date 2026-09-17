@@ -1,0 +1,526 @@
+{
+  "gateway": "http://127.0.0.1:8300",
+  "redis": {
+    "v3a02-block": {
+      "present": true,
+      "enforcement_mode": "block",
+      "firewall_enabled": true,
+      "has_pii_detection_enabled": false,
+      "pii_detection_enabled": null,
+      "output_pii_enabled": true,
+      "output_pii_action": "redact",
+      "payload_keys": [
+        "allowed_models",
+        "auto_block_threats",
+        "blocked_keywords",
+        "burst_limit",
+        "compliance_frameworks",
+        "deep_scan_enabled",
+        "default_data_sensitivity",
+        "enforcement_mode",
+        "firewall_enabled",
+        "hallucination_flag_enabled",
+        "hallucination_grounding_mode",
+        "hallucination_grounding_model",
+        "hallucination_grounding_threshold",
+        "litellm_default_model",
+        "log_level",
+        "max_response_tokens",
+        "mcp_ext_scan_action",
+        "mcp_policy_only_enforcement",
+        "mcp_tier2_enabled",
+        "model_isolation_enabled",
+        "org_slug",
+        "org_tpm_limit",
+        "output_credential_action",
+        "output_credential_enabled",
+        "output_hallucination_action",
+        "output_incident_logging_enabled",
+        "output_ip_leakage_action",
+        "output_ip_leakage_enabled",
+        "output_pii_action",
+        "output_pii_enabled",
+        "output_policy_action",
+        "output_policy_enabled",
+        "prompt_injection_threshold",
+        "rag_default_max_results",
+        "rag_enabled",
+        "rag_redaction_enabled",
+        "rag_relevance_threshold",
+        "rag_tier2_enabled",
+        "rate_limit_enabled",
+        "requests_per_minute",
+        "retention_days",
+        "routing_cost_weight",
+        "routing_enabled",
+        "routing_latency_weight",
+        "routing_priority_weight",
+        "routing_risk_weight",
+        "telemetry_enabled",
+        "threat_intel_enabled",
+        "threat_score_threshold",
+        "tier2_enabled",
+        "tier2_execution_mode",
+        "tier2_fail_closed_enabled",
+        "tier2_stream_hold_enabled",
+        "tier2_stream_hold_timeout_ms",
+        "tier2_strict",
+        "toxicity_threshold",
+        "vector_db_isolation"
+      ]
+    },
+    "v3a02-observe": {
+      "present": true,
+      "enforcement_mode": "monitor",
+      "firewall_enabled": true,
+      "has_pii_detection_enabled": false,
+      "pii_detection_enabled": null,
+      "output_pii_enabled": true,
+      "output_pii_action": "redact",
+      "payload_keys": [
+        "allowed_models",
+        "auto_block_threats",
+        "blocked_keywords",
+        "burst_limit",
+        "compliance_frameworks",
+        "deep_scan_enabled",
+        "default_data_sensitivity",
+        "enforcement_mode",
+        "firewall_enabled",
+        "hallucination_flag_enabled",
+        "hallucination_grounding_mode",
+        "hallucination_grounding_model",
+        "hallucination_grounding_threshold",
+        "litellm_default_model",
+        "log_level",
+        "max_response_tokens",
+        "mcp_ext_scan_action",
+        "mcp_policy_only_enforcement",
+        "mcp_tier2_enabled",
+        "model_isolation_enabled",
+        "org_slug",
+        "org_tpm_limit",
+        "output_credential_action",
+        "output_credential_enabled",
+        "output_hallucination_action",
+        "output_incident_logging_enabled",
+        "output_ip_leakage_action",
+        "output_ip_leakage_enabled",
+        "output_pii_action",
+        "output_pii_enabled",
+        "output_policy_action",
+        "output_policy_enabled",
+        "prompt_injection_threshold",
+        "rag_default_max_results",
+        "rag_enabled",
+        "rag_redaction_enabled",
+        "rag_relevance_threshold",
+        "rag_tier2_enabled",
+        "rate_limit_enabled",
+        "requests_per_minute",
+        "retention_days",
+        "routing_cost_weight",
+        "routing_enabled",
+        "routing_latency_weight",
+        "routing_priority_weight",
+        "routing_risk_weight",
+        "telemetry_enabled",
+        "threat_intel_enabled",
+        "threat_score_threshold",
+        "tier2_enabled",
+        "tier2_execution_mode",
+        "tier2_fail_closed_enabled",
+        "tier2_stream_hold_enabled",
+        "tier2_stream_hold_timeout_ms",
+        "tier2_strict",
+        "toxicity_threshold",
+        "vector_db_isolation"
+      ]
+    },
+    "zeroshield": {
+      "present": true,
+      "enforcement_mode": "block",
+      "firewall_enabled": true,
+      "has_pii_detection_enabled": false,
+      "pii_detection_enabled": null,
+      "output_pii_enabled": true,
+      "output_pii_action": "flag",
+      "payload_keys": [
+        "allowed_models",
+        "auto_block_threats",
+        "blocked_keywords",
+        "burst_limit",
+        "compliance_frameworks",
+        "deep_scan_enabled",
+        "default_data_sensitivity",
+        "enforcement_mode",
+        "firewall_enabled",
+        "hallucination_flag_enabled",
+        "hallucination_grounding_mode",
+        "hallucination_grounding_model",
+        "hallucination_grounding_threshold",
+        "litellm_default_model",
+        "log_level",
+        "max_response_tokens",
+        "mcp_ext_scan_action",
+        "mcp_policy_only_enforcement",
+        "mcp_tier2_enabled",
+        "model_isolation_enabled",
+        "org_slug",
+        "org_tpm_limit",
+        "output_credential_action",
+        "output_credential_enabled",
+        "output_hallucination_action",
+        "output_incident_logging_enabled",
+        "output_ip_leakage_action",
+        "output_ip_leakage_enabled",
+        "output_pii_action",
+        "output_pii_enabled",
+        "output_policy_action",
+        "output_policy_enabled",
+        "prompt_injection_threshold",
+        "rag_default_max_results",
+        "rag_enabled",
+        "rag_redaction_enabled",
+        "rag_relevance_threshold",
+        "rag_tier2_enabled",
+        "rate_limit_enabled",
+        "requests_per_minute",
+        "retention_days",
+        "routing_cost_weight",
+        "routing_enabled",
+        "routing_latency_weight",
+        "routing_priority_weight",
+        "routing_risk_weight",
+        "telemetry_enabled",
+        "threat_intel_enabled",
+        "threat_score_threshold",
+        "tier2_enabled",
+        "tier2_execution_mode",
+        "tier2_fail_closed_enabled",
+        "tier2_stream_hold_enabled",
+        "tier2_stream_hold_timeout_ms",
+        "tier2_strict",
+        "toxicity_threshold",
+        "vector_db_isolation"
+      ]
+    }
+  },
+  "chat": {
+    "block-pii-gpt4omini": {
+      "http_status": 404,
+      "ms": 1033.8,
+      "request_id": "zs-d88ffc19d1cd",
+      "sanitized": {
+        "error": "Model 'gpt-4o-mini' is not configured for inference in this organization. Connect it under Multi-Model Governance, use a connected model, or send 'auto' to route automatically.",
+        "code": "model_not_configured",
+        "blocked_by": "model_routing",
+        "message": "",
+        "zeroshield_action": null,
+        "final_action": null,
+        "stages": [],
+        "leaked_ssn": false,
+        "leaked_email": false,
+        "has_pipeline_trace": false,
+        "prompt_submitted_has_ssn": false
+      },
+      "events": {
+        "error": "models/query.py\", line 1542, in filter\n    return self._filter_or_exclude(False, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/control/.venv/lib/python3.12/site-packages/django/db/models/query.py\", line 1560, in _filter_or_exclude\n    clone._filter_or_exclude_inp"
+      }
+    },
+    "block-pii-auto": {
+      "http_status": 200,
+      "ms": 12061.4,
+      "request_id": "zs-6f6f448bd337",
+      "sanitized": {
+        "error": null,
+        "code": null,
+        "blocked_by": null,
+        "message": "",
+        "zeroshield_action": "redact",
+        "final_action": "redact",
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 0.4
+          },
+          {
+            "name": "kill_switch",
+            "action": "allow",
+            "latency_ms": 0.2
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.7
+          },
+          {
+            "name": "policy",
+            "action": "redact",
+            "latency_ms": 1.1
+          },
+          {
+            "name": "input_scan",
+            "action": "allow",
+            "latency_ms": 1076.2
+          },
+          {
+            "name": "model_routing",
+            "action": "reroute",
+            "latency_ms": 9.7
+          },
+          {
+            "name": "model_input",
+            "action": "allow",
+            "latency_ms": 0.2
+          },
+          {
+            "name": "model_output",
+            "action": "allow",
+            "latency_ms": 9394.5
+          },
+          {
+            "name": "output_guardrail",
+            "action": "allow",
+            "latency_ms": 1244.9
+          }
+        ],
+        "leaked_ssn": false,
+        "leaked_email": false,
+        "has_pipeline_trace": true,
+        "prompt_submitted_has_ssn": false
+      },
+      "events": {
+        "error": "models/query.py\", line 1542, in filter\n    return self._filter_or_exclude(False, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/control/.venv/lib/python3.12/site-packages/django/db/models/query.py\", line 1560, in _filter_or_exclude\n    clone._filter_or_exclude_inp"
+      }
+    },
+    "block-clean-gpt4omini": {
+      "http_status": 404,
+      "ms": 1248.5,
+      "request_id": "zs-82f7147ba078",
+      "sanitized": {
+        "error": "Model 'gpt-4o-mini' is not configured for inference in this organization. Connect it under Multi-Model Governance, use a connected model, or send 'auto' to route automatically.",
+        "code": "model_not_configured",
+        "blocked_by": "model_routing",
+        "message": "",
+        "zeroshield_action": null,
+        "final_action": null,
+        "stages": [],
+        "leaked_ssn": false,
+        "leaked_email": false,
+        "has_pipeline_trace": false,
+        "prompt_submitted_has_ssn": false
+      },
+      "events": {
+        "error": "models/query.py\", line 1542, in filter\n    return self._filter_or_exclude(False, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/control/.venv/lib/python3.12/site-packages/django/db/models/query.py\", line 1560, in _filter_or_exclude\n    clone._filter_or_exclude_inp"
+      }
+    },
+    "observe-pii-gpt4omini": {
+      "http_status": 404,
+      "ms": 1434.5,
+      "request_id": "zs-0ba45b9efa49",
+      "sanitized": {
+        "error": "Model 'gpt-4o-mini' is not configured for inference in this organization. Connect it under Multi-Model Governance, use a connected model, or send 'auto' to route automatically.",
+        "code": "model_not_configured",
+        "blocked_by": "model_routing",
+        "message": "",
+        "zeroshield_action": null,
+        "final_action": null,
+        "stages": [],
+        "leaked_ssn": false,
+        "leaked_email": false,
+        "has_pipeline_trace": false,
+        "prompt_submitted_has_ssn": false
+      },
+      "events": {
+        "error": "models/query.py\", line 1542, in filter\n    return self._filter_or_exclude(False, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/control/.venv/lib/python3.12/site-packages/django/db/models/query.py\", line 1560, in _filter_or_exclude\n    clone._filter_or_exclude_inp"
+      }
+    },
+    "observe-pii-auto": {
+      "http_status": 200,
+      "ms": 10638.3,
+      "request_id": "zs-b09d181afa8b",
+      "sanitized": {
+        "error": null,
+        "code": null,
+        "blocked_by": null,
+        "message": "",
+        "zeroshield_action": "flag",
+        "final_action": "flag",
+        "stages": [
+          {
+            "name": "auth",
+            "action": "allow",
+            "latency_ms": 3.1
+          },
+          {
+            "name": "kill_switch",
+            "action": "allow",
+            "latency_ms": 0.3
+          },
+          {
+            "name": "rate_limit",
+            "action": "allow",
+            "latency_ms": 0.7
+          },
+          {
+            "name": "policy",
+            "action": "redact",
+            "latency_ms": 1.0
+          },
+          {
+            "name": "input_scan",
+            "action": "flag",
+            "latency_ms": 1338.2
+          },
+          {
+            "name": "model_routing",
+            "action": "reroute",
+            "latency_ms": 2.6
+          },
+          {
+            "name": "model_input",
+            "action": "allow",
+            "latency_ms": 0.3
+          },
+          {
+            "name": "model_output",
+            "action": "allow",
+            "latency_ms": 8301.1
+          },
+          {
+            "name": "output_guardrail",
+            "action": "flag",
+            "latency_ms": 981.7
+          }
+        ],
+        "leaked_ssn": false,
+        "leaked_email": false,
+        "has_pipeline_trace": true,
+        "prompt_submitted_has_ssn": false
+      },
+      "events": {
+        "error": "models/query.py\", line 1542, in filter\n    return self._filter_or_exclude(False, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/control/.venv/lib/python3.12/site-packages/django/db/models/query.py\", line 1560, in _filter_or_exclude\n    clone._filter_or_exclude_inp"
+      }
+    },
+    "observe-clean-gpt4omini": {
+      "http_status": 404,
+      "ms": 1244.7,
+      "request_id": "zs-0eccd958c6cf",
+      "sanitized": {
+        "error": "Model 'gpt-4o-mini' is not configured for inference in this organization. Connect it under Multi-Model Governance, use a connected model, or send 'auto' to route automatically.",
+        "code": "model_not_configured",
+        "blocked_by": "model_routing",
+        "message": "",
+        "zeroshield_action": null,
+        "final_action": null,
+        "stages": [],
+        "leaked_ssn": false,
+        "leaked_email": false,
+        "has_pipeline_trace": false,
+        "prompt_submitted_has_ssn": false
+      },
+      "events": {
+        "error": "models/query.py\", line 1542, in filter\n    return self._filter_or_exclude(False, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/app/control/.venv/lib/python3.12/site-packages/django/db/models/query.py\", line 1560, in _filter_or_exclude\n    clone._filter_or_exclude_inp"
+      }
+    }
+  },
+  "policy_check": {
+    "block-pii": {
+      "http_status": 200,
+      "ms": 27.0,
+      "request_id": "zs-99a4be4dc5f0",
+      "sanitized": {
+        "error": null,
+        "code": null,
+        "blocked_by": null,
+        "message": "Content redacted by policy",
+        "zeroshield_action": null,
+        "final_action": null,
+        "stages": [],
+        "leaked_ssn": false,
+        "leaked_email": false,
+        "has_pipeline_trace": false,
+        "prompt_submitted_has_ssn": false
+      }
+    },
+    "block-clean": {
+      "http_status": 200,
+      "ms": 31.7,
+      "request_id": "zs-ca7bab8a63ea",
+      "sanitized": {
+        "error": null,
+        "code": null,
+        "blocked_by": null,
+        "message": "",
+        "zeroshield_action": null,
+        "final_action": null,
+        "stages": [],
+        "leaked_ssn": false,
+        "leaked_email": false,
+        "has_pipeline_trace": false,
+        "prompt_submitted_has_ssn": false
+      }
+    },
+    "observe-pii": {
+      "http_status": 200,
+      "ms": 5.3,
+      "request_id": "zs-36fe2e1218f3",
+      "sanitized": {
+        "error": null,
+        "code": null,
+        "blocked_by": null,
+        "message": "Content redacted by policy",
+        "zeroshield_action": null,
+        "final_action": null,
+        "stages": [],
+        "leaked_ssn": false,
+        "leaked_email": false,
+        "has_pipeline_trace": false,
+        "prompt_submitted_has_ssn": false
+      }
+    },
+    "observe-clean": {
+      "http_status": 200,
+      "ms": 3.6,
+      "request_id": "zs-778cd45aae8c",
+      "sanitized": {
+        "error": null,
+        "code": null,
+        "blocked_by": null,
+        "message": "",
+        "zeroshield_action": null,
+        "final_action": null,
+        "stages": [],
+        "leaked_ssn": false,
+        "leaked_email": false,
+        "has_pipeline_trace": false,
+        "prompt_submitted_has_ssn": false
+      }
+    }
+  },
+  "db_pii_flags": {
+    "v3a02-block": {
+      "pii_detection_enabled": true,
+      "enforcement_mode": "block",
+      "firewall_enabled": true,
+      "output_pii_enabled": true,
+      "output_pii_action": "redact"
+    },
+    "v3a02-observe": {
+      "pii_detection_enabled": false,
+      "enforcement_mode": "monitor",
+      "firewall_enabled": true,
+      "output_pii_enabled": true,
+      "output_pii_action": "redact"
+    },
+    "zeroshield": {
+      "pii_detection_enabled": true,
+      "enforcement_mode": "block",
+      "firewall_enabled": true,
+      "output_pii_enabled": true,
+      "output_pii_action": "flag"
+    }
+  }
+}

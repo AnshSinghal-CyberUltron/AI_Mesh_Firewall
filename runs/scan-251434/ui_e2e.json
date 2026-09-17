@@ -1,0 +1,49 @@
+{
+  "ok": true,
+  "base": "http://127.0.0.1:8180",
+  "started_at": "2026-09-17T06:16:41.570Z",
+  "asserts": [
+    {
+      "label": "open live blocked request zs-1b34a6759ecd",
+      "pass": true
+    },
+    {
+      "label": "live jailbreak Scan Detail shows BLOCK",
+      "pass": true
+    },
+    {
+      "label": "live Prompt Injection is true",
+      "pass": true
+    },
+    {
+      "label": "live Threat Level not NONE (got Pipeline)",
+      "pass": true
+    },
+    {
+      "label": "live Security Score > 0 (got 95)",
+      "pass": true
+    }
+  ],
+  "pageErrors": [],
+  "historical": {
+    "opened": false,
+    "note": "scan 251434 is no longer in threat-feed (API 404); live jailbreak block is the enforceable proof"
+  },
+  "liveBlock": {
+    "term": "zs-1b34a6759ecd",
+    "score": "95",
+    "threat": "Pipeline",
+    "promptInjection": "true",
+    "orgRoutingOff": false,
+    "routingDidNotRun": false,
+    "pinnedOrgEnabled": false,
+    "overallAllow": true,
+    "overallBlock": true,
+    "inputScanBlock": false,
+    "modelRecBlock": false,
+    "scanId": "339285",
+    "requestId": "zs-1b34a6759ecd"
+  },
+  "error": null,
+  "finished_at": "2026-09-17T06:17:38.881Z"
+}

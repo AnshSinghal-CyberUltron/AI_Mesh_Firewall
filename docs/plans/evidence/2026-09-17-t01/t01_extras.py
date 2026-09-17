@@ -146,11 +146,13 @@ def main() -> None:
             "model_name": target.get("model_name") or "gpt-4o-mini",
             "api_key": raw_key,
             "is_active": True,
-            "data_sensitivity_level": target.get("data_sensitivity_level") or "internal",
-            "cost_per_1k_input_tokens": str(target.get("cost_per_1k_input_tokens") or "0.001"),
-            "latency_sla_ms": target.get("latency_sla_ms") or 8000,
-            "routing_priority": target.get("routing_priority") or 1,
-            "risk_score": target.get("risk_score") or 20,
+            "data_sensitivity_level": target.get("data_sensitivity_level") or "public",
+            "cost_per_1k_input_tokens": str(
+                target.get("cost_per_1k_input_tokens") if target.get("cost_per_1k_input_tokens") is not None else "0.001"
+            ),
+            "latency_sla_ms": target.get("latency_sla_ms") if target.get("latency_sla_ms") is not None else 8000,
+            "routing_priority": target.get("routing_priority") if target.get("routing_priority") is not None else 1,
+            "risk_score": target.get("risk_score") if target.get("risk_score") is not None else 0.2,
         }
         pst, pbody, ph = _http(
             "PATCH",

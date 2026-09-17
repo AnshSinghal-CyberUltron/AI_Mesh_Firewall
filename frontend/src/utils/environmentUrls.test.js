@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   getDedicatedGatewayFallbackUrl,
+  isControlPlaneGatewayUrl,
   isProductionFirewallHost,
   preferSameOriginGateway,
   probeSameOriginGatewayProxy,
@@ -148,4 +149,52 @@ test("toAbsoluteGatewayUrl passes an already-absolute URL through unchanged", ()
 test("toAbsoluteGatewayUrl returns empty string for an empty/undefined path", () => {
   assert.equal(toAbsoluteGatewayUrl(""), "");
   assert.equal(toAbsoluteGatewayUrl(undefined), "");
+});
+
+test("isControlPlaneGatewayUrl flags Django/backend hosts that 404 /v1", () => {
+  assert.equal(isControlPlaneGatewayUrl("https://aimeshbackend.zeroshield.ai"), true);
+  assert.equal(isControlPlaneGatewayUrl("http://127.0.0.1:8100"), true);
+  assert.equal(isControlPlaneGatewayUrl("https://aimeshfirewall.zeroshield.ai"), false);
+  assert.equal(isControlPlaneGatewayUrl("https://aimeshgateway.zeroshield.ai"), false);
+});
+
+test("resolveBrowserGatewayBaseUrl uses same-origin on Vite :8180", () => {
+  const original = globalThis.window;
+  globalThis.window = {
+    location: {
+      hostname: "127.0.0.1",
+      origin: "http://127.0.0.1:8180",
+      protocol: "http:",
+      port: "8180",
+    },
+    localStorage: { getItem: () => "", setItem: () => {}, removeItem: () => {} },
+  };
+  try {
+    assert.equal(preferSameOriginGateway(), true);
+    assert.equal(resolveBrowserGatewayBaseUrl(), "http://127.0.0.1:8180");
+  } finally {
+    globalThis.window = original;
+  }
+});
+
+test("resolveBrowserGatewayBaseUrl uses same-origin on GCP *.internal Vite UI", () => {
+  const original = globalThis.window;
+  globalThis.window = {
+    location: {
+      hostname: "ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal",
+      origin: "http://ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal:8180",
+      protocol: "http:",
+      port: "8180",
+    },
+    localStorage: { getItem: () => "", setItem: () => {}, removeItem: () => {} },
+  };
+  try {
+    assert.equal(preferSameOriginGateway(), true);
+    assert.equal(
+      resolveBrowserGatewayBaseUrl(),
+      "http://ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal:8180",
+    );
+  } finally {
+    globalThis.window = original;
+  }
 });

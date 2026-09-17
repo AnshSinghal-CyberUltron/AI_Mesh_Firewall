@@ -16,7 +16,6 @@
   "do_not_claim": [
     "addon p99 < 20ms (measured 20.6ms)",
     "1064 qualified chat RPS (scan-only openloop is not that floor)",
-    "OpenRouter L01-3 full inference (key file absent after session compact)",
     "quality Target_FPR 0.01 achieved"
   ],
   "closed_this_completion": [
@@ -28,7 +27,8 @@
     "stale green Configuration-saved banner not shown on rewrite 400",
     "compose frontend pin to ai-mesh-nginx-t00:t01 on 8180:80",
     "zeroshield Redis firewall:config now includes pii_detection_enabled=true",
-    "quality signed: Target_FPR 0.01 not achievable; Achieved_FPR 1.0; Recall_At_Floor 0.0"
+    "quality signed: Target_FPR 0.01 not achievable; Achieved_FPR 1.0; Recall_At_Floor 0.0",
+    "OpenRouter BYOK full inference: API Pong zs-f63fd2818b6c / zs-6f2450fa6e9a; UI Attack Simulator zs-fc30d1327ae2 max_tokens=512; PII-ON SSN redacted zs-37e941e0a0ac without raw SSN in prompt_submitted"
   ],
   "deploy": {
     "method": "docker compose build gateway (second build after cache-stale main.py); up -d --no-deps --force-recreate gateway; frontend already ai-mesh-nginx-t00:t01",
@@ -135,8 +135,35 @@
     "note": "1064 is a 4-node L4 fleet qualified-chat floor. 1308 RPS is this VM scan-only (max_tokens=0). Do not equate them. Addon p99 20.6ms misses the 20ms target."
   },
   "inference": {
-    "openrouter_attempted": false,
-    "reason": "OpenRouter key was not present in /tmp/t01-openrouter.key after context compact; not recovered from transcript. Synth org still GATEWAY_ORG_ONLY_INFERENCE. Scan-only L01-3 proved. Full completion against OpenRouter not live-proven."
+    "openrouter_attempted": true,
+    "openrouter_pass": true,
+    "provider": "custom",
+    "api_base_host": "openrouter.ai",
+    "model_id": "openai/gpt-4o-mini",
+    "api_key_last4": "a8bb",
+    "patch_x_request_id": "27e5826d-7dea-4452-971f-527969ea687d",
+    "clean_api": {
+      "http": 200,
+      "assistant": "Pong.",
+      "x_request_ids": ["zs-f63fd2818b6c", "zs-6f2450fa6e9a"],
+      "model_output": "allow"
+    },
+    "ssn_pii_on": {
+      "http": 200,
+      "zs_action": "redact",
+      "input_scan": "redact",
+      "raw_ssn_in_prompt_or_assistant": false,
+      "x_request_id": "zs-37e941e0a0ac"
+    },
+    "ui_attack_simulator": {
+      "pass": true,
+      "http": 200,
+      "assistant": "Pong.",
+      "max_tokens": 512,
+      "x_request_id": "zs-fc30d1327ae2",
+      "hashed_js": "/assets/index-BwiHFc60.js"
+    },
+    "key_storage": "/tmp/t01-openrouter.key mode 0600; not in git; not in evidence JSON"
   },
   "unit_tests": {
     "gateway_test_t01_pii_and_pre_masked": "25 passed",
@@ -150,5 +177,5 @@
     },
     "zeroshield": "PUT pii_detection_enabled current=true so Redis now has the key (was omitted)."
   },
-  "next": "Do not start T02. Wait for explicit instruction. H22 still blocks release. Rotate the OpenRouter test key if it was pasted in chat."
+  "next": "Do not start T02. Wait for explicit instruction. H22 still blocks release. OpenRouter L01-3 full inference is proven. Rotate the test key after this session because it was pasted in chat."
 }

@@ -1,0 +1,82 @@
+{
+  "task": "T02",
+  "verdict": "PASS",
+  "pin": "2a657fad48e3f557f4c1f3c7bf23acec5007d304",
+  "ts": "2026-09-17T07:46:20Z",
+  "lab": "this-vm-docker-wipe-and-recreate",
+  "gcp_vms_deleted": false,
+  "secrets_committed": false,
+  "gates": {
+    "L02-1": {
+      "pass": true,
+      "same_image_ids": true,
+      "any_repo_bind_mounts": false,
+      "evidence": [
+        "docs/plans/evidence/2026-09-17-t02/l02_1_recreate.json",
+        "docs/plans/evidence/2026-09-17-t02/l02_1_images.json",
+        "docs/plans/evidence/2026-09-17-t02/wipe.json"
+      ]
+    },
+    "L02-2": {
+      "pass": true,
+      "ALLOW": {
+        "request_id": "zs-e6e611e587a9",
+        "http": 200,
+        "recorder_saw_original": true,
+        "assistant": "pong-t02"
+      },
+      "REDACT": {
+        "request_id": "zs-1d720143ca49",
+        "http": 200,
+        "input_scan": "redact",
+        "recorder_saw_raw_ssn": false
+      },
+      "BLOCK": {
+        "request_id": "zs-e37efd2772ce",
+        "http": 400,
+        "recorder_calls": 0,
+        "note": "byte-truth is recorder_calls==0; pipeline_trace model_output still reads allow"
+      }
+    },
+    "L02-3": {
+      "pass": true,
+      "waiver": "keep_waiver with L00-2 — second host not required on this VM"
+    },
+    "L02-4": {
+      "pass": true,
+      "admin_bind": "127.0.0.1:18081",
+      "openai_port_unpublished": true,
+      "wrong_admin": 401,
+      "public_spa_html_is_not_recorder": true
+    }
+  },
+  "frontend": {
+    "image": "ai-mesh-nginx-t00:t02",
+    "server": "nginx/1.30.5",
+    "hashed_js": "/assets/index-BwiHFc60.js",
+    "vite_client": false,
+    "browser_ok": true
+  },
+  "images": {
+    "gateway": "sha256:2fd529f864f1527445fe4b0ffe1df512628f78d43c6f0249489853f0f68d31af",
+    "control": "sha256:692077b47db75d905bfad93b711c9199798f81e001dd68b99c40b7ab054c311e",
+    "frontend": "sha256:4a47de9a3cd1d18f805748208a165d1831353db918ba2d0205e271fda79ab8b1",
+    "recorder": "sha256:f7f85c914d4af29465737977a36a909f58e3ea6d45f56a3e4a293469b5c6b005"
+  },
+  "openloop": {
+    "target_rps": 20,
+    "achieved_rps": 18.114,
+    "http_200": 300,
+    "recorder_calls": 300,
+    "p99_ms": 1841.3,
+    "not_a_1064_claim": true,
+    "not_a_20ms_sla_claim": true
+  },
+  "recorder_unit_tests": "7 passed",
+  "honesty": {
+    "t00_t01_runbook_verbatim": "still waived L00-2/L00-3/20ms/1064/FPR — T02 started under that lock",
+    "wipe_also_removed_other_named_volumes_on_this_vm": true,
+    "openrouter_not_repointed": "synth BYOK stays on t02-recorder so L02 byte proof is unambiguous",
+    "injection_without_org_policies_does_not_block": "scanner zero-policy org has no built-in injection block; BLOCK used org blocked_keywords canary"
+  }
+}

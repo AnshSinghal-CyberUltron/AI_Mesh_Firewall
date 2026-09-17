@@ -37,16 +37,73 @@ export function honestStageAction(stage) {
   let a = String((stage && stage.action) || "allow").toLowerCase();
   const lat = stage && stage.latency_ms;
   if (typeof lat === "number" && lat === 0 && (a === "allow" || a === "")) {
+    const name = String(stage?.name || stage?.stage || "").toLowerCase();
+    if (name === "model_routing" || name === "route") {
+      return a || "allow";
+    }
     return "skip";
   }
   const noop = stage && ((stage.metadata && stage.metadata.redact_noop) || stage.redact_noop);
   const analyzed = stage && stage.scan_outcome === "analyzed";
-  if (analyzed && a === "allow") return a;
+  const rec = String(stage?.recommended_action || "").toLowerCase();
+  const recIsEnforce = rec === "block" || rec === "redact" || rec === "rewrite" || rec === "flag";
+  const threat = String(stage?.threat_type || "").toLowerCase();
+  const isInjection = (
+    threat === "prompt_injection"
+    || threat === "jailbreak"
+    || threat === "goal_hijacking"
+    || threat === "injection"
+    || threat.endsWith("_injection")
+  );
+  if (analyzed && a === "allow" && !(recIsEnforce && isInjection)) return a;
   if (a === "redact" && noop) {
-    if (analyzed) return "allow";
+    if (analyzed && !(recIsEnforce && isInjection)) return "allow";
     a = "flag";
   }
+  if ((a === "allow" || a === "pass") && recIsEnforce && isInjection) {
+    return rec === "block" ? "flag" : rec;
+  }
   return a;
+}
+
+const _STAGE_SEVERITY = { block: 3, error: 3, redact: 2, rewrite: 2, flag: 1, reroute: 1, monitor: 0, skip: 0, allow: 0, pass: 0 };
+const _STAGE_SCORE = { block: 90, error: 90, redact: 75, rewrite: 75, flag: 60, reroute: 40 };
+
+/** Lift score/action from stage badges including unenforced injection BLOCK recs. */
+export function deriveStageVerdict(stages) {
+  let action = null, score = 0, severity = -1;
+  for (const s of Array.isArray(stages) ? stages : []) {
+    const a = honestStageAction(s);
+    const sev = _STAGE_SEVERITY[a] ?? 0;
+    if (a && sev > severity) { severity = sev; action = a; }
+    if (_STAGE_SCORE[a]) score = Math.max(score, _STAGE_SCORE[a]);
+  }
+  return { action, score, severity };
+}
+
+/** Security Analysis flags from pipeline stages when telemetry threat_type was dropped. */
+export function derivePipelineDetections(stages = [], meta = {}) {
+  let promptInjection = Boolean(meta?.prompt_injection_detected);
+  let jailbreak = Boolean(meta?.jailbreak_detected);
+  let pii = Boolean(meta?.pii_detected);
+  for (const s of Array.isArray(stages) ? stages : []) {
+    const t = String(s?.threat_type || "").trim().toLowerCase();
+    if (!t || t === "none" || t === "clean") continue;
+    if (
+      t === "prompt_injection"
+      || t === "injection"
+      || t === "jailbreak"
+      || t === "goal_hijacking"
+      || t === "tool_overreach"
+      || t === "indirect_injection"
+      || t.endsWith("_injection")
+    ) {
+      promptInjection = true;
+    }
+    if (t === "jailbreak") jailbreak = true;
+    if (t === "pii" || t === "secret" || t === "phi" || t === "pci" || t === "credential") pii = true;
+  }
+  return { promptInjection, jailbreak, pii };
 }
 
 // Build honest timeline nodes from the gateway's REAL pipeline_trace.stages[].
@@ -381,6 +438,7 @@ export function resolveRoutingDecision(sources = {}) {
     remapped_from: pick("remapped_from") || "",
     runtime_model: pick("runtime_model") || routed,
     candidate_scores: Array.isArray(pick("candidate_scores")) ? pick("candidate_scores") : [],
+    org_routing_enabled: pick("org_routing_enabled"),
   };
 }
 

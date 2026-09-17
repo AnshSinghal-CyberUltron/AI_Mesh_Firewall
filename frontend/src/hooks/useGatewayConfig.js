@@ -3,6 +3,7 @@ import {
   getDedicatedGatewayFallbackUrl,
   getGatewayStorageKey,
   isBrowserReachableUrl,
+  isControlPlaneGatewayUrl,
   isLocalBrowserHost,
   isProductionFirewallHost,
   preferSameOriginGateway,
@@ -29,7 +30,7 @@ export function useGatewayConfig() {
 
   useEffect(() => {
     const stored = localStorage.getItem(GATEWAY_URL_KEY);
-    if (stored && !isBrowserReachableUrl(stored)) {
+    if (stored && (!isBrowserReachableUrl(stored) || isControlPlaneGatewayUrl(stored))) {
       localStorage.removeItem(GATEWAY_URL_KEY);
       return;
     }
@@ -38,8 +39,8 @@ export function useGatewayConfig() {
       try {
         const storedHost = new URL(stored).hostname.toLowerCase();
         const pageHost = new URL(origin).hostname.toLowerCase();
-        // Drop stale cross-origin cache so prod UI uses same-origin /v1 proxy.
-        if (pageHost === "aimeshfirewall.zeroshield.ai" && storedHost !== pageHost) {
+        // Drop stale cross-origin cache so the UI uses same-origin /v1 proxy.
+        if ((pageHost === "aimeshfirewall.zeroshield.ai" || preferSameOriginGateway()) && storedHost !== pageHost) {
           localStorage.removeItem(GATEWAY_URL_KEY);
         }
       } catch {
@@ -96,10 +97,11 @@ export function useGatewayConfig() {
             ? data.backend_url
             : fallbackBe;
 
-        setGatewayUrl(gw);
+        const safeGw = isControlPlaneGatewayUrl(gw) ? resolveBrowserGatewayBaseUrl() : gw;
+        setGatewayUrl(safeGw);
         setBackendUrl(be);
-        if (isBrowserReachableUrl(gw)) {
-          localStorage.setItem(GATEWAY_URL_KEY, gw);
+        if (isBrowserReachableUrl(safeGw) && !isControlPlaneGatewayUrl(safeGw)) {
+          localStorage.setItem(GATEWAY_URL_KEY, safeGw);
         }
       } catch {
         if (!cancelled) {

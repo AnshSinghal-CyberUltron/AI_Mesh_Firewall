@@ -1,0 +1,32 @@
+{
+  "ok": true,
+  "base": "https://aimeshfirewall.zeroshield.ai",
+  "asserts": [
+    {
+      "label": "Secret Extraction blocked in UI or HTTP 400",
+      "pass": true
+    },
+    {
+      "label": "chat completions request observed",
+      "pass": true
+    },
+    {
+      "label": "no page errors",
+      "pass": true
+    }
+  ],
+  "pageErrors": [],
+  "error": null,
+  "started_at": "2026-09-17T07:23:14.683Z",
+  "uiTextSample": "ZeroShield\n\nAI Security Platform\n\nPRODUCT\nAI Mesh Firewall\nAI Gateway & Traffic Ingress\nPolicy Management\nRAG & Vector DB Firewall\nContext Assembly & MCP\nMulti-Model Governance\nModel Isolation & Kill-Switch\nOutput Guardrails\nInputs\nSystem Status\n\nAll systems operational\n\nProtected\nOpenAI SDK Demo\n\nadmin@zeroshield.io\n\nadmin@zeroshield.io\n\nAI GATEWAY & TRAFFIC INGRESS\nPROD\nConnected\nScan Model\n9+\n\nadmin@zeroshield.io\n\nadmin@zeroshield.io\n\nSubmodule 1.1 · Unified gateway lane\nAI Gateway & Traffic Ingress\n\nThe network entry point for every model request. This page now centers ingress pressure, gateway controls, and live evidence instead of the shared generic telemetry frame.\n\nThis is the broadest Module 1 surface: it represents the unified gateway sitting in front of all model, RAG, MCP, and output traffic.\n\nREQUESTS INSPECTED\n25\nDistinct requests that entered the gateway (24h) — allowed + redacted + blocked (deduplicated across routing/guard events)\nALLOWED THROUGH GATEWAY\n6\nCompleted without block or redact (7 redacted in period)\nRATE-LIMITED OR BLOCKED\n12\nGateway events stopped before downstream completion\nIDENTITIES OBSERVED\n1\nDistinct tenants in recent evidence sample (table may show up to 500 rows)\nOPERATOR LENS\nChoose the time horizon\n1h\n6h\n24h\n7d\n30d\nGATEWAY ASSETS\n0\nGateway records available from the control plane\nAVERAGE RISK\n90%\nMean security risk score across recent ingress events\nLATEST SOURCE\nsecurity_scan\nMost recent ingress source observed in the current lens\nOPERATOR PRIORITIES\nWhat should dominate this page\nTrack auth failures and rate-limit pressure before requests hit downstream models.\nKeep gateway key changes adjacent to live attack simulations.\nUse ingress evidence to validate that identity and quota policy are actually attached.\nOpen detailed results\nGETTING STARTED\nRoute Your AI Requests Through the Gateway\nWorks for technical & non-technical users\nView guide\nWORKFLOW\nGateway controls and full mesh intake testing\n\nThis is the broadest Module 1 surface: it represents the unified gateway sitting in front of all model, RAG, MCP, and output traffic.\n\nTRAFFIC PATH\nCLIENT\n25 requests\nAUTH LAYER\n6 passed\nRATE LIMITER\n12 blocked\nGATEWAY\n21 critical\nINGRESS CONTROLS\nGateway API Keys\n\nManage authentication, project scoping, and rate limits for gateway access.\n\nOrganization: ZeroShield\nCreate API Key\nNAME\tPREFIX\tORGANIZATION\tPROJECT\tMODELS\tRATE LIMIT\tSTATUS\tLAST USED\tACTIONS\ntest1\tLdkd0Av2...\t\nZeroShield\tdfd\t\nall\n\t1K TPM\t\nActive\t--\t\n\nDEMO-RAG-TR",
+  "chat": [
+    {
+      "status": 400,
+      "request_id": "zs-94dac030c259",
+      "code": "content_blocked",
+      "final_action": "block",
+      "threat": "sensitive_information_disclosure"
+    }
+  ],
+  "finished_at": "2026-09-17T07:23:23.579Z"
+}

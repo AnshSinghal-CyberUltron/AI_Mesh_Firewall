@@ -352,9 +352,11 @@ def _resolve_input_scan_action(
     blocked_stage: str,
     is_output_only: bool,
     scan_input_prompt: str,
+    recommended_action: str = "",
 ) -> tuple[str, str, bool]:
     """Honest input_scan stage action (action, scan_outcome, redact_noop)."""
     action = _normalize_verdict_action(verdict_action)
+    rec = _normalize_verdict_action(recommended_action) if recommended_action else ""
     threat_lc = str(threat_type or "").strip().lower()
     has_threat = bool(matched_patterns) or bool(
         threat_lc and threat_lc not in ("none", "", "clean")
@@ -364,7 +366,17 @@ def _resolve_input_scan_action(
         return "block", "", False
 
     if not is_blocked and action == "block":
-        action = "allow"
+        # Unenforced BLOCK rec: injection is a real detection (flag), PII
+        # often means policy already masked (keep allow).
+        action = "flag" if _is_injection_threat(threat_type) else "allow"
+
+    if (
+        not is_blocked
+        and action in ("allow", "pass")
+        and rec in ("block", "flag")
+        and _is_injection_threat(threat_type)
+    ):
+        action = "flag"
 
     if is_output_only:
         return (action if action in ("flag", "block") else "allow"), "", False
@@ -376,6 +388,8 @@ def _resolve_input_scan_action(
     if policy_redacted and not scanner_redaction_applied:
         if has_threat and _is_injection_threat(threat_type):
             if action == "redact":
+                action = "flag"
+            if action in ("allow", "pass") and rec in ("block", "flag"):
                 action = "flag"
             return action, "", False
         if has_threat:
@@ -496,6 +510,13 @@ ROUTING_STAGE_KEYS: tuple[str, ...] = (
     "candidate_count",
     "fallback_chain",
     "evaluator_model",
+    "candidate_scores",
+    "data_sensitivity_source",
+    "data_sensitivity",
+    "remapped_from",
+    "org_routing_enabled",
+    "routing_enabled",
+    "routing_override",
 )
 
 ROUTE_DESTINATION_LABELS: dict[str, str] = {
@@ -617,12 +638,14 @@ def normalize_routing_stage_fields(stage: dict[str, Any]) -> dict[str, Any]:
         return stage
     for key in ROUTING_STAGE_KEYS:
         if key not in stage:
-            if key in ("decision_factors", "fallback_chain"):
+            if key in ("decision_factors", "fallback_chain", "candidate_scores"):
                 stage[key] = []
             elif key == "weights":
                 stage[key] = {}
             elif key in ("routing_score", "candidate_count"):
                 stage[key] = 0
+            elif key in ("org_routing_enabled", "routing_enabled", "routing_override"):
+                stage[key] = None
             else:
                 stage[key] = ""
     if not stage.get("route_destination"):
@@ -1148,6 +1171,14 @@ def build_pipeline_trace(
         )
 
     verdict_action = getattr(sv, "action", None) or _zs_scan.get("action") or "allow"
+    _sv_meta = getattr(sv, "scan_meta", None) if sv is not None else None
+    if not isinstance(_sv_meta, dict):
+        _sv_meta = {}
+    recommended_action = str(
+        _sv_meta.get("recommended_action")
+        or _zs_scan.get("recommended_action")
+        or ""
+    ).strip().lower()
     is_output_only = zs.get("detection_tier") == "output_guard"
     scan_action, scan_outcome, redact_noop = _resolve_input_scan_action(
         policy_redacted=policy_redacted,
@@ -1160,6 +1191,7 @@ def build_pipeline_trace(
         blocked_stage=blocked_stage,
         is_output_only=is_output_only,
         scan_input_prompt=scan_input_prompt,
+        recommended_action=recommended_action,
     )
     input_scan_detail = _input_scan_detail(
         scan_action=scan_action,
@@ -1230,6 +1262,21 @@ def build_pipeline_trace(
     candidate_count = routing.get("candidate_count") or zs.get("candidate_count") or 0
     fallback_chain = routing.get("fallback_chain") or zs.get("fallback_chain") or []
     evaluator_model = routing.get("evaluator_model") or zs.get("evaluator_model") or ""
+    candidate_scores = routing.get("candidate_scores") or zs.get("candidate_scores") or []
+    data_sensitivity_source = (
+        routing.get("data_sensitivity_source") or zs.get("data_sensitivity_source") or ""
+    )
+    data_sensitivity = routing.get("data_sensitivity") or zs.get("data_sensitivity") or ""
+    remapped_from = routing.get("remapped_from") or zs.get("remapped_from") or ""
+    org_routing_enabled = routing.get("org_routing_enabled")
+    if org_routing_enabled is None:
+        org_routing_enabled = zs.get("org_routing_enabled")
+    routing_enabled_flag = routing.get("routing_enabled")
+    if routing_enabled_flag is None:
+        routing_enabled_flag = zs.get("routing_enabled")
+    routing_override = routing.get("routing_override")
+    if routing_override is None:
+        routing_override = zs.get("routing_override")
 
     # Where did the request-level enforcement (block/redact/...) actually happen?
     # The output guard forces detection_tier="output_guard" on its zs copy below,
@@ -1456,6 +1503,13 @@ def build_pipeline_trace(
             "candidate_count": candidate_count,
             "fallback_chain": fallback_chain,
             "evaluator_model": evaluator_model,
+            "candidate_scores": candidate_scores,
+            "data_sensitivity_source": data_sensitivity_source,
+            "data_sensitivity": data_sensitivity,
+            "remapped_from": remapped_from,
+            "org_routing_enabled": org_routing_enabled,
+            "routing_enabled": routing_enabled_flag,
+            "routing_override": routing_override,
             "guard_reason": routing_guard_reason,
             "tier": "",
             "confidence": 0,
@@ -1676,6 +1730,13 @@ def build_pipeline_trace(
             "candidate_count": candidate_count,
             "fallback_chain": fallback_chain,
             "evaluator_model": evaluator_model,
+            "candidate_scores": candidate_scores,
+            "data_sensitivity_source": data_sensitivity_source,
+            "data_sensitivity": data_sensitivity,
+            "remapped_from": remapped_from,
+            "org_routing_enabled": org_routing_enabled,
+            "routing_enabled": routing_enabled_flag,
+            "routing_override": routing_override,
         },
     }
     trace_out.update(compute_addon_split(metrics, total))

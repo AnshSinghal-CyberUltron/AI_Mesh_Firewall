@@ -69,6 +69,9 @@ export function isBrowserReachableUrl(value) {
   try {
     const host = new URL(raw).hostname.toLowerCase();
     if (INTERNAL_DOCKER_HOSTS.has(host)) return false;
+    const pageHost = getBrowserHost().toLowerCase();
+    // Same-origin is always callable (GCP *.internal:8180 Vite UI included).
+    if (pageHost && host === pageHost) return true;
     if (host.endsWith(".internal") || host.endsWith(".local")) return false;
     return true;
   } catch {
@@ -81,14 +84,39 @@ export function isBrowserReachableUrl(value) {
  * (nginx proxies /v1 → gateway). Set VITE_GATEWAY_SAME_ORIGIN=true to opt in
  * on other hosts. External API clients (curl/SDKs) use aimeshgateway.* directly.
  */
+export function isViteDevUiPort() {
+  if (typeof window === "undefined") return false;
+  const port = String(window.location.port || "");
+  return port === "8180" || port === "5173";
+}
+
 export function preferSameOriginGateway() {
   if (isProductionFirewallHost()) return true;
+  if (isViteDevUiPort()) return true;
   return import.meta.env?.VITE_GATEWAY_SAME_ORIGIN === "true";
 }
 
 /** True when the UI is served from the production firewall vhost (not the gateway vhost). */
 export function isProductionFirewallHost() {
   return getBrowserHost().toLowerCase() === "aimeshfirewall.zeroshield.ai";
+}
+
+/** True when a URL is the Django control plane — POST /v1 there is HTML 404. */
+export function isControlPlaneGatewayUrl(value) {
+  const raw = trimTrailingSlash(value);
+  if (!raw) return false;
+  try {
+    const url = new URL(raw, getBrowserOrigin() || "http://localhost");
+    const host = url.hostname.toLowerCase();
+    const port = url.port;
+    if (host === "aimeshbackend.zeroshield.ai") return true;
+    if (host === "control") return true;
+    if (port === "8100" || port === "8000") return true;
+    if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return true;
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -117,12 +145,7 @@ export function resolveBrowserGatewayBaseUrl() {
   const origin = trimTrailingSlash(getBrowserOrigin());
   const dedicated = getDedicatedGatewayFallbackUrl();
 
-  // Production firewall UI: same-origin /v1 via nginx (no CORS). Dedicated host is fallback only.
-  if (isProductionFirewallHost() && origin && isBrowserReachableUrl(origin)) {
-    return origin;
-  }
-
-  // Same-origin /v1 proxy when opted in (VITE_GATEWAY_SAME_ORIGIN or prod firewall host).
+  // Production firewall UI + Vite :8180/:5173: same-origin /v1 (nginx or Vite proxy).
   if (preferSameOriginGateway() && origin && isBrowserReachableUrl(origin)) {
     return origin;
   }

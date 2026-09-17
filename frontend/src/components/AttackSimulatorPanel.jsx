@@ -12,7 +12,7 @@ import { SimulatorModelSelector } from "./simulator/SimulatorModelSelector";
 import { StageTimeline } from "./simulator/StageTimeline";
 import {
   chatCompletionBody,
-  simulatorRoutingPreferences,
+  attackSimulatorRoutingPreferences,
   normalizeChatPipelineResult,
   normalizeStreamChatPipelineResult,
 } from "../utils/liveGateway";
@@ -225,8 +225,14 @@ export function AttackSimulatorPanel() {
     gatewayFetch, gatewayFetchStream, executing: engineExecuting,
   } = useSimulatorEngine();
   const gatewayModels = useSimulatorGatewayModels();
-  const { config: firewallConfig } = useFirewallConfig();
-  const orgRoutingEnabled = firewallConfig?.routing_enabled ?? true;
+  const { config: firewallConfig, loading: firewallConfigLoading } = useFirewallConfig();
+  const attackSimRoutingPreferences = attackSimulatorRoutingPreferences(
+    gatewayModels.selectedModel,
+    {
+      orgRoutingEnabled: Boolean(firewallConfig?.routing_enabled),
+      configReady: !firewallConfigLoading && firewallConfig != null,
+    },
+  );
 
   const [selectedScenario, setSelectedScenario] = useState(null);
   const [promptText, setPromptText] = useState("");
@@ -275,7 +281,7 @@ export function AttackSimulatorPanel() {
         model: gatewayModels.selectedModel,
         runInference: true,
         stream: useStreamMode,
-        routingPreferences: simulatorRoutingPreferences(gatewayModels.selectedModel, { orgRoutingEnabled }),
+        routingPreferences: attackSimRoutingPreferences,
       });
 
       const res = useStreamMode
@@ -316,7 +322,7 @@ export function AttackSimulatorPanel() {
                 prompt: activePrompt,
                 model: gatewayModels.selectedModel,
                 runInference: false,
-                routingPreferences: simulatorRoutingPreferences(gatewayModels.selectedModel, { orgRoutingEnabled }),
+                routingPreferences: attackSimRoutingPreferences,
               }),
             ),
           });
@@ -380,6 +386,9 @@ export function AttackSimulatorPanel() {
         }
       } else if (
         res.status === 502
+        && !["isolation_target_uncallable", "kill_switch_active", "model_isolated"].includes(
+          String(res.data?.code || res.data?.blocked_by || res.data?.error?.code || ""),
+        )
         && (
           ["bedrock_inference_error", "guard_model_inference_error"].includes(
             res.data?.code || res.data?.blocked_by,
@@ -523,7 +532,7 @@ export function AttackSimulatorPanel() {
           prompt: burstPrompt,
           model: gatewayModels.selectedModel,
           runInference,
-          routingPreferences: simulatorRoutingPreferences(gatewayModels.selectedModel, { orgRoutingEnabled }),
+          routingPreferences: attackSimRoutingPreferences,
         });
         if (estimatedTokens != null) payload.estimated_tokens = estimatedTokens;
         const res = await gatewayFetch("/v1/chat/completions", {
@@ -622,7 +631,6 @@ export function AttackSimulatorPanel() {
     gatewayKey,
     gatewayModels,
     gatewayUrl,
-    orgRoutingEnabled,
   ]);
 
   useEffect(() => () => {

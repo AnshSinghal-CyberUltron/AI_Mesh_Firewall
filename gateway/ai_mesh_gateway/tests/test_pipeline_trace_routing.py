@@ -118,3 +118,53 @@ def test_kill_switch_stage_reroute_from_route_metadata():
     assert "Kill-switch" in ks["detail"] or "kill-switch" in ks["detail"].lower()
     assert routing["action"] == "reroute"
     assert routing["decision_source"] == "kill_switch"
+
+
+def test_model_routing_stage_carries_candidate_scores_and_sensitivity_source():
+    scores = [
+        {
+            "model_name": "gemini-flash-cheap",
+            "score": 0.84,
+            "cost_component": 0.971,
+        }
+    ]
+    trace = build_pipeline_trace(
+        route_metadata={
+            "original_model": "Haiku",
+            "selected_model": "gemini-flash-cheap",
+            "rerouted": True,
+            "decision_source": "deterministic_weighted",
+            "candidate_scores": scores,
+            "data_sensitivity_source": "org_default",
+            "data_sensitivity": "public",
+            "remapped_from": "",
+        },
+        requested_model="Haiku",
+    )
+    routing = next(s for s in trace["stages"] if s["name"] == "model_routing")
+    assert routing["candidate_scores"] == scores
+    assert routing["data_sensitivity_source"] == "org_default"
+    assert routing["data_sensitivity"] == "public"
+    assert trace["routing"]["candidate_scores"] == scores
+    assert trace["routing"]["data_sensitivity_source"] == "org_default"
+
+
+def test_routing_disabled_stamps_org_routing_enabled():
+    trace = build_pipeline_trace(
+        route_metadata={
+            "original_model": "gemini-flash-cheap",
+            "selected_model": "gemini-flash-cheap",
+            "routed_model": "gemini-flash-cheap",
+            "decision_source": "routing_disabled",
+            "org_routing_enabled": True,
+            "routing_enabled": False,
+            "routing_override": False,
+            "routing_reason": "Dynamic routing disabled by governance setting",
+        },
+        requested_model="gemini-flash-cheap",
+    )
+    routing = next(s for s in trace["stages"] if s["name"] == "model_routing")
+    assert routing["org_routing_enabled"] is True
+    assert routing["routing_enabled"] is False
+    assert routing["decision_source"] == "routing_disabled"
+    assert trace["routing"]["org_routing_enabled"] is True

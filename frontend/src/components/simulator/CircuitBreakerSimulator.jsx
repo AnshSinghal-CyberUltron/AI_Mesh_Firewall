@@ -3,22 +3,31 @@ import { AlertTriangle, RotateCcw, Zap, Activity, ShieldOff, TrendingUp } from "
 import { useAuth } from "../../context/AuthContext";
 import { startVisibleInterval } from "../../utils/visiblePoll.js";
 import { useSimulatorEngine } from "../../hooks/useSimulatorEngine";
+import { useSimulatorGatewayModels } from "../../hooks/useSimulatorGatewayModels";
 import { SimulatorShell } from "./SimulatorShell";
 
 export function CircuitBreakerSimulator() {
   const { fetchWithAuth } = useAuth();
   const engine = useSimulatorEngine();
+  const gatewayModels = useSimulatorGatewayModels();
   const [result, setResult] = useState(null);
   const [cbState, setCbState] = useState(null);
-  const [targetModel, setTargetModel] = useState("gpt-4o-mini");
+  const [targetModel, setTargetModel] = useState("");
   const [errorCount, setErrorCount] = useState(10);
   const [polling, setPolling] = useState(false);
-  const [riskModel, setRiskModel] = useState("gpt-4o");
+  const [riskModel, setRiskModel] = useState("");
   const [riskSeverity, setRiskSeverity] = useState(0.85);
   const [riskType, setRiskType] = useState("output_guard");
   const [riskResult, setRiskResult] = useState(null);
   const [riskInjecting, setRiskInjecting] = useState(false);
   const [triggering, setTriggering] = useState(false);
+
+  useEffect(() => {
+    if (gatewayModels.selectedModel) {
+      setTargetModel((cur) => cur || gatewayModels.selectedModel);
+      setRiskModel((cur) => cur || gatewayModels.selectedModel);
+    }
+  }, [gatewayModels.selectedModel]);
 
   // Load circuit breaker state
   // Phase 1 Fx-3: route through Django admin proxy (IsAdminOrSuperuser)
@@ -55,6 +64,7 @@ export function CircuitBreakerSimulator() {
     // never flips — drive the Execute button's in-flight disable off a local
     // `triggering` flag to prevent double-submit / concurrent injections.
     if (triggering) return;
+    if (!String(targetModel || "").trim()) return;
     setTriggering(true);
     let parsed = null;
     let httpOk = false;
@@ -90,6 +100,7 @@ export function CircuitBreakerSimulator() {
   };
 
   const handleReset = async () => {
+    if (!String(targetModel || "").trim()) return;
     // Phase 1 Fx-3: proxy reset through Django admin RBAC.
     await fetchWithAuth("/api/admin/gateway/circuit-breaker/reset/", {
       method: "POST",

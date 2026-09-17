@@ -1,0 +1,21 @@
+{
+  "host": "mesh-firewall-mig-nws9 / 34.180.21.204",
+  "image": "ai-mesh-gateway:v20260917-sid-floor",
+  "digest": "sha256:45bde19fbbaaa7772f8b2b84aafe355307e395fbd8dd62d07df0c24ed54d2da9",
+  "registry": "asia-south1-docker.pkg.dev/aisecshield-prod/mesh-firewall-images",
+  "overlay": "/home/support/docker-compose.sid-floor.yml",
+  "pull_policy": "always",
+  "deployed_from": "artifact-registry",
+  "secret_extraction": [
+    "zs-69a750d5950e",
+    "zs-94dac030c259",
+    "zs-c58599468407",
+    "zs-e7cfac5fb8b7",
+    "zs-90044a385a82"
+  ],
+  "scan_detail_id": 251469,
+  "ui_shot": "runs/prod-sid-floor-2026-09-17/shots/03-secret-extraction-result.png",
+  "api": "runs/prod-sid-floor-2026-09-17/api_e2e.json",
+  "ui": "runs/prod-sid-floor-2026-09-17/ui_e2e.json",
+  "registry_deploy": "runs/prod-sid-floor-2026-09-17/registry-deploy.json"
+}
