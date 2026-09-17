@@ -859,13 +859,47 @@ _PLATFORM_FLOOR_SCANNER_THREATS = frozenset({
     "pii", "phi", "pci", "secret", "credential", "sensitive_content", "dos",
 })
 
+# Policy-driven-detection keeps Tier-1 ATTACK_PATTERNS out of enforcement.
+# ZeroShield Model (tier_2) injection/jailbreak IS an enabled detection source
+# (design §4: "Tier-2 recommendation passed when tier2_enabled"). Stripping it
+# made scan 251434 ALLOW a 95% BLOCK jailbreak under enforcement_mode=block.
+_TIER2_INJECTION_THREATS = frozenset({
+    "prompt_injection", "jailbreak", "goal_hijacking", "injection",
+})
+
+
+def _is_tier2_scanner_tier(tier) -> bool:
+    t = str(tier or "").strip().lower().replace("-", "_")
+    return t in ("tier_2", "tier2")
+
+
+def _scan_threat_for_telemetry(scan_verdict) -> str:
+    """Persist a real scan threat on allow events so Security Analysis is honest."""
+    if scan_verdict is None:
+        return ""
+    t = str(getattr(scan_verdict, "threat_type", None) or "").strip()
+    if t.lower() in ("", "none", "clean"):
+        return ""
+    return t
+
+
+def _scan_risk_for_telemetry(scan_verdict) -> float:
+    if not _scan_threat_for_telemetry(scan_verdict):
+        return 0.0
+    try:
+        return float(getattr(scan_verdict, "confidence", None) or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
 
 def _scanner_kwargs_for_enforcement(verdict, *, recommendation: str | None = None) -> dict:
-    """Feed built-in PII/secret/DoS into ``resolve_and_enforce``; keep injection policy-only.
+    """Feed PII/secret/DoS plus Tier-2 injection into ``resolve_and_enforce``.
 
     Policy-driven-detection task 2.1 passed ``scanner_*=None`` for every threat, which
     let raw SSN/PAN reach the model whenever no org rule matched. The platform floor
     restores data-protection + DoS without re-arming ATTACK_PATTERNS as enforcement.
+    Tier-2 injection/jailbreak is a separate enabled source and must still drive
+    the enforcement lattice (scan 251434).
     """
     empty = {
         "scanner_recommendation": None,
@@ -877,20 +911,88 @@ def _scanner_kwargs_for_enforcement(verdict, *, recommendation: str | None = Non
         "scanner_detail": None,
     }
     if verdict is None:
-        return empty
-    threat = str(getattr(verdict, "threat_type", None) or "").strip().lower()
-    if threat not in _PLATFORM_FLOOR_SCANNER_THREATS and not _is_redactable_pii_threat(threat):
-        return empty
-    action = getattr(verdict, "action", None) or recommendation or None
-    return {
-        "scanner_recommendation": recommendation or action,
-        "scanner_action": getattr(verdict, "action", None) or action,
-        "scanner_threat_type": getattr(verdict, "threat_type", None) or None,
-        "scanner_confidence": getattr(verdict, "confidence", None),
-        "scanner_tier": getattr(verdict, "tier", None) or None,
-        "scanner_matched_patterns": list(getattr(verdict, "matched_patterns", None) or []),
-        "scanner_detail": getattr(verdict, "detail", None) or None,
-    }
+        out = empty
+        threat = ""
+        is_data_floor = False
+        is_tier2_injection = False
+    else:
+        threat = str(getattr(verdict, "threat_type", None) or "").strip().lower()
+        is_data_floor = threat in _PLATFORM_FLOOR_SCANNER_THREATS or _is_redactable_pii_threat(threat)
+        is_tier2_injection = (
+            _is_tier2_scanner_tier(getattr(verdict, "tier", None))
+            and threat in _TIER2_INJECTION_THREATS
+        )
+        # zs-b93c9033cf05 leftover: ZeroShield Model BLOCK rec used
+        # sensitive_information_disclosure (not in the injection frozenset), so
+        # kwargs were emptied and the prompt reached the model. Design §4: any
+        # Tier-2 block/redact rec is an enabled source. Tier-1 ATTACK_PATTERNS
+        # stay policy-only.
+        _t2_rec = str(recommendation or getattr(verdict, "action", None) or "").strip().lower()
+        is_tier2_block = (
+            _is_tier2_scanner_tier(getattr(verdict, "tier", None))
+            and _t2_rec in ("block", "redact", "deny", "reject", "block_immediately", "block_and_alert")
+        )
+        if not is_data_floor and not is_tier2_injection and not is_tier2_block:
+            out = empty
+        else:
+            action = getattr(verdict, "action", None) or recommendation or None
+            out = {
+                "scanner_recommendation": recommendation or action,
+                "scanner_action": getattr(verdict, "action", None) or action,
+                "scanner_threat_type": getattr(verdict, "threat_type", None) or None,
+                "scanner_confidence": getattr(verdict, "confidence", None),
+                "scanner_tier": getattr(verdict, "tier", None) or None,
+                "scanner_matched_patterns": list(getattr(verdict, "matched_patterns", None) or []),
+                "scanner_detail": getattr(verdict, "detail", None) or None,
+            }
+    return out
+
+
+def _org_pii_detection_enabled(org_config) -> bool:
+    """T01: honor org toggle; never hardcode True. Missing key keeps platform floor on."""
+    """T01 L01-3: honor the org content PII toggle.
+
+    Missing key keeps the PIPELINE-0032 input floor ON so old Redis payloads
+    that omitted ``pii_detection_enabled`` do not silently disable detection.
+    Explicit false/0/off removes the built-in PII floor (secrets/DoS stay).
+    Rebuild stamp 2026-09-17T06:58Z so the gateway image COPY layer cannot stay stale.
+    """
+    if not isinstance(org_config, dict) or "pii_detection_enabled" not in org_config:
+        return True
+    raw = org_config.get("pii_detection_enabled")
+    if isinstance(raw, str):
+        return raw.strip().lower() not in ("0", "false", "no", "off", "")
+    if raw is None:
+        return True
+    return bool(raw)
+
+
+def _scanner_kwargs_honoring_pii_toggle(
+    verdict,
+    *,
+    recommendation: str | None = None,
+    pii_detection_enabled: bool = True,
+) -> dict:
+    """Feed the platform floor into enforcement, minus PII-class threats when off."""
+    kwargs = _scanner_kwargs_for_enforcement(verdict, recommendation=recommendation)
+    if pii_detection_enabled:
+        return kwargs
+    threat = str(kwargs.get("scanner_threat_type") or "").strip().lower()
+    if threat in ("secret", "credential", "dos"):
+        return kwargs
+    if not threat:
+        return kwargs
+    if threat in _PLATFORM_FLOOR_SCANNER_THREATS or _is_redactable_pii_threat(threat):
+        return {
+            "scanner_recommendation": None,
+            "scanner_action": None,
+            "scanner_threat_type": None,
+            "scanner_confidence": None,
+            "scanner_tier": None,
+            "scanner_matched_patterns": None,
+            "scanner_detail": None,
+        }
+    return kwargs
 
 
 def _build_safe_block_response(
@@ -3464,6 +3566,9 @@ def _extract_chat_routing_preferences(body: dict, org_config: dict, auth_ctx, sc
     routing_override = routing_override if isinstance(routing_override, bool) else None
     routing_enabled = routing_override if routing_override is not None else org_routing_enabled
     preferred_model = str(body.get("model") or "auto")
+    _pref_hint = str(routing_preferences.get("preferred_model") or "").strip()
+    if _is_routing_sentinel_model(preferred_model) and _pref_hint and not _is_routing_sentinel_model(_pref_hint):
+        preferred_model = _pref_hint
     required_compliance = _coerce_string_list(
         routing_preferences.get("compliance_requirements"),
         body.get("compliance_requirements"),
@@ -3588,9 +3693,17 @@ def _extract_chat_routing_preferences(body: dict, org_config: dict, auth_ctx, sc
             _conf = float(_conf) if _conf is not None else None
         except (ValueError, TypeError):
             _conf = None
-        _malicious = _action in ("block", "flag", "redact", "rewrite") or (
-            _threat not in ("", "none", "benign", "safe", "allow")
-        )
+        # FIX-1.5c: data-protection verdicts (PII/secret redact or allow) are
+        # near-zero ROUTING risk. Tier-1 smart-mask uses action=redact while the
+        # pipeline_trace honesty layer shows allow/analyzed — treating redact as
+        # malicious kept request_risk=0.85, the risk floor dropped gemini, and
+        # routing landed on uncallable claude-haiku-cheap (HTTP 404).
+        _data_protection = _threat in {
+            "pii", "phi", "pci", "secret", "credential", "sensitive_content",
+        }
+        if _data_protection:
+            return 0.0
+        _malicious = _action in ("block", "flag", "redact", "rewrite")
         if _malicious:
             # Confidence-weighted high risk; clamp into [0,1]. Unknown confidence
             # on a malicious verdict defaults to a conservative high risk.
@@ -3753,6 +3866,142 @@ def _build_isolation_reroute_metadata(audit: dict, routing_prefs: dict) -> dict:
         "fallback_reason_code": audit.get("fallback_reason_code"),
         "isolation_scope": audit.get("isolation_scope"),
     }
+
+
+def _lookup_inference_model(models, name: str) -> dict | None:
+    key = str(name or "").strip().lower()
+    if not key:
+        return None
+    for model in models or []:
+        if not isinstance(model, dict):
+            continue
+        if str(model.get("model_name") or "").strip().lower() == key:
+            return model
+        if str(model.get("model_id") or "").strip().lower() == key:
+            return model
+    return None
+
+
+def _catalog_model_is_callable(entry: dict | None) -> bool:
+    """Runtime Callable: catalog row can actually be dispatched to LiteLLM."""
+    if not isinstance(entry, dict):
+        return False
+    if not entry.get("is_active", True):
+        return False
+    if not str(entry.get("model_id") or "").strip():
+        return False
+    if _is_guard_only_model(entry):
+        return False
+    provider = str(entry.get("provider") or "").strip().lower()
+    upstream = str(entry.get("model_id") or "").strip()
+    params = entry.get("litellm_params")
+    if isinstance(params, dict) and str(params.get("model") or "").strip():
+        upstream = str(params.get("model")).strip()
+    if provider not in {"ollama", "bedrock", "aws_bedrock"}:
+        try:
+            from llm_router import (
+                catalog_row_is_display_alias as _alias_row,
+                looks_like_provider_model_id as _provider_id,
+            )
+        except ImportError:
+            from .llm_router import (
+                catalog_row_is_display_alias as _alias_row,
+                looks_like_provider_model_id as _provider_id,
+            )
+        if _alias_row(entry) or not _provider_id(upstream):
+            return False
+    if provider in {"ollama", "bedrock", "aws_bedrock"}:
+        return True
+    if entry.get("api_key_set"):
+        return True
+    env_var = str(entry.get("api_key_env_var") or "").strip()
+    if env_var and os.environ.get(env_var):
+        return True
+    if str(entry.get("encrypted_api_key") or entry.get("api_key_encrypted") or "").strip():
+        return True
+    return False
+
+
+def _merge_isolation_into_route_metadata(route_metadata: dict, audit: dict, routing_prefs: dict) -> dict:
+    """Keep select_model weights/candidate_count; stamp isolation as the decision source."""
+    iso = _build_isolation_reroute_metadata(audit, routing_prefs)
+    merged = dict(route_metadata or {})
+    merged["decision_source"] = iso.get("decision_source") or merged.get("decision_source")
+    merged["trigger_source"] = iso.get("trigger_source")
+    merged["original_model"] = iso.get("original_model") or merged.get("original_model")
+    merged["isolation_action"] = iso.get("isolation_action")
+    merged["fallback_reason_code"] = iso.get("fallback_reason_code")
+    merged["isolation_scope"] = iso.get("isolation_scope")
+    merged["routing_reason"] = iso.get("routing_reason") or merged.get("routing_reason")
+    merged["policy_summary"] = iso.get("policy_summary") or merged.get("policy_summary")
+    merged["rerouted"] = True
+    factors = list(merged.get("decision_factors") or [])
+    for item in iso.get("decision_factors") or []:
+        if item not in factors:
+            factors.append(item)
+    merged["decision_factors"] = factors
+    selected = str(iso.get("selected_model") or merged.get("selected_model") or "").strip()
+    if selected:
+        merged["selected_model"] = selected
+        merged["routed_model"] = selected
+    return merged
+
+
+def _should_remap_isolation_provider_error(code, audit: dict | None) -> bool:
+    if not audit:
+        return False
+    trigger = str(audit.get("trigger_source") or "")
+    if trigger not in {"kill_switch", "model_state"}:
+        return False
+    try:
+        status = int(code or 0)
+    except (TypeError, ValueError):
+        return False
+    return status in (401, 404)
+
+
+def _isolation_uncallable_payload(route_metadata: dict | None) -> dict:
+    return {
+        "error": "service_unavailable",
+        "message": (
+            "The isolation fallback model is not callable. "
+            "Connect a working model or deactivate the kill-switch."
+        ),
+        "code": "isolation_target_uncallable",
+        "blocked_by": "kill_switch",
+        "zeroshield": {"routing": route_metadata or {}},
+    }
+
+
+def _isolation_uncallable_http_response(
+    *,
+    isolation_reroute_audit: dict | None,
+    inference_models: list | None,
+    requested_model: str,
+    routing_prefs: dict,
+    route_metadata: dict | None,
+):
+    if not isolation_reroute_audit:
+        return None
+    target = str(
+        (route_metadata or {}).get("selected_model")
+        or isolation_reroute_audit.get("selected_model")
+        or requested_model
+        or ""
+    ).strip()
+    entry = _lookup_inference_model(inference_models, target)
+    if _catalog_model_is_callable(entry):
+        return None
+    meta = route_metadata or _build_isolation_reroute_metadata(
+        isolation_reroute_audit, routing_prefs,
+    )
+    return JSONResponse(
+        status_code=503,
+        content=_attach_pipeline_trace_to_llm_error(
+            _isolation_uncallable_payload(meta),
+            http_status=503,
+        ),
+    )
 
 
 def _isolation_reroute_context(
@@ -4406,8 +4655,16 @@ def _guard_model_names() -> frozenset[str]:
 
 
 def _is_guard_only_model(model: dict) -> bool:
-    name = str(model.get("model_name") or "").strip().lower()
-    if name in _guard_model_names():
+    name = str(model.get("model_name") or "").strip()
+    model_id = str(model.get("model_id") or "").strip()
+    folded = name.lower()
+    if folded in _guard_model_names() or model_id.lower() in _guard_model_names():
+        return True
+    try:
+        from platform_models import is_platform_model_name as _platform_name
+    except ImportError:
+        from .platform_models import is_platform_model_name as _platform_name
+    if _platform_name(name) or (model_id and _platform_name(model_id)):
         return True
     provider = str(model.get("provider") or "").strip().lower()
     return provider == "internal"
@@ -4480,6 +4737,15 @@ def _filter_inference_eligible_models(routing_models: list[dict] | None) -> list
         if provider not in {"ollama", "bedrock", "aws_bedrock"} and not (
             api_key_set or api_key_via_env
         ):
+            continue
+        # Drop Title-Case display aliases (Haiku) that LiteLLM 404s. Keep empty
+        # model_id rows so isolation can fail closed with isolation_target_uncallable
+        # instead of a generic model_not_configured 404.
+        try:
+            from llm_router import catalog_row_is_display_alias as _display_alias_row
+        except ImportError:
+            from .llm_router import catalog_row_is_display_alias as _display_alias_row
+        if str(model.get("model_id") or "").strip() and _display_alias_row(model):
             continue
         eligible.append(model)
     return eligible
@@ -4703,6 +4969,25 @@ def _routing_identity_set(routing_models: list[dict] | None) -> set[str]:
         if model_id:
             identities.add(model_id)
     return identities
+
+
+def _concrete_requested_model_absent_from_catalog(
+    requested_model: str,
+    catalog: list[dict] | None,
+) -> bool:
+    """True when a concrete requested name is not in the org catalog at all.
+
+    Display aliases (Haiku) stay in ``routing_models`` after they are dropped
+    from ``inference_models``. Routing must remap those, not 404. Unknown
+    names the org never connected (gpt-99-omniscient) still 404.
+    """
+    name = str(requested_model or "").strip()
+    if not name or _is_routing_sentinel_model(name):
+        return False
+    identities = _routing_identity_set(catalog)
+    if not identities:
+        return False
+    return name not in identities
 
 
 def _routing_compliance_required(routing_prefs: dict) -> bool:
@@ -5209,6 +5494,10 @@ def _resolve_success_metadata_from_verdict(
     elif str(enforcement_mode or "block").lower() == "monitor" and _raw_action:
         # A detection that WOULD have been enforced, deliberately not enforced.
         action = "monitor"
+    elif _raw_action == "block":
+        # HTTP 200 with a block recommendation: the request was delivered, so
+        # the envelope must not look like a clean allow (scan 251434).
+        action = "flag"
     else:
         action = "allow"
     threat_type = scan_verdict.threat_type or "none"
@@ -8830,6 +9119,7 @@ async def proxy_chat(
             # Per-org toxicity threshold (passed by value, never stored on the
             # shared scanner singleton, so concurrent orgs cannot race on it).
             org_toxicity_threshold = org_config.get("toxicity_threshold")
+            _pii_detection_enabled = _org_pii_detection_enabled(org_config)
             # FIX-1.1a: X-Agent-Data (parsed by _extract_agent_data) is forwarded to
             # the policy check but, on the local-cache fast path, is NEVER threat-
             # scanned — the gateway evaluate() drops it and the INPUT_SCANNER only
@@ -8908,6 +9198,7 @@ async def proxy_chat(
                     verdict = await INPUT_SCANNER.scan_prompt(
                         scan_text, is_rag=is_rag_request,
                         toxicity_threshold=org_toxicity_threshold,
+                        pii_detection_enabled=_pii_detection_enabled,
                     )
                     stage_metrics["tier1_ms"] = round((time.perf_counter() - scan_start) * 1000, 2)
                 elif force_sync_tier2:
@@ -8935,6 +9226,7 @@ async def proxy_chat(
                         org_tier2_strict=org_tier2_strict,
                         toxicity_threshold=org_toxicity_threshold,
                         request_id=_REQUEST_ID.get(""),
+                        pii_detection_enabled=_pii_detection_enabled,
                     )
                     if verdict and verdict.tier == "tier_2":
                         stage_metrics["tier2_ms"] = round((time.perf_counter() - scan_start) * 1000, 2)
@@ -8946,6 +9238,7 @@ async def proxy_chat(
                     verdict = await INPUT_SCANNER.scan_prompt(
                         scan_text, is_rag=is_rag_request,
                         toxicity_threshold=org_toxicity_threshold,
+                        pii_detection_enabled=_pii_detection_enabled,
                     )
                     stage_metrics["tier1_ms"] = round((time.perf_counter() - scan_start) * 1000, 2)
                     await enqueue_job(
@@ -9137,20 +9430,19 @@ async def proxy_chat(
                 from patterns import contains_smart_redaction_markers as _has_smart_masks
             except ImportError:
                 from .patterns import contains_smart_redaction_markers as _has_smart_masks
-            # policy-driven-detection task 6.1: the legacy ``scan_block_on_pii``
-            # toggle is REMOVED as a detection driver — it is no longer read from
-            # org_config. PII redaction eligibility is a fixed property of the
-            # enforcement authority (a matched enabled policy whose action is
-            # redact/block drives it); the toggle can no longer enable/suppress
-            # detection. Since task 2.1 passes scanner_*=None, this flag is inert
-            # on the input path today (no scanner threat to gate) and defaults to
-            # the redact-eligible value it always resolved to for a clean prompt.
-            _pii_detection_enabled = True
+            # T01 L01-3: operator content PII toggle. Missing Redis key keeps
+            # the PIPELINE-0032 floor ON. Explicit false drops PII-class
+            # scanner kwargs; secrets/credential/DoS still feed enforcement.
+            _pii_detection_enabled = _org_pii_detection_enabled(org_config)
 
             # Platform floor: PII/secret/DoS from the built-in scanner still feed
             # enforcement. Injection/jailbreak stay policy-only (scanner_* None).
             _input_decision = _resolve_and_enforce(
-                **_scanner_kwargs_for_enforcement(verdict, recommendation=_guard_rec),
+                **_scanner_kwargs_honoring_pii_toggle(
+                    verdict,
+                    recommendation=_guard_rec,
+                    pii_detection_enabled=_pii_detection_enabled,
+                ),
                 org_policy_action=_org_policy_action,
                 matched_rules=check_resp.get("matched_rules") or [],
                 matched_policy_names=check_resp.get("matched_policy_names") or [],
@@ -9429,8 +9721,16 @@ async def proxy_chat(
             if is_stream:
                 METRICS["allowed"] += 1
                 _tel_action = "redact" if redacted_prompt is not None else "allow"
-                _tel_threat = (scan_verdict.threat_type if scan_verdict and redacted_prompt is not None else "")
-                _tel_risk = (scan_verdict.confidence if scan_verdict and redacted_prompt is not None else 0.0)
+                _tel_threat = (
+                    scan_verdict.threat_type
+                    if scan_verdict and redacted_prompt is not None
+                    else _scan_threat_for_telemetry(scan_verdict)
+                )
+                _tel_risk = (
+                    scan_verdict.confidence
+                    if scan_verdict and redacted_prompt is not None
+                    else _scan_risk_for_telemetry(scan_verdict)
+                )
                 telemetry_start = time.perf_counter()
                 _emit_telemetry(
                     event_type="request",
@@ -9485,8 +9785,16 @@ async def proxy_chat(
             if code == 200:
                 elapsed_ms = (time.perf_counter() - start) * 1000
                 _tel_action = "redact" if redacted_prompt is not None else "allow"
-                _tel_threat = (scan_verdict.threat_type if scan_verdict and redacted_prompt is not None else "")
-                _tel_risk = (scan_verdict.confidence if scan_verdict and redacted_prompt is not None else 0.0)
+                _tel_threat = (
+                    scan_verdict.threat_type
+                    if scan_verdict and redacted_prompt is not None
+                    else _scan_threat_for_telemetry(scan_verdict)
+                )
+                _tel_risk = (
+                    scan_verdict.confidence
+                    if scan_verdict and redacted_prompt is not None
+                    else _scan_risk_for_telemetry(scan_verdict)
+                )
                 telemetry_start = time.perf_counter()
                 _emit_telemetry(
                     event_type="request",
@@ -9669,52 +9977,50 @@ async def proxy_chat(
             inference_models
             and LLM_ROUTER is not None
             and routing_prefs["routing_enabled"]
-            and not isolation_reroute_locked
         )
-        # ── M1: model isolation — reject a disallowed/unknown CONCRETE model
-        # BEFORE routing. The early allowlist checks (~3446/3468) are GATED on
-        # `not routing_active`, so with routing on they're skipped; the adjudicator
-        # below then OVERWRITES `requested_model` with a compliant fallback, so a
-        # request for a model the org does not own (e.g. "gpt-4o", "opus",
-        # "unknown-xyz") would otherwise be silently rerouted and returned 200.
-        # A routing SENTINEL ("auto"/empty) is the explicit "you pick" contract and
-        # still routes; a concrete, non-owned model is rejected 422. This validates
-        # the ORIGINAL requested model (before reroute), unlike the downstream
-        # _validate_org_inference_model which only sees the already-routed model.
-        if auth_ctx is not None and requested_model and not _is_routing_sentinel_model(requested_model):
-            _org_identities = _routing_identity_set(inference_models)
-            if _org_identities and requested_model not in _org_identities:
-                # B1.1-undercount: request passed the gateway but targets a concrete
-                # model the org has not connected — count it once (action=block) so it
-                # is visible in module 1.1 "Requests inspected".
-                _emit_telemetry(
-                    status_code=422,
-                    event_type="request",
-                    model=body.get("model", ""),
-                    user_id=user_id,
-                    project_id=str(project_id or ""),
-                    key_prefix=auth_ctx.prefix if auth_ctx else "",
-                    latency_ms=(time.perf_counter() - start) * 1000,
-                    risk_score=0.0,
-                    action="block",
-                    threat_type="model_not_configured",
-                    endpoint_id=endpoint_id,
-                    metadata={"stage_metrics_ms": stage_metrics, "outcome": "model_not_configured"},
-                )
-                return JSONResponse(
-                    status_code=404,
-                    content={
-                        "error": "model_not_configured",
-                        "message": (
-                            f"Model '{_safe_model_echo(requested_model)}' is not configured for "
-                            "inference in this organization. Connect it under Multi-Model Governance, "
-                            "use a connected model, or send 'auto' to route automatically."
-                        ),
-                        "code": "model_not_configured",
-                        "blocked_by": "model_routing",
-                        "category": "inference_not_configured",
-                    },
-                )
+        # ── M1: reject a CONCRETE model the org never connected BEFORE routing.
+        # The early allowlist checks are GATED on `not routing_active`, so with
+        # routing on they're skipped; the adjudicator then OVERWRITES
+        # `requested_model` with a compliant fallback, so a request for a model
+        # the org does not own (e.g. "gpt-4o", "opus", "unknown-xyz") would
+        # otherwise be silently rerouted and returned 200.
+        # Cataloged-but-uncallable aliases (Haiku) MUST remap, not 404 — check
+        # the full routing_models catalog, not the filtered inference set.
+        # A routing SENTINEL ("auto"/empty) is the explicit "you pick" contract.
+        if auth_ctx is not None and _concrete_requested_model_absent_from_catalog(
+            requested_model, routing_models
+        ):
+            # B1.1-undercount: request passed the gateway but targets a concrete
+            # model the org has not connected — count it once (action=block) so it
+            # is visible in module 1.1 "Requests inspected".
+            _emit_telemetry(
+                status_code=422,
+                event_type="request",
+                model=body.get("model", ""),
+                user_id=user_id,
+                project_id=str(project_id or ""),
+                key_prefix=auth_ctx.prefix if auth_ctx else "",
+                latency_ms=(time.perf_counter() - start) * 1000,
+                risk_score=0.0,
+                action="block",
+                threat_type="model_not_configured",
+                endpoint_id=endpoint_id,
+                metadata={"stage_metrics_ms": stage_metrics, "outcome": "model_not_configured"},
+            )
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": "model_not_configured",
+                    "message": (
+                        f"Model '{_safe_model_echo(requested_model)}' is not configured for "
+                        "inference in this organization. Connect it under Multi-Model Governance, "
+                        "use a connected model, or send 'auto' to route automatically."
+                    ),
+                    "code": "model_not_configured",
+                    "blocked_by": "model_routing",
+                    "category": "inference_not_configured",
+                },
+            )
         if routing_active:
             _rt_start = time.perf_counter()
             # B1 FIX (CRITICAL): exclude runtime-ISOLATED (model_state) and KILL-SWITCHED
@@ -9730,6 +10036,29 @@ async def proxy_chat(
             inference_models, _zs_excluded = await _drop_isolated_or_killed_candidates(
                 inference_models, org_slug, auth_ctx.prefix if auth_ctx else "",
             )
+            if isolation_reroute_audit is not None:
+                _iso_target = str(isolation_reroute_audit.get("selected_model") or "").strip()
+                if _iso_target:
+                    _kept = [
+                        m for m in inference_models
+                        if str(m.get("model_name") or "") == _iso_target
+                        or str(m.get("model_id") or "") == _iso_target
+                    ]
+                    if not _kept or not _catalog_model_is_callable(_kept[0]):
+                        route_metadata = _build_isolation_reroute_metadata(
+                            isolation_reroute_audit, routing_prefs,
+                        )
+                        METRICS["blocked"] += 1
+                        return JSONResponse(
+                            status_code=503,
+                            content=_attach_pipeline_trace_to_llm_error(
+                                _isolation_uncallable_payload(route_metadata),
+                                http_status=503,
+                            ),
+                        )
+                    inference_models = _kept
+                    routing_prefs = dict(routing_prefs)
+                    routing_prefs["preferred_model"] = _iso_target
             # Deterministic selection — no LLM, no network call. Same inputs always
             # produce the same winner (total ordering inside _score_routing_models).
             selection = LLM_ROUTER.select_model(
@@ -9751,7 +10080,11 @@ async def proxy_chat(
                 # Honesty: client sent auto/empty — do not claim they "asked for"
                 # the soft-preference hint (list-order / litellm_default_model).
                 if _client_sent_routing_sentinel:
-                    selection.requested_model = "auto"
+                    _pref = str(routing_prefs.get("preferred_model") or "").strip()
+                    if _pref and not _is_routing_sentinel_model(_pref):
+                        selection.requested_model = _pref
+                    else:
+                        selection.requested_model = "auto"
                 route_selection = selection
                 requested_model = selection.model_name
                 body["model"] = requested_model
@@ -9859,11 +10192,16 @@ async def proxy_chat(
             stage_metrics["model_routing_ms"] = round((time.perf_counter() - _rt_start) * 1000, 1)
         else:
             stage_metrics["model_routing_ms"] = 0.0
-        if isolation_reroute_audit is not None and not routing_active:
-            route_metadata = _build_isolation_reroute_metadata(
-                isolation_reroute_audit,
-                routing_prefs,
-            )
+        if isolation_reroute_audit is not None:
+            if routing_active and route_metadata is not None:
+                route_metadata = _merge_isolation_into_route_metadata(
+                    route_metadata, isolation_reroute_audit, routing_prefs,
+                )
+            elif not routing_active:
+                route_metadata = _build_isolation_reroute_metadata(
+                    isolation_reroute_audit,
+                    routing_prefs,
+                )
         elif route_metadata is None:
             # No server-side routing resolved a canonical model; echo only a
             # sanitized form of the client model (never the raw string) (R4).
@@ -10304,6 +10642,18 @@ async def proxy_chat(
                         headers={"Retry-After": str(CONFIG.get("circuit_breaker_cooldown_seconds", 120))},
                     )
 
+        _iso_uncallable = _isolation_uncallable_http_response(
+            isolation_reroute_audit=isolation_reroute_audit,
+            inference_models=inference_models,
+            requested_model=requested_model,
+            routing_prefs=routing_prefs,
+            route_metadata=route_metadata,
+        )
+        if _iso_uncallable is not None:
+            METRICS["blocked"] += 1
+            _cancel_deep_scan()
+            return _iso_uncallable
+
         if is_stream:
             _cancel_deep_scan()
             preflight_block = _stream_preflight_block_if_needed(org_config)
@@ -10413,12 +10763,20 @@ async def proxy_chat(
                 metadata={"stage_metrics_ms": stage_metrics, "outcome": "upstream_inference_error", "upstream_status": code},
             )
             # Never reflect raw LiteLLM exception text (fallback topology +
-            # OpenRouter user_id) to the client (R5).
+            # OpenRouter user_id) to the client (R5). Isolation 404/401 is not a
+            # silent provider miss — remap to a fail-closed isolation 503.
+            _iso_remap = _should_remap_isolation_provider_error(code, isolation_reroute_audit)
+            _err_status = 503 if _iso_remap else (code if code else 502)
+            _err_body = (
+                _isolation_uncallable_payload(route_metadata)
+                if _iso_remap
+                else _sanitize_llm_error_response(code, llm_resp)
+            )
             return JSONResponse(
-                status_code=code if code else 502,
+                status_code=_err_status,
                 content=_attach_pipeline_trace_to_llm_error(
-                    _sanitize_llm_error_response(code, llm_resp),
-                    http_status=code if code else 502,
+                    _err_body,
+                    http_status=_err_status,
                 ),
             )
 
@@ -11290,12 +11648,20 @@ async def proxy_chat(
         _tel_threat = (
             str((output_enforcement or {}).get("threat_type") or "")
             if _output_acted
-            else (scan_verdict.threat_type if scan_verdict and redacted_prompt is not None else "")
+            else (
+                scan_verdict.threat_type
+                if scan_verdict and redacted_prompt is not None
+                else _scan_threat_for_telemetry(scan_verdict)
+            )
         )
         _tel_risk = (
             float((output_enforcement or {}).get("confidence") or 0.0)
             if _output_acted
-            else (scan_verdict.confidence if scan_verdict and redacted_prompt is not None else 0.0)
+            else (
+                scan_verdict.confidence
+                if scan_verdict and redacted_prompt is not None
+                else _scan_risk_for_telemetry(scan_verdict)
+            )
         )
         # Request telemetry is emitted AFTER pipeline_trace is built (below) so Scan
         # Detail / Activity Preview receive the full 9-stage trace + I/O, not just

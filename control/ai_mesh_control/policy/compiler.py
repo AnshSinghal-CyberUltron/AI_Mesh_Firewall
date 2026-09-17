@@ -493,6 +493,9 @@ class PolicyCompiler:
             rule["redaction_config"] = _scrub_reserved_model_targets(
                 rule.get("redaction_config")
             )
+            # T01 L01-2: REWRITE is unsupported. Existing rows compile as redact.
+            if str(rule.get("action") or "").strip().lower() == "rewrite":
+                rule["action"] = "redact"
         mcp_server_slug = None
         if policy.mcp_server_id:
             mcp_server_slug = policy.mcp_server.server_slug if policy.mcp_server else None

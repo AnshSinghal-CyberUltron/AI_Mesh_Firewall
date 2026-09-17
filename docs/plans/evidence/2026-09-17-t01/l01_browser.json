@@ -1,0 +1,248 @@
+{
+  "task": "T01",
+  "base": "http://127.0.0.1:8180",
+  "email": "v3a02.admin@example.invalid",
+  "started_at": "2026-09-17T07:02:18.323Z",
+  "html_has_vite_client": false,
+  "hashed_js": "/assets/index-BwiHFc60.js",
+  "hashed_css": "/assets/index-BSQJP-da.css",
+  "ok": true,
+  "steps": [
+    "login-ok",
+    "config-page-visible",
+    "l01-1-save-reload",
+    "l01-1-restored-block",
+    "l01-3-save-reload",
+    "l01-3-restored-pii-off",
+    "l01-2-rewrite-not-offered-api-400"
+  ],
+  "asserts": [
+    {
+      "label": "baked console has no Vite client",
+      "pass": true
+    },
+    {
+      "label": "hashed JS asset present",
+      "pass": true
+    },
+    {
+      "label": "L01-1 PUT save HTTP 200",
+      "pass": true
+    },
+    {
+      "label": "L01-1 reload enforcement monitor === monitor",
+      "pass": true
+    },
+    {
+      "label": "PII toggled false -> true",
+      "pass": true
+    },
+    {
+      "label": "L01-3 PUT HTTP 200",
+      "pass": true
+    },
+    {
+      "label": "L01-3 reload PII true === true",
+      "pass": true
+    },
+    {
+      "label": "L01-2 Rewrite pills still visible: 0",
+      "pass": true
+    },
+    {
+      "label": "L01-2 rewrite PUT 400 expected 400",
+      "pass": true
+    },
+    {
+      "label": "L01-2 stale configuration-saved banner still visible after rewrite 400",
+      "pass": true
+    }
+  ],
+  "pageErrors": [],
+  "console_errors": [
+    "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+  ],
+  "network": [
+    {
+      "method": "POST",
+      "url": "http://127.0.0.1:8180/api/auth/token/",
+      "status": 200,
+      "x_request_id": "49794406-6fe8-42d4-b600-88f331db79ed"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/auth/me/",
+      "status": 200,
+      "x_request_id": "d0ba0eab-a828-4db7-a7e9-09ab9521332e"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/policies/analytics/?days=14",
+      "status": 200,
+      "x_request_id": "269037ce-a908-4d4c-acb0-aaccc7974303"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/policies/top-violators/?days=14&limit=10",
+      "status": 200,
+      "x_request_id": "25294f06-264d-48d6-a000-2881ad9b7f1f"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/auth/me/",
+      "status": 200,
+      "x_request_id": "aee33a72-f15b-4aa6-b0d4-ab57e031a7b7"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "db041fdd-e808-4894-a0c1-7ab55a7a06ae"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "c9cfd5ca-4d7c-4dd8-8ea3-ea779b53ab09"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "99c58f9f-62e8-4952-81e0-fe6b887162c3"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "bf38adb8-1e24-4081-874c-cb5138ad8886"
+    },
+    {
+      "method": "PUT",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "eb5a41ea-592f-4aa2-be2c-4cd64a963a19"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/auth/me/",
+      "status": 200,
+      "x_request_id": "8966d33e-93e1-445f-b489-faa4fc75c316"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "59fab873-d1be-48e3-8cc0-0f781ef0fec7"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "075f8094-a455-4afc-a7d3-23f22df4b534"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "fdf66213-a5cf-4fc8-927b-09867a248516"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "9f58d731-41f2-4e27-970c-7b9eabfbafff"
+    },
+    {
+      "method": "PUT",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "c55b295a-da8d-4917-8e48-92ba4a2f9c2f"
+    },
+    {
+      "method": "PUT",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "f4a2008b-c502-40c9-9b63-5ad7b3d86237"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/auth/me/",
+      "status": 200,
+      "x_request_id": "58f0ffbb-483e-4c6a-952b-1949a5e47eac"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "9319bf1d-db1f-4395-b8e2-9d38d0cdef72"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "dbed39f1-e974-4f2b-8f42-9c01f8e225e8"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "f7cee6c5-ebab-4aaf-8db4-fa4ff4e4841d"
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "f1933193-a1b8-4ab9-a548-d2b715485ac7"
+    },
+    {
+      "method": "PUT",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 200,
+      "x_request_id": "8d3a5b49-99b2-4ab3-84fe-21ba40853c32"
+    },
+    {
+      "method": "PUT",
+      "url": "http://127.0.0.1:8180/api/firewall/config/",
+      "status": 400,
+      "x_request_id": "9e53b77d-ac2a-45ee-9a74-e6014a79d8e1"
+    }
+  ],
+  "gates": {
+    "L01-1": {
+      "pass": true,
+      "before": "block",
+      "put_status": 200,
+      "put_x_request_id": "eb5a41ea-592f-4aa2-be2c-4cd64a963a19",
+      "put_enforcement_mode": "monitor",
+      "after_reload": "monitor"
+    },
+    "L01-2": {
+      "pass": true,
+      "rewrite_button_count": 0,
+      "action_button_counts": {
+        "Block": 5,
+        "Redact": 5,
+        "Flag": 5,
+        "Allow": 5,
+        "Rewrite": 0
+      },
+      "put_status": 400,
+      "put_x_request_id": "9e53b77d-ac2a-45ee-9a74-e6014a79d8e1",
+      "error_mentions_rewrite": true,
+      "stale_success_banner_count": 0
+    },
+    "L01-3": {
+      "pass": true,
+      "before": "false",
+      "put_status": 200,
+      "put_pii_detection_enabled": true,
+      "put_x_request_id": "f4a2008b-c502-40c9-9b63-5ad7b3d86237",
+      "after_reload": "true"
+    }
+  },
+  "error": null,
+  "login_status": 200,
+  "login_x_request_id": "49794406-6fe8-42d4-b600-88f331db79ed",
+  "finished_at": "2026-09-17T07:02:31.790Z"
+}

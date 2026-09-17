@@ -97,6 +97,24 @@ class FirewallConfigSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        # T01 L01-2: REWRITE is unsupported. Reject writes; never silent-allow.
+        _unsupported = frozenset({"rewrite"})
+        for field in (
+            "output_pii_action",
+            "output_credential_action",
+            "output_ip_leakage_action",
+            "output_policy_action",
+            "output_hallucination_action",
+        ):
+            if field in attrs and str(attrs.get(field) or "").strip().lower() in _unsupported:
+                raise serializers.ValidationError(
+                    {
+                        field: (
+                            "REWRITE is unsupported. Control rejects this action; "
+                            "use redact, block, flag, or allow."
+                        )
+                    }
+                )
         compliance_frameworks = attrs.get(
             "compliance_frameworks",
             getattr(self.instance, "compliance_frameworks", []),

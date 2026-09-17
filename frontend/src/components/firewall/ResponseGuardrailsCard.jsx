@@ -5,7 +5,14 @@ import { ConfigSwitch } from "./primitives/ConfigSwitch";
 import { NumberStepper } from "./primitives/NumberStepper";
 import { OutputGuardrailControls } from "../OutputGuardrailControls";
 
-export function ResponseGuardrailsCard({ config, onPatch, onGuardrailsSaved, index }) {
+export function ResponseGuardrailsCard({
+  config,
+  onPatch,
+  onGuardrailsSaved,
+  onGuardrailsError,
+  onGuardrailsSaveStart,
+  index,
+}) {
   return (
     <SectionCard id="response-guardrails" title="Response Guardrails & Validation" icon={ShieldCheck} index={index}>
       <div className="space-y-4">
@@ -47,7 +54,12 @@ export function ResponseGuardrailsCard({ config, onPatch, onGuardrailsSaved, ind
           }
         />
         <div className="rounded-xl border border-border bg-surface-2/60 p-4 sm:p-5">
-          <OutputGuardrailControls onSaved={onGuardrailsSaved} embedded />
+          <OutputGuardrailControls
+            onSaved={onGuardrailsSaved}
+            onError={onGuardrailsError}
+            onSaveStart={onGuardrailsSaveStart}
+            embedded
+          />
         </div>
       </div>
     </SectionCard>

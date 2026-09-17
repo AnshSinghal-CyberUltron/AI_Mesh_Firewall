@@ -1,0 +1,36 @@
+{
+  "task": "T01",
+  "title": "Sign the product contract — actions, modes, thresholds, SDK, budget",
+  "signed_at_utc": "2026-09-17T05:40:00Z",
+  "signer": "cursor-grok-t01",
+  "source_of_truth": "docs/plans/FINAL_AI_MESH_SCALABLE_GATEWAY_EXECUTION_RUNBOOK_WITH_FRONTEND_REVAMP.docx",
+  "depends_on": ["T00 PASS (baked nginx :8180)"],
+  "verdict_policy": {
+    "T01_full_pass_requires": ["L01-1 live", "L01-2 live", "L01-3 live", "signed contracts"],
+    "quality_fpr_recall": "UNSIGNED until T04. T01 is PARTIAL on quality even if L01 live passes. H22 blocks release.",
+    "do_not_claim": ["20ms measured", "1064 RPS measured", "T01 FULL including quality"]
+  },
+  "latency": {
+    "T_fw_addon_p99_ms": {"value": 20, "status": "TARGET_NOT_MEASURED", "owner": "streaming/pre-release headline; strict whole-response withholding cannot inherit SSE TTFT"},
+    "buffering": "all hold/lookahead/buffering inside T_fw_addon p99<20ms"
+  },
+  "throughput": {
+    "qualified_completions_per_s_floor": 1064,
+    "status": "FAIL_STOP_FLOOR_NOT_MEASURED",
+    "note": ">=1064 is a floor to beat later, not a T01 measurement"
+  },
+  "error_ceiling": {
+    "app_infra_error_rate": "<=0.1%",
+    "safety_failures": 0,
+    "loadgen_drops": 0
+  },
+  "token_band": {"max_in": 1024, "max_out": 400, "mix": "70/30 SSE/JSON"},
+  "languages_headline": "English-only",
+  "tenants": {
+    "use": ["v3a02-block", "v3a02-observe"],
+    "zeroshield": "READ-only",
+    "rollback": "restore synth snapshot after L01; do not factory-reset"
+  },
+  "frontend": "L01 on current baked console :8180 (T00 nginx overlay), not Vite bind-mount",
+  "queue_doctrine": "derive from cgroup/memory/FD at deploy; no MAX_RPS constant"
+}

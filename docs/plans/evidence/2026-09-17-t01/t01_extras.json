@@ -1,0 +1,54 @@
+{
+  "task": "T01",
+  "extras": {
+    "models_get_status": 200,
+    "models": [
+      {
+        "id": 29,
+        "provider": "openai",
+        "model_name": "gpt-4o-mini",
+        "model_id": "openai/gpt-4o-mini",
+        "api_base_host": "",
+        "api_key_set": false,
+        "is_active": true
+      }
+    ],
+    "openrouter_key_file_present": false,
+    "openrouter_key_len": 0,
+    "inference": {
+      "attempted": false,
+      "pass": false,
+      "reason": "no_openrouter_key_file_or_no_model"
+    },
+    "zeroshield_pii_redis": {
+      "attempted": true,
+      "login": 200,
+      "get_status": 200,
+      "db_pii_detection_enabled": true,
+      "redis_had_key_before": false,
+      "put_status": 200,
+      "redis_has_key_after": true,
+      "redis_value": true,
+      "pass": true
+    },
+    "perf": {
+      "scan_only_n": 40,
+      "errors_5xx": 0,
+      "addon_ms_p50": 2.9,
+      "addon_ms_p99": 20.6,
+      "addon_ms_max": 20.6,
+      "target_addon_p99_ms": 20,
+      "addon_p99_meets_20ms": false,
+      "openloop": {
+        "inflight": 32,
+        "duration_s": 8.12,
+        "ok": 10624,
+        "fail": 0,
+        "rps": 1308.52,
+        "floor_1064": 1064,
+        "meets_1064": true,
+        "note": "4-node L4 fleet floor; this VM scan-only openloop. Do not claim 1064 unless measured."
+      }
+    }
+  }
+}

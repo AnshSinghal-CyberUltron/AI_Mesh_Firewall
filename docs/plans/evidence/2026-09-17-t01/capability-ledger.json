@@ -1,0 +1,28 @@
+{
+  "task": "T01",
+  "title": "Capability ledger — what operators can turn off",
+  "content_toggles": {
+    "pii_detection_enabled": {
+      "surface": "Inputs / Content filtering PII Detection",
+      "persist": "FirewallConfig.pii_detection_enabled",
+      "runtime": "Redis firewall:config:{org}.pii_detection_enabled MUST be present including JSON false",
+      "gateway": "proxy_chat reads org_config; missing key defaults True (PIPELINE-0032 floor for old payloads)",
+      "off_means": "built-in input PII floor does not redact/block maskable PII",
+      "off_does_not_mean": ["disable tenant isolation", "disable API key auth", "firewall_enabled=false", "disable secret/credential/DoS floor", "disable org policy rules"]
+    },
+    "output_pii_enabled": {
+      "surface": "Output Guardrails",
+      "note": "Independent of input pii_detection_enabled. L01-3 is the input content rule."
+    }
+  },
+  "integrity_cannot_be_disabled_by_content_toggle": [
+    "API key authentication",
+    "org-scoped key vs URL/JWT org (403 org_scope)",
+    "firewall_enabled service switch is NOT the L01-3 content rule"
+  ],
+  "signed_residuals": [
+    "AKIA / aws_access_key lives in PII_PATTERNS (threat_type=pii). PII OFF can forward AWS-key-shaped input unless a secret/credential detector also matches.",
+    "CISO/org keyword policies may still match SSN independently of the PII floor. L01-3 pass criterion is the platform floor, not zero policy matches.",
+    "get_config may inherit default-org Redis if org key missing. Live proof must use org-keyed chat after PUBLISH, not GET-after-PUT alone."
+  ]
+}

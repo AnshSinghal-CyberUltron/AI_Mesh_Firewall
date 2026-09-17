@@ -172,7 +172,19 @@ export function AIMeshFirewallConfig() {
         <ContentFilteringCard {...cardProps} index={4} />
         <ModelGovernanceCard {...cardProps} connectedModels={connectedModels} index={5} />
         <PromptSecurityCard {...cardProps} index={6} />
-        <ResponseGuardrailsCard {...cardProps} onGuardrailsSaved={fetchConfig} index={7} />
+        <ResponseGuardrailsCard
+          {...cardProps}
+          onGuardrailsSaved={fetchConfig}
+          onGuardrailsSaveStart={() => {
+            setSaveSuccess(false);
+            setError(null);
+          }}
+          onGuardrailsError={(msg) => {
+            setSaveSuccess(false);
+            setError(msg);
+          }}
+          index={7}
+        />
         <RagSecurityCard {...cardProps} index={8} />
         <ThreatIntelCard {...cardProps} index={9} />
         <AuditComplianceCard {...cardProps} index={10} />

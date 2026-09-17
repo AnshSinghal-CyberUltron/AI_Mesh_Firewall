@@ -1387,6 +1387,10 @@ class FirewallConfig(models.Model):
         return {
             "firewall_enabled": self.firewall_enabled,
             "enforcement_mode": self.enforcement_mode,
+            # T01 L01-3: emit including JSON false so the gateway can honor
+            # operator PII-off. Distinct from the four removed legacy keys
+            # (input_scan_enabled / scan_block_on_pii / …).
+            "pii_detection_enabled": bool(self.pii_detection_enabled),
             "log_level": self.log_level,
             "rate_limit_enabled": self.rate_limit_enabled,
             "requests_per_minute": self.requests_per_minute,

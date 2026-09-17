@@ -253,6 +253,16 @@ def contains_smart_redaction_markers(text: str) -> bool:
     return bool(_SMART_MASK_SHAPE_RE.search(text or ""))
 
 
+def _looks_like_scanner_pattern_key(key: str) -> bool:
+    """True for registry keys (``email_smart_masked``); false for Tier-2 evidence prose."""
+    s = str(key or "").strip()
+    if not s or len(s) > 64:
+        return False
+    if any(ch.isspace() or ch in "*[]{}()/,:\\" for ch in s):
+        return False
+    return s.replace("_", "").replace("-", "").isalnum()
+
+
 def smart_mask_redaction_noop_is_expected(
     prompt: str,
     matched_pattern_keys: list | None = None,
@@ -262,13 +272,18 @@ def smart_mask_redaction_noop_is_expected(
     PIPELINE-0012: partial masks (j***@a***.com, ***-**-6789, …) are unchanged
     by redact_all by design — the B1 honesty guard must not treat that as
     unmaskable PII.
+
+    Tier-2 ``matched_patterns`` are evidence strings, not pattern keys. Those
+    must not disable the exemption (live Mesh R2: recommended REDACT → 400).
+    Raw registry keys such as ``ssn`` still fail closed.
     """
     if not contains_smart_redaction_markers(prompt):
         return False
-    keys = matched_pattern_keys or []
-    if not keys:
+    keys = [str(k) for k in (matched_pattern_keys or []) if str(k).strip()]
+    pattern_keys = [k for k in keys if _looks_like_scanner_pattern_key(k)]
+    if not pattern_keys:
         return True
-    return all(str(k).endswith("_smart_masked") for k in keys)
+    return all(k.endswith("_smart_masked") for k in pattern_keys)
 
 
 # --- bounded transport decode (G2): surface PII/secrets hidden in base64/hex ---
@@ -847,10 +862,13 @@ SECRET_PATTERNS: Dict[str, str] = {
     # Both have a distinctive fixed prefix + length => detection is near-zero-FP.
     "google_api_key": r'\bAIza[0-9A-Za-z_\-]{32,42}\b',
     "npm_token": r'\bnpm_[A-Za-z0-9]{32,42}\b',
+    # T01: AKIA/ASIA is both PII-inventory (PII_PATTERNS.aws_access_key) AND a
+    # secret. detect_secrets must see it so PII Detection OFF still enforces the
+    # credential floor (secret wins; generic SSN/email bypass).
+    "aws_access_key": r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
     # AWS secret access keys are 40 bare base64 chars with NO prefix, so a bare value
     # is indistinguishable from any 40-char blob. Gate on the canonical key-name cue
-    # (env var / config label) to stay low-FP; the standard AKIA access key is already
-    # covered by aws_access_key above.
+    # (env var / config label) to stay low-FP.
     "aws_secret_access_key": r'aws_secret_access_key["\s]*[:=][\s"\']*([A-Za-z0-9/+]{40})\b',
     # CHG-0071: real-world provider credential formats that egressed UNMASKED and were NOT
     # flagged by detect_secrets (found via an adversarial redact_all secret-format sweep).

@@ -2,6 +2,71 @@
 
 All changes to the chat pipeline consolidation/fix/freeze effort.
 
+## PIPELINE-0034 (2026-09-17)
+
+**T01 PII-off true bypass + AKIA-as-secret floor.**
+
+Root Cause:
+- Org `pii_detection_enabled=false` only dropped enforcement kwargs; `_scan_prompt_sync`
+  still labelled `threat_type=pii` and `proxy_chat` hardcoded `_pii_detection_enabled = True`.
+- AKIA lived only in `PII_PATTERNS`, so PII-off allowed it as labelled PII.
+- Tier-2 could re-label SSN after a PII-off Tier-1 allow.
+
+Fix:
+- Honor org toggle in `scan_prompt` / `scan_prompt_with_tier2`; partition SECRET-tagged
+  PII keys as `secret`; duplicate `aws_access_key` into `SECRET_PATTERNS`.
+- `strip_disabled_pii_verdict` drops PII-only Tier-2 labels when the toggle is off.
+- Control `build_gateway_payload` emits `pii_detection_enabled` including JSON false.
+
+VERIFY:
+- Gateway: `test_t01_pii_org_config.py` + pre-masked (25 passed).
+- Live rebuilt gateway `sha256:d45cbb6d…`: SSN PII ON zs-3f2b531f586c redact/pii;
+  PII OFF zs-5dcb5ad52554 allow/none; AKIA zs-4e9333afc7b1 secret/redact;
+  GitHub PAT zs-a2fa58b4dca9 block. Playwright L01 1/2/3 pass on baked `:8180`.
+- Quality signed `docs/perf/posture_scores.md` (Target_FPR 0.01 not achievable).
+- Evidence `docs/plans/evidence/2026-09-17-t01/t01-verdict.json`.
+
+## PIPELINE-0033 (2026-09-17)
+
+**Tier-2 injection floor + Scan Detail honesty (scan 251434 class jailbreak).**
+
+Root Cause:
+- `_scanner_kwargs_for_enforcement` passed `scanner_*=None` for `prompt_injection`,
+  so `resolve_and_enforce` never saw the ZeroShield Model 95% BLOCK under
+  `enforcement_mode=block`. The request was delivered (ALLOW) and the model
+  answered a jailbreak. PIPELINE-0032's PII/secret/DoS floor was correct for
+  data-protection; it was too broad a strip for Tier-2 injection (design §4).
+- Allow-path telemetry omitted `threat_type` unless PII was redacted, so
+  `prompt_injection_detected` stayed false and Scan Detail showed Threat NONE /
+  0/100 / Prompt Injection false while the input_scan stage told the truth.
+- `org_routing_enabled` on route metadata was not copied onto the pipeline_trace
+  routing stage (`ROUTING_STAGE_KEYS` omitted it), so the UI treated a pin as
+  "Org routing is off".
+
+Fix:
+- Feed Tier-2 `prompt_injection`/`jailbreak`/`goal_hijacking`/`injection` into
+  `resolve_and_enforce` (Tier-1 ATTACK_PATTERNS stay policy-only).
+- Persist scan threat on allow telemetry; unenforced injection BLOCK rec →
+  input_scan `flag` (PII recommended-block stays allow).
+- Stamp `org_routing_enabled` / `routing_enabled` / `routing_override` on the
+  routing stage + `trace.routing`. FE `honestStageAction` + `derivePipelineDetections`
+  + routing copy: missing org flag ≠ org-off.
+
+VERIFY:
+- Gateway: `test_tier2_injection_enforcement_floor.py` + routing/input_scan/PII/
+  policy-driven tests (46 passed).
+- Frontend: `pipelineTrace.test.js` + `routingExplain.test.js` (44 passed).
+- Live gateway (hot-patched image `main.py`/`pipeline_trace.py`, SIGHUP):
+  jailbreak → HTTP 400 `content_blocked`, `final_action=block`, input_scan
+  `prompt_injection` 0.95, `model_output=skip`, no completion. Evidence
+  `runs/scan-251434/live_gateway_proof.json` (`zs-1b34a6759ecd`).
+- Control threat-feed `339285`: action=block, `prompt_injection_detected=true`,
+  score=95, output withheld, model stages skip.
+- Playwright Scan Detail: BLOCK, 95/100, HIGH, Prompt Injection true,
+  "Response withheld — request blocked at input scan".
+  `runs/scan-251434/ui_e2e.json` + `shots/02-live-jailbreak-block.png`.
+- Historical row 251434 is API 404 (purged); cannot be retroactively 403'd.
+
 ## PIPELINE-0032 (2026-09-10)
 
 **PII platform floor + HTTP 503 pipeline-trace honesty (Attack Simulator ALLOW/503).**

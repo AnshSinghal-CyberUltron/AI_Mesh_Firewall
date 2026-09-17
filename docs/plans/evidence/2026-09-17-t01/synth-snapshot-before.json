@@ -1,0 +1,34 @@
+{
+  "v3a02-block": {
+    "firewall_enabled": true,
+    "enforcement_mode": "block",
+    "pii_detection_enabled": false,
+    "output_pii_enabled": true,
+    "output_pii_action": "redact",
+    "output_credential_action": "block",
+    "output_ip_leakage_action": "flag",
+    "output_policy_action": "block",
+    "output_hallucination_action": "flag",
+    "content_filtering_enabled": true,
+    "jailbreak_detection_enabled": true,
+    "response_filtering_enabled": true,
+    "org_id": 95,
+    "org_slug": "v3a02-block"
+  },
+  "v3a02-observe": {
+    "firewall_enabled": true,
+    "enforcement_mode": "monitor",
+    "pii_detection_enabled": false,
+    "output_pii_enabled": true,
+    "output_pii_action": "redact",
+    "output_credential_action": "block",
+    "output_ip_leakage_action": "flag",
+    "output_policy_action": "block",
+    "output_hallucination_action": "flag",
+    "content_filtering_enabled": true,
+    "jailbreak_detection_enabled": true,
+    "response_filtering_enabled": true,
+    "org_id": 96,
+    "org_slug": "v3a02-observe"
+  }
+}

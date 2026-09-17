@@ -19,14 +19,11 @@ import { ConfigSwitch } from "./firewall/primitives/ConfigSwitch";
 import { ThresholdSlider } from "./firewall/primitives/ThresholdSlider";
 import { Button } from "./ui/Button";
 import { cn } from "../lib/utils";
-
-const ACTION_OPTIONS = [
-  { value: "block", label: "Block", hint: "Reject the response (HTTP 403) — nothing is delivered." },
-  { value: "redact", label: "Redact", hint: "Mask the offending spans, deliver the sanitized text." },
-  { value: "rewrite", label: "Rewrite", hint: "Re-generate a corrected response via the model, re-scanned before delivery; falls back to a safe message if the rewrite is unavailable or still unsafe." },
-  { value: "flag", label: "Flag", hint: "Deliver as-is but mark for review / log an incident." },
-  { value: "allow", label: "Allow", hint: "Take no action (monitoring only)." },
-];
+import {
+  OUTPUT_GUARD_ACTIONS,
+  coerceOutputGuardAction,
+  guardrailPayloadWithoutRewrite,
+} from "./outputGuardActions";
 
 const DETECTORS = [
   {
@@ -101,7 +98,10 @@ function buildLocalState(cfg) {
   };
   for (const d of DETECTORS) {
     next[d.enableKey] = cfg[d.enableKey] ?? d.defaultEnabled;
-    next[d.actionKey] = cfg[d.actionKey] ?? d.defaultAction;
+    next[d.actionKey] = coerceOutputGuardAction(
+      cfg[d.actionKey] ?? d.defaultAction,
+      d.defaultAction,
+    );
   }
   return next;
 }
@@ -114,7 +114,7 @@ function ActionPillGroup({ detectorId, value, onChange, disabled }) {
         disabled && "pointer-events-none opacity-40",
       )}
     >
-      {ACTION_OPTIONS.map((option) => {
+      {OUTPUT_GUARD_ACTIONS.map((option) => {
         const active = value === option.value;
         return (
           <motion.button
@@ -145,7 +145,13 @@ function ActionPillGroup({ detectorId, value, onChange, disabled }) {
   );
 }
 
-export function OutputGuardrailControls({ onSaved, embedded = false, className = "" }) {
+export function OutputGuardrailControls({
+  onSaved,
+  onError,
+  onSaveStart,
+  embedded = false,
+  className = "",
+}) {
   const { fetchWithAuth } = useAuth();
   const [state, setState] = useState(null);
   const [serverState, setServerState] = useState(null);
@@ -191,9 +197,12 @@ export function OutputGuardrailControls({ onSaved, embedded = false, className =
     setSaving(true);
     setError(null);
     setSuccess(false);
+    if (typeof onSaveStart === "function") onSaveStart();
+    const detectorDefaults = Object.fromEntries(
+      DETECTORS.map((d) => [d.actionKey, d.defaultAction]),
+    );
     try {
-      const payload = {};
-      for (const k of MANAGED_KEYS) payload[k] = state[k];
+      const payload = guardrailPayloadWithoutRewrite(state, MANAGED_KEYS, detectorDefaults);
       const res = await fetchWithAuth("/api/firewall/config/", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -207,21 +216,25 @@ export function OutputGuardrailControls({ onSaved, embedded = false, className =
         setSuccess(true);
         setTimeout(() => setSuccess(false), 4000);
         if (typeof onSaved === "function") onSaved(data);
-      } else if (res.status === 400) {
-        const body = await res.json().catch(() => null);
-        const detail = body
-          ? Object.entries(body)
-              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
-              .join("; ")
-          : "Invalid configuration — a compliance floor may be blocking this change.";
-        setError(detail);
-      } else if (res.status === 403) {
-        setError("You do not have permission to change guardrail configuration.");
       } else {
-        setError("Failed to save guardrail configuration.");
+        const body = await res.json().catch(() => null);
+        let detail = "Failed to save guardrail configuration.";
+        if (res.status === 400) {
+          detail = body
+            ? Object.entries(body)
+                .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+                .join("; ")
+            : "Invalid configuration — a compliance floor may be blocking this change.";
+        } else if (res.status === 403) {
+          detail = "You do not have permission to change guardrail configuration.";
+        }
+        setError(detail);
+        if (typeof onError === "function") onError(detail);
       }
     } catch {
-      setError("Network error saving guardrail configuration.");
+      const detail = "Network error saving guardrail configuration.";
+      setError(detail);
+      if (typeof onError === "function") onError(detail);
     } finally {
       setSaving(false);
     }
@@ -367,7 +380,7 @@ export function OutputGuardrailControls({ onSaved, embedded = false, className =
           <div>
             <p className="text-sm font-medium text-foreground">Security Incident Logging</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Record redact / rewrite / flag actions as security incidents. Hard blocks are always logged.
+              Record redact / flag actions as security incidents. Hard blocks are always logged.
             </p>
           </div>
         </div>

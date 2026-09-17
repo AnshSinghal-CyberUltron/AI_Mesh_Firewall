@@ -75,6 +75,15 @@ def _has_redos_shape(pattern):
     )
 
 
+def reject_unsupported_rule_action(value):
+    """T01 L01-2: operator REWRITE is unsupported. model_downgrade stays valid."""
+    if str(value or "").strip().lower() == "rewrite":
+        raise serializers.ValidationError(
+            "REWRITE is unsupported. Control rejects this action; use redact or block."
+        )
+    return value
+
+
 def validate_condition(value):
     """M-23: schema + safety validation for a Rule.condition JSONField.
 
@@ -154,6 +163,9 @@ class RuleSerializer(serializers.ModelSerializer):
     def validate_condition(self, value):
         return validate_condition(value)
 
+    def validate_action(self, value):
+        return reject_unsupported_rule_action(value)
+
     def validate_redaction_config(self, value):
         return validate_redaction_config(value)
 
@@ -181,6 +193,9 @@ class RuleSerializer(serializers.ModelSerializer):
 class RuleWriteSerializer(serializers.ModelSerializer):
     def validate_condition(self, value):
         return validate_condition(value)
+
+    def validate_action(self, value):
+        return reject_unsupported_rule_action(value)
 
     def validate_redaction_config(self, value):
         return validate_redaction_config(value)

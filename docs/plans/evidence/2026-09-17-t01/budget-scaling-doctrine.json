@@ -1,0 +1,17 @@
+{
+  "task": "T01",
+  "title": "Budget and scaling doctrine (signed, not measured)",
+  "no_max_rps_constant": true,
+  "queue_and_workers": "Derive from cgroup CPU, memory, and FD limits at deploy time (existing resource_budget.py / entrypoints). T01 does not introduce a MAX_RPS env.",
+  "latency_budget": {
+    "name": "T_fw_addon p99",
+    "target_ms": 20,
+    "status": "TARGET_NOT_MEASURED",
+    "includes": "hold, lookahead, buffering"
+  },
+  "throughput_floor": {
+    "qualified_completions_per_s": 1064,
+    "status": "FAIL_STOP_FLOOR_NOT_MEASURED"
+  },
+  "this_vm": "rebuild_current only; no host rotation"
+}

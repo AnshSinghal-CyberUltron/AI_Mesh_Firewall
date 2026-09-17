@@ -44,6 +44,8 @@ try:
         canonicalize_for_detection,
         PII_PATTERNS,
         SECRET_PATTERNS,
+        COMPLIANCE_TAG_MAP,
+        classify_pattern_key,
     )
 except ImportError:
     from bedrock_scanner import BedrockScanner
@@ -67,6 +69,8 @@ except ImportError:
         canonicalize_for_detection,
         PII_PATTERNS,
         SECRET_PATTERNS,
+        COMPLIANCE_TAG_MAP,
+        classify_pattern_key,
     )
 
 LOG = logging.getLogger("gateway.scanner")
@@ -144,6 +148,42 @@ class ScanVerdict:
     reason_code: str = ""
     owasp_codes: list[str] = field(default_factory=list)
     scan_meta: dict = field(default_factory=dict)
+
+
+# When org pii_detection_enabled is false, keep secrets/injection/DoS labels
+# and drop PII-only (including Tier-2 PII/sensitive/risk-score-on-PII) labels.
+_PII_OFF_KEEP_THREATS = frozenset(
+    {
+        "",
+        "none",
+        "clean",
+        "secret",
+        "credential",
+        "prompt_injection",
+        "jailbreak",
+        "injection",
+        "dos",
+        "toxicity",
+        "tool_overreach",
+        "data_leakage",
+        "goal_hijacking",
+        "sql_injection",
+        "command_injection",
+        "path_traversal",
+        "vector_injection",
+        "scanner_degraded",
+    }
+)
+
+
+def strip_disabled_pii_verdict(verdict: ScanVerdict) -> ScanVerdict:
+    """True PII-off bypass: do not label or enforce PII-only scanner hits."""
+    tt = str(getattr(verdict, "threat_type", "") or "").strip().lower()
+    if tt in _PII_OFF_KEEP_THREATS:
+        return verdict
+    if "inject" in tt or "jailbreak" in tt:
+        return verdict
+    return ScanVerdict()
 
 
 def _tier2_output_fail_closed() -> bool:
@@ -1120,6 +1160,7 @@ class InputScanner:
         text: str,
         is_rag: bool = False,
         toxicity_threshold: float | None = None,
+        pii_detection_enabled: bool = True,
     ) -> ScanVerdict:
         """Asynchronously scan the prompt for threats and return a structured verdict.
 
@@ -1127,6 +1168,10 @@ class InputScanner:
         the scanner falls back to the gateway-wide ``self._config`` value. It is
         passed by value (not stored on the singleton) so concurrent requests from
         different orgs cannot race on a shared mutable threshold.
+
+        ``pii_detection_enabled`` is the org content PII toggle (T01). When False,
+        generic PII (SSN/email/phone) is not labelled or enforced. SECRET-tagged
+        matches (AKIA, ghp_, sk-, PEM) still emit ``threat_type=secret``.
         """
         loop = asyncio.get_event_loop()
 
@@ -1136,6 +1181,8 @@ class InputScanner:
             text,
             is_rag,
             toxicity_threshold,
+            True,
+            pii_detection_enabled,
         )
     async def scan_output(self, text: str) -> ScanVerdict:
         """Asynchronously scan the LLM output for PII/Secrets and return a structured verdict."""
@@ -1153,6 +1200,7 @@ class InputScanner:
         is_rag: bool,
         toxicity_threshold: float | None = None,
         _multiturn: bool = True,
+        pii_detection_enabled: bool = True,
     ) -> ScanVerdict:
         """Synchronous prompt scanning logic, run in a thread to avoid blocking.
 
@@ -1194,34 +1242,39 @@ class InputScanner:
                 tier="tier_1",
             )
 
-        pii_matched = detect_pii(text)
-        if pii_matched:
+        pii_matched = detect_pii(text) or {}
+        secret_matched = detect_secrets(text) or {}
+        cred_matched = detect_credential_exposure(text) or {}
+
+        secret_keys: list[str] = []
+        true_pii_keys: list[str] = []
+        for key in pii_matched:
+            if classify_pattern_key(key) == "credential" or "SECRET" in (COMPLIANCE_TAG_MAP.get(key) or []):
+                secret_keys.append(key)
+            else:
+                true_pii_keys.append(key)
+        secret_keys.extend(secret_matched.keys())
+        secret_keys.extend(cred_matched.keys())
+        # Preserve first-seen order, drop dupes from overlapping dicts.
+        seen: set[str] = set()
+        secret_keys = [k for k in secret_keys if not (k in seen or seen.add(k))]
+
+        if secret_keys:
+            return ScanVerdict(
+                action="redact",
+                threat_type="secret",
+                confidence=0.9,
+                detail=f"Secret/credential detected: {', '.join(secret_keys)}",
+                matched_patterns=secret_keys,
+                tier="tier_1",
+            )
+        if true_pii_keys and pii_detection_enabled:
             return ScanVerdict(
                 action="redact",
                 threat_type="pii",
                 confidence=0.85,
-                detail=f"PII detected in prompt: {', '.join(pii_matched.keys())}",
-                matched_patterns=list(pii_matched.keys()),
-                tier="tier_1",
-            )
-        secret_matched = detect_secrets(text)
-        if secret_matched:
-            return ScanVerdict(
-                action="redact",
-                threat_type="secret",
-                confidence=0.9,
-                detail=f"Secret/credential detected: {', '.join(secret_matched.keys())}",
-                matched_patterns=list(secret_matched.keys()),
-                tier="tier_1",
-            )
-        cred_matched = detect_credential_exposure(text)
-        if cred_matched:
-            return ScanVerdict(
-                action="redact",
-                threat_type="secret",
-                confidence=0.9,
-                detail=f"Credential detected in prompt: {', '.join(cred_matched.keys())}",
-                matched_patterns=list(cred_matched.keys()),
+                detail=f"PII detected in prompt: {', '.join(true_pii_keys)}",
+                matched_patterns=true_pii_keys,
                 tier="tier_1",
             )
         return ScanVerdict()
@@ -2099,6 +2152,32 @@ class InputScanner:
         org_tier2_strict: bool = True,
         toxicity_threshold: float | None = None,
         request_id: str = "",
+        pii_detection_enabled: bool = True,
+    ) -> ScanVerdict:
+        verdict = await self._scan_prompt_with_tier2_unfiltered(
+            text,
+            is_rag=is_rag,
+            org_tier2_override=org_tier2_override,
+            org_slug=org_slug,
+            org_tier2_strict=org_tier2_strict,
+            toxicity_threshold=toxicity_threshold,
+            request_id=request_id,
+            pii_detection_enabled=pii_detection_enabled,
+        )
+        if pii_detection_enabled:
+            return verdict
+        return strip_disabled_pii_verdict(verdict)
+
+    async def _scan_prompt_with_tier2_unfiltered(
+        self,
+        text: str,
+        is_rag: bool = False,
+        org_tier2_override: bool | None = None,
+        org_slug: str = "",
+        org_tier2_strict: bool = True,
+        toxicity_threshold: float | None = None,
+        request_id: str = "",
+        pii_detection_enabled: bool = True,
     ) -> ScanVerdict:
         """
         Run Tier-1 regex/deterministic checks first. If no blocking verdict,
@@ -2126,7 +2205,12 @@ class InputScanner:
             * strict=False -> Tier-2 is skipped; the Tier-1 verdict is
               returned and a ``tier2_degraded_pass`` event is emitted.
         """
-        tier1 = await self.scan_prompt(text, is_rag, toxicity_threshold=toxicity_threshold)
+        tier1 = await self.scan_prompt(
+            text,
+            is_rag,
+            toxicity_threshold=toxicity_threshold,
+            pii_detection_enabled=pii_detection_enabled,
+        )
         if tier1.action == "block":
             return tier1
 

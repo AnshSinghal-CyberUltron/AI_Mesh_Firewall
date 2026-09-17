@@ -1,0 +1,18 @@
+{
+  "task": "T01",
+  "signed_at_utc": "2026-09-17T07:00:00Z",
+  "agents": [
+    "false_positive: L01-3 PII OFF allow could be a scan skip rather than a toggle. Contradicted: PII ON same prompt zs-3f2b531f586c is redact/pii; Redis pii_detection_enabled false; scanner unit SSN off → empty threat.",
+    "hidden_failure: first gateway image rebuilt with new scanner.py but cached old main.py still hardcoded _pii_detection_enabled=True. Live PII OFF stayed redact until a second build. Image identity now includes the helper.",
+    "state_propagation: zeroshield Redis omitted pii_detection_enabled until an explicit PUT. Synth JWT org is v3a02-block; chat uses that org API key. PUT 405 PATCH still.",
+    "observability: Scan Detail threat=none on PII OFF is the contract, not a detector miss. AKIA is secret not pii. GitHub PAT still blocks.",
+    "edge: OpenRouter full inference not proven (key file missing). scan-only 1308 RPS is not 1064 qualified chat. addon p99 20.6ms misses 20ms. Quality Achieved_FPR 1.0 — H22 still blocks release."
+  ],
+  "survived": [
+    "PII OFF true bypass on live rebuilt gateway",
+    "AKIA secret floor when PII OFF",
+    "Rewrite reject + UI 0 Rewrite buttons",
+    "Quality signed honestly (target 0.01 not met)",
+    "Perf signed honestly (20ms miss; 1064 chat not claimed)"
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "task": "T01",
+  "gates": {
+    "L01-1": {
+      "get_status": 200,
+      "stored_enforcement_before": "block",
+      "stored_pii_before": false,
+      "put_monitor_status": 200,
+      "put_monitor_x_request_id": "1e24150f-fe5a-4c28-8e51-714cac1c71d4",
+      "get_after_monitor": "monitor",
+      "redis_after_monitor": "monitor",
+      "redis_has_pii_key_after_monitor": true,
+      "put_block_status": 200,
+      "redis_after_block": "block",
+      "pass": true
+    },
+    "L01-2": {
+      "put_rewrite_status": 400,
+      "put_rewrite_error_has_rewrite": true,
+      "redis_output_pii_action_unchanged_not_rewrite": true,
+      "put_redact_status": 200,
+      "rule_post_status": 400,
+      "rule_post_body_keys": [
+        "action"
+      ],
+      "pass": true
+    },
+    "L01-3": {
+      "put_pii_true_status": 200,
+      "put_pii_false_status": 200,
+      "redis_pii_detection_enabled": false,
+      "redis_has_key": true,
+      "scan_only": true,
+      "pii_on": {
+        "http": 200,
+        "zs_action": "redact",
+        "threat": "pii",
+        "input_scan": "redact",
+        "final": "redact",
+        "x_request_id": "zs-3f2b531f586c"
+      },
+      "pii_off": {
+        "http": 200,
+        "zs_action": "allow",
+        "threat": "none",
+        "input_scan": "allow",
+        "final": "allow",
+        "x_request_id": "zs-5dcb5ad52554"
+      },
+      "akia_pii_off": {
+        "http": 200,
+        "zs_action": "redact",
+        "threat": "secret",
+        "input_scan": "redact",
+        "final": "redact",
+        "x_request_id": "zs-4e9333afc7b1"
+      },
+      "github_pat_pii_off": {
+        "http": 400,
+        "zs_action": null,
+        "threat": null,
+        "input_scan": "block",
+        "final": "block",
+        "x_request_id": "zs-a2fa58b4dca9"
+      },
+      "jwt_config_org": 95,
+      "firewall_enabled_stays_true": true,
+      "pass": true
+    }
+  },
+  "notes": [],
+  "do_not_claim": [
+    "20ms measured",
+    "1064 RPS measured"
+  ],
+  "l01_3_trace_keys": [
+    "stages",
+    "total_latency_ms",
+    "stage_latency_sum_ms",
+    "overhead_ms",
+    "final_action",
+    "prompt_preview",
+    "input_text",
+    "prompt_submitted",
+    "output_text",
+    "final_response",
+    "output_withheld",
+    "output_withheld_reason",
+    "input_was_redacted",
+    "input_text_before",
+    "input_text_after",
+    "guard_summary",
+    "requested_model",
+    "routed_model",
+    "routing_reason",
+    "routing"
+  ],
+  "rollback": {
+    "v3a02-block_enforcement": "block",
+    "v3a02-block_pii": false,
+    "matches_snapshot_mode": true
+  },
+  "overall_l01": true
+}

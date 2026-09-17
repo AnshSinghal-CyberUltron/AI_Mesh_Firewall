@@ -1,0 +1,17 @@
+{
+  "task": "T01",
+  "title": "OpenAI SDK pin freeze",
+  "decision": "Record current pin. Do not bump.",
+  "python": {
+    "package": "openai",
+    "pin": "2.38.0",
+    "location": "gateway/pyproject.toml [project.optional-dependencies].dev",
+    "contract": "docs/contracts/OPENAI_SDK_COMPAT.md",
+    "action_this_task": "freeze; no version bump"
+  },
+  "javascript": {
+    "frontend_package_json": "no openai SDK dependency",
+    "action_this_task": "none"
+  },
+  "bump_policy": "Bumping requires re-running tests/test_openai_sdk_compat.py and a later signed task. Not T01."
+}

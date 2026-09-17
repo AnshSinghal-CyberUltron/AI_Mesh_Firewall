@@ -64,6 +64,7 @@ _BOOL_KEYS = (
     "tier2_enabled", "mcp_tier2_enabled", "tier2_strict",
     "model_isolation_enabled", "routing_enabled",
     "hallucination_flag_enabled", "output_pii_enabled",
+    "pii_detection_enabled",
     "output_credential_enabled", "output_ip_leakage_enabled",
     "output_policy_enabled", "output_incident_logging_enabled",
     "rag_enabled", "vector_db_isolation",

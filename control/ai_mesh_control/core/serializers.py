@@ -6,6 +6,65 @@ from rest_framework import serializers
 
 from core.models import AGENT_TYPE_CHOICES, Agent, Endpoint, KillSwitch
 
+_FALLBACK_SENTINELS = frozenset({"auto", "default", "none", "*"})
+
+
+def _fallback_must_be_callable(org, fallback_model: str) -> None:
+    """Reject reroute targets that are not an active, credentialed, in-catalog model."""
+    from core.models import LLMModelConfig, is_platform_managed_llm_model_name
+
+    name = (fallback_model or "").strip()
+    if not name:
+        return
+    if name.lower() in _FALLBACK_SENTINELS:
+        raise serializers.ValidationError(
+            {
+                "fallback_model": (
+                    "Fallback must be a connected inference model, not a routing sentinel."
+                )
+            }
+        )
+    if is_platform_managed_llm_model_name(name):
+        raise serializers.ValidationError(
+            {
+                "fallback_model": (
+                    "ZeroShield guard models are platform-managed and cannot be a reroute target."
+                )
+            }
+        )
+    row = LLMModelConfig.objects.filter(
+        organization=org,
+        model_name=name,
+        is_active=True,
+    ).first()
+    if row is None:
+        raise serializers.ValidationError(
+            {
+                "fallback_model": (
+                    f'"{name}" is not an active connected model for your '
+                    "organization. Use a model_name from Model Connections."
+                )
+            }
+        )
+    if not (row.model_id or "").strip():
+        raise serializers.ValidationError(
+            {
+                "fallback_model": (
+                    f'"{name}" has no provider model id. Connect a callable model '
+                    "under Model Connections."
+                )
+            }
+        )
+    if not ((row.encrypted_api_key or "").strip() or (row.api_key_env_var or "").strip()):
+        raise serializers.ValidationError(
+            {
+                "fallback_model": (
+                    f'"{name}" has no credentials. Add an API key or env var on '
+                    "Model Connections."
+                )
+            }
+        )
+
 # M-02: Resolve the active Django user model once at import time. The previous
 # code referenced ``User`` in get_primary_user_display() without ever importing
 # it, raising NameError on every call (the except clause raised the same error).
@@ -431,21 +490,7 @@ class KillSwitchCreateSerializer(serializers.ModelSerializer):
         if request and action == "reroute" and fallback_model:
             org = getattr(getattr(request.user, "profile", None), "organization", None)
             if org:
-                from core.models import LLMModelConfig
-
-                if not LLMModelConfig.objects.filter(
-                    organization=org,
-                    model_name=fallback_model,
-                    is_active=True,
-                ).exists():
-                    raise serializers.ValidationError(
-                        {
-                            "fallback_model": (
-                                f'"{fallback_model}" is not an active connected model for your '
-                                "organization. Use a model_name from Model Connections."
-                            )
-                        }
-                    )
+                _fallback_must_be_callable(org, fallback_model)
         return attrs
 
 
@@ -513,6 +558,11 @@ class ModelStateUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"fallback_model": "fallback_model must differ from model_name (self-loop)."}
             )
+        request = self.context.get("request")
+        if request and action == "reroute" and fallback:
+            org = getattr(getattr(request.user, "profile", None), "organization", None)
+            if org:
+                _fallback_must_be_callable(org, fallback)
         return attrs
 
 
@@ -558,21 +608,7 @@ class ModelIsolateSerializer(serializers.Serializer):
         if action == "reroute" and fallback_model and request is not None:
             org = getattr(getattr(request.user, "profile", None), "organization", None)
             if org:
-                from core.models import LLMModelConfig
-
-                if not LLMModelConfig.objects.filter(
-                    organization=org,
-                    model_name=fallback_model,
-                    is_active=True,
-                ).exists():
-                    raise serializers.ValidationError(
-                        {
-                            "fallback_model": (
-                                f'"{fallback_model}" is not an active connected model for your '
-                                "organization. Use a model_name from Model Connections."
-                            )
-                        }
-                    )
+                _fallback_must_be_callable(org, fallback_model)
         return attrs
 
 

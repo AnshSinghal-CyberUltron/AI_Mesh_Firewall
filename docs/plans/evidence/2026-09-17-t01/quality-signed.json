@@ -1,0 +1,35 @@
+{
+  "task": "T01",
+  "signed_at_utc": "2026-09-17T06:56:09Z",
+  "corpus_version": "35f1fe45a6e569584a702fdf97f6950d1ec3b4a0",
+  "reproducible_command": "cd gateway && ENABLE_TIER2=false ./.venv/bin/python ../scripts/detection/score_postures.py",
+  "target_fpr": 0.01,
+  "scored_set": "eval",
+  "malicious_count": 54,
+  "benign_count": 89,
+  "quality_fpr_recall": "SIGNED",
+  "quality_meets_target_fpr_0_01": false,
+  "h22_blocks_release": true,
+  "postures": {
+    "Tier1_Only": {
+      "status": "scored",
+      "target_fpr_achievable": false,
+      "recall_at_floor": 0.0,
+      "achieved_fpr": 1.0,
+      "selected_threshold": 0.0
+    },
+    "Tier1_Plus_Policy": {
+      "status": "scored",
+      "target_fpr_achievable": false,
+      "recall_at_floor": 0.0,
+      "achieved_fpr": 1.0,
+      "selected_threshold": 0.0
+    },
+    "Tier1_Plus_Semantic": {
+      "status": "not scored",
+      "reason": "Tier-2/semantic disabled (ENABLE_TIER2 is off)"
+    }
+  },
+  "report": "docs/perf/posture_scores.md",
+  "honesty": "Do not invent 1% FPR. Target_FPR 0.01 is not achievable on this corpus; Achieved_FPR is 1.0 and Recall_At_Floor is 0.0."
+}

@@ -1,0 +1,115 @@
+{
+  "captured_at_utc": "2026-09-17T06:23:19.546401+00:00",
+  "jwt_org": 95,
+  "restore_put_status": 200,
+  "restore_x_request_id": "d214b217-8f37-4784-bc51-030d4b5b41c4",
+  "block_api": {
+    "enforcement_mode": "block",
+    "pii_detection_enabled": false,
+    "output_pii_action": "redact",
+    "firewall_enabled": true
+  },
+  "redis_block": {
+    "enforcement_mode": "block",
+    "pii_detection_enabled": false,
+    "output_pii_action": "redact",
+    "firewall_enabled": true
+  },
+  "redis_observe": {
+    "enforcement_mode": "monitor",
+    "pii_detection_enabled": false,
+    "output_pii_action": "redact",
+    "firewall_enabled": true
+  },
+  "redis_zeroshield": {
+    "enforcement_mode": "block",
+    "pii_detection_enabled": null,
+    "output_pii_action": "flag",
+    "firewall_enabled": true
+  },
+  "compiled": {
+    "v3a02-block": {
+      "present": true,
+      "version": 14,
+      "policy_count": 1,
+      "rule_count": 4
+    },
+    "v3a02-observe": {
+      "present": true,
+      "version": 14,
+      "policy_count": 1,
+      "rule_count": 4
+    },
+    "zeroshield": {
+      "present": true,
+      "version": 63,
+      "policy_count": 52,
+      "rule_count": 270
+    }
+  },
+  "matches_snapshot_block": true,
+  "matches_snapshot_observe": true,
+  "zeroshield_untouched_no_put": true,
+  "zeroshield_enforcement_block": true,
+  "patch_405": {
+    "status": 405,
+    "x_request_id": "bc12c43a-134d-4722-88a4-5eecb3180792"
+  },
+  "config_put_rewrite": {
+    "status": 400,
+    "body": {
+      "output_pii_action": [
+        "REWRITE is unsupported. Control rejects this action; use redact, block, flag, or allow."
+      ]
+    },
+    "x_request_id": "d0e0f08a-5831-48d7-a043-43ef40311735"
+  },
+  "rule_rewrite": {
+    "status": 400,
+    "body": {
+      "action": [
+        "REWRITE is unsupported. Control rejects this action; use redact or block."
+      ]
+    },
+    "x_request_id": "e6efe82c-ddea-4878-8492-c68581db6aa9",
+    "policy_id": 293
+  },
+  "pii_off_ssn": {
+    "http": 200,
+    "zs_action": "allow",
+    "threat": "pii",
+    "input_scan": "allow",
+    "final": "allow",
+    "x_request_id": "zs-7229334b029c"
+  },
+  "pii_off_injection": {
+    "http": 200,
+    "zs_action": "allow",
+    "threat": "none",
+    "input_scan": "allow",
+    "final": "allow",
+    "x_request_id": "zs-bb97c65c0f71"
+  },
+  "observe_ssn": {
+    "http": 200,
+    "zs_action": "monitor",
+    "threat": "pii",
+    "input_scan": "allow",
+    "final": "monitor",
+    "x_request_id": "zs-14ec8104cf21"
+  },
+  "images": {
+    "ai_mesh_firewall-control-1": "ai_mesh_firewall-control sha256:12533d0077614eb70673e93fbbf71f0e48bac9a54b832b1a03d3d0f5179f007d running no",
+    "ai_mesh_firewall-gateway-1": "ai_mesh_firewall-gateway sha256:e6620de2ea7096f446984da011fe67818852dbbb1b067eb512ed73b6fe382899 running unless-stopped",
+    "ai_mesh_firewall-frontend-1": "ai-mesh-nginx-t00:t01 sha256:9d31fbd58311e07d0b60743426216c96fc1061b64e9b17658b84140dcb9111a7 running unless-stopped"
+  },
+  "runtime_probes": {
+    "gateway_pii_false_helper": "False",
+    "control_rewrite_reject_hits": "2",
+    "frontend_vite": false,
+    "frontend_js": [
+      "/assets/index-BwiHFc60.js"
+    ]
+  },
+  "get_x_request_id": "647ca9f2-dbea-4998-87cf-13598bbaac70"
+}

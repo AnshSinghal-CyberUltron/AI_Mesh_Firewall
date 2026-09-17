@@ -1,0 +1,20 @@
+{
+  "task": "T01",
+  "title": "Supported vs unsupported actions/modes",
+  "supported_enforcement_modes": ["block", "monitor", "audit"],
+  "supported_rule_actions": ["allow", "flag", "redact", "block", "model_downgrade"],
+  "supported_output_guard_actions": ["block", "redact", "flag", "allow"],
+  "unsupported": {
+    "rewrite": {
+      "operator_write": "REJECT",
+      "control_http": "400 with explicit error; never save; never silent-allow",
+      "existing_rows": "compiler remaps rewrite -> redact for gateway bundles; data migration rewrites stored FirewallConfig/Rule rewrite to redact",
+      "runtime_output_guard_verdict": "gateway enforce_output may still see scanner verdict rewrite (not an operator capability). L01-2 is the control-plane write path.",
+      "fail_if": "UI label exists and control saves rewrite as allow/no-op"
+    }
+  },
+  "do_not_reject": ["model_downgrade"],
+  "l01_1": "Save each supported action/mode in real UI/API, reload, map stored value / compiled plan / runtime Redis firewall:config:{slug}. Do not use /health.enforcement_mode (global liar) or policy_cache_version (not bumped by FirewallConfig save).",
+  "l01_2": "POST/PUT rewrite on FirewallConfig output_*_action and Rule.action must 400. Fail if 201/200.",
+  "l01_3": "pii_detection_enabled=false removes the INPUT scanner PII floor. Auth, tenant isolation, firewall_enabled, secrets/DoS floor stay. Do not set firewall_enabled=false. Residual: AKIA classified as threat_type=pii so PII-off can leak AWS-key-shaped tokens unless a secret/credential rule matches."
+}
