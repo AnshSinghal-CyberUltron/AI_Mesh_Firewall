@@ -71,12 +71,14 @@ jobs:
       SOURCE_DATE_EPOCH: "1704067200"
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+          driver-opts: |
+            image=moby/buildkit:v0.21.1@sha256:87afb62ed6a762bb65b85d53819f3b341fb74a36d1fc0a1153a64f367637bfda
       - name: Build v2 image without attestations
-        env:
-          DOCKER_BUILDKIT: "1"
         run: |
-          docker version
-          docker build --provenance=false --sbom=false \
+          docker buildx build --provenance=false --sbom=false --load \
             --build-arg SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}" \
             -f gateway_v2/Dockerfile \
             -t ai-mesh-gateway-v2:gw00 .
