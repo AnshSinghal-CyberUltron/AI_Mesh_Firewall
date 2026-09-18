@@ -1,23 +1,28 @@
 {
   "task": "GW00",
-  "verdict": "GATES_GREEN_WITH_HUMAN_RESIDUALS",
+  "verdict": "GATES_GREEN_LGW00_6_LOCAL_PASS_LGW00_1_RESIDUAL",
   "complete": false,
-  "reason": "Structural workspace + CI + empty tree + negative fixtures are green. LGW00-1 and LGW00-6 are not PASS.",
+  "reason": "v2 gates green; private key untracked; local A/B image IDs identical. LGW00-1 is not PASS while Google OS Login still offers the pubkey. LGW00-6 two-host comparison waits on the Actions image-digest job after push.",
   "exits": {
-    "LGW00-1": "OPEN — human classify/revoke/rotate; agent did not print, ssh, or authenticate the tracked key; did not git rm",
-    "LGW00-2": "PASS locally (extensionless header rejected; CI throwaway job wired)",
-    "LGW00-3": "PASS locally (import-linter names Gateway v2 layers)",
-    "LGW00-4": "PASS locally (size gate names file and line)",
-    "LGW00-5": "PASS locally (HTTP AST gate names detect file)",
-    "LGW00-6": "INCOMPLETE — single-host image digest recorded; second host not unlocked; not PASS"
+    "LGW00-1": "NOT PASS — localhost and GitHub deny the leaked identity; google_authorized_keys still offers ssh-ed25519 ai-mesh; owner must reauth as contact@cyberultron.com to delete OS Login",
+    "LGW00-2": "PASS (extensionless header rejected; CI throwaway job wired; allowlist empty)",
+    "LGW00-3": "PASS (import-linter names Gateway v2 layers)",
+    "LGW00-4": "PASS (size gate)",
+    "LGW00-5": "PASS (HTTP AST gate)",
+    "LGW00-6": "LOCAL PASS — sha256:b665a1ca4dfd0f4cc0ce71c2cfcdc0218dc0a972331c02cdffa54122b401e2d5 twice on this VM; second host = GitHub Actions after push"
   },
   "ci": {
     "workflow": ".github/workflows/gateway-v2.yml",
     "chat_pipeline_golden_replaced": false,
-    "openai_conformance_in_gw00": false
+    "openai_conformance_in_gw00": false,
+    "image_digest_job": true,
+    "secret_headers_fail_allowlist": true
   },
   "v1": {
     "ai_mesh_gateway_edited": false,
-    "live_stack_restarted": false
+    "live_stack_restarted": false,
+    "gateway_container_id_prefix": "f820c851b8c1",
+    "control_container_id_prefix": "2715b8443d6e",
+    "frontend_container_id_prefix": "fbe85271abec"
   }
 }

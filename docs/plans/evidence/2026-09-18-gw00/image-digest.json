@@ -1,17 +1,24 @@
 {
   "task": "GW00",
-  "lgw00_6": "INCOMPLETE \u2014 single-host digest only; second host not unlocked; not PASS",
-  "ts": "2026-09-18T06:46:30Z",
-  "tag": "ai-mesh-gateway-v2:gw00",
-  "image_id": "sha256:7e8c6852cef84dfb4d563365b5cb631bc2ddac0e90110cebda19799feea607ca",
-  "repo_digests": [
-    "ai-mesh-gateway-v2@sha256:7e8c6852cef84dfb4d563365b5cb631bc2ddac0e90110cebda19799feea607ca"
-  ],
+  "lgw00_6": "LOCAL_PASS two consecutive no-cache builds on this VM produced byte-identical image IDs. Two-host (GitHub Actions ubuntu-latest) comparison pending push of this tree.",
+  "ts": "2026-09-18T07:44:39Z",
+  "tag": "ai-mesh-gateway-v2:gw00-a3",
+  "image_id": "sha256:b665a1ca4dfd0f4cc0ce71c2cfcdc0218dc0a972331c02cdffa54122b401e2d5",
+  "local_build_a": "sha256:b665a1ca4dfd0f4cc0ce71c2cfcdc0218dc0a972331c02cdffa54122b401e2d5",
+  "local_build_b": "sha256:b665a1ca4dfd0f4cc0ce71c2cfcdc0218dc0a972331c02cdffa54122b401e2d5",
+  "local_a_eq_b": true,
+  "created": "2024-01-01T00:00:00Z",
+  "os_arch": "linux/amd64",
+  "n_layers": 5,
+  "size_bytes": 58502179,
   "from_base": "python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea",
+  "dockerfile_syntax": "docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
+  "source_date_epoch": "1704067200",
+  "provenance": false,
+  "sbom": false,
   "host": "ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal",
+  "docker_engine": "29.1.3",
   "cmd_exit": 0,
-  "cmd_stdout": "",
-  "cmd_stderr": "",
-  "key_file_in_image": false,
-  "key_find_stdout_omitted_on_purpose": true
+  "key_filename_in_image": false,
+  "repro_notes": "COPY directory mtimes used the build clock and broke A/B identity. Fixed by bind-mounting sources into a single RUN and touching /opt and /usr/local to SOURCE_DATE_EPOCH."
 }

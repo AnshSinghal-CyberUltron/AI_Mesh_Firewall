@@ -66,8 +66,8 @@ docs/qa/*.local.md
 # Secrets / local machine artifacts (never commit)
 *.pem
 ai-mesh-key.pem
-# GW00 — extensionless OpenSSH/PEM filenames. gitignore does not untrack
-# already-tracked /ai-mesh-firewall (LGW00-1 is human-only; do not git rm).
+# GW00 — extensionless OpenSSH/PEM filenames. LGW00-1 closed: git rm'd the
+# tracked private key; keep this pattern so it cannot be re-added.
 /ai-mesh-firewall
 /id_rsa
 /id_dsa

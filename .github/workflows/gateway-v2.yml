@@ -42,8 +42,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Report known path; fail closed on any new OpenSSH/PEM header
-        run: python gateway_v2/lint/check_secret_headers.py --repo .
+      - name: Fail closed on any tracked OpenSSH/PEM key-shaped file
+        run: python gateway_v2/lint/check_secret_headers.py --repo . --fail-allowlist
       - name: LGW00-2 throwaway extensionless header (not committed)
         working-directory: gateway_v2
         run: |
@@ -64,3 +64,26 @@ jobs:
               raise SystemExit("LGW00-2 FAIL: scanner accepted an OpenSSH header")
           print("lgw00_2_rejected", blob.name)
           PY
+
+  image-digest:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_DATE_EPOCH: "1704067200"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build v2 image without attestations
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: |
+          docker version
+          docker build --provenance=false --sbom=false \
+            --build-arg SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}" \
+            -f gateway_v2/Dockerfile \
+            -t ai-mesh-gateway-v2:gw00 .
+          docker image inspect ai-mesh-gateway-v2:gw00 --format '{{.Id}}' | tee gw00-image-id.txt
+          docker run --rm ai-mesh-gateway-v2:gw00
+      - name: Upload image id
+        uses: actions/upload-artifact@v4
+        with:
+          name: gw00-image-id
+          path: gw00-image-id.txt

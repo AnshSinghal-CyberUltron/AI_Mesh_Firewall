@@ -1,0 +1,71 @@
+{
+  "task": "GW00",
+  "record": "LGW00-1 rotation / revocation",
+  "ts": "2026-09-18T07:44:39Z",
+  "signed_by_infrastructure_owner": false,
+  "agent_produced": true,
+  "private_key_printed": false,
+  "classification": {
+    "path_was": "ai-mesh-firewall",
+    "type": "OpenSSH private key",
+    "algo": "ssh-ed25519",
+    "size_bytes": 399,
+    "pub_comment": "ai-mesh",
+    "pub_sha256": "SHA256:z0v4cXDadmOUjJWg8EfyvHDuja0TIeGSIk94id/pn/g",
+    "pub_sha256_hex": "cf4bf87170da7663948c95a0f047f2bc70ee8dad1321e192224f7889dfe99ff8",
+    "pub_md5": "6f:b0:6f:d5:fe:61:c8:0d:b9:15:42:3b:8a:34:06:52",
+    "is_gce_instance_identity": false,
+    "gce_identity_sha256": "SHA256:Te/P1cjgGS+SotTXfTU1PrGir4hnhx0rsMkk4X3j8ok",
+    "gce_identity_algo": "ssh-rsa"
+  },
+  "git": {
+    "untracked": true,
+    "gitignore": "/ai-mesh-firewall",
+    "pub_still_tracked": true,
+    "scanner_fail_if_returns": true,
+    "history_rewrite": "separate ticket — blob remains in git history"
+  },
+  "auth_probes": {
+    "localhost_127_0_0_1": {
+      "method": "ssh -F /dev/null IdentitiesOnly leaked identity",
+      "result": "Permission denied (publickey)",
+      "exit": 255,
+      "accepted": false
+    },
+    "github_git": {
+      "method": "ssh -F /dev/null IdentitiesOnly leaked identity -T git@github.com",
+      "result": "Permission denied (publickey)",
+      "exit": 255,
+      "accepted": false
+    },
+    "gcp_project_metadata_ssh_keys": {
+      "n_keys": 2,
+      "contains_leaked_ed25519": false
+    },
+    "github_repo_deploy_keys": {
+      "list": "HTTP 404 on this token (no admin) / previously empty with org admin token"
+    }
+  },
+  "os_login": {
+    "posix_user": "contact_cyberultron_com",
+    "google_authorized_keys_still_offers_leaked_pub": true,
+    "n_authorized_pubkeys": 3,
+    "leaked_offered_comment": "ai-mesh",
+    "owner_account": "contact@cyberultron.com",
+    "delete_via_compute_sa": "403 PERMISSION_DENIED — credentials must match the user",
+    "gcloud_os_login_remove": "blocked — Reauthentication failed; cannot prompt non-interactively",
+    "this_host_compensating_control": {
+      "sshd_dropin": "/etc/ssh/sshd_config.d/99-gw00-revoked-keys.conf",
+      "revoked_keys": "/etc/ssh/revoked_keys.gw00",
+      "contains_algo_comment": "ssh-ed25519 ai-mesh",
+      "note": "sshd RevokedKeys denies the key on this VM even though OS Login still publishes it"
+    },
+    "other_linux_os_login_vms_in_project": "none found previously (Windows test VM has OS Login unset)"
+  },
+  "owner_action_still_required": [
+    "gcloud auth login as contact@cyberultron.com",
+    "gcloud compute os-login ssh-keys remove --key=SHA256:z0v4cXDadmOUjJWg8EfyvHDuja0TIeGSIk94id/pn/g",
+    "re-run sudo google_authorized_keys contact_cyberultron_com and confirm leaked sha256_hex absent"
+  ],
+  "lgw00_1": "NOT PASS — Google OS Login still offers the pubkey. Auth denied on every system we could probe (this VM via RevokedKeys, GitHub). Owner reauth required to delete the Google-side authorization."
+}

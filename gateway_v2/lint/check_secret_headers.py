@@ -9,7 +9,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-KNOWN_UNTIL_LGW00_1 = frozenset({"ai-mesh-firewall"})
+# Closed LGW00-1: this filename must never be tracked again. Empty allowlist.
+KNOWN_UNTIL_LGW00_1: frozenset[str] = frozenset()
+FORBIDDEN_KEY_FILENAMES = frozenset({"ai-mesh-firewall"})
 _OPENSSH = b"BEGIN OPEN" + b"SSH PRIVATE KEY"
 _PEM = re.compile(rb"BEGIN [A-Z0-9][A-Z0-9 ]{0,64} PRIVATE KEY")
 _NON_KEY_NAMES = frozenset(
@@ -46,6 +48,8 @@ def file_has_private_key_header(path: Path) -> bool:
 def is_key_shaped_filename(path: Path) -> bool:
     """LGW00-2: fail closed on extensionless / *.pem|*.key files, not on docs/tests."""
     name = path.name
+    if name in FORBIDDEN_KEY_FILENAMES:
+        return True
     suffix = path.suffix.lower()
     if suffix in {".pem", ".key", ".secret"}:
         return True
@@ -83,7 +87,7 @@ def scan_repo(repo: Path, *, allow_known: bool) -> tuple[list[HeaderHit], list[s
     known_present = [
         str(p.relative_to(repo))
         for p in tracked
-        if p.name in KNOWN_UNTIL_LGW00_1 and file_has_private_key_header(p)
+        if p.name in FORBIDDEN_KEY_FILENAMES and file_has_private_key_header(p)
     ]
     return scan_paths(tracked, allow), known_present
 
@@ -94,12 +98,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--fail-allowlist",
         action="store_true",
-        help="Also fail on the known LGW00-1 path (human removal only).",
+        default=True,
+        help="Fail if a forbidden key filename is tracked (LGW00-1 closed).",
     )
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
-    hits, known = scan_repo(args.repo.resolve(), allow_known=not args.fail_allowlist)
+    hits, known = scan_repo(args.repo.resolve(), allow_known=False)
     for rel in known:
-        print(f"LGW00-1 OPEN: known tracked private-key header (body omitted): {rel}")
+        print(
+            "LGW00-1 CLOSED residual: forbidden private-key filename "
+            f"tracked (body omitted): {rel}",
+        )
     for hit in hits:
         try:
             rel = str(Path(hit.path).resolve().relative_to(args.repo.resolve()))

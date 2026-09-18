@@ -1,21 +1,23 @@
 {
   "task": "GW00",
-  "ts": "2026-09-18T06:45:00Z",
+  "ts": "2026-09-18T07:44:39Z",
   "branch": "revamp",
-  "head_at_baseline": "82f44cb98719f327b3dd5ccea5ddd9cc8e460435",
+  "head_before_close_commit": "0e7555bfca8eb01c7311837302ba38278e8b6c7c",
   "branch_truth_user_lock": "877c27a8d219d915da54e590334eedf168986c03",
   "python": "3.12",
   "pytest": {"passed": 23, "failed": 0, "cwd": "gateway_v2"},
   "size_gate": {"exit": 0, "max_function_lines": 120, "max_module_lines": 800},
   "http_ast_gate": {"exit": 0},
   "mutable_state_gate": {"exit": 0},
-  "import_linter": {"exit": 0, "contract": "Gateway v2 layers KEPT", "files_analyzed": 54},
+  "import_linter": {"exit": 0, "contract": "Gateway v2 layers KEPT"},
   "ruff": {"exit": 0},
   "mypy_strict": {"exit": 0, "files": 59},
   "secret_headers_repo": {
     "exit": 0,
-    "known_path_reported": "ai-mesh-firewall",
-    "new_key_shaped_hits": 0,
+    "fail_allowlist": true,
+    "known_allowlist": [],
+    "forbidden_filenames": ["ai-mesh-firewall"],
+    "tracked_private_key": false,
     "body_printed": false
   }
 }
