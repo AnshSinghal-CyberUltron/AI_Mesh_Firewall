@@ -1,15 +1,18 @@
 {
   "task": "GW00",
   "workflow": "gateway-v2",
-  "run_id": 35316491049,
-  "url": "https://github.com/AnshSinghal-CyberUltron/AI_Mesh_Firewall/actions/runs/35316491049",
+  "run_id": 35321571533,
+  "url": "https://github.com/AnshSinghal-CyberUltron/AI_Mesh_Firewall/actions/runs/35321571533",
   "event": "push",
   "branch": "revamp",
-  "head_sha": "8d1230f3378dc57cdd5e107933dead724eda9190",
+  "head_sha": "837c4a66d865139e21e5df96664426094f394c41",
   "conclusion": "success",
   "jobs": {
-    "structural-gates": {"conclusion": "success", "seconds": 22},
-    "secret-headers": {"conclusion": "success", "seconds": 7}
+    "structural-gates": {"conclusion": "success", "seconds": 23},
+    "secret-headers": {"conclusion": "success", "seconds": 10},
+    "image-digest": {"conclusion": "success", "seconds": 28}
   },
-  "lgw00_2_ci": "throwaway extensionless header step ran on Actions (not committed)"
+  "lgw00_2_ci": "throwaway extensionless header step ran on Actions (not committed)",
+  "lgw00_6_config_digest": "sha256:86da8a9af994dfac7c3920b68bd132d242b72f4877741478e3f7e1fcd6359d13",
+  "lgw00_6_rootfs_layers_equal": true
 }

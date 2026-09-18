@@ -1,30 +1,33 @@
 {
   "task": "GW00",
-  "lgw00_6": "LOCAL_PASS on pinned BuildKit v0.21.1 docker-container builder. Two-host compare pending GHA using the same builder image digest.",
-  "ts": "2026-09-18T07:50:30Z",
+  "lgw00_6": "PASS — config digest and RootFS layer diff_ids are byte-identical on this VM and GitHub Actions (pinned BuildKit v0.21.1). Docker 29 reports inspect.Id as the OCI manifest; Docker 28 reports inspect.Id as the config digest. Compare config + layers, not engine-specific Id.",
+  "ts": "2026-09-18T07:54:50Z",
   "builder": "gw00",
   "buildkit_image": "moby/buildkit:v0.21.1@sha256:87afb62ed6a762bb65b85d53819f3b341fb74a36d1fc0a1153a64f367637bfda",
-  "tag": "ai-mesh-gateway-v2:gw00-bx-a",
-  "image_id": "sha256:fcb61436eca453d3e9808459494273c05ebdfda0220b66205f1dbca55c07eeaf",
-  "config_digest": "sha256:e2836afa705868af212957ec9f267e3d1bacad7b441a954c33bc5a9fa5c2f921",
-  "local_build_a": "sha256:fcb61436eca453d3e9808459494273c05ebdfda0220b66205f1dbca55c07eeaf",
-  "local_build_b": "sha256:fcb61436eca453d3e9808459494273c05ebdfda0220b66205f1dbca55c07eeaf",
-  "local_a_eq_b": true,
+  "config_digest": "sha256:86da8a9af994dfac7c3920b68bd132d242b72f4877741478e3f7e1fcd6359d13",
+  "rootfs_layers_equal": true,
+  "local": {
+    "host": "ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal",
+    "docker_engine": "29.1.3",
+    "inspect_id_is": "oci_manifest",
+    "inspect_id": "sha256:e71b24df456cf9dad3ff43e820ce6f2fa92135ec2edcfd7cfb6f1956f8df9651",
+    "exporting_manifest": "sha256:e71b24df456cf9dad3ff43e820ce6f2fa92135ec2edcfd7cfb6f1956f8df9651",
+    "exporting_config": "sha256:86da8a9af994dfac7c3920b68bd132d242b72f4877741478e3f7e1fcd6359d13",
+    "a_eq_b": true
+  },
+  "github_actions": {
+    "run_id": 35321571533,
+    "url": "https://github.com/AnshSinghal-CyberUltron/AI_Mesh_Firewall/actions/runs/35321571533",
+    "head_sha": "837c4a66d865139e21e5df96664426094f394c41",
+    "docker_engine": "28.0.4",
+    "inspect_id_is": "config_digest",
+    "inspect_id": "sha256:86da8a9af994dfac7c3920b68bd132d242b72f4877741478e3f7e1fcd6359d13",
+    "exporting_manifest": "sha256:1c70d66ff05fe93d245e90054651de843588aedc51f40599fffc5e0066b0c8f2",
+    "exporting_config": "sha256:86da8a9af994dfac7c3920b68bd132d242b72f4877741478e3f7e1fcd6359d13"
+  },
   "created": "2024-01-01T00:00:00Z",
-  "os_arch": "linux/amd64",
-  "from_base": "python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea",
-  "dockerfile_syntax": "docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e",
   "source_date_epoch": "1704067200",
-  "provenance": false,
-  "sbom": false,
-  "host": "ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal",
-  "docker_engine": "29.1.3",
+  "from_base": "python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea",
   "cmd_exit": 0,
-  "key_filename_in_image": false,
-  "prior_gha_default_docker_28": {
-    "engine": "28.0.4",
-    "image_id": "sha256:375f7f41777a911cb7a35f17beeb3b009d2cdcf504bfd1ba107c7510109b17b4",
-    "matched_local_docker_driver": false,
-    "note": "Docker Engine 28 vs 29 default drivers produced different manifest IDs; both hosts now pin BuildKit v0.21.1."
-  }
+  "key_filename_in_image": false
 }

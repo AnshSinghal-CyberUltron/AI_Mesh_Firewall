@@ -1,22 +1,30 @@
 {
   "task": "GW00",
-  "verdict": "GATES_GREEN_LGW00_6_LOCAL_PASS_LGW00_1_RESIDUAL",
+  "verdict": "GATES_GREEN_LGW00_6_PASS_LGW00_1_RESIDUAL",
   "complete": false,
-  "reason": "v2 gates green; private key untracked; local A/B image IDs identical. LGW00-1 is not PASS while Google OS Login still offers the pubkey. LGW00-6 two-host comparison waits on the Actions image-digest job after push.",
+  "reason": "v2 gates green on this VM and Actions. LGW00-6 config digest + RootFS layers match across hosts. LGW00-1 is not PASS: Google OS Login still offers the leaked pubkey even though this VM (sshd RevokedKeys) and GitHub deny authentication.",
   "exits": {
-    "LGW00-1": "NOT PASS — localhost and GitHub deny the leaked identity; google_authorized_keys still offers ssh-ed25519 ai-mesh; owner must reauth as contact@cyberultron.com to delete OS Login",
-    "LGW00-2": "PASS (extensionless header rejected; CI throwaway job wired; allowlist empty)",
-    "LGW00-3": "PASS (import-linter names Gateway v2 layers)",
-    "LGW00-4": "PASS (size gate)",
-    "LGW00-5": "PASS (HTTP AST gate)",
-    "LGW00-6": "LOCAL PASS — sha256:b665a1ca4dfd0f4cc0ce71c2cfcdc0218dc0a972331c02cdffa54122b401e2d5 twice on this VM; second host = GitHub Actions after push"
+    "LGW00-1": "NOT PASS — localhost 127.0.0.1 Permission denied; git@github.com Permission denied; sudo google_authorized_keys still offers ssh-ed25519 comment=ai-mesh; owner must gcloud auth login as contact@cyberultron.com and remove SHA256:z0v4cXDadmOUjJWg8EfyvHDuja0TIeGSIk94id/pn/g",
+    "LGW00-2": "PASS",
+    "LGW00-3": "PASS",
+    "LGW00-4": "PASS",
+    "LGW00-5": "PASS",
+    "LGW00-6": "PASS — config sha256:86da8a9af994dfac7c3920b68bd132d242b72f4877741478e3f7e1fcd6359d13 and RootFS.Layers identical on this VM and GitHub Actions run 35321571533"
   },
   "ci": {
     "workflow": ".github/workflows/gateway-v2.yml",
+    "run_id": 35321571533,
+    "url": "https://github.com/AnshSinghal-CyberUltron/AI_Mesh_Firewall/actions/runs/35321571533",
+    "head_sha": "837c4a66d865139e21e5df96664426094f394c41",
+    "conclusion": "success",
+    "jobs": ["structural-gates", "secret-headers", "image-digest"],
     "chat_pipeline_golden_replaced": false,
-    "openai_conformance_in_gw00": false,
-    "image_digest_job": true,
-    "secret_headers_fail_allowlist": true
+    "openai_conformance_in_gw00": false
+  },
+  "commits": {
+    "untrack_key": "8e18ca9538b74e0f60aa59b8e6f87cbe0fc547a0",
+    "pin_buildkit": "b44ad5c854df4e2e9b13fdac5b7fb03fa13b37fc",
+    "root_owned_copy": "837c4a66d865139e21e5df96664426094f394c41"
   },
   "v1": {
     "ai_mesh_gateway_edited": false,
