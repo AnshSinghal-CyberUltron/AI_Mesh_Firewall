@@ -16,15 +16,17 @@ ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH} \
 RUN --mount=type=bind,source=gateway_v2/pyproject.toml,target=/tmp/src/pyproject.toml,ro \
     --mount=type=bind,source=gateway_v2/gateway_v2,target=/tmp/src/pkg,ro \
     --mount=type=bind,source=shared/ai_mesh_shared,target=/tmp/src/shared,ro \
-    mkdir -p /opt/gateway_v2/gateway_v2 /opt/shared/ai_mesh_shared \
+    umask 022 \
+    && mkdir -p /opt/gateway_v2/gateway_v2 /opt/shared/ai_mesh_shared \
     && cp /tmp/src/pyproject.toml /opt/gateway_v2/pyproject.toml \
-    && cp -a /tmp/src/pkg/. /opt/gateway_v2/gateway_v2/ \
-    && cp -a /tmp/src/shared/. /opt/shared/ai_mesh_shared/ \
+    && cp -R /tmp/src/pkg/. /opt/gateway_v2/gateway_v2/ \
+    && cp -R /tmp/src/shared/. /opt/shared/ai_mesh_shared/ \
     && find /opt -xdev -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} + \
     && pip install --no-cache-dir --no-compile \
         setuptools==75.8.2 \
         wheel==0.45.1 \
     && pip install --no-cache-dir --no-compile --no-build-isolation /opt/gateway_v2 \
+    && chown -R 0:0 /usr/local /opt \
     && find /usr/local /opt -xdev -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
 
 CMD ["python", "-c", "from gateway_v2.edge import app; raise SystemExit(0 if app is None else 1)"]

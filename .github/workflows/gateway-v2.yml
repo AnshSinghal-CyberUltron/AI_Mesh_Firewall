@@ -83,9 +83,12 @@ jobs:
             -f gateway_v2/Dockerfile \
             -t ai-mesh-gateway-v2:gw00 .
           docker image inspect ai-mesh-gateway-v2:gw00 --format '{{.Id}}' | tee gw00-image-id.txt
+          docker image inspect ai-mesh-gateway-v2:gw00 --format '{{json .RootFS.Layers}}' | tee gw00-rootfs-layers.json
           docker run --rm ai-mesh-gateway-v2:gw00
       - name: Upload image id
         uses: actions/upload-artifact@v4
         with:
           name: gw00-image-id
-          path: gw00-image-id.txt
+          path: |
+            gw00-image-id.txt
+            gw00-rootfs-layers.json
