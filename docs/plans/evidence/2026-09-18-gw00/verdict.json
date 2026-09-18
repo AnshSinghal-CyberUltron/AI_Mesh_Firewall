@@ -1,0 +1,23 @@
+{
+  "task": "GW00",
+  "verdict": "GATES_GREEN_WITH_HUMAN_RESIDUALS",
+  "complete": false,
+  "reason": "Structural workspace + CI + empty tree + negative fixtures are green. LGW00-1 and LGW00-6 are not PASS.",
+  "exits": {
+    "LGW00-1": "OPEN — human classify/revoke/rotate; agent did not print, ssh, or authenticate the tracked key; did not git rm",
+    "LGW00-2": "PASS locally (extensionless header rejected; CI throwaway job wired)",
+    "LGW00-3": "PASS locally (import-linter names Gateway v2 layers)",
+    "LGW00-4": "PASS locally (size gate names file and line)",
+    "LGW00-5": "PASS locally (HTTP AST gate names detect file)",
+    "LGW00-6": "INCOMPLETE — single-host image digest recorded; second host not unlocked; not PASS"
+  },
+  "ci": {
+    "workflow": ".github/workflows/gateway-v2.yml",
+    "chat_pipeline_golden_replaced": false,
+    "openai_conformance_in_gw00": false
+  },
+  "v1": {
+    "ai_mesh_gateway_edited": false,
+    "live_stack_restarted": false
+  }
+}

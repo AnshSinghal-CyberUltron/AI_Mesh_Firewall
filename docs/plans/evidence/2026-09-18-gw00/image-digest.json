@@ -1,0 +1,17 @@
+{
+  "task": "GW00",
+  "lgw00_6": "INCOMPLETE \u2014 single-host digest only; second host not unlocked; not PASS",
+  "ts": "2026-09-18T06:46:30Z",
+  "tag": "ai-mesh-gateway-v2:gw00",
+  "image_id": "sha256:7e8c6852cef84dfb4d563365b5cb631bc2ddac0e90110cebda19799feea607ca",
+  "repo_digests": [
+    "ai-mesh-gateway-v2@sha256:7e8c6852cef84dfb4d563365b5cb631bc2ddac0e90110cebda19799feea607ca"
+  ],
+  "from_base": "python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea",
+  "host": "ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal",
+  "cmd_exit": 0,
+  "cmd_stdout": "",
+  "cmd_stderr": "",
+  "key_file_in_image": false,
+  "key_find_stdout_omitted_on_purpose": true
+}

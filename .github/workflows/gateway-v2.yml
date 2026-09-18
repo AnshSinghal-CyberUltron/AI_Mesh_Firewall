@@ -1,0 +1,66 @@
+name: gateway-v2
+
+on:
+  pull_request:
+  push:
+    branches:
+      - revamp
+
+jobs:
+  structural-gates:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gateway_v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install v2 dev deps
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -e ".[dev]"
+      - name: Size + HTTP AST + mutable-state gates
+        run: |
+          .venv/bin/python -m lint.check_sizes gateway_v2
+          .venv/bin/python -m lint.check_http_outside_edge_resolve gateway_v2
+          .venv/bin/python -m lint.check_no_module_mutable gateway_v2
+      - name: import-linter
+        run: .venv/bin/lint-imports
+      - name: ruff
+        run: .venv/bin/ruff check gateway_v2 lint tests
+      - name: mypy --strict
+        run: .venv/bin/mypy --strict
+      - name: v2 pytest (placeholder + negative fixtures)
+        run: .venv/bin/python -m pytest -q
+
+  secret-headers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Report known path; fail closed on any new OpenSSH/PEM header
+        run: python gateway_v2/lint/check_secret_headers.py --repo .
+      - name: LGW00-2 throwaway extensionless header (not committed)
+        working-directory: gateway_v2
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, ".")
+          from lint.check_secret_headers import scan_paths
+          blob = Path("/tmp/lgw00-2-extensionless")
+          blob.write_text(
+              "-----BEGIN OPENSSH PRIVATE KEY-----\n"
+              "LGW00-2-CI-FIXTURE-NOT-A-REAL-KEY\n"
+              "-----END OPENSSH PRIVATE KEY-----\n",
+              encoding="utf-8",
+          )
+          hits = scan_paths([blob], allowlist=set())
+          if not hits:
+              raise SystemExit("LGW00-2 FAIL: scanner accepted an OpenSSH header")
+          print("lgw00_2_rejected", blob.name)
+          PY

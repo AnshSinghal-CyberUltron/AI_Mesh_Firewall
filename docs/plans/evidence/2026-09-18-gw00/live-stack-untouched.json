@@ -1,0 +1,30 @@
+{
+  "ai_mesh_firewall-gateway-1": {
+    "status": "running",
+    "container_id": "f820c851b8c1",
+    "image_id": "sha256:2fd529f864f1527445fe4b0ffe1df512628f78d43c6f0249489853f0f68d31af",
+    "unchanged_container": true,
+    "unchanged_image": true
+  },
+  "ai_mesh_firewall-control-1": {
+    "status": "running",
+    "container_id": "2715b8443d6e",
+    "image_id": "sha256:692077b47db75d905bfad93b711c9199798f81e001dd68b99c40b7ab054c311e",
+    "unchanged_container": true,
+    "unchanged_image": true
+  },
+  "ai_mesh_firewall-frontend-1": {
+    "status": "running",
+    "container_id": "fbe85271abec",
+    "image_id": "sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32",
+    "unchanged_container": true,
+    "unchanged_image": true
+  },
+  "ai_mesh_firewall-t02-recorder-1": {
+    "status": "running",
+    "container_id": "6a66f9449ffc",
+    "image_id": "sha256:f7f85c914d4af29465737977a36a909f58e3ea6d45f56a3e4a293469b5c6b005",
+    "unchanged_container": true,
+    "unchanged_image": true
+  }
+}

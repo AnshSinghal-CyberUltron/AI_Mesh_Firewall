@@ -67,6 +67,26 @@ while IFS= read -r f; do
   fi
 done < <(git diff --cached --name-only --diff-filter=ACM || true)
 
+# (3) GW00 — OpenSSH / PEM private-key headers in staged added lines.
+# Report filenames only. Never print matching lines (key material).
+# Needle is assembled at runtime so this file does not contain a literal header.
+_OS_HDR="BEGIN OPEN""SSH PRIVATE KEY"
+_PEM_RE="BEGIN [A-Z0-9][A-Z0-9 ]* PRIVATE KEY"
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  # LGW00-2: extensionless / typical key suffixes. Mentions in .py/.md/.sh are not keys.
+  case "$f" in
+    *.pem|*.key|*.secret) ;;
+    *.*) continue ;;
+    Dockerfile*|Makefile*|LICENSE|CHANGELOG) continue ;;
+    .*) continue ;;
+  esac
+  fadd="$(git diff --cached --no-color -U0 -- "$f" | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
+  if printf '%s' "$fadd" | grep -Eq "${_OS_HDR}|${_PEM_RE}"; then
+    note "OpenSSH/PEM private-key header in staged file (body omitted): $f"
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACM || true)
+
 if [ "$fail" -ne 0 ]; then
   printf '\n%s\n' "COMMIT BLOCKED: remove the secret(s) above and re-stage. (Ralph secret-scan guard)" >&2
   exit 1

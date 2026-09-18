@@ -1,0 +1,25 @@
+{
+  "task": "GW00",
+  "note": "Negative fixtures run in pytest temp trees / /tmp. None are committed to the library tree.",
+  "LGW00-2": {
+    "procedure": "Write an extensionless file containing an OpenSSH private-key header (fixture body, not a real key). scan_paths must hit the path and must not include the header in repr(hits).",
+    "result": "PASS locally",
+    "evidence": "gateway_v2/tests/gates/test_secret_headers.py + /tmp/lgw00-2-extensionless rejected as lgw00-2-extensionless",
+    "ci": ".github/workflows/gateway-v2.yml job secret-headers throwaway step"
+  },
+  "LGW00-3": {
+    "procedure": "Temp package: detect/base.py does from gateway_v2.edge import app. lint-imports must fail and name the layers contract.",
+    "result": "PASS (pytest test_lgw00_3_upward_import_fails_naming_contract)",
+    "empty_tree_control": "test_empty_layers_pass_import_linter PASS; shipped tree lint-imports KEPT"
+  },
+  "LGW00-4": {
+    "procedure": "130-line function + 850-line module in tmp_path. Size gate names file and line.",
+    "result": "PASS (test_130_line_function_fails_with_file_and_line, test_850_line_module_fails_with_file)",
+    "empty_tree_control": "test_shipped_tree_within_size_limits PASS"
+  },
+  "LGW00-5": {
+    "procedure": "raise HTTPException(status_code=403) in detect/poison.py. AST gate names the file and HTTPException.",
+    "result": "PASS (test_http_exception_in_detect_fails_naming_file)",
+    "empty_tree_control": "test_shipped_tree_has_no_http_outside_edge_resolve PASS; same snippet allowed in edge/ and resolve/"
+  }
+}

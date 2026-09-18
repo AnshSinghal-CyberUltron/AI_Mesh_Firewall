@@ -66,5 +66,14 @@ docs/qa/*.local.md
 # Secrets / local machine artifacts (never commit)
 *.pem
 ai-mesh-key.pem
+# GW00 — extensionless OpenSSH/PEM filenames. gitignore does not untrack
+# already-tracked /ai-mesh-firewall (LGW00-1 is human-only; do not git rm).
+/ai-mesh-firewall
+/id_rsa
+/id_dsa
+/id_ecdsa
+/id_ed25519
+/id_ecdsa_sk
+/id_ed25519_sk
 /aws/
 awscliv2.zip
