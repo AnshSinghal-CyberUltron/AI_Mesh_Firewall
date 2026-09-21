@@ -1,0 +1,35 @@
+{
+  "task": "GW02",
+  "complete": true,
+  "verdict": "LGW02_1_5_PASS_LOCAL",
+  "honesty": {
+    "c2": "50000 sanitized synthetic production-shaped records, not a live LLM capture on :8300",
+    "lgw02_1": "v1 ATTACK_PATTERNS oracle + FrozenClock replay twice; 100% IDENTICAL. Not 50k through the production gateway (would be a real model and non-deterministic ids).",
+    "t02": "staging/t02 recorder reused as the provider *shape*; container 6a66f9449ffc /health {status:ok,role:openai,calls:0}",
+    "c3": "tests/detection_corpus G0.1/T04 labelled JSONL; labels are the oracle"
+  },
+  "exits": {
+    "LGW02-1": "PASS — 50000/50000 IDENTICAL v1 self-replay with injected clock; 20 coverage cells, 0 gaps",
+    "LGW02-2": "PASS — disposition change with empty ledger → UNEXPECTED",
+    "LGW02-3": "PASS — back-dated field and post-run git timestamp raise LedgerTimestampError",
+    "LGW02-4": "PASS — SDK object field change → WIRE + C1 gap logged",
+    "LGW02-5": "PASS — canonical backtick 5/5 block; paraphrase recall 0.0 (0/31); developer_traffic FPR 0.36"
+  },
+  "c2": {
+    "n": 50000,
+    "gaps": [],
+    "manifest": "c2-coverage.json"
+  },
+  "pytest": "8 passed, 1 skipped (T02 admin URL unset in default env) in 5.71s",
+  "v2_default_suite": "27 passed",
+  "v1_modules_edited": false,
+  "live_stack": {
+    "gateway": "f820c851b8c1",
+    "control": "2715b8443d6e",
+    "frontend": "fbe85271abec",
+    "t02_recorder": "6a66f9449ffc",
+    "recreated": false
+  },
+  "ci": "parity-harness job added; green Actions URL pending this push",
+  "lgw00_1": "still residual (OS Login)"
+}

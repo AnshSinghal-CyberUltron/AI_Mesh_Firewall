@@ -164,3 +164,38 @@ jobs:
           npm --prefix tests/openai_conformance/node ci
           node tests/openai_conformance/node/openai_matrix.mjs
           kill "$stub_pid" || true
+
+  parity-harness:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/gateway:${{ github.workspace }}/shared:${{ github.workspace }}/gateway_v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install v2 + v1 scanner deps
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -U pip
+          .venv/bin/pip install -e ./shared -e "./gateway_v2[dev]"
+          .venv/bin/python - <<'PY'
+          import subprocess
+          import sys
+          import tomllib
+          from pathlib import Path
+          data = tomllib.loads(Path("gateway/pyproject.toml").read_text())
+          deps = list(data["project"]["dependencies"])
+          deps += data["project"]["optional-dependencies"]["dev"]
+          subprocess.check_call([sys.executable, "-m", "pip", "install", *deps])
+          PY
+      - name: LGW02 C2 generate + gates
+        working-directory: gateway_v2
+        run: |
+          ../.venv/bin/python -m gateway_v2.contracts.parity.generate 50000 /tmp/gw02-c2-coverage.json
+          ../.venv/bin/python -m pytest tests/parity -q --tb=short --override-ini="addopts="
+      - name: Upload C2 coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: gw02-c2-coverage
+          path: /tmp/gw02-c2-coverage.json

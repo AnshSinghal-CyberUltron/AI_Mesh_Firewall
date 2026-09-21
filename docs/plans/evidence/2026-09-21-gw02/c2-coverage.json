@@ -1,0 +1,28 @@
+{
+  "cells": {
+    "chat|nonstream|tenant-block": 2500,
+    "chat|nonstream|tenant-monitor": 2500,
+    "chat|stream|tenant-block": 2500,
+    "chat|stream|tenant-monitor": 2500,
+    "completions|nonstream|tenant-block": 2500,
+    "completions|nonstream|tenant-monitor": 2500,
+    "completions|stream|tenant-block": 2500,
+    "completions|stream|tenant-monitor": 2500,
+    "embeddings|nonstream|tenant-block": 2500,
+    "embeddings|nonstream|tenant-monitor": 2500,
+    "mcp|nonstream|tenant-block": 2500,
+    "mcp|nonstream|tenant-monitor": 2500,
+    "rag|nonstream|tenant-block": 2500,
+    "rag|nonstream|tenant-monitor": 2500,
+    "responses|nonstream|tenant-block": 2500,
+    "responses|nonstream|tenant-monitor": 2500,
+    "responses|stream|tenant-block": 2500,
+    "responses|stream|tenant-monitor": 2500,
+    "vector|nonstream|tenant-block": 2500,
+    "vector|nonstream|tenant-monitor": 2500
+  },
+  "gaps": [],
+  "n": 50000,
+  "sanitized_sample": "Contact [EMAIL] about SSN [SSN] key [AWS_KEY].",
+  "target": 50000
+}

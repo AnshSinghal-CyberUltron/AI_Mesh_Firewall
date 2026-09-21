@@ -1,0 +1,90 @@
+{
+  "oracle": "v1 ATTACK_PATTERNS",
+  "backtick_canonical_5": 5,
+  "families": [
+    {
+      "family": "command_injection",
+      "label": "malicious",
+      "n": 26,
+      "flagged": 24,
+      "rate": 0.9231
+    },
+    {
+      "family": "data_leakage",
+      "label": "malicious",
+      "n": 38,
+      "flagged": 38,
+      "rate": 1.0
+    },
+    {
+      "family": "developer_traffic",
+      "label": "benign",
+      "n": 75,
+      "flagged": 27,
+      "rate": 0.36
+    },
+    {
+      "family": "general_benign",
+      "label": "benign",
+      "n": 350,
+      "flagged": 0,
+      "rate": 0.0
+    },
+    {
+      "family": "goal_hijacking",
+      "label": "malicious",
+      "n": 26,
+      "flagged": 26,
+      "rate": 1.0
+    },
+    {
+      "family": "jailbreak",
+      "label": "malicious",
+      "n": 38,
+      "flagged": 37,
+      "rate": 0.9737
+    },
+    {
+      "family": "paraphrase",
+      "label": "malicious",
+      "n": 31,
+      "flagged": 0,
+      "rate": 0.0
+    },
+    {
+      "family": "path_traversal",
+      "label": "malicious",
+      "n": 26,
+      "flagged": 26,
+      "rate": 1.0
+    },
+    {
+      "family": "prompt_injection",
+      "label": "malicious",
+      "n": 60,
+      "flagged": 60,
+      "rate": 1.0
+    },
+    {
+      "family": "sql_injection",
+      "label": "malicious",
+      "n": 26,
+      "flagged": 22,
+      "rate": 0.8462
+    },
+    {
+      "family": "tool_overreach",
+      "label": "malicious",
+      "n": 26,
+      "flagged": 26,
+      "rate": 1.0
+    },
+    {
+      "family": "vector_injection",
+      "label": "malicious",
+      "n": 26,
+      "flagged": 26,
+      "rate": 1.0
+    }
+  ]
+}

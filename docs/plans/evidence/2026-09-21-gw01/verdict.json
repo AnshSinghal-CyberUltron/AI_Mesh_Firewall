@@ -1,16 +1,29 @@
 {
   "task": "GW01",
   "complete": true,
-  "verdict": "LGW01_1_5_PASS_V1_LEDGER_RECORDED",
+  "verdict": "LGW01_1_5_PASS_V1_LEDGER_RECORDED_CI_GREEN",
+  "ci": {
+    "sha": "2f1156fcf8cf35ca15fabc219b830d4ec3cc80b7",
+    "url": "https://github.com/AnshSinghal-CyberUltron/AI_Mesh_Firewall/actions/runs/35566356853",
+    "conclusion": "success",
+    "jobs": ["secret-headers", "image-digest", "structural-gates", "openai-conformance"],
+    "openai_conformance": {
+      "run_a": "14 failed, 70 passed, 3 skipped, 2 xfailed in 8.79s",
+      "run_b": "14 failed, 70 passed, 3 skipped, 2 xfailed in 7.74s",
+      "lgw01_1_collected": 89,
+      "lgw01_5_identical": 89,
+      "lgw01_3_node_ok": true
+    }
+  },
+  "install_fix": "pip install declared gateway deps; do not use -e ./gateway (setuptools flat-layout discovers runs/)",
   "exits": {
-    "LGW01-1": "PASS \u2014 89 cases collected against v1 ASGI; 70 passed, 14 recorded v1 deviations, 2 xfail(strict=True), 3 skipped live-tcp without BASE_URL",
-    "LGW01-2": "PASS \u2014 loopback uvicorn in the suite; live :8300 wire probe 3/3; staging nginx absent (Vite :8180) recorded",
-    "LGW01-3": "PASS \u2014 Node openai@4.104.0 vs stub TCP (content+stream+tools) and vs :8300 (AuthenticationError)",
-    "LGW01-4": "PASS \u2014 malformed data: frame raises; log names not-json-this-frame-MUST-fail",
-    "LGW01-5": "PASS \u2014 two junit files identical (lint.compare_junit)"
+    "LGW01-1": "PASS — 89 cases collected against v1 ASGI in CI and locally; 70 passed, 14 recorded v1 deviations, 2 xfail(strict=True)",
+    "LGW01-2": "PASS — loopback uvicorn in the suite; live :8300 wire probe 3/3 after CI (2026-09-21); staging frontend is Vite :8180",
+    "LGW01-3": "PASS — Node openai@4.104.0 vs stub TCP in CI (lgw01_3_node_ok)",
+    "LGW01-4": "PASS — malformed data: frame raises",
+    "LGW01-5": "PASS — lgw01_5_identical cases=89"
   },
   "d4_d5_strict": true,
-  "nginx": "absent \u2014 frontend is Vite :8180, gateway :8300",
   "v1_modules_edited": false,
   "live_stack": {
     "gateway": "f820c851b8c1",
