@@ -109,7 +109,17 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/pip install -U pip
-          .venv/bin/pip install -e ./shared -e "./gateway[dev]"
+          .venv/bin/pip install -e ./shared
+          .venv/bin/python - <<'PY'
+          import subprocess
+          import sys
+          import tomllib
+          from pathlib import Path
+          data = tomllib.loads(Path("gateway/pyproject.toml").read_text())
+          deps = list(data["project"]["dependencies"])
+          deps += data["project"]["optional-dependencies"]["dev"]
+          subprocess.check_call([sys.executable, "-m", "pip", "install", *deps])
+          PY
       - name: LGW01-1/2/4/5 Python ASGI + loopback TCP (twice)
         working-directory: gateway_v2
         run: |
