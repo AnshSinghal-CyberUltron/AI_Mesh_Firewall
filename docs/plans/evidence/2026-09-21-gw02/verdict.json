@@ -30,6 +30,14 @@
     "t02_recorder": "6a66f9449ffc",
     "recreated": false
   },
-  "ci": "parity-harness job added; green Actions URL pending this push",
+  "ci": {
+    "sha": "001cc1c69db5efe1f2e2c5fd53be6b7b68b89e8d",
+    "url": "https://github.com/AnshSinghal-CyberUltron/AI_Mesh_Firewall/actions/runs/35567065946",
+    "conclusion": "success",
+    "parity_harness": {
+      "c2": {"n": 50000, "gaps": []},
+      "pytest": "8 passed, 1 skipped in 8.42s"
+    }
+  },
   "lgw00_1": "still residual (OS Login)"
 }
