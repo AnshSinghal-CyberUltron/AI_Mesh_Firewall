@@ -1,0 +1,38 @@
+{
+  "task": "GW01",
+  "app": "v1",
+  "note": "Assertions were not weakened. Failures reproduce on the original files under gateway/ai_mesh_gateway/tests/.",
+  "deviations": [
+    {
+      "id": "V1-INJ-STUB-NO-BLOCK",
+      "tests": [
+        "test_blocked_request_raises_api_status_error_with_zeroshield_body",
+        "test_blocked_streaming_request_raises_before_sse",
+        "test_responses_blocked_non_stream_raises_bad_request_error",
+        "test_responses_blocked_stream_raises_before_sse",
+        "test_error_fields_populated_on_block_D2",
+        "test_error_request_id_present_on_block_D3",
+        "test_error_param_null_on_content_block_A1",
+        "test_legacy_completions_block_routes_through_firewall_D4",
+        "test_c4_moderations_flags_injection",
+        "test_live_block_raises_permission_denied",
+        "test_live_blocked_stream_is_json_not_sse",
+        "test_block_403_header_request_id_matches_body",
+        "test_every_block_emits_enforcement_signal"
+      ],
+      "observed": "Classic jailbreak fixture is forwarded to the mocked upstream under TEST_CONFIG (tier2_enabled=False). pytest.raises(APIStatusError) does not fire."
+    },
+    {
+      "id": "V1-STREAM-UPSTREAM-ERROR-LEAK",
+      "tests": [
+        "test_stream_upstream_error_emits_error_event_not_clean_empty"
+      ],
+      "observed": "RuntimeError('upstream boom before first token') escapes ASGI instead of an SSE error event."
+    }
+  ],
+  "xfail_strict_true_still_expected": [
+    "test_chat_n_gt_1_returns_n_choices",
+    "test_content_part_file_requires_payload"
+  ],
+  "d4_d5": "strict must-pass; both passed on the GW01 copies"
+}

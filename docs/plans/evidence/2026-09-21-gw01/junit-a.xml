@@ -1,0 +1,327 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="14" skipped="5" tests="89" time="5.695" timestamp="2026-09-21T11:21:43.212032+05:30" hostname="ai-mesh-firewall.asia-south1-c.c.ai-mesh-firewall.internal"><testcase classname="tests.openai_conformance.test_live_tcp_8300" name="test_live_tcp_missing_key_is_authentication_error" time="0.000"><skipped type="pytest.skip" message="AMF_CONFORMANCE_BASE_URL unset (CI uses loopback uvicorn instead)">/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_live_tcp_8300.py:23: AMF_CONFORMANCE_BASE_URL unset (CI uses loopback uvicorn instead)</skipped></testcase><testcase classname="tests.openai_conformance.test_live_tcp_8300" name="test_live_tcp_error_body_is_json_not_html" time="0.000"><skipped type="pytest.skip" message="AMF_CONFORMANCE_BASE_URL unset (CI uses loopback uvicorn instead)">/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_live_tcp_8300.py:42: AMF_CONFORMANCE_BASE_URL unset (CI uses loopback uvicorn instead)</skipped></testcase><testcase classname="tests.openai_conformance.test_live_tcp_8300" name="test_live_tcp_mcp_rag_vector_not_html" time="0.000"><skipped type="pytest.skip" message="AMF_CONFORMANCE_BASE_URL unset (CI uses loopback uvicorn instead)">/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_live_tcp_8300.py:58: AMF_CONFORMANCE_BASE_URL unset (CI uses loopback uvicorn instead)</skipped></testcase><testcase classname="tests.openai_conformance.test_malformed_sse_frame" name="test_malformed_sse_data_frame_fails_and_names_frame" time="0.771" /><testcase classname="tests.openai_conformance.test_mcp_rag_vector_shapes" name="test_native_surfaces_unauthenticated_are_not_html[/v1/mcp]" time="0.069" /><testcase classname="tests.openai_conformance.test_mcp_rag_vector_shapes" name="test_native_surfaces_unauthenticated_are_not_html[/v1/rag/query]" time="0.004" /><testcase classname="tests.openai_conformance.test_mcp_rag_vector_shapes" name="test_native_surfaces_unauthenticated_are_not_html[/v1/vector/query]" time="0.004" /><testcase classname="tests.openai_conformance.test_mcp_rag_vector_shapes" name="test_mcp_jsonrpc_authenticated_envelope_is_json" time="0.004" /><testcase classname="tests.openai_conformance.test_mcp_rag_vector_shapes" name="test_rag_vector_authenticated_envelope_is_json[/v1/rag/query]" time="0.008" /><testcase classname="tests.openai_conformance.test_mcp_rag_vector_shapes" name="test_rag_vector_authenticated_envelope_is_json[/v1/rag/ingest]" time="0.007" /><testcase classname="tests.openai_conformance.test_mcp_rag_vector_shapes" name="test_rag_vector_authenticated_envelope_is_json[/v1/vector/query]" time="0.004" /><testcase classname="tests.openai_conformance.test_mcp_rag_vector_shapes" name="test_stock_sdk_has_no_mcp_or_rag_methods" time="0.005" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_non_streaming_parses_as_chat_completion" time="1.666" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_streaming_chunks_trace_frame_and_done" time="0.263" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_blocked_request_raises_api_status_error_with_zeroshield_body" time="0.023"><failure message="Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;">E   Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_blocked_streaming_request_raises_before_sse" time="0.022"><failure message="Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;">E   Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_invalid_api_key_raises_authentication_error" time="0.018" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_responses_non_streaming_parses_as_response_object" time="0.101" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_responses_streaming_events_and_text" time="0.092" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_responses_mid_stream_failure_surfaces_typed_response_failed" time="0.023" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_responses_blocked_non_stream_raises_bad_request_error" time="0.022"><failure message="Failed: DID NOT RAISE &lt;class 'openai.BadRequestError'&gt;">E   Failed: DID NOT RAISE &lt;class 'openai.BadRequestError'&gt;</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_responses_blocked_stream_raises_before_sse" time="0.022"><failure message="Failed: DID NOT RAISE &lt;class 'openai.BadRequestError'&gt;">E   Failed: DID NOT RAISE &lt;class 'openai.BadRequestError'&gt;</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_only_one_post_v1_responses_route" time="0.016" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_v1_responses_first_match_wins_is_full_handler" time="0.016" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_responses_non_string_model_returns_400" time="0.032" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_chat_tool_calls_forwarded_and_parsed" time="0.023" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_chat_response_format_json_schema" time="0.022" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_chat_usage_block_present" time="0.021" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_responses_store_retrieve_delete_roundtrip" time="0.029" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_responses_input_items_listing" time="0.066" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_responses_previous_response_id_replay" time="0.028" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_responses_typed_stream_sequence_D5" time="0.025" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_embeddings_single" time="0.023" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_embeddings_batch" time="0.020" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_models_list_returns_real_ids" time="0.021" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_models_retrieve_by_id_D4" time="0.020" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_error_model_not_allowed" time="0.023" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_error_upstream_429_maps_to_rate_limit_error" time="0.075" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_error_bad_body_raises_bad_request" time="0.020" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_error_fields_populated_on_block_D2" time="0.022"><failure message="Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;">E   Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_error_request_id_present_on_block_D3" time="0.022"><failure message="Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;">E   Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_error_param_populated_on_bad_model_A1" time="0.019" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_error_param_populated_on_bad_messages_A1" time="0.019" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_error_param_populated_on_bad_sampling_A1" time="0.019" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_error_param_null_on_content_block_A1" time="0.022"><failure message="Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;">E   Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_error_request_id_present_across_error_classes" time="0.027" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_unimplemented_surface_returns_clean_404" time="0.019" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_legacy_completions_create_D4" time="0.024" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_legacy_completions_batch_prompt_D4" time="0.024" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_legacy_completions_block_routes_through_firewall_D4" time="0.022"><failure message="Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;">E   Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_c1_success_chat_carries_request_id_header" time="0.020" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_c1_success_streaming_carries_request_id_header" time="0.021" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_c1_unmatched_v1_route_is_nested_envelope_with_request_id" time="0.020" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_c1_malformed_json_body_is_nested_envelope_with_request_id" time="0.018" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_c1_unhandled_exception_is_nested_500_with_request_id_no_traceback" time="0.023" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_c4_moderations_benign_parses_with_request_id" time="0.022" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_c4_moderations_flags_injection" time="0.019"><failure message="assert False is True&#10; +  where False = Moderation(categories=Categories(harassment=False, harassment_threatening=None, hate=False, hate_threatening=False, il...one, hate/threatening=0.0, self-harm=0.0, prompt_injection=0.0, jailbreak=0.0, pii=0.0, credential=0.0), flagged=False).flagged">E   assert False is True
+     +  where False = Moderation(categories=Categories(harassment=False, harassment_threatening=None, hate=False, hate_threatening=False, il...one, hate/threatening=0.0, self-harm=0.0, prompt_injection=0.0, jailbreak=0.0, pii=0.0, credential=0.0), flagged=False).flagged</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_c4_moderations_missing_input_is_nested_envelope_with_request_id" time="0.018" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_c4_audio_surface_returns_clean_404" time="0.019" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat" name="test_c4_models_retrieve_unknown_returns_404_with_request_id" time="0.019" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_live_uvicorn" name="test_live_chat_non_stream" time="0.127" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_live_uvicorn" name="test_live_chat_stream_chunks_and_done" time="0.013" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_live_uvicorn" name="test_live_responses_stream_typed_events" time="0.015" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_live_uvicorn" name="test_live_block_raises_permission_denied" time="0.011"><failure message="Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;">E   Failed: DID NOT RAISE &lt;class 'openai.APIStatusError'&gt;</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat_live_uvicorn" name="test_live_request_id_header_present_and_matches_body" time="0.010" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_live_uvicorn" name="test_live_blocked_stream_is_json_not_sse" time="0.012"><failure message="assert 200 == 400&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code">E   assert 200 == 400
+     +  where 200 = &lt;Response [200 OK]&gt;.status_code</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat_live_uvicorn" name="test_live_client_disconnect_midstream_then_server_responsive" time="0.021" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_live_uvicorn" name="test_live_zero_token_scan_only_no_hang" time="0.162" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2" name="test_max_completion_tokens_not_shadowed_by_injected_max_tokens" time="0.023" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2" name="test_max_completion_tokens_over_ceiling_is_rejected" time="0.019" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2" name="test_responses_adapter_forwards_response_format" time="0.000" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2" name="test_responses_adapter_forwards_sampling_penalties" time="0.000" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2" name="test_responses_adapter_forwards_top_logprobs" time="0.000" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2" name="test_block_403_header_request_id_matches_body" time="0.020"><failure message="assert 200 == 400&#10; +  where 200 = &lt;Response [200 OK]&gt;.status_code">E   assert 200 == 400
+     +  where 200 = &lt;Response [200 OK]&gt;.status_code</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2" name="test_chat_n_gt_1_returns_n_choices" time="0.021"><skipped type="pytest.xfail" message="DEFECT P2-N-CHAT-clamp (MEDIUM; INTENTIONAL single-choice output-guard tradeoff at main.py:4309, but a SILENT OpenAI deviation): n&gt;1 is clamped to 1 with no client-facing signal. OpenAI returns n choices. At minimum the clamp should be surfaced or 400'd, not silently applied." /></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2" name="test_responses_adapter_handles_n" time="0.000" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2" name="test_chat_validation_400_populates_e_param" time="0.019" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2" name="test_success_200_header_request_id_matches_body_zeroshield" time="0.020" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2" name="test_upstream_429_carries_retry_after" time="0.020" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2" name="test_content_part_file_requires_payload" time="0.020"><skipped type="pytest.xfail" message="DEFECT P2-CONTENT-part-validation-gap (LOW): allowlisted multimodal part types (file/input_audio/audio/video_url) are admitted without payload-shape validation (main.py:4214-4231 validates only text/image_url), so a malformed {'type':'file'} (no 'file' key) reaches upstream — the slow-502/KeyError vector C2 closed for image_url, reopened for the others." /></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2_adversarial" name="test_responses_adapter_maps_native_text_format" time="0.022" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2_adversarial" name="test_responses_adapter_forwards_logit_bias" time="0.021" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2_adversarial" name="test_responses_adapter_forwards_service_tier" time="0.021" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2_adversarial" name="test_responses_adapter_forwards_prediction" time="0.021" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase2_adversarial" name="test_responses_adapter_forwards_truncation" time="0.022" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase5_correlation" name="test_request_id_join_invariant_across_v1_matrix" time="0.043" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase5_correlation" name="test_every_block_emits_enforcement_signal" time="0.021"><failure message="assert 200 == 400">E   assert 200 == 400</failure></testcase><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase6_guards" name="test_missing_model_returns_400_invalid_request_param_model" time="0.022" /><testcase classname="tests.openai_conformance.test_openai_sdk_compat_phase6_guards" name="test_stream_upstream_error_emits_error_event_not_clean_empty" time="0.026"><failure message="RuntimeError: upstream boom before first token">+ Exception Group Traceback (most recent call last):
+  |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 81, in collapse_excgroups
+  |     yield
+  |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 274, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |                ~~~~~~~~~~~~~~~~~~~~~~~^^
+  |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/anyio/_backends/_asyncio.py", line 799, in __aexit__
+  |     raise BaseExceptionGroup(
+  |         "unhandled errors in a TaskGroup", self._exceptions
+  |     ) from None
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 353, in from_call
+    |     result: TResult | None = func()
+    |                              ~~~~^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 245, in &lt;lambda&gt;
+    |     lambda: runtest_hook(item=item, **kwds),
+    |             ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    |     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+    |            ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 167, in _multicall
+    |     raise exception
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/logging.py", line 850, in pytest_runtest_call
+    |     yield
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/capture.py", line 900, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 53, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ~~~~~~~~~~~~~~~~~^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 38, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/skipping.py", line 268, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    |     res = hook_impl.function(*args)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/runner.py", line 179, in pytest_runtest_call
+    |     item.runtest()
+    |     ~~~~~~~~~~~~^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py", line 569, in runtest
+    |     super().runtest()
+    |     ~~~~~~~~~~~~~~~^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/python.py", line 1720, in runtest
+    |     self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_hooks.py", line 512, in __call__
+    |     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+    |            ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 167, in _multicall
+    |     raise exception
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 53, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ~~~~~~~~~~~~~~~~~^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 38, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pluggy/_callers.py", line 121, in _multicall
+    |     res = hook_impl.function(*args)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/_pytest/python.py", line 166, in pytest_pyfunc_call
+    |     result = testfunction(**testargs)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py", line 905, in inner
+    |     runner.run(coro, context=context)
+    |     ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/lib/python3.14/asyncio/runners.py", line 127, in run
+    |     return self._loop.run_until_complete(task)
+    |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+    |   File "/usr/lib/python3.14/asyncio/base_events.py", line 719, in run_until_complete
+    |     return future.result()
+    |            ~~~~~~~~~~~~~^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py", line 85, in test_stream_upstream_error_emits_error_event_not_clean_empty
+    |     async with rc.stream("POST", "/v1/chat/completions",
+    |                ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |                          json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}], "stream": True}) as resp:
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/usr/lib/python3.14/contextlib.py", line 214, in __aenter__
+    |     return await anext(self.gen)
+    |            ^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1583, in stream
+    |     response = await self.send(
+    |                ^^^^^^^^^^^^^^^^
+    |     ...&lt;4 lines&gt;...
+    |     )
+    |     ^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    |     response = await self._send_handling_auth(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     ...&lt;4 lines&gt;...
+    |     )
+    |     ^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    |     response = await self._send_handling_redirects(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     ...&lt;3 lines&gt;...
+    |     )
+    |     ^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    |     response = await self._send_single_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    |     response = await transport.handle_async_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_transports/asgi.py", line 170, in handle_async_request
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py", line 1159, in __call__
+    |     await super().__call__(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/applications.py", line 90, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 88, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/middleware.py", line 529, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 660, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 680, in app
+    |     await route.handle(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 276, in handle
+    |     await self.app(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 134, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 121, in app
+    |     await response(scope, receive, send)
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 273, in __call__
+    |     with collapse_excgroups():
+    |          ~~~~~~~~~~~~~~~~~~^^
+    |   File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    |     self.gen.throw(value)
+    |     ~~~~~~~~~~~~~~^^^^^^^
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 87, in collapse_excgroups
+    |     raise exc
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 277, in wrap
+    |     await func()
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 250, in stream_response
+    |     async for chunk in self.body_iterator:
+    |     ...&lt;2 lines&gt;...
+    |         await send({"type": "http.response.body", "body": chunk, "more_body": True})
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/stream_orchestration.py", line 873, in stream_with_finalize
+    |     async for chunk in wrapped:
+    |     ...&lt;64 lines&gt;...
+    |         yield chunk
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py", line 4451, in _provider_stream
+    |     async for chunk in LLM_ROUTER.acompletion_stream(
+    |     ...&lt;7 lines&gt;...
+    |         yield chunk
+    |   File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py", line 80, in _boom_stream
+    |     raise RuntimeError("upstream boom before first token")
+    | RuntimeError: upstream boom before first token
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py", line 85, in test_stream_upstream_error_emits_error_event_not_clean_empty
+    async with rc.stream("POST", "/v1/chat/completions",
+               ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                         json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "hi"}], "stream": True}) as resp:
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/contextlib.py", line 214, in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1583, in stream
+    response = await self.send(
+               ^^^^^^^^^^^^^^^^
+    ...&lt;4 lines&gt;...
+    )
+    ^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...&lt;4 lines&gt;...
+    )
+    ^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...&lt;3 lines&gt;...
+    )
+    ^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/httpx/_transports/asgi.py", line 170, in handle_async_request
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/applications.py", line 1159, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/middleware.py", line 529, in __call__
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/fastapi/routing.py", line 121, in app
+    await response(scope, receive, send)
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 273, in __call__
+    with collapse_excgroups():
+         ~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 277, in wrap
+    await func()
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/.venv/lib/python3.14/site-packages/starlette/responses.py", line 250, in stream_response
+    async for chunk in self.body_iterator:
+    ...&lt;2 lines&gt;...
+        await send({"type": "http.response.body", "body": chunk, "more_body": True})
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/stream_orchestration.py", line 873, in stream_with_finalize
+    async for chunk in wrapped:
+    ...&lt;64 lines&gt;...
+        yield chunk
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway/ai_mesh_gateway/main.py", line 4451, in _provider_stream
+    async for chunk in LLM_ROUTER.acompletion_stream(
+    ...&lt;7 lines&gt;...
+        yield chunk
+  File "/home/contact_cyberultron_com/AI_Mesh_Firewall/gateway_v2/tests/openai_conformance/test_openai_sdk_compat_phase6_guards.py", line 80, in _boom_stream
+    raise RuntimeError("upstream boom before first token")
+RuntimeError: upstream boom before first token
+
+During handling of the above exception, another exception occurred:
+E   RuntimeError: upstream boom before first token</failure></testcase></testsuite></testsuites>

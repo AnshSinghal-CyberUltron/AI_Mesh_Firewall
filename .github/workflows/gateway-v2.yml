@@ -92,3 +92,65 @@ jobs:
           path: |
             gw00-image-id.txt
             gw00-rootfs-layers.json
+
+  openai-conformance:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/gateway:${{ github.workspace }}/shared:${{ github.workspace }}/gateway_v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install v1 + suite deps
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -U pip
+          .venv/bin/pip install -e ./shared -e "./gateway[dev]"
+      - name: LGW01-1/2/4/5 Python ASGI + loopback TCP (twice)
+        working-directory: gateway_v2
+        run: |
+          set +e
+          ../.venv/bin/python -m pytest tests/openai_conformance \
+            --ignore=tests/openai_conformance/node \
+            --ignore=tests/openai_conformance/stub_server.py \
+            -q --tb=line --junitxml=/tmp/gw01-a.xml
+          a=$?
+          ../.venv/bin/python -m pytest tests/openai_conformance \
+            --ignore=tests/openai_conformance/node \
+            --ignore=tests/openai_conformance/stub_server.py \
+            -q --tb=line --junitxml=/tmp/gw01-b.xml
+          b=$?
+          set -e
+          # pytest 0=all pass, 1=recorded failures (ledger). >=2 is harness death.
+          if [ "$a" -ge 2 ] || [ "$b" -ge 2 ]; then
+            echo "pytest crashed a=$a b=$b"
+            exit 1
+          fi
+          test -s /tmp/gw01-a.xml && test -s /tmp/gw01-b.xml
+          ../.venv/bin/python -m lint.compare_junit /tmp/gw01-a.xml /tmp/gw01-b.xml
+          ../.venv/bin/python - <<'PY'
+          import xml.etree.ElementTree as ET
+          n = sum(1 for _ in ET.parse("/tmp/gw01-a.xml").iter("testcase"))
+          if n < 70:
+              raise SystemExit(f"LGW01-1 FAIL: only {n} cases collected")
+          print("lgw01_1_collected", n)
+          PY
+      - name: LGW01-3 Node SDK vs stub TCP
+        working-directory: gateway_v2
+        run: |
+          export AMF_STUB_URL_FILE=/tmp/gw01-stub-url.txt
+          ../.venv/bin/python tests/openai_conformance/stub_server.py &
+          stub_pid=$!
+          for i in $(seq 1 50); do
+            [ -s /tmp/gw01-stub-url.txt ] && break
+            sleep 0.2
+          done
+          test -s /tmp/gw01-stub-url.txt
+          export AMF_CONFORMANCE_BASE_URL="$(tr -d '[:space:]' < /tmp/gw01-stub-url.txt)"
+          npm --prefix tests/openai_conformance/node ci
+          node tests/openai_conformance/node/openai_matrix.mjs
+          kill "$stub_pid" || true

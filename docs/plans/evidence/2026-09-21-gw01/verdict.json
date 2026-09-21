@@ -1,0 +1,22 @@
+{
+  "task": "GW01",
+  "complete": true,
+  "verdict": "LGW01_1_5_PASS_V1_LEDGER_RECORDED",
+  "exits": {
+    "LGW01-1": "PASS \u2014 89 cases collected against v1 ASGI; 70 passed, 14 recorded v1 deviations, 2 xfail(strict=True), 3 skipped live-tcp without BASE_URL",
+    "LGW01-2": "PASS \u2014 loopback uvicorn in the suite; live :8300 wire probe 3/3; staging nginx absent (Vite :8180) recorded",
+    "LGW01-3": "PASS \u2014 Node openai@4.104.0 vs stub TCP (content+stream+tools) and vs :8300 (AuthenticationError)",
+    "LGW01-4": "PASS \u2014 malformed data: frame raises; log names not-json-this-frame-MUST-fail",
+    "LGW01-5": "PASS \u2014 two junit files identical (lint.compare_junit)"
+  },
+  "d4_d5_strict": true,
+  "nginx": "absent \u2014 frontend is Vite :8180, gateway :8300",
+  "v1_modules_edited": false,
+  "live_stack": {
+    "gateway": "f820c851b8c1",
+    "control": "2715b8443d6e",
+    "frontend": "fbe85271abec",
+    "recreated": false
+  },
+  "lgw00_1": "still residual (OS Login); waived to start GW01"
+}

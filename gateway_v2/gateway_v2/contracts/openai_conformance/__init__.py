@@ -1,3 +1,9 @@
-"""Frozen OpenAI SDK conformance suite — populated in GW01."""
+"""Frozen OpenAI SDK conformance — env-selected app resolver (GW01)."""
 
-__all__: tuple[str, ...] = ()
+from gateway_v2.contracts.openai_conformance.harness import (
+    conformance_app_name,
+    is_tcp_mode,
+    tcp_base_url,
+)
+
+__all__ = ("conformance_app_name", "is_tcp_mode", "tcp_base_url")
