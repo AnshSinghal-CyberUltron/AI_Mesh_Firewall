@@ -1,0 +1,56 @@
+{
+  "card": "GW03",
+  "date": "2026-09-21",
+  "git_head_before": "7e9c1883",
+  "lgw00_1": "NOT claimed PASS (OS Login ed25519 still offered; waived for GW01)",
+  "unit": {
+    "pytest": "40 passed, 4 skipped (live docker gated on AMF_LIVE_DOCKER=1)",
+    "live_docker": "4 passed in 16.23s (AMF_LIVE_DOCKER=1)"
+  },
+  "LGW03-1": {
+    "result": "PASS",
+    "procedure": "same image ai-mesh-gateway-v2:gw03 at docker --cpus 2/4/8/16 on this 16-CPU GCP host",
+    "workers": {"2": 1, "4": 3, "8": 6, "16": 12},
+    "queue_depth": {"2": 2, "4": 4, "8": 8, "16": 16},
+    "scanner_pool": {"2": 1, "4": 3, "8": 6, "16": 12},
+    "cpu_source": "cgroup-v2"
+  },
+  "LGW03-2": {
+    "result": "PASS",
+    "procedure": "--cpus=8 --memory=1600m vs 800m AMF_PER_WORKER_RSS_MB=400",
+    "workers": {"1600m": 3, "800m": 1},
+    "stream_buffer_bytes": {"1600m": 1258291200, "800m": 629145600}
+  },
+  "LGW03-3": {
+    "result": "PASS",
+    "procedure": "--cpus=4 --ulimit nofile=65536 vs 256",
+    "fd_limit": {"high": 65536, "low": 256},
+    "connection_budget": {"high": 49149, "low": 189}
+  },
+  "LGW03-4": {
+    "result": "PASS",
+    "procedure": "tmp admit/poison.py pool(max_connections=64)",
+    "gate_exit": 1,
+    "named": "admit/poison.py:2: capacity literal max_connections=64 outside runtime/resources.py"
+  },
+  "LGW03-5": {
+    "result": "PASS",
+    "procedure": "docker run --cpus=2 --serve AMF_HOLD_LEASE=1; docker update --cpus=8; kill -HUP; PID unchanged",
+    "host_pid_before": 4109203,
+    "host_pid_after": 4109203,
+    "container_pid": 1,
+    "workers": {"before": 1, "after": 6},
+    "reload_count": 1,
+    "dropped": 0,
+    "in_flight": 1
+  },
+  "LGW03-6": {
+    "result": "PASS",
+    "procedure": "WEB_CONCURRENCY=9 GATEWAY_ENTRYPOINT_DRYRUN=1 gateway/entrypoint.sh",
+    "log": "[gateway-entrypoint] WEB_CONCURRENCY override=9 detected=16 (deviation)"
+  },
+  "prod_compose": "removed silent WEB_CONCURRENCY:-16",
+  "live_gateway_8300": "HTTP 200 health after tests; compose stack not wiped",
+  "extra_gcp_vms": "none created (this host nproc=16)",
+  "gha": "image-digest job now runs docker --cpus 2 vs 4 against python -m gateway_v2.runtime"
+}

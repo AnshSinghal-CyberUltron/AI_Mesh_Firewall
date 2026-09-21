@@ -21,11 +21,12 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/pip install -q -e ".[dev]"
-      - name: Size + HTTP AST + mutable-state gates
+      - name: Size + HTTP AST + mutable-state + capacity-literal gates
         run: |
           .venv/bin/python -m lint.check_sizes gateway_v2
           .venv/bin/python -m lint.check_http_outside_edge_resolve gateway_v2
           .venv/bin/python -m lint.check_no_module_mutable gateway_v2
+          .venv/bin/python -m lint.check_capacity_literals gateway_v2
       - name: import-linter
         run: .venv/bin/lint-imports
       - name: ruff
@@ -85,6 +86,36 @@ jobs:
           docker image inspect ai-mesh-gateway-v2:gw00 --format '{{.Id}}' | tee gw00-image-id.txt
           docker image inspect ai-mesh-gateway-v2:gw00 --format '{{json .RootFS.Layers}}' | tee gw00-rootfs-layers.json
           docker run --rm ai-mesh-gateway-v2:gw00
+      - name: LGW03-1 GitHub-hosted --cpus 2 vs 4
+        run: |
+          python3 - <<'PY'
+          import json
+          import subprocess
+
+          def snap(cpus: str) -> dict:
+              out = subprocess.check_output(
+                  [
+                      "docker", "run", "--rm", f"--cpus={cpus}",
+                      "ai-mesh-gateway-v2:gw00",
+                      "python", "-m", "gateway_v2.runtime",
+                  ],
+                  text=True,
+              )
+              return json.loads(out)
+
+          a = snap("2")
+          b = snap("4")
+          keys = ("cpu_quota", "workers", "queue_depth", "pools")
+          print("cpus2", json.dumps({k: a[k] for k in keys}, sort_keys=True))
+          print("cpus4", json.dumps({k: b[k] for k in keys}, sort_keys=True))
+          if a["workers"] == b["workers"]:
+              raise SystemExit("LGW03-1 GHA FAIL: workers identical at --cpus 2 and 4")
+          if a["queue_depth"] == b["queue_depth"]:
+              raise SystemExit("LGW03-1 GHA FAIL: queue_depth identical at --cpus 2 and 4")
+          if a["pools"]["scanner"] == b["pools"]["scanner"]:
+              raise SystemExit("LGW03-1 GHA FAIL: scanner pool identical at --cpus 2 and 4")
+          print("lgw03_1_gha_ok")
+          PY
       - name: Upload image id
         uses: actions/upload-artifact@v4
         with:

@@ -1,0 +1,22 @@
+[gateway-entrypoint] WEB_CONCURRENCY override=9 detected=16 (deviation)
+[gateway-entrypoint] WEB_CONCURRENCY=9 (source=env-override)
+[gateway-entrypoint]   {
+[gateway-entrypoint]     "cpu_budget": 16.0,
+[gateway-entrypoint]     "ram_bytes": 63186812928,
+[gateway-entrypoint]     "cpu_source": "affinity",
+[gateway-entrypoint]     "mem_source": "meminfo",
+[gateway-entrypoint]     "per_worker_rss": 536870912,
+[gateway-entrypoint]     "workers": 16,
+[gateway-entrypoint]     "asgi_threads": 32,
+[gateway-entrypoint]     "db_threads": 32,
+[gateway-entrypoint]     "pg_max_conns": 578,
+[gateway-entrypoint]     "scanner_pool": 16,
+[gateway-entrypoint]     "bedrock_pool": 10000,
+[gateway-entrypoint]     "vault_pool": 8,
+[gateway-entrypoint]     "redis_pool": 128,
+[gateway-entrypoint]     "headroom": 0.75,
+[gateway-entrypoint]     "ram_gib": 58.85,
+[gateway-entrypoint]     "ram_workers": 88,
+[gateway-entrypoint]     "cpu_bound": true
+[gateway-entrypoint]   }
+[gateway-entrypoint] DRYRUN would exec: gunicorn ai_mesh_gateway.main:app -k uvicorn.workers.UvicornWorker --config /app/gateway/gunicorn.conf.py --bind 0.0.0.0:8300 --workers 9 --worker-connections 20000 --timeout 120 --graceful-timeout 60 --keep-alive 65

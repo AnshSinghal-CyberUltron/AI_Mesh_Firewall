@@ -3,10 +3,9 @@
 # (shared/ai_mesh_shared/resource_budget.py) so the gateway uses the full machine
 # it is given: ~one async UvicornWorker per core, RAM-bounded with headroom.
 #
-# An explicit WEB_CONCURRENCY (env) ALWAYS wins — operators pin it when they want a
-# fixed count; the detector only fills the default (replacing the old hardcoded 4).
-# If the detector ever fails to import/run, we fall back to a safe static default so
-# the gateway can never fail to boot over a sizing calculation.
+# An explicit WEB_CONCURRENCY (env) still wins, but GW03 requires it to be logged
+# as a named deviation with the detector's value beside it. A detector failure
+# falls back to FALLBACK_WORKERS and is also logged as a deviation (v1 must boot).
 #
 # GATEWAY_ENTRYPOINT_DRYRUN=1 prints the resolved command and exits 0 (used by the
 # perf proof to show worker count without needing DB/Redis).  See docs/perf/.
@@ -14,15 +13,19 @@ set -eu
 
 FALLBACK_WORKERS=4
 
+DETECTED="$(python -m ai_mesh_shared.resource_budget --value workers 2>/dev/null || true)"
+
 if [ -n "${WEB_CONCURRENCY:-}" ]; then
     WORKERS="$WEB_CONCURRENCY"
     WSRC="env-override"
-elif WORKERS="$(python -m ai_mesh_shared.resource_budget --value workers 2>/dev/null)" \
-        && [ -n "$WORKERS" ]; then
+    echo "[gateway-entrypoint] WEB_CONCURRENCY override=${WORKERS} detected=${DETECTED:-unreadable} (deviation)" >&2
+elif [ -n "$DETECTED" ]; then
+    WORKERS="$DETECTED"
     WSRC="detector"
 else
     WORKERS="$FALLBACK_WORKERS"
     WSRC="fallback"
+    echo "[gateway-entrypoint] FALLBACK_WORKERS=${WORKERS} detected=unreadable (deviation)" >&2
 fi
 
 # One diagnostic line + the full budget, so the running config is always in the logs.

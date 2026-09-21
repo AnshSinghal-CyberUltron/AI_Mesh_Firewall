@@ -1,0 +1,76 @@
+{
+  "high": {
+    "binding": "ram",
+    "connection_budget": 765,
+    "cpu_quota": 8.0,
+    "cpu_source": "cgroup-v2",
+    "detected_workers": 3,
+    "dropped": 0,
+    "fd_limit": 1024,
+    "fd_source": "rlimit",
+    "in_flight": 0,
+    "logs": [
+      "cpu_quota=8.0 source=cgroup-v2 memory_limit=1677721600 source=cgroup-v2 fd_limit=1024 source=rlimit",
+      "binding=ram workers=3 detected_workers=3",
+      "target_p99_ms=20.0 utilization_cap=0.75 per_worker_rss=419430400 declared=env"
+    ],
+    "mem_source": "cgroup-v2",
+    "memory_limit": 1677721600,
+    "pid": 1,
+    "pool_sizes": {
+      "provider": 3,
+      "redis": 765,
+      "scanner": 6,
+      "vault": 3
+    },
+    "pools": {
+      "guard": null,
+      "provider": 3,
+      "redis": 765,
+      "scanner": 6,
+      "vault": 3
+    },
+    "queue_depth": 3,
+    "reload_count": 0,
+    "stream_buffer_bytes": 1258291200,
+    "worker_override": null,
+    "workers": 3
+  },
+  "low": {
+    "binding": "ram",
+    "connection_budget": 767,
+    "cpu_quota": 8.0,
+    "cpu_source": "cgroup-v2",
+    "detected_workers": 1,
+    "dropped": 0,
+    "fd_limit": 1024,
+    "fd_source": "rlimit",
+    "in_flight": 0,
+    "logs": [
+      "cpu_quota=8.0 source=cgroup-v2 memory_limit=838860800 source=cgroup-v2 fd_limit=1024 source=rlimit",
+      "binding=ram workers=1 detected_workers=1",
+      "target_p99_ms=20.0 utilization_cap=0.75 per_worker_rss=419430400 declared=env"
+    ],
+    "mem_source": "cgroup-v2",
+    "memory_limit": 838860800,
+    "pid": 1,
+    "pool_sizes": {
+      "provider": 1,
+      "redis": 767,
+      "scanner": 6,
+      "vault": 1
+    },
+    "pools": {
+      "guard": null,
+      "provider": 1,
+      "redis": 767,
+      "scanner": 6,
+      "vault": 1
+    },
+    "queue_depth": 1,
+    "reload_count": 0,
+    "stream_buffer_bytes": 629145600,
+    "worker_override": null,
+    "workers": 1
+  }
+}

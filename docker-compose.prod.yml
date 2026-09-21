@@ -8,8 +8,9 @@
 #
 # Sized for c8g.2xlarge (8 vCPU / 16 GiB): gateway-first. Gateway has NO CPU
 # quota so it can use every idle core; memory ceiling 12 GiB (host 15 GiB minus
-# postgres/redis/OS). WEB_CONCURRENCY default 16 = 2× vCPU for I/O-bound
-# Bedrock/BYOK waits (research: I/O-bound uvicorn 2 workers/vCPU).
+# postgres/redis/OS). Worker count comes from the cgroup detector (GW03). Set
+# WEB_CONCURRENCY only as an explicit override — the entrypoint logs it as a
+# named deviation with the detected value beside it. There is no silent 16.
 # Apps + migrations reach Postgres via pgbouncer:6432 only (never postgres:5432).
 #
 # Build/push: infra/scripts/build-push-images.sh  |  Deploy: scripts/deploy-ec2.sh
@@ -172,8 +173,8 @@ services:
     # Bind 8300 on host for Prometheus scrape (auth: METRICS_SCRAPER_KEY on /metrics)
     ports: !override ["0.0.0.0:8300:8300"]
     environment:
-      # 2× vCPU for I/O-bound 9-stage (Bedrock + BYOK waits). Pin to 8 if RSS climbs.
-      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-16}
+      # GW03: no silent WEB_CONCURRENCY=16. Detector sizes workers unless the
+      # operator sets WEB_CONCURRENCY (logged as a named deviation).
       GATEWAY_CIRCUIT_BREAKER_ENABLED: ${GATEWAY_CIRCUIT_BREAKER_ENABLED:-true}
       TIER2_BREAKER_MIN_CALLS: ${TIER2_BREAKER_MIN_CALLS:-5}
       TIER2_BREAKER_FAILURE_THRESHOLD: ${TIER2_BREAKER_FAILURE_THRESHOLD:-0.5}
